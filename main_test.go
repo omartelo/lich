@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/omartelo/lich/internal/browser"
 	"github.com/omartelo/lich/internal/drop"
 	"github.com/omartelo/lich/internal/project"
 	"github.com/omartelo/lich/internal/relay"
@@ -32,6 +33,8 @@ var denied = map[string]reflect.Type{
 	"relay.SetPlugins":     reflect.TypeFor[*relay.Service](),
 	"project.SetAccounts":  reflect.TypeFor[*project.Service](),
 	"project.SetProjects":  reflect.TypeFor[*project.Service](),
+	"browser.Cleanup":      reflect.TypeFor[*browser.Service](),
+	"browser.CloseOwnedBy": reflect.TypeFor[*browser.Service](),
 	"terminal.SetDropDir":  reflect.TypeFor[*terminal.Service](),
 }
 
@@ -53,10 +56,13 @@ func (stubService) SetAccounts() error    { return nil }
 func (stubService) SetProjects() error    { return nil }
 func (stubService) SetDropDir() error     { return nil }
 func (stubService) Allowed() error        { return nil }
+func (stubService) Cleanup() error      { return nil }
+func (stubService) CloseOwnedBy() error { return nil }
+
 
 func denyingDispatcher() *rpc.Handler {
 	d := rpc.New()
-	for _, service := range []string{"store", "drop", "relay", "project", "terminal"} {
+	for _, service := range []string{"store", "drop", "relay", "project", "terminal", "browser"} {
 		d.Register(service, stubService{})
 	}
 	denyInternal(d)

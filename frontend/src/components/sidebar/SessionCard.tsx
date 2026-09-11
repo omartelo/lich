@@ -12,6 +12,7 @@ import {
   FolderOpen,
   GitBranch,
   GitPullRequestArrow,
+  Globe,
   Hourglass,
   Inbox,
   ListChecks,
@@ -66,7 +67,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { System, Terminal as TerminalService } from "@/lib/rpc"
+import { Browser, System, Terminal as TerminalService } from "@/lib/rpc"
 import { queuePaste } from "@/lib/terminal/paste-queue"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { delegatePrompt, delegateWorktreePrompt } from "@/lib/session/delegate-prompt"
@@ -700,6 +701,16 @@ export function SessionCard({
           <ContextMenuItem onClick={() => onPin(!pinned)}>
             {pinned ? <PinOff /> : <Pin />}
             {pinned ? "Unpin" : "Pin"}
+          </ContextMenuItem>
+          <ContextMenuItem
+            onClick={() => {
+              void Browser.OpenVisible(session.id).catch((err) => {
+                toast.error(`Browser: ${errorText(err)}`)
+              })
+            }}
+          >
+            <Globe />
+            Browser tab
           </ContextMenuItem>
           <SessionEntrypointItem session={session} onOpen={() => setEntrypointOpen(true)} />
           {!active && (

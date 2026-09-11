@@ -270,6 +270,11 @@ type Service struct {
 	// without answering (internal/relay). Guarded by mu: wired after the
 	// transport is already serving.
 	onState func(id, state string)
+	// onClose, when set, receives every session id Close removes. The agent
+	// browser hangs off it so a card that goes away takes its Chromium with it.
+	// Guarded by mu: wired after the transport is already serving.
+	onClose func(id string)
+
 	// spawns is how each live session's PTY was started — what it runs and where
 	// — keyed by session id. Read by providerKind, which is what stops a
 	// session-start report from repainting a card lich itself chose the provider
@@ -283,6 +288,7 @@ type Service struct {
 	// Written once per spawn and read on every report, which is what sync.Map
 	// is for.
 	spawns sync.Map
+
 	// turns is which sessions have a turn open right now, which is what tells a
 	// `waiting` report that a human is blocking from one that only says the
 	// session is sitting at its prompt (see turnLog). It carries its own lock:
@@ -634,6 +640,15 @@ func (s *Service) SetSessionState(fn func(id, state string)) {
 	s.onState = fn
 }
 
+// SetOnClose wires fn to every session Close. Only one watcher: the agent
+// browser is torn down with the card that owned it, and the terminal package
+// must not import that one.
+func (s *Service) SetOnClose(fn func(id string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onClose = fn
+}
+
 // stateWatcher reads the watcher under the lock, so a report arriving while it
 // is being wired sees one function or none, never a torn read.
 func (s *Service) stateWatcher() func(id, state string) {
@@ -730,6 +745,7 @@ func (s *Service) Close(id string) error {
 		delete(s.sessions, id)
 		close(sess.done)
 	}
+	onClose := s.onClose
 	s.mu.Unlock()
 	s.spawns.Delete(id)
 	// A turn dies with its session, and an open one left behind would keep the
@@ -750,6 +766,9 @@ func (s *Service) Close(id string) error {
 	s.hands.forget(id)
 	if !ok {
 		return nil
+	}
+	if onClose != nil {
+		onClose(id)
 	}
 	return sess.pty.Close()
 }

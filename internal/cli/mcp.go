@@ -94,7 +94,9 @@ Delegate in parallel: for work that can run beside yours, open a worker session 
 
 Never poll for results. A send that outlives its wait hands back a ticket and you carry on with your own work; when results are ready, one short [lich] note arrives at your prompt — collect everything at once with wait_for_answer (no ticket). Polling in a loop burns the tokens this design exists to save.
 
-When a [lich] message carrying a ticket arrives at YOUR prompt, you are the worker: do the task, then answer with ` + relay.ToolReply + ` — a concise report (what was done, where, what remains), never a transcript.`
+When a [lich] message carrying a ticket arrives at YOUR prompt, you are the worker: do the task, then answer with ` + relay.ToolReply + ` — a concise report (what was done, where, what remains), never a transcript.
+
+This session also has a browser of its own (browser_* tools): the same Chromium window Browser tab opens on this card, not the lich UI. Open it, read the page, click, type, press named keys (Enter/Tab/Escape/…), screenshot. Screenshots are files — never paste their bytes into a reply.`
 
 // serveMCP runs the stdio server until its input ends.
 func (c *client) serveMCP(args []string) error {
@@ -180,7 +182,7 @@ func (c *client) callMCPTool(params json.RawMessage) (any, *jsonRPCError) {
 	if err := json.Unmarshal(params, &call); err != nil {
 		return nil, &jsonRPCError{Code: codeInvalidParams, Message: err.Error()}
 	}
-	for _, tool := range mcpTools {
+	for _, tool := range allMCPTools() {
 		if tool.Name != call.Name {
 			continue
 		}
@@ -204,8 +206,9 @@ func mcpText(text string, failed bool) map[string]any {
 }
 
 func mcpToolList() []map[string]any {
-	list := make([]map[string]any, 0, len(mcpTools))
-	for _, tool := range mcpTools {
+	tools := allMCPTools()
+	list := make([]map[string]any, 0, len(tools))
+	for _, tool := range tools {
 		entry := map[string]any{
 			"name":        tool.Name,
 			"description": tool.Description,
@@ -217,6 +220,11 @@ func mcpToolList() []map[string]any {
 		list = append(list, entry)
 	}
 	return list
+}
+
+func allMCPTools() []mcpTool {
+	out := make([]mcpTool, 0, len(mcpTools)+len(browserTools))
+	return append(append(out, mcpTools...), browserTools...)
 }
 
 // mcpArgs is one tool call's arguments, read leniently: a model that sends a
@@ -266,6 +274,53 @@ func (a mcpArgs) seconds(key string) int {
 	return asked
 }
 
+// optionalInt reads a number that may be absent. Missing, empty, or a type
+// this cannot parse is nil rather than zero: zero is a valid element index.
+func (a mcpArgs) optionalInt(key string) *int {
+	v, ok := a[key]
+	if !ok || v == nil {
+		return nil
+	}
+	n := 0
+	switch x := v.(type) {
+	case float64:
+		n = int(x)
+	case string:
+		if x == "" {
+			return nil
+		}
+		if _, err := fmt.Sscanf(x, "%d", &n); err != nil {
+			return nil
+		}
+	default:
+		return nil
+	}
+	return &n
+}
+
+// optionalFloat is optionalInt for viewport coordinates.
+func (a mcpArgs) optionalFloat(key string) *float64 {
+	v, ok := a[key]
+	if !ok || v == nil {
+		return nil
+	}
+	n := 0.0
+	switch x := v.(type) {
+	case float64:
+		n = x
+	case string:
+		if x == "" {
+			return nil
+		}
+		if _, err := fmt.Sscanf(x, "%f", &n); err != nil {
+			return nil
+		}
+	default:
+		return nil
+	}
+	return &n
+}
+
 // schema builds an inputSchema from named properties and the subset of them
 // that is required.
 func schema(properties map[string]any, required ...string) map[string]any {
@@ -283,9 +338,10 @@ func property(kind, description string) map[string]any {
 	return map[string]any{"type": kind, "description": description}
 }
 
-// mcpTools is the whole tool surface. Adding one is an entry here — the reason
-// registering MCP once buys every tool lich grows later, on every provider,
-// with no further per-provider work.
+// mcpTools is the relay/session surface. Browser tools live in mcp_browser.go
+// and allMCPTools concatenates the two, which is what registering MCP once
+// buys — every tool lich grows later reaches every provider that took the
+// registration, with no further per-provider work.
 var mcpTools = []mcpTool{
 	{
 		Name: "list_sessions",

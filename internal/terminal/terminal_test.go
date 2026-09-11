@@ -1471,6 +1471,35 @@ func TestSessionStateWithoutAWatcherIsHarmless(t *testing.T) {
 	}
 }
 
+// TestCloseNotifiesOnClose proves the seam the agent browser hangs off: closing
+// a card must tell the watcher, not only tear down the PTY. A miss here leaves
+// a Chromium running after the session is gone.
+func TestCloseNotifiesOnClose(t *testing.T) {
+	svc := &Service{sessions: map[string]*session{}}
+	pty := &shortWritePTY{}
+	svc.sessions["s1"] = &session{pty: pty, done: make(chan struct{})}
+	var seen string
+	svc.SetOnClose(func(id string) { seen = id })
+
+	if err := svc.Close("s1"); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if seen != "s1" {
+		t.Fatalf("onClose = %q, want s1", seen)
+	}
+	if svc.Live("s1") {
+		t.Fatal("session still live after Close")
+	}
+
+	seen = "stale"
+	if err := svc.Close("gone"); err != nil {
+		t.Fatalf("Close missing: %v", err)
+	}
+	if seen != "stale" {
+		t.Fatal("onClose fired for a session that was not running")
+	}
+}
+
 // The size a session starts at is a contract with the window, not an
 // implementation detail: a session drawn into a grid the window does not have
 // is repainted on its first view, and whatever its provider had already written

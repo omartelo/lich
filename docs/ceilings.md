@@ -300,35 +300,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   holds the delivery back while the user has unsent input there. What it counts is printable input since the last
   Enter, escape sequences skipped — it cannot see the line, so an edit that leaves it empty by another route
   (Ctrl+W, a click into the middle of it) reads as a draft that is still there, and a delivery waits out
-  `draftIdle` for nothing. The stale-draft release is what keeps that a delay instead of a wedged relay, and the
-  wait says so where it is happening: the pull request and issue handoffs
-  (`frontend/src/lib/terminal/write-at-prompt.ts`) wait on the same answer with no Enter of their own to justify
-  it, so while one is held its target's card carries a rung saying something is waiting for that prompt — hand a
-  conflict to a session you left half a sentence in and the card says where it went, rather than the click reading
-  as having done nothing. The mark lives in the page that is waiting, so it is only ever on the window that started
-  the handoff, and the relay's own hold is not drawn at all: a delivery held there answers to its sender, through
-  the ticket. What stays open is the provider that takes keystrokes through anything other than this PTY, which is
-  invisible to every part of this.
-- **A relayed Enter is timed against silence, not against the target** (`internal/relay`, `awaitSettled`): lich
-  presses Enter once the target's PTY has been quiet for `defaultSubmitDelay`, because nothing here can read a TUI's
-  screen to know it has taken the paste in. The window that opens on the target's own keyboard is closed rather
-  than lived with: from the paste to the Enter its keystrokes are held and written at the prompt the Enter leaves
-  behind (`terminal.HoldInput`), so what a person types there is late by the length of the window instead of
-  submitted inside somebody else's message. Held, not dropped — but held is still not typed: an interrupt reached
-  for in that window lands after the delivery, on the turn the delivery started. On Windows that quiet is the whole instrument — ConPTY hands a child key
-  events rather than bytes, the bracketed paste markers do not survive, and every provider TUI then guesses at where
-  a paste ends from timing alone. A target that repaints on a timer of its own never goes quiet and gets its Enter
-  at `defaultSettleLimit` regardless, which is the case this cannot tell from a paste still arriving.
-- **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`,
-  `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that
-  wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and
-  deletes when the run ends, so writing it gives a registration that works for the rest of that session and then
-  fails silently forever. lich writes `lich` from PATH instead, recognising the cache by shape
-  (`go-build*/b*/exe/*`) since the toolchain exports no marker. The trap is that a dev install then points at
-  whatever version is installed on the machine — harmless, because the registration is only the transport and a
-  session reaches the lich its PTY's coordinates name, but not what the file appears to say. With no lich on
-  PATH at all, a dev install registers nothing: Crush and oh-my-pi still get their hooks, and Cursor's install
-  refuses outright.
+- **An answer that names no ticket is matched by delivery order** (`internal/relay/relay.go`, `errandOfLocked`): `lich reply "<answer>"` and `reply_to_session` without a ticket close the oldest message delivered to that session and still open, because nothing in an answer itself says which request it belongs to. A session working two relayed tasks at once that answers the second one first sends it home as the answer to the first, and both senders read a confident wrong report — nothing anywhere reports the mismatch. Naming the ticket is still the only exact route, which is why every relayed message spells it and why the card's tooltip shows it.
+
+- **Installing the plugin writes into four harnesses' own directories** (`internal/agentplugin`): Claude Code and Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the released files itself. None of them records what is installed, so the version lives in a marker line lich wrote — edit the file by hand and lich reads it as not installed. Crush below 0.88.0 ignores those lines in silence, which is why the install asks its version first. Crush's block and omp's `mcp.json` register lich's MCP server by the absolute path of the binary that installed it, and omp's is a JSON document lich rewrites rather than appends to: every key survives, the user's formatting does not.
+- **opencode does not see the session browser tools.** Claude Code and Codex get them at spawn, Crush and oh-my-pi through the plugin's MCP registration; opencode's plugin cannot register an MCP server and still defines only the original seven tools. `lich browser` still works in an opencode PTY. The plugin's `toolsMinVersion` is not bumped for this.
+- **The agent browser is a second Chromium, never CDP on the lich window.** Attaching to the `--app` process would expose the UI and the session token. The sidecar uses `chromium.FindBrowser` (system Chrome/Edge/…, never `lich-shell`) with its own user-data-dir. Promoting a headless context to a visible window replaces it, so the page reloads.
+- **omp's state directory answers to two variables, and the profile wins** (`internal/agentplugin/omp.go`, `internal/terminal/transcript.go`, resolving it independently as the Claude Code pair do): `OMP_PROFILE` moves the whole directory and beats an explicit `PI_CODING_AGENT_DIR`. Get it backwards and the install lands where omp is not reading and every restored card silently starts fresh.
+
+- **A relayed Enter is timed against silence, not against the target** (`internal/relay`, `awaitSettled`): lich presses Enter once the target's PTY has been quiet for `defaultSubmitDelay`, because nothing here can read a TUI's screen to know it has taken the paste in. The window that opens on the target's own keyboard is closed rather than lived with: from the paste to the Enter its keystrokes are held and written at the prompt the Enter leaves behind (`terminal.HoldInput`), so what a person types there is late by the length of the window instead of submitted inside somebody else's message. Held, not dropped — but held is still not typed: an interrupt reached for in that window lands after the delivery, on the turn the delivery started. On Windows that quiet is the whole instrument — ConPTY hands a child key events rather than bytes, the bracketed paste markers do not survive, and every provider TUI then guesses at where a paste ends from timing alone. A target that repaints on a timer of its own never goes quiet and gets its Enter at `defaultSettleLimit` regardless, which is the case this cannot tell from a paste still arriving.
+- **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`, `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and deletes when the run ends, so writing it gives a registration that works for the rest of that session and then fails silently forever. lich writes `lich` from PATH instead, recognising the cache by shape (`go-build*/b*/exe/*`) since the toolchain exports no marker. The trap is that a dev install then points at whatever version is installed on the machine — harmless, because the registration is only the transport and a session reaches the lich its PTY's coordinates name, but not what the file appears to say. With no lich on PATH at all, a dev install registers nothing: Crush and oh-my-pi still get their hooks, and Cursor's install refuses outright.
+
+- **The plan gauge answers to two undocumented endpoints, and only two providers have one** (`internal/quota`): Claude Code's and Codex's usage routes are what their own CLIs poll, not published API. A field renamed upstream drops the window it fed rather than raising anything — an entry lich has no name for is
 - **The plan gauge answers to two undocumented endpoints, and only two providers have one**
   (`internal/quota`): Claude Code's and Codex's usage routes are what their own CLIs poll, not published API. A
   field renamed upstream drops the window it fed rather than raising anything — an entry lich has no name for is

@@ -39,6 +39,11 @@ telemetry, so the interesting boundaries are local ones:
   [lich-plugin](https://github.com/omartelo/lich-plugin) and post to the same
   authenticated listener. A payload that escapes its contract belongs here too;
   a bug in the scripts themselves belongs in that repository.
+- **The agent browser.** Each session may launch a second Chromium, driven over
+  CDP, with its own profile — never the lich `--app` window, never
+  `lich/chromium-profile`. URLs are allow-listed (`http`/`https`/`about:blank`);
+  page-info never serializes form values. Attaching CDP to the UI process, or
+  loading `file:` / `javascript:` / `data:` for the agent, is a vulnerability.
 
 ## What is not a vulnerability
 

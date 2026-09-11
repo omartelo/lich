@@ -123,6 +123,8 @@ func dispatch(args []string, c *client) int {
 		// printed, and a second "lich: …" line on stderr would only say it
 		// again, worse.
 		return c.doctor(args[1:])
+	case "browser":
+		return c.run(c.browser, args[1:])
 	case "help", "--help", "-h":
 		// `lich help <command>` is the command's own help, which is the flags
 		// and not just the paragraph the list above shows.

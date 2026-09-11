@@ -15,6 +15,7 @@ import type {
   LastSaid,
   LastTurn,
   Branches,
+  BrowserHandle,
   CommitIdentity,
   DetectedProvider,
   Diagnostics as DiagnosticsData,
@@ -558,6 +559,11 @@ export const Quota = {
    * question. Served from a five-minute cache per account, so calling it often
    * is cheap and asks nothing extra of endpoints that rate-limit. */
   Plans: (sessionId: string) => call<QuotaPlan[]>("quota.Plans", [sessionId]),
+}
+
+export const Browser = {
+  /** Open or focus this session's visible Chromium window — not the lich UI. */
+  OpenVisible: (owner: string) => call<BrowserHandle>("browser.OpenVisible", [owner]),
 }
 
 export const Spawn = {

@@ -592,6 +592,15 @@ export interface DetectedProvider {
   docs: string
 }
 
+/** internal/browser.Handle — this session's Chromium sidecar. */
+export interface BrowserHandle {
+  id: string
+  url: string
+  title: string
+  owner: string
+  headed: boolean
+}
+
 /** internal/providers.Check — what a configured binary resolves to. `path` is
  * the executable a session would spawn, empty for every status but "ok". */
 export interface BinaryCheck {

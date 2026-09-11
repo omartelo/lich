@@ -58,6 +58,7 @@ exceptions: they read the machine, not a running lich.
 ```
 POST http://127.0.0.1:${LICH_PORT}/rpc/relay.<Method>?token=${LICH_TOKEN}
 POST http://127.0.0.1:${LICH_PORT}/rpc/spawn.<Method>?token=${LICH_TOKEN}
+POST http://127.0.0.1:${LICH_PORT}/rpc/browser.<Method>?token=${LICH_TOKEN}
 ```
 
 **Outside a session** those are absent, and the command finds the running lich
@@ -442,10 +443,28 @@ one whose fate that session's close decides, and a checkout with none is one
 nobody is working in. The project's own directory is not listed — it is the
 checkout every project has and the one that cannot be removed.
 
+### `lich browser <verb> [args]`
+
+Drives **this session's** browser — the same Chromium window **Browser tab** opens on the card. It is not the lich UI. Run it inside a session (`LICH_SESSION_ID`); outside one it exits 1.
+
+| Verb | What it does |
+|------|----------------|
+| `open [url]` | Create the browser if needed and load `url` (omit for `about:blank`). `http`/`https` only. |
+| `info` | URL, title, visible text, interactive elements as JSON. No form values. |
+| `click --index N` / `--selector S` / `--x X --y Y` | Real mouse event. |
+| `type [--clear] [--index N] <text>` | Keystrokes. |
+| `screenshot [path]` | PNG on disk; prints the path. |
+| `navigate <url>` | Load in the already-open browser. |
+| `reload` / `back` / `forward` | History. |
+| `scroll [--dy N]` | Viewport. Default 400px down. |
+| `list` | This session's handle, or `[]`. |
+| `close` | Tear the sidecar down. Closing the card does this too. |
+
+See [`browser-tab.md`](browser-tab.md).
+
 ### `lich cost [--project <name>] [--provider <provider>] [--since <window>] [--json|--csv]`
 
-What the sessions lich still remembers have cost, at API prices, one row per
-project and a total under them:
+What the sessions lich still remembers have cost, at API prices, one row per project and a total under them:
 
 ```
 project	sessions	unpriced	source	cost
@@ -456,55 +475,21 @@ total	15	2	mixed	$5.19
 Lower bound: 2 unpriced of 15 sessions — their spend is not in this total.
 ```
 
-**The last line is the contract.** A session lich never priced holds no ledger
-row and contributes nothing, so a sum over a unit containing one is a *lower
-bound* — and nothing else on screen would say so. The count travels with the
-money on every surface: the `unpriced` column, the line under the table, the
-`unpriced` field in `--json`, the `unpriced` column in `--csv`. With none, the
-line reads `Complete: every session in this total is priced.` instead.
+**The last line is the contract.** A session lich never priced holds no ledger row and contributes nothing, so a sum over a unit containing one is a *lower bound* — and nothing else on screen would say so. The count travels with the money on every surface: the `unpriced` column, the line under the table, the `unpriced` field in `--json`, the `unpriced` column in `--csv`. With none, the line reads `Complete: every session in this total is priced.` instead.
 
-Why a session has no price is not reported here. That is the live scan's
-`costMiss` (`internal/terminal/usage_cost.go`), decided per turn and never
-persisted, so the ledger can only say a session carries no price — an
-unreadable transcript, an unpriced model, a provider lich has no reader for
-(Antigravity and Cursor CLI), or a session that ran while the readout was off
-all land in the same count.
+Why a session has no price is not reported here. That is the live scan's `costMiss` (`internal/terminal/usage_cost.go`), decided per turn and never persisted, so the ledger can only say a session carries no price — an unreadable transcript, an unpriced model, a provider lich has no reader for (Antigravity and Cursor CLI), or a session that ran while the readout was off all land in the same count.
 
-**The `source` column is the other half of that contract.** The money comes
-from two kinds of accounting and reads identically either way: `priced` is
-lich's own arithmetic over the token counts Claude Code and Codex write down,
-`reported` is the figure oh-my-pi, opencode or Crush computed themselves and
-handed over, with the omission their own accounting has. A row that ran both
-reads `mixed`, and a total that mixes them adds the line above the last one,
-splitting the counted sessions between the two. A row with no money to
-attribute — every session in it unpriced, or its spend earned by a provider CLI
-started by hand inside a shell session — reads `—` and claims no rung.
-`docs/ceilings.md` has what each rung's own figure leaves out.
+**The `source` column is the other half of that contract.** The money comes from two kinds of accounting and reads identically either way: `priced` is lich's own arithmetic over the token counts Claude Code and Codex write down, `reported` is the figure oh-my-pi, opencode or Crush computed themselves and handed over, with the omission their own accounting has. A row that ran both reads `mixed`, and a total that mixes them adds the line above the last one, splitting the counted sessions between the two. A row with no money to attribute — every session in it unpriced, or its spend earned by a provider CLI started by hand inside a shell session — reads `—` and claims no rung. `docs/ceilings.md` has what each rung's own figure leaves out.
 
-With the cost readout switched off, no transcript is ever summed and every
-session is unpriced, so the total can only be `$0.00`. That case adds a second
-line naming the setting, because a zero on a machine that was never asked to
-count reads exactly like a machine that spent nothing.
+With the cost readout switched off, no transcript is ever summed and every session is unpriced, so the total can only be `$0.00`. That case adds a second line naming the setting, because a zero on a machine that was never asked to count reads exactly like a machine that spent nothing.
 
 The filters:
 
-- `--project <name>` — one project, matched case-insensitively the way every
-  other command matches one. A name no session sits under is **refused**, not
-  answered with a zero: about money, a typo that reads as "that project cost
-  nothing" is worse than no answer.
-- `--provider <provider>` — one session kind (`claude`, `codex`, `crush`, …).
-  Combined with the total line this is what a provider cost across the machine.
-  An unknown provider is not refused; it matches nothing and the report is
-  empty.
-- `--since <window>` — `7d`, `24h`, `90m`. Sessions **active** in the window,
-  counted whole: a session's activity is its last counted turn, and a session
-  that ran through the boundary brings all of its cost with it. The ledger is a
-  running total with no per-turn history behind it, so this is a filter over
-  sessions, never a slice of the money by day. A session with nothing counted is
-  dated by when it was parked, or by now while it is still open.
+- `--project <name>` — one project, matched case-insensitively the way every other command matches one. A name no session sits under is **refused**, not answered with a zero: about money, a typo that reads as "that project cost nothing" is worse than no answer.
+- `--provider <provider>` — one session kind (`claude`, `codex`, `crush`, …). Combined with the total line this is what a provider cost across the machine. An unknown provider is not refused; it matches nothing and the report is empty.
+- `--since <window>` — `7d`, `24h`, `90m`. Sessions **active** in the window, counted whole: a session's activity is its last counted turn, and a session that ran through the boundary brings all of its cost with it. The ledger is a running total with no per-turn history behind it, so this is a filter over sessions, never a slice of the money by day. A session with nothing counted is dated by when it was parked, or by now while it is still open.
 
-`--csv` writes the per-project rows and no total — the totals are a sum of the
-columns, `unpriced` included, so the bound survives the export:
+`--csv` writes the per-project rows and no total — the totals are a sum of the columns, `unpriced` included, so the bound survives the export:
 
 ```
 project,sessions,unpriced,source,cost_usd
@@ -512,24 +497,13 @@ lich,12,2,mixed,4.312500
 revu,3,0,priced,0.880000
 ```
 
-A row with no rung leaves the `source` cell empty rather than carrying the
-table's dash: to a script a blank is the absence, and the dash is a thing to
-print.
+A row with no rung leaves the `source` cell empty rather than carrying the table's dash: to a script a blank is the absence, and the dash is a thing to print.
 
-`--json` is the whole report on one line — `projects`, the summed `sessions`,
-`unpriced` and `costUsd`, the total's own `source` with the `priced` and
-`reported` session counts behind it, and `readout` for whether anything is
-being counted at all.
+`--json` is the whole report on one line — `projects`, the summed `sessions`, `unpriced` and `costUsd`, the total's own `source` with the `priced` and `reported` session counts behind it, and `readout` for whether anything is being counted at all.
 
-It is not registered as an MCP tool. Every tool definition is in the prompt of
-every session lich spawns whether or not it is used (see the ceiling below), and
-a total nobody asked for is not worth that on every turn — an agent that wants
-it runs the command.
+It is not registered as an MCP tool. Every tool definition is in the prompt of every session lich spawns whether or not it is used (see the ceiling below), and a total nobody asked for is not worth that on every turn — an agent that wants it runs the command.
 
-There is no `--model` breakdown. The ledger records what a `(session,
-transcript)` pair cost and never which model each priced turn ran under, and
-the model on a session row is the one selected now — so a per-model total would
-have to be a second accounting path, not a filter on this one.
+There is no `--model` breakdown. The ledger records what a `(session, transcript)` pair cost and never which model each priced turn ran under, and the model on a session row is the one selected now — so a per-model total would have to be a second accounting path, not a filter on this one.
 
 ### `lich mcp`
 
@@ -552,6 +526,16 @@ at lich.
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |
+| `browser_open` | optional `url` — this session's browser. |
+| `browser_info` | the current page as JSON. Read-only. |
+| `browser_click` | `index` / `selector` / `x`+`y`. |
+| `browser_type` | `text`, optional `clear` and a target. |
+| `browser_screenshot` | optional `path`; returns a file path. Read-only. |
+| `browser_navigate` | `url`. |
+| `browser_reload` / `browser_back` / `browser_forward` | history. |
+| `browser_scroll` | optional `dy`. |
+| `browser_list` | this session's handle, or `[]`. Read-only. |
+| `browser_close` | tear the sidecar down. |
 
 A tool that fails answers with `isError` and the reason as text, not a JSON-RPC
 error: the agent should read what went wrong and act on it, not lose the turn.
@@ -559,8 +543,8 @@ error: the agent should read what went wrong and act on it, not lose the turn.
 `initialize` also carries `instructions` — the server's own briefing, which
 clients inject into the agent's system prompt. It is the one place the whole
 journey (fan out into worktree sessions, carry on, collect) is told as one;
-the tool descriptions each only explain their own door. `list_sessions` and
-`list_worktrees` are annotated `readOnlyHint`, so a client may auto-allow
+the tool descriptions each only explain their own door. `list_sessions`, `list_worktrees`, `browser_info`, `browser_list` and
+`browser_screenshot` are annotated `readOnlyHint`, so a client may auto-allow
 them.
 
 ### `lich rage [--output <path>]`
@@ -662,7 +646,7 @@ own command line (`providers.AcceptsMCPServer`):
 | Codex | `-c mcp_servers.lich.command=…` and `…args=["mcp"]` | at spawn |
 | Antigravity | an `agy mcp add` the plugin install runs — its own supported interface, so lich never formats that document | with the plugin |
 | Crush | an `mcp add` line in the block the plugin install writes into `crushrc` | with the plugin |
-| opencode | its plugin defines the same eight as tools of its own — a plugin there cannot register an MCP server | with the plugin |
+| opencode | its plugin defines the original seven as tools of its own — a plugin there cannot register an MCP server, so the session browser tools are absent | with the plugin |
 | oh-my-pi | a `lich` entry merged into `mcp.json` beside the extension the plugin install writes | with the plugin |
 | Cursor CLI | a `lich` entry merged into `~/.cursor/mcp.json` by the install — its `mcp` subcommand only lists, enables and disables what is already there | with the plugin |
 | Kiro CLI | a `kiro-cli mcp add --agent lich` the plugin install runs, so the entry lands in the agent lich owns rather than in the user's global `mcp.json` | with the plugin |
@@ -814,10 +798,11 @@ receiving agent only because this text describes it.
   and a test that reached it would deliver into a real session.
 - **Finding a lich from outside** — `internal/singleton`, `Read`: the runtime
   file the CLI falls back to when the environment carries no coordinates.
-- **MCP server** — `internal/cli/mcp.go`: the stdio transport, the tool table
-  and the handshake. Adding a tool is one entry in `mcpTools`, which is what
-  registering once buys — every tool lich grows later reaches every provider
-  that took the registration, with no further per-provider work.
+- **MCP server** — `internal/cli/mcp.go` and `mcp_browser.go`: the stdio
+  transport, the tool tables and the handshake. Relay tools are `mcpTools`;
+  browser tools are `browserTools`; `allMCPTools` concatenates them, which is
+  what registering once buys — every tool lich grows later reaches every
+  provider that took the registration, with no further per-provider work.
 - **Registration** — `internal/terminal`, `providerArgs` / `mcpArgs`, beside
   `nameArgs` and `resumeArgs`; which providers accept one is
   `providers.AcceptsMCPServer`. The names it registers under

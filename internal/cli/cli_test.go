@@ -237,7 +237,7 @@ func TestHelpPrintsEveryCommand(t *testing.T) {
 	}
 	for _, want := range []string{
 		"lich sessions", "lich send", "lich wait", "lich reply", "lich open",
-		"lich close", "lich worktrees",
+		"lich close", "lich worktrees", "lich browser",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("help does not document %q", want)

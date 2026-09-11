@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A session can open a real browser the agent drives.** Right-click a session
+  card and pick **Browser tab** to open a Chromium window of that session's
+  own — the same page `lich browser` and the `browser_*` MCP tools inspect,
+  click, type, press named keys (Enter, Tab, Escape, …) and screenshot. It is
+  a second Chromium on the machine (never lich-shell / the UI window), and
+  closing it does not quit lich. `file:` and `javascript:` URLs are refused,
+  and form values never enter the transcript.
+
 - **The Commits tab says which GitHub account each commit actually landed
   under.** A project's GitHub account governs what lich asks `gh`; it has never
   governed the push, which still signs with your global `user.email`. So a pull
@@ -47,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   switch appears as soon as it says anything.
 
 ### Fixed
+
+- **Browser tab no longer flashes shut with "invalid context".** CDP actions
+  now run on the Chromium they just launched, so the window stays open.
 
 - **What you type while a message is being relayed into your session no longer
   goes out with it.** A relayed message is pasted at the prompt and an Enter is
@@ -275,20 +286,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measured against that login instead of the one lich is signed in to. A session
   whose environment cannot be read at all shows no gauge on any platform now,
   which is what a card whose terminal is not yet up looks like until it is.
-
 - **Closing a session on Windows now asks the agent to leave before
   terminating it.** The close sends the terminal's Ctrl+C and gives the agent a
   moment to run its own exit path — hooks, transcripts, whatever it writes on
   the way out — where it used to be killed outright. An agent whose TUI wants a
   second Ctrl+C to quit is still terminated when that moment runs out.
-
 - **A session whose shell runs inside tmux, over ssh or in a container now says
   its directory is unknown instead of naming a local one.** The card, its
   tooltip and the footer read "cwd unknown · inside tmux": the directory those
   hosts sit in is real and is not where the user is typing, which is the one
   wrong answer that looks right. Linux and macOS; Windows has no foreground
   process group to read it from.
-
 - **The Review panel's recap band no longer goes blank behind a large tool
   result, and says when its words are the previous turn's.** The band read a
   bounded tail of the conversation, so a turn whose closing words ended up
@@ -297,13 +305,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where the last read stopped, so a turn is read whole however large it is;
   while a turn is running the band is labelled "from the previous turn", which
   is whose words they are beside a diff that has no window to draw yet.
-
 - **Searching a large history no longer reads whole conversations to show one
   sentence.** Every row a search matched on its conversation had its indexed
   body read out whole: megabytes each, a page of a hundred rows, once per
   settled keystroke. The stretch the snippet is cut from is now cut by the query
   itself, so the page reads kilobytes whatever the conversations behind it hold.
-
 - **On Windows, lich's own window no longer opens a stray console window beside
   it, or gives up and reopens in Chrome.** The window was built for the console
   subsystem, so Windows allocated a console for it and for each of Chromium's
@@ -375,35 +381,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   way — it is what each sender would have been told alone — and the worker is
   asked at its prompt to name the ticket. One open request behaves as before on
   both paths.
+
 - **The shortcut recorder now says what a chord costs the terminal.** A bound
   chord is caught before the session sees it, so rebinding one to `Ctrl+R` took
   the shell's history search with nothing on screen connecting the two. The row
   now names what the chord already does down there — the shell's own control
   codes, the terminal's search, the image paste the agent reads — and still
   records it.
+
 - **The sandbox's "Ask each time" rung now reaches every session.** It only ever
   asked in the New worktree dialog, so a session started from the New session
   menu, by another session, or through the MCP tool quietly ran on the machine.
   The New session menu now puts the question before the card opens, and a
   session nobody can be asked about — one opened by an agent through
   `open_session` or `lich open` — is confined, which that call now says.
+
 - **A session card now says when the sandbox setting moved past it.** A session
   is confined by the answer it opened with, so changing the rung in Settings
   never reaches a card already open, and the card's shield said confined or not
   without ever saying why. A session the rung would confine today now carries a
   crossed shield, and the tooltip on either side of the disagreement says to
   reopen the session to apply the setting.
+
 - **`lich cost` now says whose arithmetic each dollar is.** A new `source`
   column, carried in `--json` and `--csv` too, marks a row `priced` where lich
   derived the money from Claude Code's and Codex's token counts and `reported`
   where oh-my-pi, opencode or Crush handed over the figure they computed
   themselves. A project that ran both reads `mixed`, and a total that mixes them
   gains a line splitting the sessions between the two.
+
 - **A session card now says why it cannot be forked.** "Fork to worktree…" used
   to be missing altogether on Antigravity, oh-my-pi, Crush, Cursor CLI and Kiro
   CLI cards, so the offer looked lost rather than withheld. The item is there
   now, disabled, under one line naming the provider — their CLIs keep no fork,
   only resume.
+
 - **A session card's right-click menu now reads the same on every card.** The
   shortcuts printed beside Rename, Pin, Delegate, Terminal and Close session
   were only ever true of the card in view, since that is the card a chord acts
@@ -2074,6 +2086,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   labels underneath showed straight through it. A dragged card now carries a
   raised surface and stops at the ends of the list it is being reordered in —
   the same for checkout groups and project tabs.
+
 
 ## [0.35.0] - 2026-08-16
 

@@ -85,6 +85,13 @@ var commands = []command{
 			"sessions are open in it.",
 	},
 	{
+		name: "browser",
+		args: "<verb> [args]",
+		about: "Drive this session's browser — the same window Browser tab opens.\n" +
+			"Verbs: open [url], info, click, type, press <key>, screenshot [path], navigate <url>,\n" +
+			"reload, back, forward, scroll, list, close.",
+	},
+	{
 		name: "cost",
 		args: "[--project <name>] [--provider <provider>] [--since <window>]\n" +
 			"            [--json|--csv]",
