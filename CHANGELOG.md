@@ -83,6 +83,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lich's log. The packages now set the mode on the copy Chromium reads;
   installing the release over the previous one is enough.
 
+- **The dock resizes from its whole edge while a file is open.** Opening a file
+  in the Code tab laid its preview over the panel's drag handle, so only the
+  strip beside the tabs still resized the dock. The handle now sits above the
+  preview.
+
 ## [0.49.0] - 2026-09-09
 
 > [!WARNING]
