@@ -7,16 +7,14 @@ description = "lich's window: an embedded Chromium (CEF) launched by the Go back
 license = "AGPL-3.0-only"
 
 [dependencies]
-# The fork's `lich` branch: upstream eedaedc plus window_class / window_title /
-# window_icon / cache_dir (kurogane#11), the client handlers a browser delegate
-# supplies (kurogane#12), the NSApplication kept to the browser process
-# (kurogane#14), and the macOS bundle layout (framework in Contents/Frameworks,
-# subprocesses as the bundle's helper app) that upstream carries on its
-# seal-of-approval/distribution branch (53d51ba), and a relaunch on the
-# profile raising the window it already has (451bd7c) and the Linux sandbox
-# left on (bb27484); move back to 0x48piraj/kurogane once they land
-# (build/linux/shell/README.md).
-kurogane = { git = "https://github.com/omartelo/kurogane", rev = "bb274847fc3bd517358f1bd41cc56ab69bfd7dd9" }
+# The fork's `lich-next` branch: upstream master (fda6cb6, which ships the
+# macOS bundle layout) plus window_class / window_title / window_icon /
+# cache_dir (kurogane#11), the client handlers a browser delegate supplies
+# (kurogane#12), the NSApplication kept to the browser process (kurogane#14),
+# a relaunch on the profile raising the window it already has (451bd7c) and
+# the Linux sandbox left on (bb27484); move back to 0x48piraj/kurogane once
+# they land (build/linux/shell/README.md).
+kurogane = { git = "https://github.com/omartelo/kurogane", rev = "445638402d8e5afe565812e0f378d7910f3f21b0" }
 
 # The CEF handler types a delegate returns (main.rs). Pinned to the revision
 # kurogane's own workspace pins: two cef crates in one binary are two different
