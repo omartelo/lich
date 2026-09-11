@@ -279,12 +279,12 @@ fn wait_for_eof(mut stdin: impl Read) -> bool {
 
 /// Whether Chromium can confine its subprocesses here, decided the way
 /// Chromium decides it at its zygote (content/browser/zygote_host): never as
-/// root; otherwise a user namespace, or the setuid helper beside the executable.
+/// root; otherwise a user namespace, or the setuid helper beside libcef.so.
 /// With neither the browser process aborts at startup, and Chromium's own
 /// advice is --no-sandbox; Ubuntu denies unprivileged user namespaces through
-/// AppArmor, and the packages do not ship the helper setuid, so that is every
-/// Ubuntu desktop. The "stability and security will suffer" bar Chrome draws
-/// over the switch is then the truth about that machine.
+/// AppArmor, so there only a package, which can own the helper root, keeps the
+/// sandbox. The "stability and security will suffer" bar Chrome draws over the
+/// switch is then the truth about that machine.
 #[cfg(target_os = "linux")]
 fn sandbox_available() -> bool {
     // SAFETY: geteuid has no preconditions.
@@ -296,7 +296,7 @@ fn sandbox_available() -> bool {
     }
     std::env::current_exe()
         .ok()
-        .and_then(|exe| exe.with_file_name("chrome-sandbox").metadata().ok())
+        .and_then(|exe| helper_path(&exe).metadata().ok())
         .is_some_and(|meta| {
             use std::os::unix::fs::MetadataExt;
             helper_usable(meta.uid(), meta.mode())
@@ -308,6 +308,13 @@ fn sandbox_available() -> bool {
 #[cfg(target_os = "linux")]
 fn helper_usable(uid: u32, mode: u32) -> bool {
     uid == 0 && mode & libc::S_ISUID != 0 && mode & libc::S_IXOTH != 0
+}
+
+/// Chromium looks for the helper beside libcef.so, not beside this executable:
+/// its FATAL names cef/chrome-sandbox even with a usable copy next to lich-shell.
+#[cfg(target_os = "linux")]
+fn helper_path(exe: &std::path::Path) -> std::path::PathBuf {
+    exe.with_file_name("cef").join("chrome-sandbox")
 }
 
 /// Chromium's own probe (sandbox::Credentials::CanCreateProcessInNewUserNS):
@@ -487,6 +494,15 @@ mod tests {
         assert!(!helper_usable(1000, 0o104755), "not root");
         assert!(!helper_usable(0, 0o100755), "no setuid bit");
         assert!(!helper_usable(0, 0o104750), "not executable by others");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn looks_for_the_helper_beside_libcef_where_chromium_does() {
+        assert_eq!(
+            helper_path(std::path::Path::new("/usr/lib/lich/shell/lich-shell")),
+            std::path::Path::new("/usr/lib/lich/shell/cef/chrome-sandbox")
+        );
     }
 
     #[test]

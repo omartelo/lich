@@ -18,4 +18,8 @@ else
   echo "Warning: update-mime-database command not found. Custom URL schemes may not be immediately recognized." >&2
 fi
 
+# Chromium reads its setuid sandbox helper from cef/ and aborts the window when
+# it is not root-owned 4755; nfpm.yaml says why the package cannot set the mode.
+chmod 4755 /usr/local/lib/lich/shell/cef/chrome-sandbox
+
 exit 0

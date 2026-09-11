@@ -21,22 +21,12 @@ contents:
   - src: "./bin/lich"
     dst: "/usr/local/bin/lich"
   # The window, where /usr/local/bin/lich looks for it: the lib directory
-  # sibling to its bin (internal/chromium/shell.go).
+  # sibling to its bin (internal/chromium/shell.go). Its cef/chrome-sandbox gets
+  # 4755 from the install scripts: a second entry for it collides with the tree,
+  # and the archlinux packager drops a setuid bit read from the source file.
   - src: "./bin/shell"
     dst: "/usr/local/lib/lich/shell"
     type: tree
-  # Chromium's setuid sandbox helper, at the only path its zygote reads —
-  # beside the executable, root-owned and 4755 (shell/src/main.rs). Without it
-  # a desktop that denies unprivileged user namespaces, which is Ubuntu's
-  # AppArmor policy, opens the window with --no-sandbox. Copied rather than
-  # moved: the tree above carries the same binary under cef/, where the
-  # tarball keeps it and nothing reads it.
-  - src: "./bin/shell/cef/chrome-sandbox"
-    dst: "/usr/local/lib/lich/shell/chrome-sandbox"
-    file_info:
-      mode: 0o4755
-      owner: root
-      group: root
   - src: "./build/appicon.png"
     dst: "/usr/share/icons/hicolor/128x128/apps/lich.png"
   - src: "./build/linux/lich.desktop"
@@ -147,3 +137,9 @@ rpm:
 
 scripts:
   postinstall: "./build/linux/nfpm/scripts/postinstall.sh"
+
+# pacman runs post_install on the first install only, and every upgrade rewrites
+# the sandbox helper with the package's own mode.
+archlinux:
+  scripts:
+    postupgrade: "./build/linux/nfpm/scripts/postinstall.sh"

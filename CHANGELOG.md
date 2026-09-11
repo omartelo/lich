@@ -74,6 +74,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   combining accent underlined the wrong columns. The match now runs over the
   whole logical line and maps back to the cells the characters really occupy.
 
+- **The window opens on Ubuntu instead of dying at launch.** Where the desktop
+  denies unprivileged user namespaces, which is Ubuntu's AppArmor policy,
+  Chromium confines the window through its setuid sandbox helper. The deb, rpm
+  and AUR packages installed that helper root-owned and 4755 beside the
+  window's binary, but Chromium reads the copy beside its own library, found it
+  without the setuid bit and aborted: no window, and `trace/breakpoint trap` in
+  lich's log. The packages now set the mode on the copy Chromium reads;
+  installing the release over the previous one is enough.
+
 ## [0.49.0] - 2026-09-09
 
 > [!WARNING]
