@@ -10,7 +10,9 @@ interface ResizeHandleProps {
 }
 
 // The drag strip along a resizable panel's edge: a 6px hit area, invisible
-// until hovered. The panel must be `relative` for it to land on the edge.
+// until hovered. The panel must be `relative` for it to land on the edge, and
+// the handle must come after the panel's content: z-10 ties with the layers a
+// panel raises over itself (the dock's file preview), and tree order wins it.
 export function ResizeHandle({ edge, label, handleProps }: ResizeHandleProps) {
   return (
     <div
@@ -19,7 +21,7 @@ export function ResizeHandle({ edge, label, handleProps }: ResizeHandleProps) {
       aria-label={label}
       {...handleProps}
       className={cn(
-        "absolute top-0 h-full w-1.5 cursor-col-resize touch-none transition-colors hover:bg-accent",
+        "absolute top-0 z-10 h-full w-1.5 cursor-col-resize touch-none transition-colors hover:bg-accent",
         edge === "right" ? "right-0" : "left-0",
       )}
     />
