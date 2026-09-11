@@ -106,7 +106,9 @@ func fallsBack(step string, err error, elapsed time.Duration) bool {
 	return step == stepShell && err != nil && elapsed < startupGrace
 }
 
-// launch starts the resolved window on the profile and waits for it to exit.
+// launch starts the resolved window on the profile and waits for it to exit. A
+// window that exits with an error comes back as an ExitError, with the end of
+// what it wrote to stderr.
 func launch(window Result, url, dataDir, class string, extra []string, onStart func(*os.Process)) error {
 	dataDir = window.ProfileDir(dataDir)
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
@@ -114,7 +116,9 @@ func launch(window Result, url, dataDir, class string, extra []string, onStart f
 	}
 	cmd := exec.Command(window.Path, Args(url, dataDir, class, extra)...)
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	tail := &stderrTail{mirror: os.Stderr}
+	cmd.Stderr = tail
+	cmd.WaitDelay = stderrDrain
 	// The window's life is tied to this process by a pipe it reads for EOF: a
 	// lich that dies without closing its window (a kill, an out-of-memory, a
 	// crash) closes the write end with it, and the window goes. Left running,
@@ -134,5 +138,5 @@ func launch(window Result, url, dataDir, class string, extra []string, onStart f
 	if onStart != nil {
 		onStart(cmd.Process)
 	}
-	return cmd.Wait()
+	return tail.exit(cmd.Wait())
 }
