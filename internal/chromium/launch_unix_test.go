@@ -3,9 +3,11 @@
 package chromium
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -30,6 +32,27 @@ func TestFocusLaunchesThePinnedWindowOnItsProfile(t *testing.T) {
 	keyed := filepath.Join(profile, (Result{Path: exe}).profileKey())
 	if info, err := os.Stat(keyed); err != nil || !info.IsDir() {
 		t.Fatalf("profile directory %q not created: %v", keyed, err)
+	}
+}
+
+// A window that dies at launch says why: its stderr comes back on the exit,
+// which is what main.go logs and shows.
+func TestFocusReportsWhatTheWindowWroteBeforeItDied(t *testing.T) {
+	fatal := "[1:1:0911/1:FATAL:setuid_sandbox_host.cc:166] The SUID sandbox helper binary was found"
+	exe := filepath.Join(t.TempDir(), "lich-shell")
+	script := "#!/bin/sh\necho 'Fontconfig warning' >&2\necho '" + fatal + "' >&2\nexit 5\n"
+	if err := os.WriteFile(exe, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(OverrideEnv, exe)
+	err := Focus("http://127.0.0.1:1/", filepath.Join(t.TempDir(), "chromium-profile"), "lichtest")
+	var exit *ExitError
+	var code *exec.ExitError
+	if !errors.As(err, &exit) || !errors.As(err, &code) || code.ExitCode() != 5 {
+		t.Fatalf("Focus = %v, want an ExitError on exit status 5", err)
+	}
+	if want := []string{"Fontconfig warning", fatal}; !slices.Equal(exit.Stderr, want) {
+		t.Fatalf("Stderr = %q, want %q", exit.Stderr, want)
 	}
 }
 

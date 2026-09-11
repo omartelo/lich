@@ -88,6 +88,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lich's log. The packages now set the mode on the copy Chromium reads;
   installing the release over the previous one is enough.
 
+- **A window that fails to open says why.** When lich's window died on start,
+  the error dialog and `lich.log` named only the signal it died of, such as
+  "trace/breakpoint trap", while the reason the window printed went to a
+  terminal that a launch from the app menu does not have. The dialog now shows
+  the line the window died on, and the log keeps the last lines it wrote, so a
+  `lich rage` bundle carries them too. A second launch that fails to bring the
+  open window forward logs them the same way.
+
 ## [0.49.0] - 2026-09-09
 
 > [!WARNING]
