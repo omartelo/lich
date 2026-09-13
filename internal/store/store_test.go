@@ -913,7 +913,8 @@ CREATE TABLE sessions (
 // terminal now, and the selection the terminal used to keep is read by nothing.
 // It is deleted on the way past so that whoever gives the terminal its own
 // theme again starts from the default, rather than silently restoring a choice
-// its user made when the two were separate.
+// its user made when the two were separate. The delete belongs to the one-time
+// legacy migration, so the database is put back to version 0 before reopening.
 func TestOpenDropsTheTerminalThemeSetting(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "themed.db")
 	before, err := open(path)
@@ -927,6 +928,7 @@ func TestOpenDropsTheTerminalThemeSetting(t *testing.T) {
 	_ = before.SetSetting("appearance.terminalTheme", "p1", "emerald")
 	_ = before.SetSetting("appearance.theme", "", "rose-pine")
 	_ = before.Close()
+	seedDB(t, path, `PRAGMA user_version = 0`)
 
 	after, err := open(path)
 	if err != nil {

@@ -34,8 +34,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// schema is applied on every open. Every statement is idempotent, so opening an
-// existing database is a no-op and adding a column later is a plain migration.
+// schema is the version-1 shape, applied once by the first migration
+// (migrate.go). It is frozen: a later change is a new migration, never an edit
+// here, or a fresh database would be created with a column its ALTER then adds.
 const schema = `
 CREATE TABLE IF NOT EXISTS projects (
     id                TEXT    PRIMARY KEY,
@@ -53,7 +54,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     project_id          TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     label               TEXT NOT NULL,
     -- 'claude' is providers.Claude, which SQL cannot interpolate: renaming that
-    -- constant has to move this literal and the migration below with it, or a
+    -- constant has to move this literal and the migration in migrate.go with it, or a
     -- row inserted without a kind (mutations.go's AddSession default) reads back
     -- as a provider nothing is registered under.
     kind                TEXT NOT NULL DEFAULT 'claude',
@@ -441,70 +442,11 @@ func open(path string) (*Service, error) {
 	}
 	db.SetMaxOpenConns(1)
 
-	if _, err := db.Exec(schema); err != nil {
+	if err := migrate(db); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("apply schema: %w", err)
-	}
-	// Migrations for databases created before these columns existed. SQLite has
-	// no ADD COLUMN IF NOT EXISTS and no RENAME COLUMN IF EXISTS; the two errors
-	// tolerated below are exactly "the column is already there" and "there is
-	// nothing to rename", which is what an already-applied migration looks like.
-	//
-	// The rename/add pair covers all three shapes a database can be in: created
-	// fresh with provider_session_id (rename finds nothing, add is a duplicate),
-	// created with the old claude_session_id (rename carries the ids over, add is
-	// a duplicate), or predating the column entirely (rename finds nothing, add
-	// creates it).
-	migrations := []string{
-		// 'claude' is providers.Claude spelled out — see the schema above.
-		`ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'claude'`,
-		`ALTER TABLE sessions ADD COLUMN path TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE sessions RENAME COLUMN claude_session_id TO provider_session_id`,
-		`ALTER TABLE sessions ADD COLUMN provider_session_id TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE sessions ADD COLUMN label_auto INTEGER NOT NULL DEFAULT 1`,
-		`ALTER TABLE sessions ADD COLUMN is_open INTEGER NOT NULL DEFAULT 1`,
-		`ALTER TABLE sessions ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE sessions ADD COLUMN model TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE sessions ADD COLUMN entrypoint TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE sessions ADD COLUMN origin_session_id TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE sessions ADD COLUMN origin_label TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE sessions ADD COLUMN sandbox TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE sessions ADD COLUMN closed_at INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE sessions ADD COLUMN scheduled_at INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE sessions ADD COLUMN scheduled_prompt TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE sessions ADD COLUMN unread INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE sessions ADD COLUMN mcp_servers TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE sessions ADD COLUMN parked_branch TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE sessions ADD COLUMN fork_cost_offset REAL NOT NULL DEFAULT 0`,
-		`ALTER TABLE sessions ADD COLUMN sandbox_links TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE sessions ADD COLUMN run INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE session_costs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE session_texts ADD COLUMN truncated INTEGER NOT NULL DEFAULT 0`,
-		// The terminal's own theme selection, from before one theme coloured both
-		// surfaces. Nothing reads it, and a row left standing would hand whoever
-		// gives the terminal a theme again a choice its user made under other
-		// rules. Unlike the ALTERs above this runs on every launch, so a terminal
-		// theme that ever comes back needs a key of its own: this one is cleared
-		// under it.
-		`DELETE FROM settings WHERE key = 'appearance.terminalTheme'`,
-	}
-	for _, stmt := range migrations {
-		if _, err := db.Exec(stmt); err != nil && !migrationApplied(err) {
-			_ = db.Close()
-			return nil, fmt.Errorf("migrate schema: %w", err)
-		}
+		return nil, err
 	}
 	return &Service{db: db, stopped: make(chan struct{})}, nil
-}
-
-// migrationApplied reports whether an ALTER TABLE failed because the migration
-// had already been applied — the column exists, or the one to rename is gone.
-func migrationApplied(err error) bool {
-	msg := err.Error()
-	return strings.Contains(msg, "duplicate column") || strings.Contains(msg, "no such column")
 }
 
 // databasePath resolves the on-disk location of the database file. LICH_DEV
