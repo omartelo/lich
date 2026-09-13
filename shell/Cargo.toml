@@ -11,10 +11,11 @@ license = "AGPL-3.0-only"
 # macOS bundle layout) plus window_class / window_title / window_icon /
 # cache_dir (kurogane#11), the client handlers a browser delegate supplies
 # (kurogane#12), the NSApplication kept to the browser process (kurogane#14),
-# a relaunch on the profile raising the window it already has (451bd7c) and
-# the Linux sandbox left on (bb27484); move back to 0x48piraj/kurogane once
+# a relaunch on the profile raising the window it already has (451bd7c), the
+# Linux sandbox left on (bb27484) and the main window's geometry handed to the
+# delegate (kurogane#19); move back to 0x48piraj/kurogane once
 # they land (build/linux/shell/README.md).
-kurogane = { git = "https://github.com/omartelo/kurogane", rev = "445638402d8e5afe565812e0f378d7910f3f21b0" }
+kurogane = { git = "https://github.com/omartelo/kurogane", rev = "893debec328eccd69832ae7d0f801c7d0e127975" }
 
 # The CEF handler types a delegate returns (main.rs). Pinned to the revision
 # kurogane's own workspace pins: two cef crates in one binary are two different

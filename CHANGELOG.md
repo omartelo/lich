@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The window reopens the way you left it.** Its size and maximized state come
+  back at the next launch, and so does its position on X11, Windows and macOS.
+  A window last seen on a monitor that is gone opens on one that is still there.
+
 - **A written stability promise.** [docs/stability.md](docs/stability.md) lists
   what semver covers (the CLI, MCP tools, hooks, themes, project files and
   environment variables) and what may change in any release.

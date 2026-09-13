@@ -621,9 +621,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Windows and macOS run with `no_sandbox` and the same bar everywhere: the Windows sandbox needs
   `cef_sandbox` linked into the executable and the macOS one a helper app initialising it, and neither is
   wired.
-- **The window opens at CEF's default size** (`shell/src/main.rs`): a system browser remembered the
-  window's last size and position in its profile; the CEF Views window does not, so each launch is the
-  default rectangle until the window manager places it. Tiling compositors never notice.
+- **Under Wayland the window remembers its size, not its position** (`shell/src/geometry.rs`): a Wayland
+  client can neither read nor set where its window sits, so the compositor places it at every launch.
+  X11, Windows and macOS reopen it where it was. The geometry lives in `lich-window` in the Chromium
+  profile directory, so `task dev` keeps its own, and a window killed outright (SIGKILL, a crash) keeps
+  the one it had before.
 - **Opened as a tab there is no window lifecycle** (`main.go`, `openWithoutWindow`, macOS only): lich opens a
   plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on. Closing
   the tab leaves lich serving.
