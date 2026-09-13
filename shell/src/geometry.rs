@@ -88,15 +88,25 @@ impl Geometry {
         (bounds, state)
     }
 
-    /// What is saved when the window closes, given what was saved before. CEF
-    /// has no restored bounds: a maximized window reports the maximized
-    /// rectangle, so the normal one saved earlier is kept. A minimized window
-    /// reports nothing worth keeping.
+    /// What is saved when the window closes, given the work area of its
+    /// display and what was saved before. CEF has no restored bounds: a
+    /// maximized window reports the maximized rectangle, so the normal one
+    /// saved earlier is kept. A minimized window reports nothing worth keeping.
     pub fn closed(
         bounds: BrowserBounds,
         state: WindowState,
+        work_area: BrowserBounds,
         previous: Option<Self>,
     ) -> Option<Self> {
+        // Hyprland configures every window tiled on all four edges, floating
+        // ones included, and Chromium reports that as maximized (measured,
+        // 0.56): a maximized window spans its work area, one that does not is not.
+        let state = match state {
+            WindowState::Maximized if work_area.width > 0 && bounds.width < work_area.width => {
+                WindowState::Normal
+            }
+            state => state,
+        };
         match state {
             WindowState::Normal => Some(Self {
                 x: bounds.x,
@@ -135,6 +145,41 @@ mod tests {
 
     fn fields(b: BrowserBounds) -> (i32, i32, i32, i32) {
         (b.x, b.y, b.width, b.height)
+    }
+
+    const SCREEN: BrowserBounds = BrowserBounds {
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1080,
+    };
+
+    #[test]
+    fn saves_a_maximized_state_that_does_not_span_the_work_area_as_normal() {
+        let floating = Geometry::closed(
+            rect(40, 40, 800, 600),
+            WindowState::Maximized,
+            SCREEN,
+            Some(NORMAL),
+        );
+        assert_eq!(
+            floating,
+            Some(Geometry {
+                x: 40,
+                y: 40,
+                width: 800,
+                height: 600,
+                maximized: false,
+            })
+        );
+        let no_display = rect(0, 0, 0, 0);
+        let trusted = Geometry::closed(
+            rect(40, 40, 800, 600),
+            WindowState::Maximized,
+            no_display,
+            Some(NORMAL),
+        );
+        assert_eq!(trusted.map(|g| g.maximized), Some(true));
     }
 
     const NORMAL: Geometry = Geometry {
@@ -204,7 +249,8 @@ mod tests {
 
     #[test]
     fn opens_maximized_at_the_default_size_when_no_normal_size_is_known() {
-        let only_maximized = Geometry::closed(rect(0, 0, 1920, 1080), WindowState::Maximized, None);
+        let only_maximized =
+            Geometry::closed(rect(0, 0, 1920, 1080), WindowState::Maximized, SCREEN, None);
         let (bounds, state) = only_maximized.unwrap().restore(rect(0, 0, 1920, 1080));
         assert_eq!(fields(bounds), (0, 0, 0, 0));
         assert_eq!(state, WindowState::Maximized);
@@ -212,7 +258,12 @@ mod tests {
 
     #[test]
     fn keeps_the_normal_rectangle_when_closed_maximized() {
-        let saved = Geometry::closed(rect(0, 0, 1920, 1080), WindowState::Maximized, Some(NORMAL));
+        let saved = Geometry::closed(
+            rect(0, 0, 1920, 1080),
+            WindowState::Maximized,
+            SCREEN,
+            Some(NORMAL),
+        );
         assert_eq!(
             saved,
             Some(Geometry {
@@ -224,7 +275,12 @@ mod tests {
 
     #[test]
     fn saves_the_normal_rectangle_and_ignores_a_minimized_close() {
-        let saved = Geometry::closed(rect(10, 20, 900, 700), WindowState::Normal, Some(NORMAL));
+        let saved = Geometry::closed(
+            rect(10, 20, 900, 700),
+            WindowState::Normal,
+            SCREEN,
+            Some(NORMAL),
+        );
         assert_eq!(
             saved,
             Some(Geometry {
@@ -236,7 +292,12 @@ mod tests {
             })
         );
         assert_eq!(
-            Geometry::closed(rect(0, 0, 0, 0), WindowState::Minimized, Some(NORMAL)),
+            Geometry::closed(
+                rect(0, 0, 0, 0),
+                WindowState::Minimized,
+                SCREEN,
+                Some(NORMAL)
+            ),
             None
         );
     }

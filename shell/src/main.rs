@@ -166,28 +166,20 @@ impl ClientAppBrowserDelegate for Window {
 
     fn initial_window_geometry(&self) -> Option<(BrowserBounds, WindowState)> {
         let saved = read_geometry(self.geometry.as_deref()?)?;
-        let rect = cef::Rect {
+        Some(saved.restore(work_area(BrowserBounds {
             x: saved.x,
             y: saved.y,
             width: saved.width,
             height: saved.height,
-        };
-        let area = cef::display_get_matching_bounds(Some(&rect), 0)
-            .map(|display| display.work_area())
-            .unwrap_or_default();
-        Some(saved.restore(BrowserBounds {
-            x: area.x,
-            y: area.y,
-            width: area.width,
-            height: area.height,
-        }))
+        })))
     }
 
     fn on_window_closing(&self, bounds: BrowserBounds, state: WindowState) {
         let Some(path) = &self.geometry else {
             return;
         };
-        let Some(geometry) = Geometry::closed(bounds, state, read_geometry(path)) else {
+        let work_area = work_area(bounds);
+        let Some(geometry) = Geometry::closed(bounds, state, work_area, read_geometry(path)) else {
             return;
         };
         if let Err(err) = std::fs::write(path, geometry.encode()) {
@@ -196,6 +188,26 @@ impl ClientAppBrowserDelegate for Window {
                 path.display()
             );
         }
+    }
+}
+
+/// The work area of the display nearest to `bounds`, in DIP screen
+/// coordinates; empty when CEF knows no display.
+fn work_area(bounds: BrowserBounds) -> BrowserBounds {
+    let rect = cef::Rect {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+    };
+    let area = cef::display_get_matching_bounds(Some(&rect), 0)
+        .map(|display| display.work_area())
+        .unwrap_or_default();
+    BrowserBounds {
+        x: area.x,
+        y: area.y,
+        width: area.width,
+        height: area.height,
     }
 }
 
