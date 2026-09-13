@@ -211,6 +211,25 @@ func TestRepairRepointsCrushsBlock(t *testing.T) {
 	}
 }
 
+// A Crush install from before v0.44.0 keeps its scripts in the hooks directory
+// itself. The repair fetches no scripts, so it must not point the block at a
+// directory that has none.
+func TestRepairKeepsCrushsPre044ScriptDir(t *testing.T) {
+	s, _, _ := repairHome(t)
+	configDir := t.TempDir()
+	flat := filepath.Join(lichConfigHome(t), "lich", "plugin", "hooks")
+	writeDoc(t, filepath.Join(flat, filepath.Base(crushHooks[0].script)), "#!/bin/sh\n")
+	crushCLI(t, s, configDir, "0.88.1")
+	rc := filepath.Join(configDir, "crushrc")
+	writeDoc(t, rc, crushrcBlock(testVersion, flat, "/opt/old/lich"))
+
+	s.RepairRegistrations()
+
+	if got, want := readFile(t, rc), crushrcBlock(testVersion, flat, freshLich); got != want {
+		t.Errorf("crushrc =\n%s\nwant\n%s", got, want)
+	}
+}
+
 // A crushrc block with no `mcp add` line is one whose registration was left out
 // or taken out, and the repair does not put it back.
 func TestRepairLeavesACrushBlockWithoutTheServer(t *testing.T) {

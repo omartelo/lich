@@ -188,6 +188,13 @@ func (s *Service) crushRewrite(lichBin string) error {
 	if err != nil {
 		return err
 	}
+	// Before v0.44.0 the scripts sat in the hooks directory itself. The repair
+	// fetches none, so an install that old keeps running the ones it has.
+	legacy := filepath.Dir(dir)
+	_, errNew := os.Stat(dir)
+	if _, errOld := os.Stat(filepath.Join(legacy, filepath.Base(crushHooks[0].script))); errNew != nil && errOld == nil {
+		dir = legacy
+	}
 	return s.writeCrushrc(version, dir, lichBin)
 }
 
