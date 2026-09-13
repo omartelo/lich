@@ -132,9 +132,9 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 | --- | --- | --- |
 | **Linux** | `install.sh` above, or AUR [`lich-bin`](https://aur.archlinux.org/packages/lich-bin) (`yay -S lich-bin`) | `zenity`, plus glibc 2.34 or newer for the window that ships in the package (Debian 12, Ubuntu 22.04, RHEL 9 and up) |
 | **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | nothing on Apple Silicon — the window ships in the app; Intel opens lich as a tab in your default browser |
-| **Windows** | installer from [Releases](https://github.com/omartelo/lich/releases), or Scoop: `scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json` | nothing — the window ships with both |
+| **Windows** | installer or portable zip from [Releases](https://github.com/omartelo/lich/releases), or Scoop: `scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json` | nothing, the window ships with each |
 
-Manual per-distro packages and the static binary: [INSTALL.md](INSTALL.md). The
+Manual per-distro packages, the Linux tarball and the Windows portable zip: [INSTALL.md](INSTALL.md). The
 macOS and Windows binaries are unsigned — Gatekeeper and SmartScreen warn until
 notarization/signing ship. Homebrew installs sidestep the Gatekeeper prompt;
 a download from the Releases page needs its quarantine flag cleared by hand.

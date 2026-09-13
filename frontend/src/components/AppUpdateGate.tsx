@@ -24,10 +24,10 @@ import { errorText } from "@/lib/utils"
 const POLL_INTERVAL_MS = 60 * 60 * 1000
 
 // AppUpdateGate checks on startup, then hourly, whether a newer lich release
-// exists. Where the binary is writable (Windows/macOS) it offers a one-click
-// self-update; on Linux the binary is package-manager owned, so it offers to
-// paste the install command into a terminal (the user runs it) or open the
-// release page. Any failure is silent — it must never block or break startup.
+// exists. A Windows install it may write offers a one-click update through the
+// installer; anything a package manager owns offers to paste its install
+// command into a terminal (the user runs it) or open the release page. Any
+// failure is silent: it must never block or break startup.
 export function AppUpdateGate() {
   const { newSession, ensureHomeProject } = useProjects()
   const navigate = useNavigate()
@@ -93,7 +93,7 @@ export function AppUpdateGate() {
 
   const dismiss = (version: string) => writePref(UPDATE_DISMISSED_KEY, version)
 
-  // Windows/macOS: swap the binary in place, then offer a one-click restart.
+  // Windows: download and run the installer, which closes and reopens lich.
   const promptSelfApply = (version: string) => {
     toast(`lich ${version} is available`, {
       duration: Infinity,
@@ -102,10 +102,9 @@ export function AppUpdateGate() {
     })
   }
 
-  // Download + verify + swap, drawn step by step off the progress events Apply
-  // emits, then a persistent toast whose Restart button relaunches lich in
-  // place. Kept persistent so the button stays available if the user doesn't
-  // restart right away. A failure names the phase it died in and offers the
+  // Download + verify + hand over to the installer, drawn step by step off the
+  // progress events Apply emits, then a persistent toast whose Restart button
+  // relaunches lich, for the moment before the installer closes it. A failure names the phase it died in and offers the
   // whole thing again; there is no resume.
   const runApply = async (version: string) => {
     let last: AppUpdateProgress | null = null
@@ -149,15 +148,15 @@ export function AppUpdateGate() {
     }
   }
 
-  // Linux: three choices — paste the install command into a terminal, open the
-  // release page, or dismiss for this version. sonner's default toast has only
+  // Package-manager installs: three choices, paste the install command into a
+  // terminal, open the release page, or dismiss for this version. sonner's default toast has only
   // two buttons, so this is a custom one styled with the popover tokens.
   //
-  // There is no install command where lich cannot name one: a Windows or macOS
-  // binary in a directory it may not write cannot self-apply and belongs to no
-  // package manager either. Install is then dropped rather than offered as a
-  // button that pastes an empty line, and the release page — where the reader
-  // gets the binary themselves — becomes the primary action.
+  // There is no install command where lich cannot name one: a Linux tarball, or
+  // a Windows folder it may not write, belongs to no package manager. Install is
+  // then dropped rather than offered as a button that pastes an empty line, and
+  // the release page, where the reader gets the package themselves, becomes the
+  // primary action.
   const promptInstall = (version: string, releaseUrl: string, installCommand: string) => {
     toast.custom(
       (id) => (

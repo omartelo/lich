@@ -89,13 +89,13 @@ jobs:
           mv "lich.deb"             "lich-${tag}-amd64.deb"
           mv "lich.rpm"             "lich-${tag}-x86_64.rpm"
           mv "lich.pkg.tar.zst"     "lich-${tag}-x86_64.pkg.tar.zst"
-          cp lich "lich-${tag}-linux-amd64"
-          # The window for the bare binary and the AUR package: the PKGBUILD
-          # unpacks it into /usr/lib/lich/shell. zstd's default level leaves
-          # ~30 MB on the table for a minute of CPU; the env is how tar's zstd
-          # takes a level. Threads spelled out: unlike -T0, ZSTD_NBTHREADS=0
-          # is one thread, and level 19 on one thread is three minutes.
-          ZSTD_CLEVEL=19 ZSTD_NBTHREADS="$(nproc)" tar --zstd -cf "lich-${tag}-linux-amd64-shell.tar.zst" shell
+          # The tarball is a complete package, the binary with its window
+          # beside it; the AUR PKGBUILD installs from it too. zstd's default
+          # level leaves ~30 MB on the table for a minute of CPU; the env is how
+          # tar's zstd takes a level. Threads spelled out: unlike -T0,
+          # ZSTD_NBTHREADS=0 is one thread, and level 19 on one thread is three
+          # minutes.
+          ZSTD_CLEVEL=19 ZSTD_NBTHREADS="$(nproc)" tar --zstd -cf "lich-${tag}-linux-amd64.tar.zst" lich shell
           ls -la lich-${tag}-*
 
       - name: Upload Linux assets
@@ -225,10 +225,10 @@ jobs:
         run: |
           cd bin
           tag="${GITHUB_REF_NAME//\//-}"
-          mv lich.exe       "lich-${tag}-windows-amd64.exe"
           mv lich-setup.exe "lich-${tag}-windows-amd64-setup.exe"
-          # The window for the portable exe: unzipped beside it as shell\.
-          7z a -bso0 -bsp0 "lich-${tag}-windows-amd64-shell.zip" shell
+          # The portable package: lich.exe with its window beside it as shell\,
+          # the layout the installer lays down.
+          7z a -bso0 -bsp0 "lich-${tag}-windows-amd64.zip" lich.exe shell
           ls -la lich-${tag}-*
 
       - name: Upload Windows assets
@@ -294,8 +294,8 @@ jobs:
       - name: Build the window (arm64)
         run: task build:shell
 
-      # Two assets per arch: the .app the cask installs, and the bare binary the
-      # in-app self-update and hand installs still download.
+      # One asset per arch, the .app the cask installs. The binaries it is
+      # built from are removed so the upload below cannot pick them up.
       - name: Assemble macOS assets
         run: |
           cd bin
@@ -306,7 +306,7 @@ jobs:
             # ditto, not zip: it is the archiver that keeps a bundle's symlinks,
             # permissions and signature intact for Homebrew Cask to unpack.
             ditto -c -k --keepParent "stage-${arch}/Lich.app" "lich-${tag}-darwin-${arch}.zip"
-            mv "lich-darwin-${arch}" "lich-${tag}-darwin-${arch}"
+            rm "lich-darwin-${arch}"
           done
           ls -la lich-${tag}-*
 
@@ -361,17 +361,15 @@ jobs:
           sum() {
             awk -v file="$1" '$2 == file { print $1 }' bin/checksums.txt
           }
-          exe="$(sum "lich-v${version}-windows-amd64.exe")"
-          shell="$(sum "lich-v${version}-windows-amd64-shell.zip")"
+          zip="$(sum "lich-v${version}-windows-amd64.zip")"
           # An empty hash would publish a manifest that fails every install.
-          if [ -z "$exe" ] || [ -z "$shell" ]; then
+          if [ -z "$zip" ]; then
             echo "missing windows checksums in checksums.txt" >&2
             cat bin/checksums.txt >&2
             exit 1
           fi
           sed -e "s/@VERSION@/${version}/g" \
-              -e "s/@SHA_EXE@/${exe}/" \
-              -e "s/@SHA_SHELL@/${shell}/" \
+              -e "s/@SHA_ZIP@/${zip}/" \
               build/windows/scoop/lich.json.tpl > bin/lich.json
           jq . bin/lich.json
 

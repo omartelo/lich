@@ -23,7 +23,7 @@ func collectProgress() (*Service, *[]Progress) {
 func TestProgressReaderStepsByPercent(t *testing.T) {
 	s, steps := collectProgress()
 	body := strings.Repeat("x", 1000)
-	r := s.progressReader(strings.NewReader(body), 1000, phaseInstall)
+	r := s.progressReader(strings.NewReader(body), 1000, phaseInstaller)
 	if got, err := io.ReadAll(iotest5(r)); err != nil || len(got) != 1000 {
 		t.Fatalf("read = %d bytes, %v", len(got), err)
 	}
@@ -33,7 +33,7 @@ func TestProgressReaderStepsByPercent(t *testing.T) {
 	if first != (Progress{Phase: phaseDownload, Received: 0, Total: 1000}) {
 		t.Errorf("first step = %+v", first)
 	}
-	if last != (Progress{Phase: phaseInstall}) {
+	if last != (Progress{Phase: phaseInstaller}) {
 		t.Errorf("last step = %+v", last)
 	}
 	if done := (*steps)[len(*steps)-2]; done != (Progress{Phase: phaseDownload, Received: 1000, Total: 1000}) {
@@ -73,7 +73,7 @@ func TestProgressReaderUnknownTotalStepsByTime(t *testing.T) {
 
 func TestProgressSilentWithoutHub(t *testing.T) {
 	s := &Service{}
-	r := s.progressReader(strings.NewReader("abc"), 3, phaseInstall)
+	r := s.progressReader(strings.NewReader("abc"), 3, phaseInstaller)
 	if got, err := io.ReadAll(r); err != nil || string(got) != "abc" {
 		t.Fatalf("read = %q, %v", got, err)
 	}

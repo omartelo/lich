@@ -1,9 +1,9 @@
-// Package appupdate checks GitHub for a newer lich release and, on the install
-// channels that own their binary (Windows and macOS), downloads and swaps it in
-// place. On Linux — and wherever Homebrew owns the binary — it belongs to a
-// package manager, so this package only reports the update: the UI drives the
-// install through that manager instead (see install.sh and the /restart
-// endpoint).
+// Package appupdate checks GitHub for a newer lich release and, on a Windows
+// install no package manager owns, downloads and runs the release's installer.
+// Everywhere else lich belongs to a package manager (a Linux package, Homebrew,
+// Scoop), so this package only reports the update: the UI drives the install
+// through that manager instead (see install.sh and the /restart endpoint), or
+// points at the release page where it can name none.
 package appupdate
 
 import (
@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/selfupdate"
 	"github.com/omartelo/lich/internal/ghrelease"
 	"github.com/omartelo/lich/internal/semver"
 )
@@ -58,14 +57,10 @@ const (
 	defaultOSRelease = "/etc/os-release"
 
 	httpTimeout = 5 * time.Second
-	// downloadTimeout bounds the binary download. A client Timeout spans the
+	// downloadTimeout bounds the installer download. A client Timeout spans the
 	// whole body read, so the metadata timeout above would cut a multi-MiB
 	// asset mid-stream on any modest link; this one is a hang stop, not a pace.
 	downloadTimeout = 5 * time.Minute
-	// assetLimit caps the binary download (lich is a ~10-20 MiB static binary —
-	// 256 MiB is slack, not a target). The metadata reads ride
-	// ghrelease.BodyLimit.
-	assetLimit = 256 << 20
 )
 
 // Service reports lich's own update state and applies self-updates where the
@@ -85,8 +80,8 @@ type Service struct {
 	version  string
 	exePath  string
 	// goos and goarch are the platform, fields so tests can drive the
-	// self-apply path — and the platform that ships no asset — without running
-	// on that OS or CPU; they default to runtime.GOOS/runtime.GOARCH.
+	// installer path without running on that OS or CPU; they default to
+	// runtime.GOOS/runtime.GOARCH.
 	goos   string
 	goarch string
 	// latestURL is the release endpoint to poll; a field so tests can point it
@@ -97,10 +92,6 @@ type Service struct {
 	// osReleasePath is read to pick the Linux install command; a field so tests
 	// drive the arch/non-arch branches off a fixture instead of the host's file.
 	osReleasePath string
-	// applyBinary swaps the running binary for the downloaded one. A field so a
-	// test drives Apply's download+verify orchestration without the real swap
-	// (which would replace the test binary); defaults to selfupdateApply.
-	applyBinary func(r io.Reader, checksum []byte) error
 }
 
 // New returns a service that reports version as the running build and polls
@@ -121,15 +112,7 @@ func New(version string, install func(string) error, emit func(name string, data
 		downloadBase:  releaseBase,
 		tagBase:       releaseTagBase,
 		osReleasePath: defaultOSRelease,
-		applyBinary:   selfupdateApply,
 	}
-}
-
-// selfupdateApply verifies the stream against checksum and atomically replaces
-// the running binary, rolling back on failure — including the Windows
-// locked-exe rename dance. It is the one boundary Apply cannot unit-test.
-func selfupdateApply(r io.Reader, checksum []byte) error {
-	return selfupdate.Apply(r, selfupdate.Options{Checksum: checksum})
 }
 
 // Status is lich's install/update state, reported to the frontend.
@@ -145,7 +128,7 @@ type Status struct {
 }
 
 // Status reports whether a newer release exists and whether this install can
-// swap its own binary. A failed network lookup leaves everything empty and
+// update itself through the installer. A failed network lookup leaves everything empty and
 // reports no update — it must not block or break app startup.
 func (s *Service) Status() Status {
 	latest := s.latestVersion()
@@ -153,7 +136,7 @@ func (s *Service) Status() Status {
 		CurrentVersion:  s.version,
 		LatestVersion:   latest,
 		UpdateAvailable: semver.IsRelease(s.version) && latest != "" && semver.Less(s.version, latest),
-		CanSelfApply:    canSelfApply(s.goos, s.exePath),
+		CanSelfApply:    canSelfApply(s.goos, s.goarch, s.exePath),
 		InstallCommand:  s.installCommand(),
 	}
 	if latest != "" {
@@ -162,23 +145,20 @@ func (s *Service) Status() Status {
 	return st
 }
 
-// Apply verifies the latest release against its SHA-256 checksum, then swaps
-// the portable executable or hands a windowed Windows install to its installer.
-// The installer closes and relaunches lich. Only valid where CanSelfApply is true.
+// Apply verifies the latest release's Windows installer against its SHA-256
+// checksum and hands the install over to it; the installer closes and
+// relaunches lich. Only valid where CanSelfApply is true.
 func (s *Service) Apply() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !canSelfApply(s.goos, s.exePath) {
+	if !canSelfApply(s.goos, s.goarch, s.exePath) {
 		return fmt.Errorf("self-apply not supported on this install")
 	}
 	latest := s.latestVersion()
 	if latest == "" {
 		return fmt.Errorf("could not resolve the latest release")
 	}
-	asset := s.assetName(latest)
-	if asset == "" {
-		return fmt.Errorf("no release asset for %s/%s", s.goos, s.goarch)
-	}
+	asset := "lich-v" + latest + "-windows-amd64-setup.exe"
 	base := s.downloadBase + "v" + latest + "/"
 
 	sum, err := s.fetchChecksum(base+"checksums.txt", asset)
@@ -193,46 +173,18 @@ func (s *Service) Apply() error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download %s: status %d", asset, resp.StatusCode)
 	}
-	if s.installerUpdate() {
-		return s.applyInstaller(s.progressReader(resp.Body, resp.ContentLength, phaseInstaller), sum)
-	}
-	body := s.progressReader(resp.Body, resp.ContentLength, phaseInstall)
-	if err := s.applyBinary(io.LimitReader(body, assetLimit), sum); err != nil {
-		return fmt.Errorf("apply update: %w", err)
-	}
-	return nil
+	return s.applyInstaller(s.progressReader(resp.Body, resp.ContentLength, phaseInstaller), sum)
 }
 
-// assetName is the release asset for a platform, or "" when none ships. Windows
-// and macOS carry a self-apply binary; Linux is package-manager only, so it has
-// no self-apply asset here even though a raw linux binary exists in the release.
-func assetName(goos, goarch, version string) string {
-	name := "lich-v" + version
-	switch goos {
-	case "windows":
-		if goarch == "amd64" {
-			return name + "-windows-amd64.exe"
-		}
-	case "darwin":
-		if goarch == "arm64" || goarch == "amd64" {
-			return name + "-darwin-" + goarch
-		}
-	}
-	return ""
-}
-
-// canSelfApply reports whether this build can replace its own binary: a
-// self-apply platform (Windows/macOS) with a known, writable executable
-// directory that no package manager owns. Linux always returns false — its
-// binary is package-manager owned.
-func canSelfApply(goos, exePath string) bool {
-	if goos != "windows" && goos != "darwin" {
-		return false
-	}
-	if exePath == "" {
-		return false
-	}
-	if brewOwned(exePath) || bundled(exePath) || scoopOwned(exePath) {
+// canSelfApply reports whether this install updates through the button: a
+// Windows amd64 install (the only installer that ships) in a writable directory
+// Scoop does not own. The installer is the route for a portable folder too:
+// it waits for lich to exit before it replaces lich.exe and the window's
+// libcef.dll, both locked while they run, and relaunches lich afterwards.
+// macOS and Linux lich belong to a package manager, or to the user who
+// unpacked them.
+func canSelfApply(goos, goarch, exePath string) bool {
+	if goos != "windows" || goarch != "amd64" || exePath == "" || scoopOwned(exePath) {
 		return false
 	}
 	return dirWritable(filepath.Dir(exePath))
@@ -240,9 +192,8 @@ func canSelfApply(goos, exePath string) bool {
 
 // scoopOwned reports whether exePath is a Scoop install: <root>\apps\lich\
 // <version or current>\lich.exe, whichever way the junction was resolved. The
-// directory is writable and, since the manifest ships the window, carries
-// shell\, so the checks above would send it to the Inno Setup installer —
-// which would register a second lich in "Installed apps" and write into the
+// directory is writable, so without this check it would go to the Inno Setup
+// installer, which would register a second lich in "Installed apps" and write into the
 // version directory Scoop tracks.
 func scoopOwned(exePath string) bool {
 	segments := strings.Split(filepath.ToSlash(exePath), "/")
@@ -250,47 +201,15 @@ func scoopOwned(exePath string) bool {
 	return n >= 4 && strings.EqualFold(segments[n-4], "apps") && strings.EqualFold(segments[n-3], scoopPackage)
 }
 
-// installerOwned recognizes the Windows installer layout by either mark it
-// leaves beside the exe: the window under shell\, or the uninstaller Inno Setup
-// writes to every install. The uninstaller is the only mark an install from
-// before the window carries (v0.10.0 to v0.45.x); swapping the bare exe there
-// left a lich that opened a system browser, with the shortcut and the
-// "Installed apps" entry stuck at the old version.
-func installerOwned(exePath string) bool {
-	dir := filepath.Dir(exePath)
-	for _, mark := range []string{filepath.Join("shell", "lich-shell.exe"), "unins000.exe"} {
-		if _, err := os.Stat(filepath.Join(dir, mark)); err == nil {
-			return true
-		}
-	}
-	return false
-}
-
-// brewOwned reports whether exePath is a Homebrew formula install. The Cellar
-// is writable by its user, so the writability check alone would let lich swap a
-// binary brew tracks — leaving brew reporting the version it installed while a
-// different one runs. Every prefix (/opt/homebrew, /usr/local, a custom one)
-// keeps formulae under a Cellar segment, and <prefix>/bin/lich is a symlink
-// into it, so the path is resolved first.
-func brewOwned(exePath string) bool {
-	resolved, err := filepath.EvalSymlinks(exePath)
-	if err != nil {
-		resolved = exePath
-	}
-	return slices.Contains(strings.Split(resolved, string(filepath.Separator)), "Cellar")
-}
-
 // bundled reports whether exePath is the executable inside lich's macOS .app —
-// what the Homebrew cask installs into /Applications. Swapping that binary
-// would invalidate the bundle's code signature and leave an app macOS reads as
-// damaged, so a bundled install updates through Homebrew rather than the
-// button.
+// what the Homebrew cask installs into /Applications, so it updates through
+// Homebrew.
 func bundled(exePath string) bool {
 	return strings.Contains(filepath.ToSlash(exePath), ".app/Contents/MacOS/")
 }
 
 // installCommand is the shell command the UI pastes to update this install, or
-// "" on the self-apply platforms (they swap the binary through the button).
+// "" where no package manager owns it (the UI then offers the release page).
 // A Scoop install is package-manager owned like Arch's, and its restart is
 // spelled for PowerShell.
 // Arch goes through its AUR helper plus an explicit restart — yay knows nothing
@@ -301,13 +220,10 @@ func (s *Service) installCommand() string {
 	if bundled(s.exePath) {
 		return "brew upgrade --cask " + brewPackage + restartChain
 	}
-	if brewOwned(s.exePath) {
-		return "brew upgrade " + brewPackage + restartChain
-	}
 	if scoopOwned(s.exePath) {
 		return "scoop update " + scoopPackage + restartChainPwsh
 	}
-	if s.goos != "linux" {
+	if s.goos != "linux" || !packaged(s.exePath) {
 		return ""
 	}
 	data, _ := os.ReadFile(s.osReleasePath) // missing/unreadable → not arch → install.sh
@@ -317,6 +233,15 @@ func (s *Service) installCommand() string {
 		return "yay -S " + aurPackage + restartChain
 	}
 	return installScript
+}
+
+// packaged reports whether exePath is where the deb, rpm and AUR packages put
+// lich, with the window in ../lib/lich/shell. The tarball keeps it beside the
+// binary instead, and a package installed over a tarball would leave /restart
+// relaunching the tarball's binary, still at the old version.
+func packaged(exePath string) bool {
+	_, err := os.Stat(filepath.Join(filepath.Dir(exePath), "..", "lib", "lich", "shell", "lich-shell"))
+	return err == nil
 }
 
 // isArch reports whether os-release content describes Arch or an Arch

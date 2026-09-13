@@ -467,21 +467,21 @@ export interface AppUpdateStatus {
   currentVersion: string
   latestVersion: string
   updateAvailable: boolean
-  /** true where lich can swap its own binary (Windows/macOS); false on Linux. */
+  /** true where the update button runs the Windows installer; false wherever a package manager or the user owns lich. */
   canSelfApply: boolean
   releaseUrl: string
-  /** shell command the UI pastes to update a package-manager install; "" where canSelfApply. */
+  /** shell command the UI pastes to update a package-manager install; "" where there is none to name. */
   installCommand: string
 }
 
 /**
  * internal/appupdate.Progress — one step of Apply, on the "appupdate-progress"
  * event: bytes of the download (total -1 without a Content-Length), then the
- * phase with no percentage — install swaps the binary in place, installer
- * hands over to the Windows installer and closes lich.
+ * phase with no percentage: installer, which hands over to the Windows
+ * installer and closes lich.
  */
 export interface AppUpdateProgress {
-  phase: "download" | "install" | "installer"
+  phase: "download" | "installer"
   received: number
   total: number
 }

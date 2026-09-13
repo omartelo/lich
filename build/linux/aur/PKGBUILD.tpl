@@ -17,19 +17,17 @@ depends=('glibc' 'gcc-libs' 'nss' 'nspr' 'glib2' 'at-spi2-core' 'dbus' 'libcups'
          'libxcb' 'mesa' 'expat' 'libxkbcommon' 'cairo' 'pango' 'systemd-libs'
          'alsa-lib')
 optdepends=('zenity: native folder picker')
-source=("lich-v${pkgver}-linux-amd64::${url}/releases/download/v${pkgver}/lich-v${pkgver}-linux-amd64"
-        "lich-v${pkgver}-linux-amd64-shell.tar.zst::${url}/releases/download/v${pkgver}/lich-v${pkgver}-linux-amd64-shell.tar.zst"
+source=("lich-v${pkgver}-linux-amd64.tar.zst::${url}/releases/download/v${pkgver}/lich-v${pkgver}-linux-amd64.tar.zst"
         "lich-${pkgver}.desktop::https://raw.githubusercontent.com/omartelo/lich/v${pkgver}/build/linux/lich.desktop"
         "lich-${pkgver}.png::https://raw.githubusercontent.com/omartelo/lich/v${pkgver}/build/appicon.png")
 sha256sums=('SKIP'
             'SKIP'
-            'SKIP'
             'SKIP')
 
 package() {
-  install -Dm755 "lich-v${pkgver}-linux-amd64" "${pkgdir}/usr/bin/lich"
-  # The window (lich's own Chromium), unpacked by makepkg into shell/, where
-  # /usr/bin/lich looks for it: /usr/lib/lich/shell.
+  # makepkg unpacks the release tarball: lich, and its window in shell/, which
+  # /usr/bin/lich looks for at /usr/lib/lich/shell.
+  install -Dm755 lich "${pkgdir}/usr/bin/lich"
   install -d "${pkgdir}/usr/lib/lich"
   cp -a shell "${pkgdir}/usr/lib/lich/shell"
   # Chromium reads its setuid sandbox helper from cef/, beside libcef.so, and

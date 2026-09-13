@@ -585,13 +585,25 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   that is exactly what an Intel UHD driver did on Windows until `shell/src/main.rs` turned DirectComposition
   off there. No runner here can look at its own screen, so presentation is only ever proven on a desk.
 - **A Linux or Windows install whose window is missing or dies is a lich that shows nothing but a dialog**
-  (`internal/chromium.Run`): `go run` with no `LICH_SHELL` pin, a bare binary copied out of the tarball, a
+  (`internal/chromium.Run`): `go run` with no `LICH_SHELL` pin, a binary copied out of the package it shipped in, a
   package missing `lib/lich/shell`, a window that exits on a missing system library or a glibc older than 2.34
   (Debian 11, RHEL 8, which `lich-shell` will not load on) — each ends in the error dialog with the log path,
-  never in a browser on the machine. Only macOS keeps a fallback, and only to a plain tab: an Intel bundle has
+  never in a browser on the machine; the dialog names the release page. Only macOS keeps a fallback, and only to a plain tab: an Intel bundle has
   no window, and an Apple Silicon window that exits with an error inside `startupGrace` (30 s, because a
   segfault is reported only after its core dump is written) hands the URL to the default browser instead.
   `lich doctor` names the window a launch would open.
+- **Every release asset is a complete package, and an update is run by the release being left**
+  (`internal/appupdate`, `TestUpgradeMatrix`): the matrix pins the route today's lich takes from each package,
+  not what an older one does on its way out, which is frozen in its binary. 0.48 to 0.50 also shipped bare
+  binaries, and an install built from one sees this: a macOS bare binary's update button fails on a 404 (the
+  release has no such asset now) until the cask replaces it; a Linux bare binary is offered install.sh or yay,
+  which install a package, while `/restart` relaunches the bare binary, still at the old version; a Windows
+  exe without `shell\` never opened in the first place. A 0.48 Scoop install ran the installer into Scoop's
+  directory, and `scoop update` puts it back. Nothing below 0.48 is supported. A Linux tarball updates by hand:
+  the prompt links the release page, because a package installed over it leaves the tarball's binary
+  relaunched. On disk, the unkeyed Chromium profile of a release before the window moves under the window's
+  key (`migrateProfile`); a profile a newer system Chrome wrote, opened by an older CEF, is the failure
+  `ProfileDir` names, and it has not been measured.
 - **Only a window that exits with an error leaves its stderr in the log** (`internal/chromium/stderr.go`): the
   window's stderr still reaches lich's own, and a failed exit, of the window or of the launch that focuses it,
   carries its last 20 lines into `lich.log`, with the first three FATAL or "Check failed" lines kept ahead of

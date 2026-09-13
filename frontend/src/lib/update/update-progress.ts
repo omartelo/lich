@@ -13,7 +13,7 @@ export function isUpdateProgress(data: unknown): data is AppUpdateProgress {
   if (typeof data !== "object" || data === null) return false
   const p = data as Record<string, unknown>
   return (
-    (p.phase === "download" || p.phase === "install" || p.phase === "installer") &&
+    (p.phase === "download" || p.phase === "installer") &&
     typeof p.received === "number" &&
     typeof p.total === "number"
   )
