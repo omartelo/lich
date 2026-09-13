@@ -121,6 +121,8 @@ type transport struct {
 	// reason restart is: the service owns the bridge and the transport is built
 	// before it.
 	fallback func(id string, data []byte)
+	// plugins is the plugin release each session's hooks report from.
+	plugins pluginVersions
 }
 
 // newTransport starts the listener on a random loopback port. input receives
@@ -389,7 +391,7 @@ func (t *transport) authorized(r *http.Request) bool {
 // client ignores the response either way — the status codes exist so a failure
 // is visible to logs and tests rather than silently swallowed. It is a function
 // rather than a method on transport because Go methods cannot be generic.
-func servePost[T any](
+func servePost[T hookBody](
 	t *transport,
 	w http.ResponseWriter,
 	r *http.Request,
@@ -404,6 +406,7 @@ func servePost[T any](
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
 	}
+	plugin := r.Header.Get(pluginVersionHeader)
 	body, err := io.ReadAll(io.LimitReader(r.Body, hookBodyLimit))
 	if err != nil {
 		http.Error(w, "failed to read body", http.StatusBadRequest)
@@ -412,13 +415,15 @@ func servePost[T any](
 	parsed, err := parse(body)
 	if err != nil {
 		// The hook client ignores responses, so the log is the only place a
-		// bad payload ever surfaces.
-		slog.Warn("hook: bad payload", "path", r.URL.Path, "err", err)
+		// bad payload ever surfaces. The plugin release is what tells a value
+		// this lich predates from a broken script.
+		slog.Warn("hook: bad payload", "path", r.URL.Path, "plugin", pluginLabel(plugin), "err", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	t.plugins.note(parsed.session(), plugin)
 	if err := apply(parsed); err != nil {
-		slog.Warn("hook: apply failed", "path", r.URL.Path, "err", err)
+		slog.Warn("hook: apply failed", "path", r.URL.Path, "plugin", pluginLabel(plugin), "err", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

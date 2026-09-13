@@ -409,6 +409,9 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		// The transport is built before the service that owns the bridge, so the
 		// path output takes when the socket cannot carry it is wired here.
 		ws.setFallback(s.emitData)
+		ws.plugins.setOnIncompatible(func(id, version string) {
+			s.hub.Emit(pluginEventName, pluginEvent{ID: id, Version: version})
+		})
 	}
 	return s
 }
@@ -748,6 +751,9 @@ func (s *Service) Close(id string) error {
 	// this is the last chance a closed card gets to keep what it was worked.
 	s.FlushHandsOn()
 	s.hands.forget(id)
+	if s.ws != nil {
+		s.ws.plugins.forget(id)
+	}
 	if !ok {
 		return nil
 	}

@@ -16,11 +16,14 @@ import {
   decidePluginAction,
   DISMISSED_FLAG,
   INSTALL_DISMISSED_KEY,
+  incompatibleMessage,
+  PLUGIN_INCOMPATIBLE_EVENT,
   type PluginAction,
   RESTART_HINT,
   type Status,
   UPDATE_DISMISSED_KEY,
 } from "@/lib/update/plugin-gate"
+import { onAppEvent } from "@/lib/app-events"
 import { AgentPlugin } from "@/lib/rpc"
 import { enabledProviders, useProviders, useStoredDefaultProvider } from "@/lib/providers-store"
 import { errorText } from "@/lib/utils"
@@ -30,9 +33,11 @@ import { runWithToast } from "@/lib/toast-async"
 // AgentPluginGate checks on startup whether the lich plugin is installed and
 // current in the provider CLIs the user turned on. Missing → an install modal
 // listing those CLIs, ticked by default; a newer release → a non-blocking,
-// actionable update toast. Plugin hooks only load in new sessions, so both
-// actions remind the user to restart. Any failure is silent — it must never
-// block or break startup.
+// actionable update toast; an install outside the range this lich speaks → a
+// toast offering the release it does. Plugin hooks only load in new sessions, so
+// every action reminds the user to restart. Any failure is silent — it must never
+// block or break startup. A session reporting from an out-of-range release later
+// runs the same check again, which is how a harness moving its own plugin shows.
 //
 // It waits for a stored default provider, which is what ProviderSetupGate writes
 // on a first launch: asking to install a plugin before the user has said which
@@ -54,6 +59,10 @@ export function AgentPluginGate() {
     void check(enabledProviders(providers).map((p) => p.id))
   }, [providers, storedDefault])
 
+  const enabled = useRef<string[]>([])
+  enabled.current = enabledProviders(providers).map((p) => p.id)
+  useEffect(() => onAppEvent(PLUGIN_INCOMPATIBLE_EVENT, () => void check(enabled.current)), [])
+
   const check = async (enabled: string[]) => {
     let action: PluginAction
     try {
@@ -66,7 +75,9 @@ export function AgentPluginGate() {
     } catch {
       return
     }
-    if (action.kind === "install") {
+    if (action.kind === "incompatible") {
+      promptIncompatible(action.version, action.providers)
+    } else if (action.kind === "install") {
       setOffer(action.providers)
       setPicked(action.providers.map((p) => p.provider))
     } else if (action.kind === "update") {
@@ -82,6 +93,18 @@ export function AgentPluginGate() {
         label: "Later",
         onClick: () => writePref(UPDATE_DISMISSED_KEY, version),
       },
+    })
+  }
+
+  const promptIncompatible = (version: string, providers: Status[]) => {
+    // One id, so a second session reporting the same release replaces the toast
+    // instead of stacking another.
+    toast.warning(incompatibleMessage(version, providers), {
+      id: PLUGIN_INCOMPATIBLE_EVENT,
+      duration: Infinity,
+      action: version
+        ? { label: `Install v${version}`, onClick: () => void runUpdate(providers) }
+        : undefined,
     })
   }
 

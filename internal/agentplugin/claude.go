@@ -13,36 +13,31 @@ import (
 // own installed_plugins.json for what is installed.
 
 func (s *Service) claudeInstall() error {
-	if err := s.claudeSyncMarketplace(); err != nil {
+	if err := s.claudePinMarketplace(); err != nil {
 		return err
 	}
 	return s.run(providers.Claude, "plugin", "install", pluginKey)
 }
 
-func (s *Service) claudeUpdate() error {
-	if err := s.claudeSyncMarketplace(); err != nil {
+// claudePinMarketplace declares the marketplace at the tag of the newest release
+// this lich is compatible with, so neither an install nor Claude Code's own
+// marketplace refresh can move the plugin past it.
+//
+// The declaration is removed first because Claude Code refuses an add whose ref
+// differs from the one already declared, and has no command to change a ref.
+// The remove also uninstalls the plugin, which is why Update is this same path
+// and not `plugin update`: the install right after puts it back at the pinned
+// release, a downgrade included. A remove with nothing declared fails, which is
+// the first install and not an error. All measured on Claude Code 2.1.270.
+func (s *Service) claudePinMarketplace() error {
+	version, err := s.releaseVersion()
+	if err != nil {
 		return err
 	}
-	return s.run(providers.Claude, "plugin", "update", pluginKey)
-}
-
-// claudeSyncMarketplace brings the local marketplace clone level with the
-// remote: an add for the first install, an update for one already there.
-//
-// Both `plugin install` and `plugin update` refresh the marketplace themselves,
-// but a failed refresh only downgrades them to a warning — they read the stale
-// clone, report "already at the latest version" and exit 0. That is a success
-// lich has no way to tell from a real one, so the refresh runs here first, where
-// its failure is an error the user sees.
-func (s *Service) claudeSyncMarketplace() error {
-	// A repeat add errors ("already exists"), which is how an existing clone
-	// announces itself; the update is the branch that then matters.
-	err := s.run(providers.Claude, "plugin", "marketplace", "add", marketplaceRepo)
-	if err == nil {
-		return nil
+	if err := s.run(providers.Claude, "plugin", "marketplace", "remove", marketplaceName); err != nil {
+		slog.Debug("agentplugin: claude marketplace remove", "err", err)
 	}
-	slog.Debug("agentplugin: claude marketplace add", "err", err)
-	return s.run(providers.Claude, "plugin", "marketplace", "update", marketplaceName)
+	return s.run(providers.Claude, "plugin", "marketplace", "add", gitURL+"#v"+version)
 }
 
 // claudeInstalledVersion reads the plugin's installed version from Claude

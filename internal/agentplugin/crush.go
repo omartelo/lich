@@ -330,8 +330,8 @@ func (s *Service) crushrcPath() (string, error) {
 // them should not be carrying them.
 //
 // One directory per provider, even though Crush and Kiro ship the same scripts.
-// releaseVersion resolves whatever the plugin repository has released, not the
-// version of the lich running the install, so a shared directory would let a
+// releaseVersion resolves the newest release compatible with this lich, not a
+// version fixed by it, so a shared directory would let a
 // Kiro install fetched today overwrite the scripts a Crush install fetched at an
 // older release — leaving Crush's marker naming a version that is no longer on
 // disk, which is the one thing that marker exists to answer.

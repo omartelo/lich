@@ -73,6 +73,19 @@ project's own setup and run scripts and for commands typed in a card
 the agent in the PTY calls to reach the sessions beside it. That surface has its
 own contract in [cli.md](../cli.md).
 
+### The plugin release
+
+Every hook request carries the plugin release it comes from in an
+`X-Lich-Plugin` header, as a bare version (`X-Lich-Plugin: 0.13.0`). It is a
+header rather than a body field so it rides every endpoint without touching a
+payload, and so a report lich refuses can still be logged with the release that
+sent it.
+
+lich remembers the last release each session named. A release outside the range
+under [Versioning](#versioning) is still applied wherever its payload parses; it
+is logged, and the window offers the release this lich supports. A request with
+no header is a plugin older than the header and is accepted as before.
+
 ## Client rules (all hooks)
 
 - Missing env vars → no-op, exit 0.
@@ -82,14 +95,25 @@ own contract in [cli.md](../cli.md).
 ## Versioning
 
 For users, these contracts are covered by lich's semver promise; see
-[stability.md](../stability.md).
+[stability.md](../stability.md). The plugin's version number says which contract
+a release speaks:
 
 - A change **within** an existing contract (a script tweak) is a plugin-only
-  release — no lich release needed.
-- A change **to** a contract (new endpoint, field, or accepted value) is a
-  breaking change: ship the lich server side first, then the plugin. Keep the
-  two in lockstep. The order runs through the fixtures: the prose here moves,
-  then [`fixtures/`](fixtures/), then lich's endpoint, then the plugin.
+  release and bumps the plugin's **patch** version. No lich release is needed.
+- A change **to** a contract (new endpoint, header, field, or accepted value)
+  bumps the plugin's **minor** version (its major, from 1.0). Ship the lich
+  server side first, then the plugin. The order runs through the fixtures: the
+  prose here moves, then [`fixtures/`](fixtures/), then lich's endpoint, then the
+  plugin.
+
+Each lich declares the range it speaks in `internal/agentplugin/compat.go`: a
+floor, the oldest release whose reports it still parses, and a ceiling, the
+first minor past the newest contract it implements. A lich that implements a
+contract change raises the ceiling in the same change. An install or update
+writes the newest release inside that range, never simply the newest release:
+Claude Code and Codex get their marketplace pinned to that release's tag, and
+the file-shipped harnesses fetch their files at it. The plugin's contract tests
+read these fixtures at a lich release tag, not from `main`.
 
 ## Adding a new hook
 

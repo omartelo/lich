@@ -3,39 +3,37 @@ package agentplugin
 import (
 	"bytes"
 	"encoding/json"
+	"log/slog"
 
 	"github.com/omartelo/lich/internal/providers"
 )
 
 // The Codex side: `codex plugin ...` for every mutation, and `codex plugin list
 // --json` for what is installed. Codex has no `plugin update`, so an update is
-// an upgraded marketplace snapshot followed by the same install — which is
-// idempotent there, unlike Claude Code's.
+// the same pinned install.
 
 func (s *Service) codexInstall() error {
-	if err := s.codexSyncMarketplace(); err != nil {
+	if err := s.codexPinMarketplace(); err != nil {
 		return err
 	}
 	return s.run(providers.Codex, "plugin", "add", pluginKey)
 }
 
-func (s *Service) codexUpdate() error {
-	if err := s.codexSyncMarketplace(); err != nil {
+// codexPinMarketplace declares the marketplace at the tag of the newest release
+// this lich is compatible with, for the reason claudePinMarketplace does. Codex
+// refuses an add from a different source ("remove it before adding this
+// source"), so the old declaration goes first; a remove with nothing declared
+// fails, which is the first install. `plugin add` then installs from the fresh
+// clone at that tag. Measured on codex-cli 0.153.4.
+func (s *Service) codexPinMarketplace() error {
+	version, err := s.releaseVersion()
+	if err != nil {
 		return err
 	}
-	return s.run(providers.Codex, "plugin", "add", pluginKey)
-}
-
-// codexSyncMarketplace makes sure the marketplace is configured and its snapshot
-// current. Unlike Claude Code's, a repeat `marketplace add` succeeds, so both
-// calls run every time: the add is the first install's, the upgrade is what
-// pulls a newer release into an existing snapshot. `plugin add` installs from
-// the snapshot alone, so skipping the upgrade would reinstall the same version.
-func (s *Service) codexSyncMarketplace() error {
-	if err := s.run(providers.Codex, "plugin", "marketplace", "add", marketplaceRepo); err != nil {
-		return err
+	if err := s.run(providers.Codex, "plugin", "marketplace", "remove", marketplaceName); err != nil {
+		slog.Debug("agentplugin: codex marketplace remove", "err", err)
 	}
-	return s.run(providers.Codex, "plugin", "marketplace", "upgrade", marketplaceName)
+	return s.run(providers.Codex, "plugin", "marketplace", "add", marketplaceRepo, "--ref", "v"+version)
 }
 
 // codexInstalledVersion reads the plugin's installed version from Codex's own

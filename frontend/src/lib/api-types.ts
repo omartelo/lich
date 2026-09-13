@@ -454,8 +454,12 @@ export interface PluginStatus {
   available: boolean
   installed: boolean
   installedVersion: string
+  /** The newest release this lich is compatible with, which is what an install or update writes. */
   latestVersion: string
+  /** True for an older compatible release, and for any install outside the supported range. */
   updateAvailable: boolean
+  /** False when the installed release is outside the range this lich speaks. */
+  compatible: boolean
 }
 
 /** internal/appupdate.Status — lich's own release/update state. */

@@ -43,8 +43,14 @@ const (
 	pluginName      = "lich"
 	// pluginKey is how both harnesses name the plugin: install target, update
 	// target, and key in their installed-plugin state.
-	pluginKey        = pluginName + "@" + marketplaceName
-	latestReleaseURL = "https://api.github.com/repos/" + marketplaceRepo + "/releases/latest"
+	pluginKey = pluginName + "@" + marketplaceName
+	// releasesURL lists the plugin's releases, newest first, so the first page
+	// holds whatever this lich would pick unless 100 releases have shipped past
+	// its ceiling.
+	releasesURL = "https://api.github.com/repos/" + marketplaceRepo + "/releases?per_page=100"
+	// gitURL is the repository as a git remote, the spelling Claude Code takes a
+	// ref on (url#ref, measured on 2.1.270).
+	gitURL = "https://github.com/" + marketplaceRepo + ".git"
 	// rawBaseURL serves the repository's files at a tag, for the harnesses lich
 	// installs by writing files rather than by calling a CLI.
 	rawBaseURL = "https://raw.githubusercontent.com/" + marketplaceRepo
@@ -93,9 +99,9 @@ type BinResolver interface {
 type Service struct {
 	bins BinResolver
 	http *http.Client
-	// latestURL is the release endpoint to poll; a field so tests can point it
-	// at a local server.
-	latestURL string
+	// releasesURL is the release list to poll; a field so tests can point it at
+	// a local server.
+	releasesURL string
 	// rawBase serves the plugin repository's files at a tag; a field so tests
 	// can point it at a local server.
 	rawBase string
@@ -112,12 +118,12 @@ type Service struct {
 // New returns a service that shells out through bins.
 func New(bins BinResolver) *Service {
 	return &Service{
-		bins:      bins,
-		http:      &http.Client{Timeout: httpTimeout},
-		latestURL: latestReleaseURL,
-		rawBase:   rawBaseURL,
-		lookPath:  exec.LookPath,
-		lichBin:   lichBinary,
+		bins:        bins,
+		http:        &http.Client{Timeout: httpTimeout},
+		releasesURL: releasesURL,
+		rawBase:     rawBaseURL,
+		lookPath:    exec.LookPath,
+		lichBin:     lichBinary,
 	}
 }
 
@@ -131,8 +137,15 @@ type Status struct {
 	Available        bool   `json:"available"`
 	Installed        bool   `json:"installed"`
 	InstalledVersion string `json:"installedVersion"`
-	LatestVersion    string `json:"latestVersion"`
-	UpdateAvailable  bool   `json:"updateAvailable"`
+	// LatestVersion is the newest release this lich is compatible with, not the
+	// newest the plugin has published: it is the one an install or update writes.
+	LatestVersion   string `json:"latestVersion"`
+	UpdateAvailable bool   `json:"updateAvailable"`
+	// Compatible is false when the installed release is outside the range this
+	// lich speaks (PluginVersionFloor, PluginVersionCeiling). Its reports still
+	// land where they parse; UpdateAvailable then offers LatestVersion, a
+	// downgrade included.
+	Compatible bool `json:"compatible"`
 }
 
 // Status reports, for every provider that can run the plugin, whether its CLI
@@ -220,13 +233,15 @@ func (s *Service) Installed(provider string) bool {
 }
 
 // computeStatus is the pure decision: an update needs the plugin installed, a
-// known latest, and that latest to be strictly newer than what is installed.
+// known latest, and that latest to be strictly newer than what is installed, or
+// what is installed to be outside the range this lich speaks.
 //
 // Cursor never offers one. Its version is Claude Code's — the install its
 // reports come from — so the update is the button on the Claude Code row of the
 // same screen, and a second one here would run an install that rewrites a
 // registration and moves no version at all.
 func computeStatus(id string, available, installed bool, installedVer, latestVer string) Status {
+	compatible := !installed || Compatible(installedVer)
 	return Status{
 		Provider:         id,
 		Name:             providerName(id),
@@ -234,8 +249,9 @@ func computeStatus(id string, available, installed bool, installedVer, latestVer
 		Installed:        installed,
 		InstalledVersion: installedVer,
 		LatestVersion:    latestVer,
-		UpdateAvailable: id != providers.Cursor &&
-			installed && latestVer != "" && semver.Less(installedVer, latestVer),
+		UpdateAvailable: id != providers.Cursor && installed && latestVer != "" &&
+			(semver.Less(installedVer, latestVer) || !compatible),
+		Compatible: compatible,
 	}
 }
 
@@ -263,30 +279,13 @@ func (s *Service) Install(provider string) error {
 	return fmt.Errorf("no lich plugin for provider %q", provider)
 }
 
-// Update pulls the latest released version into a provider. Every one applies
-// it on the next session (a restart is required, which the UI signals). For the
-// file-shipped harnesses an update is the same write as an install — the files
-// are replaced wholesale — so they share one path.
+// Update pulls the newest compatible release into a provider, which is the
+// same write as an install for every harness: the file-shipped ones replace
+// their files wholesale, and Claude Code and Codex re-pin the marketplace
+// (claudePinMarketplace). Every one applies it on the next session (a restart
+// is required, which the UI signals).
 func (s *Service) Update(provider string) error {
-	switch provider {
-	case providers.Claude:
-		return s.claudeUpdate()
-	case providers.Codex:
-		return s.codexUpdate()
-	case providers.Antigravity:
-		return s.antigravityInstall()
-	case providers.OpenCode:
-		return s.opencodeInstall()
-	case providers.OMP:
-		return s.ompInstall()
-	case providers.Crush:
-		return s.crushInstall()
-	case providers.Cursor:
-		return s.cursorInstall()
-	case providers.Kiro:
-		return s.kiroInstall()
-	}
-	return fmt.Errorf("no lich plugin for provider %q", provider)
+	return s.Install(provider)
 }
 
 // installedVersion reads the plugin's installed version from a provider's own
@@ -367,10 +366,11 @@ func (s *Service) exec(provider string, timeout time.Duration, args ...string) (
 	return string(out), err
 }
 
-// latestVersion fetches the newest released version from GitHub, or "" on any
-// failure — the caller treats an empty result as "no update known".
+// latestVersion fetches the newest released version this lich is compatible
+// with, or "" on any failure or when no release is. The caller treats an empty
+// result as "no update known".
 func (s *Service) latestVersion() string {
-	return ghrelease.LatestTag(s.http, s.latestURL)
+	return newestCompatible(ghrelease.ReleaseTags(s.http, s.releasesURL))
 }
 
 // writeFile writes data to path through a temporary file in the same directory.
