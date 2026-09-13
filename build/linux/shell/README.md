@@ -34,7 +34,7 @@ subprocesses, and `shell/src/main.rs` passes `--no-sandbox` on the machines
 that cannot (Ubuntu's AppArmor policy, root). Last, the main window opened at
 CEF's default size every launch: the fork asks the browser delegate for its
 initial geometry and tells it the bounds the window closed with
-([omartelo/kurogane#1](https://github.com/omartelo/kurogane/pull/1)), and
+([0x48piraj/kurogane#19](https://github.com/0x48piraj/kurogane/pull/19)), and
 `shell/src/geometry.rs` remembers them. All of it is carried meanwhile
 on the fork `shell/Cargo.toml` pins:
 `omartelo/kurogane`, branch `lich-next`, on top of upstream `fda6cb6`.
