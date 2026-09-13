@@ -11,25 +11,6 @@ import (
 	"testing"
 )
 
-func TestAssetName(t *testing.T) {
-	tests := []struct {
-		goos, goarch string
-		want         string
-	}{
-		{"windows", "amd64", "lich-v0.8.0-windows-amd64.exe"},
-		{"darwin", "arm64", "lich-v0.8.0-darwin-arm64"},
-		{"darwin", "amd64", "lich-v0.8.0-darwin-amd64"},
-		{"linux", "amd64", ""},   // package-manager owned, no self-apply asset
-		{"windows", "arm64", ""}, // no arm64 windows asset ships
-		{"darwin", "386", ""},
-	}
-	for _, tc := range tests {
-		if got := assetName(tc.goos, tc.goarch, "0.8.0"); got != tc.want {
-			t.Errorf("assetName(%q,%q) = %q, want %q", tc.goos, tc.goarch, got, tc.want)
-		}
-	}
-}
-
 func TestParseChecksum(t *testing.T) {
 	data := []byte(
 		"aaaa1111  lich-v0.8.0-linux-amd64\n" +
@@ -52,28 +33,25 @@ func TestParseChecksum(t *testing.T) {
 }
 
 func TestCanSelfApply(t *testing.T) {
-	writable := t.TempDir()
-	exe := filepath.Join(writable, "lich")
+	exe := filepath.Join(t.TempDir(), "lich.exe")
 
 	tests := []struct {
-		name    string
-		goos    string
-		exePath string
-		want    bool
+		name         string
+		goos, goarch string
+		exePath      string
+		want         bool
 	}{
-		{"windows writable dir", "windows", exe, true},
-		{"darwin writable dir", "darwin", exe, true},
-		{"linux never", "linux", exe, false},
-		{"no exe path", "darwin", "", false},
-		{"unwritable dir", "darwin", filepath.Join("/nonexistent-abc123", "lich"), false},
-		{"homebrew cellar is brew's", "darwin", cellarExe(t), false},
-		{"app bundle keeps its signature", "darwin", bundleExe(t), false},
-		{"installer layout self-applies", "windows", windowedExe(t), true},
-		{"scoop install is scoop's", "windows", scoopExe(t), false},
+		{"windows writable dir", "windows", "amd64", exe, true},
+		{"windows arm64 has no installer", "windows", "arm64", exe, false},
+		{"darwin never", "darwin", "arm64", exe, false},
+		{"linux never", "linux", "amd64", exe, false},
+		{"no exe path", "windows", "amd64", "", false},
+		{"unwritable dir", "windows", "amd64", filepath.Join("/nonexistent-abc123", "lich.exe"), false},
+		{"scoop install is scoop's", "windows", "amd64", scoopExe(t), false},
 	}
 	for _, tc := range tests {
-		if got := canSelfApply(tc.goos, tc.exePath); got != tc.want {
-			t.Errorf("canSelfApply(%q,%q) = %v, want %v", tc.goos, tc.exePath, got, tc.want)
+		if got := canSelfApply(tc.goos, tc.goarch, tc.exePath); got != tc.want {
+			t.Errorf("%s: canSelfApply = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 }
@@ -108,18 +86,6 @@ func scoopExe(t *testing.T) string {
 	return filepath.Join(dir, "lich.exe")
 }
 
-// cellarExe returns a writable path shaped like a Homebrew formula install
-// (<prefix>/Cellar/<formula>/<version>/bin/lich), so the Cellar segment is the
-// only reason canSelfApply can refuse it.
-func cellarExe(t *testing.T) string {
-	t.Helper()
-	dir := filepath.Join(t.TempDir(), "Cellar", "lich", "0.21.1", "bin")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return filepath.Join(dir, "lich")
-}
-
 // bundleExe returns a writable path shaped like the cask install
 // (/Applications/Lich.app/Contents/MacOS/lich), so the bundle is the only
 // reason canSelfApply can refuse it.
@@ -132,30 +98,13 @@ func bundleExe(t *testing.T) string {
 	return filepath.Join(dir, "lich")
 }
 
-// The binary users actually launch is <prefix>/bin/lich, a symlink into the
-// Cellar — the check has to see through it.
-func TestBrewOwnedResolvesLinkedBinary(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation needs elevation on Windows")
-	}
-	cellar := cellarExe(t)
-	if err := os.WriteFile(cellar, []byte("lich"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	linkDir := filepath.Join(t.TempDir(), "bin")
-	if err := os.MkdirAll(linkDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	link := filepath.Join(linkDir, "lich")
-	if err := os.Symlink(cellar, link); err != nil {
-		t.Fatal(err)
-	}
-	if !brewOwned(link) {
-		t.Errorf("brewOwned(%q) = false, want true through the symlink", link)
-	}
-	if canSelfApply("darwin", link) {
-		t.Error("canSelfApply = true for a brew-linked binary, want false")
-	}
+// packagedExe returns a path laid out the way the deb, rpm and AUR packages
+// install lich: <root>/bin/lich with the window in <root>/lib/lich/shell.
+func packagedExe(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	touch(t, filepath.Join(root, "lib", "lich", "shell", "lich-shell"))
+	return filepath.Join(root, "bin", "lich")
 }
 
 // serveBody points a Service's latest endpoint at a test server.
@@ -169,6 +118,7 @@ func serveBody(t *testing.T, status int, body string) *Service {
 	return &Service{
 		http:      srv.Client(),
 		goos:      runtime.GOOS,
+		goarch:    runtime.GOARCH,
 		latestURL: srv.URL,
 		tagBase:   releaseTagBase,
 	}
@@ -192,9 +142,8 @@ func TestStatus(t *testing.T) {
 		if got.ReleaseURL != "https://github.com/omartelo/lich/releases/tag/v0.8.0" {
 			t.Fatalf("ReleaseURL = %q", got.ReleaseURL)
 		}
-		// CanSelfApply tracks the platform: only the self-apply OSes on a
-		// writable dir. Linux (the CI host) must report false.
-		wantSelfApply := runtime.GOOS == "windows" || runtime.GOOS == "darwin"
+		// CanSelfApply tracks the platform: only Windows amd64 on a writable dir.
+		wantSelfApply := runtime.GOOS == "windows" && runtime.GOARCH == "amd64"
 		if got.CanSelfApply != wantSelfApply {
 			t.Fatalf("CanSelfApply = %v, want %v on %s", got.CanSelfApply, wantSelfApply, runtime.GOOS)
 		}
@@ -243,7 +192,6 @@ func TestStatus(t *testing.T) {
 
 func TestInstallCommand(t *testing.T) {
 	arch := "yay -S lich-bin" + restartChain
-	brew := "brew upgrade omartelo/tap/lich" + restartChain
 	cask := "brew upgrade --cask omartelo/tap/lich" + restartChain
 
 	tests := []struct {
@@ -254,17 +202,17 @@ func TestInstallCommand(t *testing.T) {
 		want      string
 	}{
 		{"windows self-apply", "windows", "", "", ""},
-		{"darwin self-apply", "darwin", "", "", ""},
-		{"homebrew install", "darwin", cellarExe(t), "", brew},
+		{"darwin outside a bundle", "darwin", "", "", ""},
 		{"cask install", "darwin", bundleExe(t), "", cask},
 		{"scoop install", "windows", scoopExe(t), "", "scoop update lich" + restartChainPwsh},
 		{"scoop version dir", "windows", filepath.Join("C:", "scoop", "apps", "lich", "0.47.0", "lich.exe"), "", "scoop update lich" + restartChainPwsh},
-		{"arch by ID", "linux", "", "ID=arch\n", arch},
-		{"arch quoted ID", "linux", "", "ID=\"arch\"\n", arch},
-		{"arch derivative via ID_LIKE", "linux", "", "ID=manjaro\nID_LIKE=arch\n", arch},
-		{"debian uses install.sh", "linux", "", "ID=debian\n", installScript},
-		{"fedora uses install.sh", "linux", "", "ID=fedora\nID_LIKE=\"rhel centos\"\n", installScript},
-		{"missing os-release uses install.sh", "linux", "", "", installScript},
+		{"arch by ID", "linux", packagedExe(t), "ID=arch\n", arch},
+		{"arch quoted ID", "linux", packagedExe(t), "ID=\"arch\"\n", arch},
+		{"arch derivative via ID_LIKE", "linux", packagedExe(t), "ID=manjaro\nID_LIKE=arch\n", arch},
+		{"debian uses install.sh", "linux", packagedExe(t), "ID=debian\n", installScript},
+		{"fedora uses install.sh", "linux", packagedExe(t), "ID=fedora\nID_LIKE=\"rhel centos\"\n", installScript},
+		{"missing os-release uses install.sh", "linux", packagedExe(t), "", installScript},
+		{"linux tarball has no package to install", "linux", filepath.Join(t.TempDir(), "lich"), "ID=debian\n", ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -291,14 +239,13 @@ func TestApplyRejectedWhenNotSelfApply(t *testing.T) {
 	}
 }
 
-// applyAsset is the release asset the apply tests drive: the goos/goarch pair
-// is pinned on the Service, so the test runs the same on every host.
-const applyAsset = "lich-v0.8.0-darwin-arm64"
+// applyAsset is the installer the apply tests drive: the goos/goarch pair is
+// pinned on the Service, so the test runs the same on every host.
+const applyAsset = "lich-v0.8.0-windows-amd64-setup.exe"
 
 // applyServer serves the release endpoints Apply hits: the latest-tag JSON,
-// checksums.txt (with a matching hash for applyAsset), and the asset bytes
-// under assetStatus — 404 is the window between a pushed tag and a published
-// binary.
+// checksums.txt, and the asset under assetStatus. 404 is the window between a
+// pushed tag and a published installer.
 func applyServer(t *testing.T, assetStatus int) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -309,20 +256,18 @@ func applyServer(t *testing.T, assetStatus int) *httptest.Server {
 			_, _ = io.WriteString(w, "deadbeef  "+applyAsset+"\n")
 		default:
 			w.WriteHeader(assetStatus)
-			_, _ = io.WriteString(w, "FAKEBINARY")
+			_, _ = io.WriteString(w, "FAKEINSTALLER")
 		}
 	}))
 	t.Cleanup(srv.Close)
 	return srv
 }
 
-// applyService is a Service pinned to darwin/arm64 — the self-apply path driven
-// off whatever host runs the suite.
 func TestApplyReportsProgress(t *testing.T) {
 	body := "verified release asset"
-	srv := windowsReleaseFixture(t, "lich-v0.8.0-darwin-arm64", body)
+	srv := windowsReleaseFixture(t, applyAsset, body)
 	defer srv.Close()
-	s := applyService(t, srv, func(r io.Reader, _ []byte) error { _, err := io.ReadAll(r); return err })
+	s := applyService(t, srv)
 	s.downloadBase = srv.URL + "/"
 	var steps []Progress
 	s.emit = func(_ string, data any) { steps = append(steps, data.(Progress)) }
@@ -335,54 +280,23 @@ func TestApplyReportsProgress(t *testing.T) {
 	if first := steps[0]; first != (Progress{Phase: phaseDownload, Received: 0, Total: int64(len(body))}) {
 		t.Errorf("first = %+v", first)
 	}
-	if last := steps[len(steps)-1]; last != (Progress{Phase: phaseInstall}) {
+	if last := steps[len(steps)-1]; last != (Progress{Phase: phaseInstaller}) {
 		t.Errorf("last = %+v", last)
 	}
 }
 
-func applyService(t *testing.T, srv *httptest.Server, apply func(io.Reader, []byte) error) *Service {
+// applyService is a Service pinned to windows/amd64, the installer path driven
+// off whatever host runs the suite. install records the staged installer.
+func applyService(t *testing.T, srv *httptest.Server) *Service {
 	t.Helper()
 	return &Service{
 		http:         srv.Client(),
-		goos:         "darwin",
-		goarch:       "arm64",
-		exePath:      filepath.Join(t.TempDir(), "lich"),
+		goos:         "windows",
+		goarch:       "amd64",
+		exePath:      filepath.Join(t.TempDir(), "lich.exe"),
 		latestURL:    srv.URL + "/latest",
 		downloadBase: srv.URL + "/dl/",
-		applyBinary:  apply,
-	}
-}
-
-func TestApplyDownloadsVerifiesAndSwaps(t *testing.T) {
-	srv := applyServer(t, http.StatusOK)
-
-	var gotBody string
-	var gotChecksum []byte
-	s := applyService(t, srv, func(r io.Reader, checksum []byte) error {
-		b, _ := io.ReadAll(r)
-		gotBody = string(b)
-		gotChecksum = checksum
-		return nil
-	})
-
-	if err := s.Apply(); err != nil {
-		t.Fatalf("Apply() = %v, want nil", err)
-	}
-	if gotBody != "FAKEBINARY" {
-		t.Fatalf("swapped body = %q, want the downloaded asset", gotBody)
-	}
-	// The checksum handed to the swap is the decoded hex from checksums.txt.
-	want := []byte{0xde, 0xad, 0xbe, 0xef}
-	if len(gotChecksum) != len(want) || gotChecksum[0] != 0xde || gotChecksum[3] != 0xef {
-		t.Fatalf("checksum = %x, want %x", gotChecksum, want)
-	}
-}
-
-func TestApplyPropagatesSwapError(t *testing.T) {
-	srv := applyServer(t, http.StatusOK)
-	s := applyService(t, srv, func(io.Reader, []byte) error { return io.ErrUnexpectedEOF })
-	if err := s.Apply(); err == nil {
-		t.Fatal("Apply() = nil, want the swap error propagated")
+		install:      func(string) error { return nil },
 	}
 }
 
@@ -390,11 +304,9 @@ func TestApplyPropagatesSwapError(t *testing.T) {
 // be missing while the version lookup already reports the new release.
 func TestApplyFailsWhenTheAssetIsNotPublishedYet(t *testing.T) {
 	srv := applyServer(t, http.StatusNotFound)
-	swapped := false
-	s := applyService(t, srv, func(io.Reader, []byte) error {
-		swapped = true
-		return nil
-	})
+	installed := false
+	s := applyService(t, srv)
+	s.install = func(string) error { installed = true; return nil }
 
 	err := s.Apply()
 
@@ -404,33 +316,16 @@ func TestApplyFailsWhenTheAssetIsNotPublishedYet(t *testing.T) {
 	if !strings.Contains(err.Error(), "404") {
 		t.Errorf("error = %q, want the status in it", err)
 	}
-	if swapped {
-		t.Error("Apply swapped the binary for a 404 body")
-	}
-}
-
-// No asset ships for every self-apply platform: a darwin/386 build has nothing
-// to download, and saying so beats fetching a URL that cannot exist.
-func TestApplyRefusesAnArchWithNoAsset(t *testing.T) {
-	srv := applyServer(t, http.StatusOK)
-	s := applyService(t, srv, func(io.Reader, []byte) error { return nil })
-	s.goarch = "386"
-
-	err := s.Apply()
-
-	if err == nil {
-		t.Fatal("Apply() = nil, want an error when no asset ships for the arch")
-	}
-	if !strings.Contains(err.Error(), "darwin/386") {
-		t.Errorf("error = %q, want it to name the platform", err)
+	if installed {
+		t.Error("Apply ran an installer for a 404 body")
 	}
 }
 
 func TestFetchChecksum(t *testing.T) {
 	t.Run("reads the asset's hash", func(t *testing.T) {
-		s := serveBody(t, http.StatusOK, "aaaa  lich-v0.8.0-darwin-arm64\nbbbb  other\n")
+		s := serveBody(t, http.StatusOK, "aaaa  "+applyAsset+"\nbbbb  other\n")
 
-		sum, err := s.fetchChecksum(s.latestURL, "lich-v0.8.0-darwin-arm64")
+		sum, err := s.fetchChecksum(s.latestURL, applyAsset)
 		if err != nil {
 			t.Fatalf("fetchChecksum() error: %v", err)
 		}
@@ -446,7 +341,7 @@ func TestFetchChecksum(t *testing.T) {
 	t.Run("a non-200 is not a checksums file", func(t *testing.T) {
 		s := serveBody(t, http.StatusNotFound, "Not Found")
 
-		_, err := s.fetchChecksum(s.latestURL, "lich-v0.8.0-darwin-arm64")
+		_, err := s.fetchChecksum(s.latestURL, applyAsset)
 
 		if err == nil {
 			t.Fatal("fetchChecksum() = nil error, want failure on a non-200")
@@ -459,9 +354,9 @@ func TestFetchChecksum(t *testing.T) {
 	// checksums.txt is remote data: a truncated or corrupted line must fail the
 	// update, never reach selfupdate as a half-decoded checksum.
 	t.Run("a malformed hash is refused", func(t *testing.T) {
-		s := serveBody(t, http.StatusOK, "zzzz  lich-v0.8.0-darwin-arm64\n")
+		s := serveBody(t, http.StatusOK, "zzzz  "+applyAsset+"\n")
 
-		_, err := s.fetchChecksum(s.latestURL, "lich-v0.8.0-darwin-arm64")
+		_, err := s.fetchChecksum(s.latestURL, applyAsset)
 
 		if err == nil {
 			t.Fatal("fetchChecksum() = nil error, want failure on a non-hex hash")

@@ -27,6 +27,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Every release asset is now a complete package, lich with its window.**
+  Linux gets `lich-vX-linux-amd64.tar.zst` (the binary and `shell/`) in place
+  of `lich-vX-linux-amd64` and `lich-vX-linux-amd64-shell.tar.zst`; Windows gets
+  the portable `lich-vX-windows-amd64.zip` (`lich.exe` and `shell\`) in place of
+  `lich-vX-windows-amd64.exe` and `lich-vX-windows-amd64-shell.zip`; and the bare
+  `lich-vX-darwin-arm64` and `lich-vX-darwin-amd64` binaries are gone, leaving
+  `Lich.app`. The update button on Windows always runs the installer, a portable
+  folder included, so the window updates with lich; a portable folder updated
+  this way shows up in Installed apps from then on. On macOS lich updates
+  through Homebrew, and a Linux tarball through the release page.
+
 - **Plugin releases older than 0.13.0 are marked unsupported**, and lich offers
   the release it supports in their place. 0.13.0 is the first that tells lich
   which release it is. Releases older than 0.3.0 can no longer link a session

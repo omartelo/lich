@@ -10,8 +10,8 @@ const ProgressEventName = "appupdate-progress"
 
 // Progress is one step of Apply: bytes received of total during the download
 // (total is -1 when the asset came without a Content-Length), then the phase
-// that has no percentage — "install" for the in-place swap, "installer" where
-// lich hands over to the Windows installer and closes.
+// that has no percentage: "installer", where lich hands over to the Windows
+// installer and closes.
 type Progress struct {
 	Phase    string `json:"phase"`
 	Received int64  `json:"received"`
@@ -20,7 +20,6 @@ type Progress struct {
 
 const (
 	phaseDownload  = "download"
-	phaseInstall   = "install"
 	phaseInstaller = "installer"
 	// A download event per ~1% or per 250 ms, whichever comes first: enough for
 	// the bar to move on a slow link, and no repaint per chunk on a fast one.
@@ -73,8 +72,8 @@ func (p *progressReader) report() {
 	p.emit(Progress{Phase: phaseDownload, Received: p.received, Total: p.total})
 }
 
-// emitProgress hands one step to the hub; a Service built without one (tests,
-// a bare binary) updates in silence.
+// emitProgress hands one step to the hub; a Service built without one (tests)
+// updates in silence.
 func (s *Service) emitProgress(p Progress) {
 	if s.emit != nil {
 		s.emit(ProgressEventName, p)

@@ -114,9 +114,9 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 | --- | --- | --- |
 | **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `zenity` —— 窗口随软件包一起附带 |
 | **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | Apple Silicon 上无需任何东西 —— 窗口随应用一起附带；Intel 上 lich 会作为标签页开在你的默认浏览器里 |
-| **Windows** | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序，或使用 Scoop：`scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json` | 无需任何东西 —— 两种方式都自带窗口 |
+| **Windows** | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序或便携版 zip，或使用 Scoop：`scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json` | 无需任何东西，每种方式都自带窗口 |
 
-手动的分发版软件包和静态二进制文件见 [INSTALL.md](INSTALL.md)。macOS 和 Windows 的
+手动的分发版软件包、Linux 压缩包和 Windows 便携版 zip 见 [INSTALL.md](INSTALL.md)。macOS 和 Windows 的
 二进制文件未签名 —— 在公证/签名做好之前，Gatekeeper 和 SmartScreen 会发出警告。用
 Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的二进制文件则需要手动
 清除隔离标记。在 macOS 上，cask 会把 `Lich.app` 装进 `/Applications`，lich 因此有了

@@ -29,7 +29,7 @@ detect_family() {
       arch) echo arch; return ;;
     esac
   done
-  fail "unsupported distro '${ID:-unknown}' — grab a package or the static binary from https://github.com/${REPO}/releases"
+  fail "unsupported distro '${ID:-unknown}': grab a package or the tarball from https://github.com/${REPO}/releases"
 }
 
 # latest_tag prints the tag name of the latest release, without jq. The JSON

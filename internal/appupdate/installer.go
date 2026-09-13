@@ -12,23 +12,6 @@ import (
 // The installer includes Chromium, several hundred MiB larger than the exe.
 const installerLimit = 1 << 30
 
-// installerUpdate reports the one install shape Inno Setup owns: a Windows
-// layout the installer left its mark on and Scoop does not track, which only
-// ships for amd64. The arch belongs in this predicate and not beside the asset
-// name: Apply routes on it alone, so an arch published later would otherwise
-// hand its bare exe to the installer and run it with /SILENT and /DIR=.
-func (s *Service) installerUpdate() bool {
-	return s.goos == "windows" && s.goarch == "amd64" &&
-		installerOwned(s.exePath) && !scoopOwned(s.exePath)
-}
-
-func (s *Service) assetName(version string) string {
-	if s.installerUpdate() {
-		return "lich-v" + version + "-windows-amd64-setup.exe"
-	}
-	return assetName(s.goos, s.goarch, version)
-}
-
 func (s *Service) applyInstaller(r io.Reader, checksum []byte) error {
 	if s.install == nil {
 		return fmt.Errorf("installer updates unavailable")

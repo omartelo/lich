@@ -9,7 +9,7 @@ Pick your system:
 - [Debian / Ubuntu](#debian--ubuntu)
 - [Fedora / RHEL](#fedora--rhel)
 - [Arch](#arch)
-- [Static binary (any distro)](#static-binary)
+- [Tarball (any distro)](#tarball)
 - [macOS (experimental)](#macos-experimental)
 - [Windows](#windows)
 - [Verifying checksums](#verifying-checksums)
@@ -22,8 +22,8 @@ Linux window needs glibc 2.34 or newer — Debian 12, Ubuntu 22.04, RHEL 9, or
 anything current — and the libraries Chromium itself links against, which the
 deb, rpm and AUR packages declare. The window carries lich's own class and
 title, so the launcher icon, window rules by class and `StartupWMClass` all
-match it. A package missing its window, or a bare binary copied out of the
-tarball, does not start: `lich doctor` says so, and `--shell` or `LICH_SHELL`
+match it. A package missing its window, or a binary copied out of the
+package it came in, does not start: `lich doctor` says so, and `--shell` or `LICH_SHELL`
 points lich at a window build of your own
 ([docs/chromium-shell.md](docs/chromium-shell.md)).
 
@@ -100,21 +100,23 @@ install them yourself:
 sudo pacman -S zenity
 ```
 
-## Static binary
+## Tarball
 
-Every release also ships the bare binary (`lich-*-linux-amd64`) — pure static
-Go, no libraries needed. Download it from the releases page, then drop it on
-your PATH:
+Every release also ships `lich-*-linux-amd64.tar.zst`: the static binary with
+its window beside it as `shell/`. Download it from the releases page and
+unpack it into a directory on your PATH:
 
 ```bash
-install -Dm755 lich-*-linux-amd64 ~/.local/bin/lich
-tar --zstd -xf lich-*-linux-amd64-shell.tar.zst -C ~/.local/bin
+mkdir -p ~/.local/lib/lich
+tar --zstd -xf lich-*-linux-amd64.tar.zst -C ~/.local/lib/lich
+ln -s ~/.local/lib/lich/lich ~/.local/bin/lich
 ```
 
-The second line unpacks the window beside the binary, as `~/.local/bin/shell/`
-— lich looks for it there, and under `../lib/lich/shell` relative to its bin.
-Without it — or if it fails to start on your machine — lich does not open:
-a dialog and the log say why. `zenity` still comes from your package manager.
+lich finds its window beside the real binary, through the link. If the window
+fails to start on your machine, lich does not open: a dialog and the log say
+why. `zenity` still comes from your package manager. A tarball install updates
+by hand: the update prompt links the release page, since a package installed
+over it would leave the old binary first on your PATH.
 
 ## macOS (experimental)
 
@@ -158,24 +160,14 @@ would otherwise refuse:
 xattr -dr com.apple.quarantine /Applications/Lich.app
 ```
 
-The bare `lich-*-darwin-arm64` and `lich-*-darwin-amd64` binaries are still
-published for a CLI-only install by hand; they carry no window and open lich
-as a tab in the default browser:
-
-```bash
-install -m755 lich-*-darwin-arm64 ~/.local/bin/lich
-xattr -d com.apple.quarantine ~/.local/bin/lich
-```
-
 ## Windows
 
 Download `lich-*-windows-amd64-setup.exe` from the releases page and run it.
 The install is per-user (no admin prompt): lich lands in
 `%LocalAppData%\Programs\lich` with its window beside it as `shell\`, shows
 up in the Start Menu and in Settings → Installed apps, and uninstalls from
-there like any other application. An installed lich updates by running the
-next installer: the update button opens the release page, since the window is
-what an in-place swap of the exe would leave behind.
+there like any other application. The update button downloads the next
+installer, verifies it and runs it over the install, then reopens lich.
 
 The installer is not code-signed, so SmartScreen will warn on first run —
 "More info" → "Run anyway". Verify the download against `checksums.txt` first
@@ -183,7 +175,7 @@ The installer is not code-signed, so SmartScreen will warn on first run —
 
 lich runs windowless on Windows; diagnostics live in `%AppData%\lich\lich.log`.
 
-Scoop installs the same two assets from the manifest every release publishes
+Scoop installs the portable zip from the manifest every release publishes
 beside them, no bucket to add:
 
 ```powershell
@@ -195,10 +187,11 @@ keeps `lich` on PATH and adds a Start Menu entry; `scoop update lich` re-reads
 the manifest from that URL, which is always the latest release's. The workspace stays in `%AppData%\lich`, so
 `scoop uninstall lich` leaves your projects and sessions alone.
 
-The bare `lich-*-windows-amd64.exe` is also published for a portable,
-no-install run — same binary the installer ships. Unzip
-`lich-*-windows-amd64-shell.zip` beside it to get the window as `shell\`;
-without it, lich does not open, and a dialog says so.
+`lich-*-windows-amd64.zip` is the portable package, for a no-install run:
+`lich.exe` with its window beside it as `shell\`. Unzip it anywhere you can
+write and run `lich.exe`; keep the two together, since `lich.exe` alone does
+not open. The update button runs the installer into that folder, which also
+adds lich to Installed apps.
 
 ## Verifying checksums
 

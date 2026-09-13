@@ -32,9 +32,6 @@ describe("failureText", () => {
     )
   })
   it("names the install once the download is over", () => {
-    expect(failureText({ phase: "install", received: 0, total: 0 }, "checksum mismatch")).toBe(
-      "Install failed: checksum mismatch",
-    )
     expect(failureText({ phase: "installer", received: 0, total: 0 }, "x")).toBe(
       "Install failed: x",
     )
@@ -45,9 +42,10 @@ describe("failureText", () => {
 })
 
 describe("isUpdateProgress", () => {
-  it("accepts the three phases and rejects the rest", () => {
+  it("accepts the two phases and rejects the rest", () => {
     expect(isUpdateProgress({ phase: "download", received: 1, total: 2 })).toBe(true)
     expect(isUpdateProgress({ phase: "installer", received: 0, total: 0 })).toBe(true)
+    expect(isUpdateProgress({ phase: "install", received: 0, total: 0 })).toBe(false)
     expect(isUpdateProgress({ phase: "verify", received: 0, total: 0 })).toBe(false)
     expect(isUpdateProgress({ phase: "download", received: "1", total: 2 })).toBe(false)
     expect(isUpdateProgress(null)).toBe(false)

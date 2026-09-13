@@ -12,47 +12,29 @@ import (
 	"testing"
 )
 
-func TestWindowsApplyAsset(t *testing.T) {
-	layouts := map[string]func(*testing.T) string{
-		"portable": func(t *testing.T) string { return filepath.Join(t.TempDir(), "lich.exe") },
-		"windowed": windowedExe,
-		"legacy":   legacyInstallExe,
+// A Windows install, from the installer or the portable zip, updates by
+// verifying the release's installer and handing it over.
+func TestWindowsApplyRunsTheInstaller(t *testing.T) {
+	body := "verified release asset"
+	srv := windowsReleaseFixture(t, applyAsset, body)
+	defer srv.Close()
+	s := applyService(t, srv)
+	s.exePath = windowedExe(t)
+	s.downloadBase = srv.URL + "/"
+	installed := false
+	s.install = func(path string) error {
+		data, err := os.ReadFile(path)
+		if err != nil || string(data) != body {
+			t.Fatalf("installer bytes = %q, %v", data, err)
+		}
+		installed = true
+		return nil
 	}
-	for name, layout := range layouts {
-		t.Run(name, func(t *testing.T) {
-			window := name != "portable"
-			exe := layout(t)
-			asset := "lich-v0.8.0-windows-amd64.exe"
-			if window {
-				asset = "lich-v0.8.0-windows-amd64-setup.exe"
-			}
-			body := "verified release asset"
-			srv := windowsReleaseFixture(t, asset, body)
-			defer srv.Close()
-			s := applyService(t, srv, func(r io.Reader, checksum []byte) error {
-				if window {
-					t.Fatal("installer layout must not swap the bare exe")
-				}
-				return nil
-			})
-			s.goos, s.goarch, s.exePath = "windows", "amd64", exe
-			s.downloadBase = srv.URL + "/"
-			installed := false
-			s.install = func(path string) error {
-				data, err := os.ReadFile(path)
-				if err != nil || string(data) != body {
-					t.Fatalf("installer bytes = %q, %v", data, err)
-				}
-				installed = true
-				return nil
-			}
-			if err := s.Apply(); err != nil {
-				t.Fatal(err)
-			}
-			if installed != window {
-				t.Fatalf("installed = %v, window = %v", installed, window)
-			}
-		})
+	if err := s.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	if !installed {
+		t.Fatal("the installer did not run")
 	}
 }
 
@@ -77,7 +59,7 @@ func windowsReleaseFixture(t *testing.T, asset, body string) *httptest.Server {
 func TestInstallerVerificationAndFailures(t *testing.T) {
 	body := "installer"
 	sum := sha256.Sum256([]byte(body))
-	if (&Service{goos: "windows", exePath: scoopExe(t)}).installerUpdate() {
+	if canSelfApply("windows", "amd64", scoopExe(t)) {
 		t.Fatal("a Scoop install must not run the Inno Setup installer")
 	}
 	s := &Service{exePath: windowedExe(t)}
@@ -120,30 +102,6 @@ func TestInstallerSizeCap(t *testing.T) {
 	if err := stageInstaller(strings.NewReader(body+"!"), sum[:], path, limit); err == nil {
 		t.Fatal("an asset past the limit must be refused")
 	}
-}
-
-// A windowed layout on an arch the installer does not ship for must stay on the
-// portable path: applyInstaller would run a bare exe with Inno's own flags.
-func TestWindowedNonAmd64IsNotAnInstallerUpdate(t *testing.T) {
-	s := &Service{goos: "windows", goarch: "arm64", exePath: windowedExe(t)}
-	if s.installerUpdate() {
-		t.Fatal("windows/arm64 routed to the installer")
-	}
-	if got := s.assetName("0.8.0"); got != "" {
-		t.Fatalf("assetName = %q, want none: no arm64 asset ships", got)
-	}
-}
-
-// legacyInstallExe returns a path laid out like an installer install from
-// before the window shipped: the Inno Setup uninstaller beside the exe and no
-// shell\ directory.
-func legacyInstallExe(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "unins000.exe"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return filepath.Join(dir, "lich.exe")
 }
 
 type failingReader struct{}
