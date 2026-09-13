@@ -110,3 +110,37 @@ func TestLatestTagBadURL(t *testing.T) {
 		t.Fatalf("LatestTag() = %q, want %q for an unbuildable request", got, "")
 	}
 }
+
+func TestReleaseTags(t *testing.T) {
+	body := `[
+		{"tag_name":"v0.14.0-rc.1","prerelease":true},
+		{"tag_name":"v0.13.1"},
+		{"tag_name":"v0.13.0","draft":true},
+		{"tag_name":""},
+		{"tag_name":"0.12.0"}
+	]`
+	client, url := serveBody(t, http.StatusOK, body)
+	got := strings.Join(ReleaseTags(client, url), ",")
+	if got != "0.13.1,0.12.0" {
+		t.Fatalf("ReleaseTags() = %q, want published releases only, v stripped", got)
+	}
+}
+
+func TestReleaseTagsFailures(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"not a list", http.StatusOK, `{"tag_name":"v0.2.0"}`},
+		{"not found", http.StatusNotFound, `[]`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client, url := serveBody(t, tc.status, tc.body)
+			if got := ReleaseTags(client, url); got != nil {
+				t.Fatalf("ReleaseTags() = %v, want nil", got)
+			}
+		})
+	}
+}

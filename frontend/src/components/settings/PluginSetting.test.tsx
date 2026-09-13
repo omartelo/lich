@@ -22,6 +22,7 @@ const NOT_INSTALLED: PluginStatus = {
   installedVersion: "",
   latestVersion: "0.9.0",
   updateAvailable: false,
+  compatible: true,
 }
 
 const INSTALLED: PluginStatus = {
@@ -36,6 +37,15 @@ const OUTDATED: PluginStatus = {
   ...INSTALLED,
   installedVersion: "0.8.0",
   updateAvailable: true,
+}
+
+// An install past the range this lich speaks: the compatible release is offered
+// even though it is older.
+const UNSUPPORTED: PluginStatus = {
+  ...INSTALLED,
+  installedVersion: "0.14.0",
+  updateAvailable: true,
+  compatible: false,
 }
 
 /** What the next Status() call answers. Swapped per test, and mid-test. */
@@ -180,5 +190,17 @@ describe("the plugin pane", () => {
     expect(text()).toContain("v0.9.0")
     expect(text()).not.toContain("Plugin not installed")
     await second.unmount()
+  })
+
+  it("offers the supported release on an unsupported install", async () => {
+    status = () => Promise.resolve([UNSUPPORTED])
+    const mounted = await mountBudget(createElement(PluginSetting))
+    await mounted.act(() => {})
+
+    expect(text()).toContain("v0.14.0, not supported by this lich")
+    await mounted.act(() => click("Install v0.9.0"))
+
+    expect(updates).toEqual(["claude"])
+    await mounted.unmount()
   })
 })

@@ -43,17 +43,17 @@ func fileServer(t *testing.T, files map[string]string) (*Service, func() []strin
 	t.Cleanup(srv.Close)
 
 	release := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = io.WriteString(w, `{"tag_name":"v`+testVersion+`"}`)
+		_, _ = io.WriteString(w, `[{"tag_name":"v`+testVersion+`"}]`)
 	}))
 	t.Cleanup(release.Close)
 
 	return &Service{
-		http:      srv.Client(),
-		latestURL: release.URL,
-		rawBase:   srv.URL,
-		bins:      stubBins{},
-		lookPath:  func(name string) (string, error) { return "/usr/bin/" + name, nil },
-		lichBin:   lichBinary,
+		http:        srv.Client(),
+		releasesURL: release.URL,
+		rawBase:     srv.URL,
+		bins:        stubBins{},
+		lookPath:    func(name string) (string, error) { return "/usr/bin/" + name, nil },
+		lichBin:     lichBinary,
 	}, func() []string { return asked }
 }
 

@@ -105,9 +105,11 @@ export function PluginSetting() {
             <span className="ml-auto text-xs text-muted-foreground">
               {!status.available
                 ? "CLI not installed"
-                : status.installed
-                  ? `v${status.installedVersion}`
-                  : "Plugin not installed"}
+                : !status.installed
+                  ? "Plugin not installed"
+                  : status.compatible
+                    ? `v${status.installedVersion}`
+                    : `v${status.installedVersion}, not supported by this lich`}
             </span>
             {status.available && !status.installed && (
               <Button
@@ -127,7 +129,7 @@ export function PluginSetting() {
                 disabled={busy}
               >
                 {busy ? spinner : null}
-                Update to v{status.latestVersion}
+                {status.compatible ? "Update to" : "Install"} v{status.latestVersion}
               </Button>
             )}
           </div>

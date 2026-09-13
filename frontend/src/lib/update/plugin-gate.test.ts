@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { decidePluginAction } from "./plugin-gate"
+import { decidePluginAction, incompatibleMessage } from "./plugin-gate"
 import type { Status } from "./plugin-gate"
 
 const status = (over: Partial<Status>): Status => ({
@@ -10,6 +10,7 @@ const status = (over: Partial<Status>): Status => ({
   installedVersion: "",
   latestVersion: "",
   updateAvailable: false,
+  compatible: true,
   ...over,
 })
 
@@ -100,5 +101,43 @@ describe("decidePluginAction", () => {
       version: "0.0.2",
       providers: [a, b],
     })
+  })
+
+  // An install outside the supported range may have its reports refused, so no
+  // dismissal of the other two prompts keeps it quiet, and it outranks both.
+  it("prompts incompatible ahead of install and update, past every dismissal", () => {
+    const unsupported = status({
+      installed: true,
+      compatible: false,
+      updateAvailable: true,
+      installedVersion: "0.14.0",
+      latestVersion: "0.13.1",
+    })
+    const missing = codex({ installed: false })
+    expect(decidePluginAction([unsupported, missing], true, "0.13.1")).toEqual({
+      kind: "incompatible",
+      version: "0.13.1",
+      providers: [unsupported],
+    })
+  })
+
+  // Cursor reports Claude Code's version, so the fix is offered on that row.
+  it("leaves Cursor out of the incompatible prompt", () => {
+    const cursor = status({ provider: "cursor", installed: true, compatible: false })
+    expect(decidePluginAction([cursor], false, null)).toEqual({ kind: "none" })
+  })
+})
+
+describe("incompatibleMessage", () => {
+  const unsupported = status({ installed: true, compatible: false, installedVersion: "0.14.0" })
+
+  it("names the install and the release that fixes it", () => {
+    expect(incompatibleMessage("0.13.1", [unsupported])).toBe(
+      "The lich plugin in Claude Code (v0.14.0) is not supported by this lich. Install v0.13.1, the release this lich supports.",
+    )
+  })
+
+  it("points at lich itself when no supported release is known", () => {
+    expect(incompatibleMessage("", [unsupported])).toContain("Update lich")
   })
 })

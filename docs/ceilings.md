@@ -329,6 +329,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   session reaches the lich its PTY's coordinates name, but not what the file appears to say. With no lich on
   PATH at all, a dev install registers nothing: Crush and oh-my-pi still get their hooks, and Cursor's install
   refuses outright.
+- **A plugin install is pinned, so the harness never updates it on its own** (`internal/agentplugin/compat.go`,
+  `claudePinMarketplace`, `codexPinMarketplace`): lich installs the newest plugin release inside the range it
+  speaks and declares Claude Code's and Codex's marketplace at that release's tag, so a plugin release this lich
+  would not parse never arrives behind its back. The price is that a newer compatible release only lands through
+  lich's own update prompt, and a marketplace the user pointed somewhere else is re-pointed on the next install.
+  Neither CLI can change a declared ref, so an install removes the marketplace and adds it back; on Claude Code the
+  remove also uninstalls the plugin, and an add that fails there (offline mid-install) leaves it uninstalled until
+  the next attempt, which the install prompt then offers. An install that was already outside the range, from
+  before the pin or by hand, is caught by the `X-Lich-Plugin` header its hooks send (docs/hooks/README.md): only
+  once a session reports, and a plugin older than the header sends none, so until the floor passes that release
+  such a plugin is accepted in silence.
 - **The plan gauge answers to two undocumented endpoints, and only two providers have one**
   (`internal/quota`): Claude Code's and Codex's usage routes are what their own CLIs poll, not published API. A
   field renamed upstream drops the window it fed rather than raising anything — an entry lich has no name for is

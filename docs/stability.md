@@ -12,7 +12,8 @@ old form keeps working, with a visible warning, for at least one minor release b
   output, and exit codes. [cli.md](cli.md) is the reference for each of them.
 - **MCP tools.** The tool names and input schemas that `lich mcp` serves (`internal/cli/mcp.go`).
 - **The hook contract** with [`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin): the endpoints and
-  payloads written down in [hooks/](hooks/README.md).
+  payloads written down in [hooks/](hooks/README.md). Which plugin releases a lich supports, and how the plugin's
+  version number marks a contract change, is under [Versioning](hooks/README.md#versioning).
 - **Themes.** The theme JSON format and the `lich-theme.json` pack manifest, as described in [themes.md](themes.md).
 - **Project files.** `.lich/setup-worktree.sh`, `.lich/run-worktree.sh` and `.worktreeinclude`.
 - **Environment variables lich sets in every session:** `LICH_PORT`, `LICH_TOKEN`, `LICH_SESSION_ID`, `LICH_BIN`,

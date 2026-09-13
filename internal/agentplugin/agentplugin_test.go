@@ -113,24 +113,33 @@ func TestParseCodexPluginList(t *testing.T) {
 
 func TestComputeStatus(t *testing.T) {
 	tests := []struct {
-		name         string
-		installed    bool
-		installedVer string
-		latestVer    string
-		wantUpdate   bool
+		name           string
+		installed      bool
+		installedVer   string
+		latestVer      string
+		wantUpdate     bool
+		wantCompatible bool
 	}{
-		{"not installed", false, "", "0.0.2", false},
-		{"installed, no latest known", true, "0.0.1", "", false},
-		{"update available", true, "0.0.1", "0.0.2", true},
-		{"already latest", true, "0.0.2", "0.0.2", false},
-		{"installed newer than latest", true, "0.1.0", "0.0.2", false},
-		{"pre-release install sees the stable release", true, "0.2.0-rc.3", "0.2.0", true},
+		{"not installed", false, "", "0.12.2", false, true},
+		{"installed, no latest known", true, "0.12.1", "", false, true},
+		{"update available", true, "0.12.1", "0.12.2", true, true},
+		{"already latest", true, "0.12.2", "0.12.2", false, true},
+		{"installed newer than latest, still compatible", true, "0.13.0", "0.12.2", false, true},
+		{"pre-release install sees the stable release", true, "0.12.0-rc.3", "0.12.0", true, true},
+		// Past the ceiling: the compatible release is offered even though it is
+		// older, because it is the one this lich speaks.
+		{"installed past the ceiling", true, PluginVersionCeiling, "0.13.1", true, false},
+		{"installed below the floor", true, "0.2.9", "0.13.1", true, false},
+		{"incompatible, no compatible release known", true, "0.2.9", "", false, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := computeStatus(providers.Codex, true, tc.installed, tc.installedVer, tc.latestVer)
 			if got.UpdateAvailable != tc.wantUpdate {
 				t.Fatalf("UpdateAvailable = %v, want %v", got.UpdateAvailable, tc.wantUpdate)
+			}
+			if got.Compatible != tc.wantCompatible {
+				t.Fatalf("Compatible = %v, want %v", got.Compatible, tc.wantCompatible)
 			}
 			if got.Installed != tc.installed || got.InstalledVersion != tc.installedVer || got.LatestVersion != tc.latestVer {
 				t.Fatalf("status = %+v, mismatch on passthrough fields", got)
@@ -139,6 +148,15 @@ func TestComputeStatus(t *testing.T) {
 				t.Fatalf("status = %+v, want it to name the provider it is about", got)
 			}
 		})
+	}
+}
+
+// Cursor's version is Claude Code's install, so an incompatible one is reported
+// on its row but the fix is offered on Claude Code's.
+func TestComputeStatusCursorNeverOffersTheFix(t *testing.T) {
+	got := computeStatus(providers.Cursor, true, true, PluginVersionCeiling, "0.13.1")
+	if got.Compatible || got.UpdateAvailable {
+		t.Fatalf("status = %+v, want incompatible with no update of its own", got)
 	}
 }
 
@@ -188,8 +206,8 @@ func (s stubBins) ProviderBin(string, string) string { return s.bin }
 
 func TestNewDefaults(t *testing.T) {
 	s := New(stubBins{bin: "claude"})
-	if s.latestURL != latestReleaseURL {
-		t.Errorf("latestURL = %q, want %q", s.latestURL, latestReleaseURL)
+	if s.releasesURL != releasesURL {
+		t.Errorf("releasesURL = %q, want %q", s.releasesURL, releasesURL)
 	}
 	if s.http == nil || s.http.Timeout != httpTimeout {
 		t.Errorf("http client = %+v, want one with a %v timeout", s.http, httpTimeout)
@@ -240,11 +258,11 @@ func serveBody(t *testing.T, status int, body string) *Service {
 	}))
 	t.Cleanup(srv.Close)
 	return &Service{
-		http:      srv.Client(),
-		latestURL: srv.URL,
-		bins:      stubBins{},
-		lookPath:  func(name string) (string, error) { return "/usr/bin/" + name, nil },
-		lichBin:   lichBinary,
+		http:        srv.Client(),
+		releasesURL: srv.URL,
+		bins:        stubBins{},
+		lookPath:    func(name string) (string, error) { return "/usr/bin/" + name, nil },
+		lichBin:     lichBinary,
 	}
 }
 
@@ -261,9 +279,9 @@ func statusOf(t *testing.T, list []Status, provider string) Status {
 }
 
 func TestStatus(t *testing.T) {
-	t.Setenv("CLAUDE_CONFIG_DIR", writeClaudeState(t, `{"plugins":{"lich@lich-plugin":[{"scope":"user","version":"0.2.0-rc.3"}]}}`))
+	t.Setenv("CLAUDE_CONFIG_DIR", writeClaudeState(t, `{"plugins":{"lich@lich-plugin":[{"scope":"user","version":"0.12.0-rc.3"}]}}`))
 
-	s := serveBody(t, http.StatusOK, `{"tag_name":"v0.2.0"}`)
+	s := serveBody(t, http.StatusOK, `[{"tag_name":"v0.12.0"}]`)
 	// Codex's version comes from its CLI, which is not spawned here; only the
 	// Claude Code entry is asserted on.
 	s.lookPath = func(name string) (string, error) {
@@ -275,7 +293,8 @@ func TestStatus(t *testing.T) {
 
 	want := Status{
 		Provider: providers.Claude, Name: "Claude Code", Available: true,
-		Installed: true, InstalledVersion: "0.2.0-rc.3", LatestVersion: "0.2.0", UpdateAvailable: true,
+		Installed: true, InstalledVersion: "0.12.0-rc.3", LatestVersion: "0.12.0", UpdateAvailable: true,
+		Compatible: true,
 	}
 	if got := statusOf(t, s.Status(), providers.Claude); got != want {
 		t.Fatalf("Status() = %+v, want %+v", got, want)
@@ -287,7 +306,7 @@ func TestStatus(t *testing.T) {
 // install button on a CLI with nothing to install.
 func TestStatusListsEveryHarness(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	s := serveBody(t, http.StatusOK, `{"tag_name":"v0.2.0"}`)
+	s := serveBody(t, http.StatusOK, `[{"tag_name":"v0.12.0"}]`)
 	s.lookPath = func(string) (string, error) { return "", errors.New("not found") }
 
 	var got []string
@@ -309,7 +328,7 @@ func TestStatusListsEveryHarness(t *testing.T) {
 // never read, since there is no CLI to have installed anything.
 func TestStatusWithoutTheCLI(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", writeClaudeState(t, `{"plugins":{"lich@lich-plugin":[{"scope":"user","version":"0.5.0"}]}}`))
-	s := serveBody(t, http.StatusOK, `{"tag_name":"v0.5.0"}`)
+	s := serveBody(t, http.StatusOK, `[{"tag_name":"v0.5.0"}]`)
 	s.lookPath = func(string) (string, error) { return "", errors.New("not found") }
 
 	got := statusOf(t, s.Status(), providers.Claude)
@@ -320,14 +339,14 @@ func TestStatusWithoutTheCLI(t *testing.T) {
 
 func TestStatusNotInstalled(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	s := serveBody(t, http.StatusOK, `{"tag_name":"v0.2.0"}`)
+	s := serveBody(t, http.StatusOK, `[{"tag_name":"v0.12.0"}]`)
 
 	got := statusOf(t, s.Status(), providers.Claude)
 	if got.Installed || got.UpdateAvailable {
 		t.Fatalf("Status() = %+v, want not installed and no update", got)
 	}
-	if got.LatestVersion != "0.2.0" {
-		t.Fatalf("LatestVersion = %q, want %q", got.LatestVersion, "0.2.0")
+	if got.LatestVersion != "0.12.0" {
+		t.Fatalf("LatestVersion = %q, want %q", got.LatestVersion, "0.12.0")
 	}
 }
 
@@ -420,65 +439,69 @@ func fakeCLI(t *testing.T, failOn string) (*Service, func() []string) {
 		}
 		return strings.Split(strings.TrimSpace(string(data)), "\n")
 	}
-	return &Service{bins: stubBin(self), lichBin: lichBinary}, calls
+	release := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `[{"tag_name":"v`+PluginVersionCeiling+`"},{"tag_name":"v`+testVersion+`"}]`)
+	}))
+	t.Cleanup(release.Close)
+	return &Service{
+		bins: stubBin(self), lichBin: lichBinary,
+		http: release.Client(), releasesURL: release.URL,
+	}, calls
 }
 
-// TestInstallAddsMarketplaceThenPlugin pins the order and the exact targets per
-// harness: the marketplace has to be added before the plugin can resolve, both
-// calls name the keys that harness stores the plugin under, and Codex's
-// marketplace is upgraded on the way in because a repeat add there succeeds
-// without refreshing the snapshot.
-func TestInstallAddsMarketplaceThenPlugin(t *testing.T) {
-	tests := []struct {
-		provider string
-		want     []string
-	}{
-		{
-			provider: providers.Claude,
-			want: []string{
-				"plugin marketplace add " + marketplaceRepo,
-				"plugin install " + pluginKey,
-			},
-		},
-		{
-			provider: providers.Codex,
-			want: []string{
-				"plugin marketplace add " + marketplaceRepo,
-				"plugin marketplace upgrade " + marketplaceName,
-				"plugin add " + pluginKey,
-			},
-		},
+// pinnedCalls is what an install or an update runs through a harness's plugin
+// CLI: whatever marketplace was declared goes, the marketplace comes back at the
+// tag of the newest compatible release (testVersion; fakeCLI's release list also
+// carries one past the ceiling), and the plugin is installed from it under the
+// key that harness stores it under.
+var pinnedCalls = map[string][]string{
+	providers.Claude: {
+		"plugin marketplace remove " + marketplaceName,
+		"plugin marketplace add " + gitURL + "#v" + testVersion,
+		"plugin install " + pluginKey,
+	},
+	providers.Codex: {
+		"plugin marketplace remove " + marketplaceName,
+		"plugin marketplace add " + marketplaceRepo + " --ref v" + testVersion,
+		"plugin add " + pluginKey,
+	},
+}
+
+// TestInstallPinsTheMarketplace pins the order and the exact targets per
+// harness, for Install and Update alike: an unpinned marketplace is one the
+// harness's own refresh can move past the contract this lich speaks.
+func TestInstallPinsTheMarketplace(t *testing.T) {
+	for provider, want := range pinnedCalls {
+		for name, call := range map[string]func(*Service, string) error{
+			"install": (*Service).Install,
+			"update":  (*Service).Update,
+		} {
+			t.Run(provider+" "+name, func(t *testing.T) {
+				s, calls := fakeCLI(t, "")
+				if err := call(s, provider); err != nil {
+					t.Fatalf("%s: %v", name, err)
+				}
+				if got := calls(); !slices.Equal(got, want) {
+					t.Errorf("calls = %v, want %v", got, want)
+				}
+			})
+		}
 	}
-	for _, tc := range tests {
-		t.Run(tc.provider, func(t *testing.T) {
-			s, calls := fakeCLI(t, "")
-			if err := s.Install(tc.provider); err != nil {
-				t.Fatalf("Install: %v", err)
+}
+
+// TestInstallSurvivesANothingToRemove proves the first install: a remove with no
+// marketplace declared fails, and that failure must not cost the install.
+func TestInstallSurvivesANothingToRemove(t *testing.T) {
+	for provider, want := range pinnedCalls {
+		t.Run(provider, func(t *testing.T) {
+			s, calls := fakeCLI(t, "marketplace remove")
+			if err := s.Install(provider); err != nil {
+				t.Fatalf("Install with nothing to remove: %v", err)
 			}
-			if got := calls(); !slices.Equal(got, tc.want) {
-				t.Errorf("calls = %v, want %v", got, tc.want)
+			if got := calls(); !slices.Equal(got, want) {
+				t.Errorf("calls = %v, want %v", got, want)
 			}
 		})
-	}
-}
-
-// TestInstallSurvivesARepeatMarketplaceAdd proves the documented tolerance on
-// Claude Code: a marketplace already present makes `marketplace add` fail, and
-// that failure must not cost the install that follows it — it only redirects the
-// refresh to the existing clone.
-func TestInstallSurvivesARepeatMarketplaceAdd(t *testing.T) {
-	s, calls := fakeCLI(t, "marketplace add")
-
-	if err := s.Install(providers.Claude); err != nil {
-		t.Fatalf("Install after a repeat marketplace add: %v", err)
-	}
-	want := []string{
-		"plugin marketplace add " + marketplaceRepo,
-		"plugin marketplace update " + marketplaceName,
-		"plugin install " + pluginKey,
-	}
-	if got := calls(); !slices.Equal(got, want) {
-		t.Errorf("calls = %v, want %v", got, want)
 	}
 }
 
@@ -499,79 +522,41 @@ func TestInstallReportsTheInstallFailure(t *testing.T) {
 	}
 }
 
-// TestUpdateTargetsThePluginKey proves Update names the same key Status reads
-// the installed version under — a mismatch would silently update nothing.
-func TestUpdateTargetsThePluginKey(t *testing.T) {
-	tests := map[string]string{
-		providers.Claude: "plugin update " + pluginKey,
-		providers.Codex:  "plugin add " + pluginKey,
-	}
-	for provider, want := range tests {
+// TestMarketplaceAddFailureStopsTheRun is the regression this package exists to
+// prevent: a marketplace that could not be declared at the pinned tag must
+// surface as an error, never as a plugin call that reads whatever clone is left
+// and exits 0 as a successful install.
+func TestMarketplaceAddFailureStopsTheRun(t *testing.T) {
+	for provider := range pinnedCalls {
 		t.Run(provider, func(t *testing.T) {
-			s, calls := fakeCLI(t, "")
-			if err := s.Update(provider); err != nil {
-				t.Fatalf("Update: %v", err)
+			s, calls := fakeCLI(t, "marketplace add")
+
+			err := s.Install(provider)
+			if err == nil || !strings.Contains(err.Error(), "plugin marketplace add") {
+				t.Fatalf("Install = %v, want the error to name the marketplace add", err)
 			}
-			if got := calls(); got[len(got)-1] != want {
-				t.Errorf("calls = %v, want the last one to be %q", got, want)
+			for _, call := range calls() {
+				if strings.HasPrefix(call, "plugin install") || strings.HasPrefix(call, "plugin add") {
+					t.Fatalf("calls = %v, want no plugin call after a failed add", calls())
+				}
 			}
 		})
 	}
 }
 
-// TestUpdateRefreshesTheMarketplaceFirst pins the order on the real-world path,
-// where the marketplace is already present: the clone is refreshed before the
-// plugin call reads a version off it. Reversed, the update reads the stale clone
-// and reports the version it already has as the newest one.
-func TestUpdateRefreshesTheMarketplaceFirst(t *testing.T) {
-	s, calls := fakeCLI(t, "marketplace add")
-
-	if err := s.Update(providers.Claude); err != nil {
-		t.Fatalf("Update: %v", err)
-	}
-	want := []string{
-		"plugin marketplace add " + marketplaceRepo,
-		"plugin marketplace update " + marketplaceName,
-		"plugin update " + pluginKey,
-	}
-	if got := calls(); !slices.Equal(got, want) {
-		t.Errorf("calls = %v, want %v", got, want)
-	}
-}
-
-// TestMarketplaceRefreshFailureStopsTheRun is the regression this package exists
-// to prevent: an unrefreshable marketplace must surface as an error, never as a
-// plugin call that exits 0 on the stale clone and reads as a successful update.
-func TestMarketplaceRefreshFailureStopsTheRun(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		provider string
-		// failOn is what the fake CLI refuses, and wantErr the call the error
-		// has to name — the one whose failure left the snapshot stale.
-		failOn  string
-		wantErr string
-	}{
-		{"claude", providers.Claude, "marketplace", "plugin marketplace update " + marketplaceName},
-		{"codex, marketplace unreachable", providers.Codex, "marketplace add",
-			"plugin marketplace add " + marketplaceRepo},
-		{"codex, snapshot not refreshed", providers.Codex, "marketplace upgrade",
-			"plugin marketplace upgrade " + marketplaceName},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			s, calls := fakeCLI(t, tc.failOn)
-
-			err := s.Install(tc.provider)
-			if err == nil {
-				t.Fatal("want an error when the marketplace cannot be refreshed, got nil")
+// TestPinnedInstallNeedsARelease proves an install that cannot name a
+// compatible release touches nothing: removing the marketplace first would
+// uninstall the plugin with nothing to put back.
+func TestPinnedInstallNeedsARelease(t *testing.T) {
+	for provider := range pinnedCalls {
+		t.Run(provider, func(t *testing.T) {
+			s, calls := fakeCLI(t, "")
+			s.releasesURL = "http://127.0.0.1:0/unreachable"
+			if err := s.Install(provider); err == nil {
+				t.Fatal("Install: want an error without a release, got nil")
 			}
-			if !strings.Contains(err.Error(), tc.wantErr) {
-				t.Errorf("error %q does not name the call that failed", err)
-			}
-			for _, call := range calls() {
-				if strings.HasPrefix(call, "plugin install") || strings.HasPrefix(call, "plugin add") {
-					t.Errorf("calls = %v, want no plugin call after a failed refresh", calls())
-					break
-				}
+			if got := calls(); len(got) != 0 {
+				t.Fatalf("calls = %v, want none", got)
 			}
 		})
 	}

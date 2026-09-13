@@ -19,7 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failing on a color it does not know, and the themes already installed stay as
   they were.
 
+- **lich tells you when a provider's plugin is a release it does not support.**
+  An install outside that range, including one a harness updated on its own,
+  gets a warning with a button that installs the release this lich does support,
+  and Settings › Updates marks the row. Its reports keep landing wherever they
+  still parse.
+
 ### Changed
+
+- **Installing or updating the lich plugin picks the newest release this lich
+  supports, not the newest one published.** In Claude Code and Codex the
+  plugin's marketplace is pinned to that release, so those CLIs no longer move
+  the plugin on their own: newer releases arrive through lich's update prompt.
 
 - **Breaking for scripts: `lich send` and `lich wait` no longer exit 0 unless
   an answer came back.** A wait that runs out and hands back a ticket exits 2,
