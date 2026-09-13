@@ -81,6 +81,9 @@ own contract in [cli.md](../cli.md).
 
 ## Versioning
 
+For users, these contracts are covered by lich's semver promise; see
+[stability.md](../stability.md).
+
 - A change **within** an existing contract (a script tweak) is a plugin-only
   release — no lich release needed.
 - A change **to** a contract (new endpoint, field, or accepted value) is a

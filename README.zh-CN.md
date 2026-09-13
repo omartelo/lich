@@ -151,6 +151,8 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
   `.worktreeinclude` 文件用来调整哪些被 gitignore 的文件会被复制过去。
 - **会话钩子** —— 在设置里装上 [lich 插件](https://github.com/omartelo/lich-plugin)
   之后，会话会给自己的卡片起标题，并在它写入文件的那一刻刷新 git。
+- **稳定性承诺** —— 哪些部分可以放心写脚本依赖、哪些可能在任何版本里变动，写在
+  [docs/stability.md](docs/stability.md)（英文）。
 
 ## 隐私与更新
 

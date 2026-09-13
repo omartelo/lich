@@ -12,6 +12,9 @@ Imported themes are stored under the user config directory:
 The file name is managed by lich on import. A stored custom theme whose file name
 does not match `<id>.json` is ignored.
 
+The theme format and the pack manifest are covered by lich's semver promise; see
+[stability.md](stability.md).
+
 ## Import Shape
 
 ```json
