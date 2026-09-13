@@ -55,8 +55,9 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
 
 Non-negotiable rules. A violation means the work is not done.
 
-1. **Test coverage ≥ 80%**, backend and frontend. CI measures and reports the number but does not auto-fail below
-   the bar — it is held in review, so read the summary. OS/framework boundaries (the PTY, the Chromium
+1. **Test coverage ≥ 80%**, backend and frontend. CI fails below the bar on each side's total: backend
+   in `.github/scripts/go-test-summary.sh`, frontend in `coverage.thresholds` of `frontend/vitest.config.ts`. An
+   exclusion goes in that config, never into a skipped test. OS/framework boundaries (the PTY, the Chromium
    launcher/zenity subprocesses, WebSocket wiring, the `main` bootstrap, xterm.js internals) are the documented
    exception: cover the pure logic and leave the boundary itself alone.
 2. **Tests answer to the contract, never the other way round.** Never weaken, skip, delete or rewrite a test to buy
