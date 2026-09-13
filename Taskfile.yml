@@ -4,7 +4,7 @@ version: '3'
 # --app window — see docs/chromium-shell.md. That window is lich's own, an
 # embedded Chromium built out of shell/ (Rust, CEF) and launched like a
 # browser, on Linux, Windows and Apple Silicon; an Intel Mac still opens the
-# system browser. Linux first; the Windows and macOS builds are experimental.
+# system browser. Linux first, Windows supported; the macOS build is experimental.
 
 vars:
   APP_NAME: "lich"
@@ -104,7 +104,7 @@ tasks:
       - cmd: go run github.com/akavel/rsrc@v0.10.2 -ico build/windows/lich.ico -arch amd64 -o rsrc_windows_amd64.syso
 
   build:windows:
-    desc: Cross-compile the Windows binary (experimental)
+    desc: Cross-compile the Windows binary
     deps: [build:frontend]
     cmds:
       # GUI subsystem: no console window rides along. stdout/stderr go

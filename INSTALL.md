@@ -1,7 +1,7 @@
 # Installing lich
 
-lich targets Linux x86_64 first; an experimental Windows x64 build ships
-alongside it, with the same window. Every artifact comes from the
+lich targets Linux x86_64 and Windows x64, with the same window on both; an
+experimental macOS build ships alongside them. Every artifact comes from the
 [Releases](https://github.com/omartelo/lich/releases) page.
 
 Pick your system:
@@ -11,7 +11,7 @@ Pick your system:
 - [Arch](#arch)
 - [Static binary (any distro)](#static-binary)
 - [macOS (experimental)](#macos-experimental)
-- [Windows (experimental)](#windows-experimental)
+- [Windows](#windows)
 - [Verifying checksums](#verifying-checksums)
 - [If it does not start](#if-it-does-not-start)
 
@@ -167,7 +167,7 @@ install -m755 lich-*-darwin-arm64 ~/.local/bin/lich
 xattr -d com.apple.quarantine ~/.local/bin/lich
 ```
 
-## Windows (experimental)
+## Windows
 
 Download `lich-*-windows-amd64-setup.exe` from the releases page and run it.
 The install is per-user (no admin prompt): lich lands in

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Windows is no longer experimental.** The installer, Scoop and the portable
+  build have held up in real use, so the README, the install guide and the site
+  list Windows beside Linux as supported. macOS keeps the label for now.
+
 ### Fixed
 
 - **A theme whose name does not fit its card can be read in full.** The theme

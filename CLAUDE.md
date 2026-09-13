@@ -3,7 +3,7 @@
 `lich` is a **harness for AI coding agents**: a Go backend serving an embedded React frontend to a system
 Chromium window in `--app` mode — no Electron, no webview toolkit (`docs/chromium-shell.md`). It is built for
 other developers to use, not only its author: docs, errors and defaults answer to a stranger. Linux first;
-Windows and macOS are experimental, and there is no hardware here for either.
+Windows is supported and macOS is experimental, with no hardware here for either.
 
 **This file is instruction, not documentation.** Rules, gates and the workflow live here. What the project *is*
 lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
