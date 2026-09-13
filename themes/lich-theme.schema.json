@@ -151,6 +151,12 @@
       ],
       "type": "object"
     },
+    "formatVersion": {
+      "description": "The theme file format. Omitted means 1; lich refuses a format newer than it reads.",
+      "maximum": 1,
+      "minimum": 1,
+      "type": "integer"
+    },
     "id": {
       "description": "Names the file the theme is stored as, so reserved ids and Windows device names are out.",
       "maxLength": 64,

@@ -28,6 +28,12 @@ func Schema() ([]byte, error) {
 		"required":             []string{"id", "name", "scheme", "app", "terminal"},
 		"properties": map[string]any{
 			"$schema": map[string]any{"type": "string"},
+			"formatVersion": map[string]any{
+				"description": "The theme file format. Omitted means 1; lich refuses a format newer than it reads.",
+				"type":        "integer",
+				"minimum":     1,
+				"maximum":     FormatVersion,
+			},
 			"id": map[string]any{
 				"description": "Names the file the theme is stored as, so reserved ids and Windows device names are out.",
 				"type":        "string",

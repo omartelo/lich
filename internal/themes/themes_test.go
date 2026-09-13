@@ -456,6 +456,99 @@ func TestListSkipsInvalidCustomTheme(t *testing.T) {
 	if len(themes) != 2 {
 		t.Fatalf("got %d themes, want bundled only", len(themes))
 	}
+	assertBroken(t, s, "bad", "parse theme JSON")
+}
+
+func assertBroken(t *testing.T, s *Service, id, reason string) {
+	t.Helper()
+	broken, err := s.ListBroken()
+	if err != nil {
+		t.Fatalf("ListBroken: %v", err)
+	}
+	if len(broken) != 1 || broken[0].ID != id || !strings.Contains(broken[0].Reason, reason) {
+		t.Fatalf("ListBroken = %#v, want %q with a reason naming %q", broken, id, reason)
+	}
+}
+
+func TestListBrokenNamesANewerFormatAndRemoveClearsIt(t *testing.T) {
+	dir := t.TempDir()
+	future := customTheme("future")
+	future.FormatVersion = FormatVersion + 1
+	if err := os.WriteFile(filepath.Join(dir, "future.json"), []byte(rawTheme(t, future)), 0o600); err != nil {
+		t.Fatalf("write future theme: %v", err)
+	}
+	s := NewInDir(dir)
+	assertBroken(t, s, "future", "theme format 2 is newer")
+	if err := s.Remove("future"); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	broken, err := s.ListBroken()
+	if err != nil || len(broken) != 0 {
+		t.Fatalf("ListBroken after Remove = %#v, %v", broken, err)
+	}
+}
+
+func TestListBrokenIgnoresNamesLichNeverWrites(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"Not An ID.json", "light.json"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("{"), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	broken, err := NewInDir(dir).ListBroken()
+	if err != nil || len(broken) != 0 {
+		t.Fatalf("ListBroken = %#v, %v; want nothing", broken, err)
+	}
+}
+
+func TestListBrokenPropagatesErrors(t *testing.T) {
+	if broken, err := NewInDir(filepath.Join(t.TempDir(), "absent")).ListBroken(); err != nil || broken != nil {
+		t.Fatalf("ListBroken on a missing dir = %#v, %v", broken, err)
+	}
+	s := &Service{initErr: os.ErrPermission}
+	if _, err := s.ListBroken(); err == nil {
+		t.Fatal("ListBroken ignored the init error")
+	}
+}
+
+func TestFormatVersion(t *testing.T) {
+	cases := []struct {
+		name    string
+		version int
+		wantErr string
+	}{
+		{"absent reads as 1", 0, ""},
+		{"current", FormatVersion, ""},
+		{"newer", FormatVersion + 1, "newer than this lich reads"},
+		{"negative", -1, "positive integer"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			theme := customTheme("versioned")
+			theme.FormatVersion = tc.version
+			_, err := importTheme(t, NewInDir(t.TempDir()), theme)
+			if tc.wantErr == "" && err != nil {
+				t.Fatalf("Import: %v", err)
+			}
+			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+				t.Fatalf("Import error = %v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestInstallStampsTheFormatVersion(t *testing.T) {
+	s := NewInDir(t.TempDir())
+	if _, err := importTheme(t, s, customTheme("stamped")); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	stored, err := s.read("stamped")
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if stored.FormatVersion != FormatVersion {
+		t.Fatalf("stored formatVersion = %d, want %d", stored.FormatVersion, FormatVersion)
+	}
 }
 
 func TestListSkipsMissingTerminalAndNonThemeEntries(t *testing.T) {
@@ -475,13 +568,15 @@ func TestListSkipsMissingTerminalAndNonThemeEntries(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(dir, "nested.json"), 0o700); err != nil {
 		t.Fatalf("make directory entry: %v", err)
 	}
-	themes, err := NewInDir(dir).List()
+	s := NewInDir(dir)
+	themes, err := s.List()
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	if len(themes) != 2 {
 		t.Fatalf("got %d themes, want bundled only", len(themes))
 	}
+	assertBroken(t, s, "missing-terminal", "terminal colors are required")
 }
 
 func TestListSkipsFilenameMismatch(t *testing.T) {
@@ -497,6 +592,7 @@ func TestListSkipsFilenameMismatch(t *testing.T) {
 	if len(themes) != 2 {
 		t.Fatalf("got %d themes, want bundled only", len(themes))
 	}
+	assertBroken(t, s, "wrong", `holds theme id "right"`)
 }
 
 func TestListReturnsDirectoryError(t *testing.T) {
