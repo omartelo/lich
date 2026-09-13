@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   what semver covers (the CLI, MCP tools, hooks, themes, project files and
   environment variables) and what may change in any release.
 
+- **A theme repository can name the oldest lich it works with.** Its
+  `lich-theme.json` takes an optional `minLichVersion`. An older lich refuses to
+  install or update the pack and says which version it needs, instead of
+  failing on a color it does not know, and the themes already installed stay as
+  they were.
+
 ### Changed
 
 - **Breaking for scripts: `lich send` and `lich wait` no longer exit 0 unless

@@ -104,7 +104,7 @@ A repository is the versioned way in. It is a plain git repository with a
 manifest at its root and one or more theme files beside it:
 
 ```
-lich-theme.json      { "name": "Sample pack", "version": "1.2.0" }
+lich-theme.json      { "name": "Sample pack", "version": "1.2.0", "minLichVersion": "0.51.0" }
 tokyo-night.json
 gruvbox.json
 ```
@@ -117,6 +117,12 @@ gruvbox.json
   subdirectories — is ignored.
 - Version is per repository, not per theme. Installing takes the whole pack, and
   so does updating it.
+- `minLichVersion` is optional: the oldest lich release the pack is written
+  for, as `MAJOR.MINOR.PATCH`. An older lich refuses the install or update and
+  names the version it needs; what is already installed stays as it is. A dev
+  build, or one between release tags, cannot be ordered and skips the check.
+- `formatVersion` is optional and follows the same rule as in a theme file:
+  omitted means `1`, and a newer one is refused.
 
 Install clones the repository shallowly into a temporary directory, validates
 the manifest and every theme, and only then writes. One invalid file fails the

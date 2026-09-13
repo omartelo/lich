@@ -347,7 +347,7 @@ func TestDefaultDirSeparatesDevThemes(t *testing.T) {
 	if filepath.Base(development) != "themes-dev" || filepath.Base(filepath.Dir(development)) != "lich" {
 		t.Fatalf("development dir = %q", development)
 	}
-	if got := New().dir; got != development {
+	if got := New("dev").dir; got != development {
 		t.Fatalf("New dir = %q, want %q", got, development)
 	}
 }
