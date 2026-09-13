@@ -53,18 +53,12 @@ func (s *Service) cursorInstall() error {
 	if err != nil {
 		return err
 	}
-	registration, err := mcpDocument(path, s.lichBin())
-	if err != nil {
-		return err
-	}
-	if registration == nil {
+	lichBin := s.lichBin()
+	if lichBin == "" {
 		return fmt.Errorf("lich cannot resolve its own binary to register with %s",
 			providerName(providers.Cursor))
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("create %s: %w", filepath.Dir(path), err)
-	}
-	return writeFile(path, registration, 0o644)
+	return writeMCPDocument(path, lichBin)
 }
 
 // cursorInstalledVersion is the Claude Code install's version, and only once

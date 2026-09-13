@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the highlight of the open section filled the gap above it. It is a separator
   of its own now.
 
+- **Crush, oh-my-pi, Cursor, Kiro and Antigravity keep lich's tools after lich
+  moves.** Their install wrote the path of the lich binary into the agent's own
+  config, so an update or a reinstall to another place left those sessions
+  without lich's tools and nothing said so. lich now points those registrations
+  back at itself when it starts. A registration you removed or disabled is left
+  alone.
+
 ## [0.50.0] - 2026-09-11
 
 ### Added
