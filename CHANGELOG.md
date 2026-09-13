@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build have held up in real use, so the README, the install guide and the site
   list Windows beside Linux as supported. macOS keeps the label for now.
 
+- **An older lich no longer opens a workspace a newer lich has upgraded.** Going
+  back to an earlier version used to open the database anyway, and anything the
+  newer version stored there could be overwritten with defaults. lich now shows a
+  dialog naming both database versions and asks you to install the newer lich.
+  Only versions from this release on can refuse, so going back to one before it
+  still opens the database.
+
 ### Fixed
 
 - **A theme whose name does not fit its card can be read in full.** The theme

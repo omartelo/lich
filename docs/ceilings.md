@@ -430,6 +430,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   cask's `depends_on` and the bundle's `LSMinimumSystemVersion` say 13.0 because the compiler does —
   both move with the next Go bump, and a machine below the floor is refused by Homebrew rather than
   by a crash.
+- **A workspace database only moves forward** (`internal/store/migrate.go`): `PRAGMA user_version` counts
+  the migrations applied, and a lich that finds a number above the ones it knows refuses to open the database,
+  in a dialog naming both, rather than write its defaults over columns it has never heard of. There is no
+  migration down: going back to an older lich means installing the newer one again or starting a fresh
+  workspace. The refusal only exists from the release that stamped version 1; a lich before it reads no version
+  and opens anything, which costs nothing until the first migration after version 1 adds a column. The trap for
+  a contributor: `schema` is frozen at the version-1 shape and every change after it is an appended entry in
+  `migrations`, never an edit to the `CREATE TABLE`, or a fresh database is created with the column its own
+  ALTER then fails to add.
 - **A history snippet folds case in ASCII, so a shouted accented word is a hit with no snippet**
   (`internal/store/transcripts.go`, `firstMention`): the window around a match is cut in the query rather than
   out of the whole conversation, which is what keeps a page of a hundred rows off the megabytes behind it. The

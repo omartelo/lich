@@ -95,6 +95,10 @@ func main() {
 	db, err := store.New()
 	if err != nil {
 		slog.Error("open store", "err", err)
+		// Before the listener and the window, so the dialog is the only surface:
+		// a launcher start would otherwise end in silence (handleBindFailure).
+		_ = zenity.Error(fmt.Sprintf("lich %s could not open its workspace database.\n\n%v\n\nLog: %s",
+			version, err, logPath), zenity.Title("lich"))
 		os.Exit(1)
 	}
 	defer db.Close()
