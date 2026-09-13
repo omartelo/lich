@@ -6,8 +6,9 @@ import "testing"
 // moving a bound is a visible edit here too.
 func TestCompatible(t *testing.T) {
 	tests := map[string]bool{
-		"0.2.9":        false,
-		"0.3.0":        true,
+		"0.12.9":       false,
+		"0.13.0-rc.1":  false,
+		"0.13.0":       true,
 		"0.13.9":       true,
 		"0.14.0-rc.1":  true,
 		"0.14.0":       false,
@@ -28,9 +29,9 @@ func TestNewestCompatible(t *testing.T) {
 		tags []string
 		want string
 	}{
-		{"newest in range wins over a newer one past it", []string{"0.14.0", "0.13.2", "0.13.10", "0.12.0"}, "0.13.10"},
-		{"order does not matter", []string{"0.12.0", "0.13.1"}, "0.13.1"},
-		{"nothing in range", []string{"0.14.0", "0.2.0"}, ""},
+		{"newest in range wins over a newer one past it", []string{"0.14.0", "0.13.2", "0.13.10", "0.12.9"}, "0.13.10"},
+		{"order does not matter", []string{"0.13.0", "0.13.1"}, "0.13.1"},
+		{"nothing in range", []string{"0.14.0", "0.12.0"}, ""},
 		{"no releases", nil, ""},
 	}
 	for _, tc := range tests {

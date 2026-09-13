@@ -23,7 +23,7 @@ import (
 // release published, the marker that names the version, and — for Crush — that
 // every line the user wrote survives the write.
 
-const testVersion = "0.8.0"
+const testVersion = "0.13.0"
 
 // fileServer serves the plugin repository's files at a tag and records the
 // paths asked for. A path with no body 404s, which is how a test says "this

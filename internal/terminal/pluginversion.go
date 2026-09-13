@@ -45,8 +45,7 @@ type pluginVersions struct {
 }
 
 // note records the release a session's report named. An absent header is a
-// plugin older than the header itself, whose reports are accepted as they
-// always were; it is recorded but raises nothing.
+// plugin older than the header, and so older than the floor.
 func (p *pluginVersions) note(id, version string) {
 	p.mu.Lock()
 	if p.byID == nil {
@@ -57,10 +56,10 @@ func (p *pluginVersions) note(id, version string) {
 	fn := p.onIncompatible
 	p.mu.Unlock()
 
-	if (seen && prev == version) || version == "" || agentplugin.Compatible(version) {
+	if (seen && prev == version) || agentplugin.Compatible(version) {
 		return
 	}
-	slog.Warn("hook: plugin outside the supported range", "session", id, "plugin", version,
+	slog.Warn("hook: plugin outside the supported range", "session", id, "plugin", pluginLabel(version),
 		"floor", agentplugin.PluginVersionFloor, "ceiling", agentplugin.PluginVersionCeiling)
 	if fn != nil {
 		fn(id, version)

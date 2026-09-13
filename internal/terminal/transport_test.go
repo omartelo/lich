@@ -407,10 +407,8 @@ func TestParseSessionStart(t *testing.T) {
 		wantErr        bool
 	}{
 		{"ok", `{"session_id":"s1","provider_session_id":"uuid-1"}`, "s1", "uuid-1", "claude", false},
-		{"legacy claude field", `{"session_id":"s1","claude_session_id":"uuid-2"}`, "s1", "uuid-2", "claude", false},
-		{"new field wins over legacy",
-			`{"session_id":"s1","provider_session_id":"uuid-1","claude_session_id":"uuid-2"}`,
-			"s1", "uuid-1", "claude", false},
+		// The pre-0.3.0 alias is gone: the floor is past every plugin that sent it.
+		{"legacy claude field is not read", `{"session_id":"s1","claude_session_id":"uuid-2"}`, "", "", "", true},
 		{"reported provider",
 			`{"session_id":"s1","provider_session_id":"uuid-1","provider":"codex"}`,
 			"s1", "uuid-1", "codex", false},
@@ -438,9 +436,6 @@ func TestParseSessionStart(t *testing.T) {
 			"", "", "", true},
 		{"question mark provider id",
 			`{"session_id":"s1","provider_session_id":"uuid-?"}`,
-			"", "", "", true},
-		{"legacy field is checked too",
-			`{"session_id":"s1","claude_session_id":"../../etc/passwd"}`,
 			"", "", "", true},
 		{"a dot inside an id is not a traversal",
 			`{"session_id":"s1","provider_session_id":"ses.2026-08-17.a1b2"}`,

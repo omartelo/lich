@@ -84,7 +84,8 @@ sent it.
 lich remembers the last release each session named. A release outside the range
 under [Versioning](#versioning) is still applied wherever its payload parses; it
 is logged, and the window offers the release this lich supports. A request with
-no header is a plugin older than the header and is accepted as before.
+no header comes from a plugin older than the header, which is below the floor
+and handled the same way.
 
 ## Client rules (all hooks)
 

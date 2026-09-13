@@ -30,7 +30,7 @@ func TestPluginVersionsRaisesOncePerSessionAndRelease(t *testing.T) {
 	raised := incompatibleRecorder(&p)
 
 	p.note("a", "0.13.0") // compatible
-	p.note("a", "")       // a plugin older than the header
+	p.note("a", "")       // a plugin older than the header, so below the floor
 	p.note("a", "9.0.0")
 	p.note("a", "9.0.0") // repeat report, same release
 	p.note("b", "9.0.0") // another session
@@ -39,7 +39,7 @@ func TestPluginVersionsRaisesOncePerSessionAndRelease(t *testing.T) {
 	p.forget("b")
 	p.note("b", "9.0.0") // a closed session's id reused
 
-	want := []string{"a@9.0.0", "b@9.0.0", "a@9.0.0", "b@9.0.0"}
+	want := []string{"a@", "a@9.0.0", "b@9.0.0", "a@9.0.0", "b@9.0.0"}
 	if got := raised(); !slices.Equal(got, want) {
 		t.Fatalf("raised %v, want %v", got, want)
 	}
