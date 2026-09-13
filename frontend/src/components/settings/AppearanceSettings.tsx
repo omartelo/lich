@@ -31,7 +31,10 @@ import { errorText } from "@/lib/utils"
 // the footer an editor — and both open in place, below their own row, so the
 // pane never stops being one list.
 export function AppearanceSettings() {
-  const [themePendingRemoval, setThemePendingRemoval] = useState<ThemeDefinition | null>(null)
+  const [themePendingRemoval, setThemePendingRemoval] = useState<{
+    id: string
+    name: string
+  } | null>(null)
   const [themePendingOverwrite, setThemePendingOverwrite] = useState<{
     path: string
     theme: ThemeDefinition
@@ -45,6 +48,7 @@ export function AppearanceSettings() {
   const [updatingID, setUpdatingID] = useState<string | null>(null)
   const {
     themes,
+    brokenThemes,
     theme,
     resolvedTheme,
     setTheme,
@@ -153,12 +157,14 @@ export function AppearanceSettings() {
     <>
       <ThemePicker
         themes={themes}
+        brokenThemes={brokenThemes}
         value={theme}
         resolved={resolvedTheme}
         onSelect={(id: Theme) => setTheme(id)}
         onImport={() => setImportOpen(true)}
         onUpdate={(item) => void onUpdateTheme(item)}
         onRemove={setThemePendingRemoval}
+        onRemoveBroken={(item) => setThemePendingRemoval({ id: item.id, name: item.id })}
         updatingID={updatingID}
       />
 
