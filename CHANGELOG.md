@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Plugin releases older than 0.13.0 are marked unsupported**, and lich offers
+  the release it supports in their place. 0.13.0 is the first that tells lich
+  which release it is. Releases older than 0.3.0 can no longer link a session
+  to its conversation, because their old `claude_session_id` field is not read
+  anymore.
+
 - **Installing or updating the lich plugin picks the newest release this lich
   supports, not the newest one published.** In Claude Code and Codex the
   plugin's marketplace is pinned to that release, so those CLIs no longer move

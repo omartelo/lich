@@ -9,9 +9,10 @@ import (
 // change (its major, from 1.0) and its patch for anything else, so every release
 // below the ceiling sends only what this lich accepts.
 const (
-	// PluginVersionFloor is the oldest plugin release whose reports this lich
-	// still parses.
-	PluginVersionFloor = "0.3.0"
+	// PluginVersionFloor is the oldest plugin release this lich supports: the
+	// first to name itself in the X-Lich-Plugin header, so every supported
+	// install says which release a report comes from.
+	PluginVersionFloor = "0.13.0"
 	// PluginVersionCeiling is the first release past the newest contract this
 	// lich implements (0.13), and the first one it cannot vouch for.
 	PluginVersionCeiling = "0.14.0"

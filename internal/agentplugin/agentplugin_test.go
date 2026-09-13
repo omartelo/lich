@@ -120,17 +120,17 @@ func TestComputeStatus(t *testing.T) {
 		wantUpdate     bool
 		wantCompatible bool
 	}{
-		{"not installed", false, "", "0.12.2", false, true},
-		{"installed, no latest known", true, "0.12.1", "", false, true},
-		{"update available", true, "0.12.1", "0.12.2", true, true},
-		{"already latest", true, "0.12.2", "0.12.2", false, true},
-		{"installed newer than latest, still compatible", true, "0.13.0", "0.12.2", false, true},
-		{"pre-release install sees the stable release", true, "0.12.0-rc.3", "0.12.0", true, true},
+		{"not installed", false, "", "0.13.2", false, true},
+		{"installed, no latest known", true, "0.13.1", "", false, true},
+		{"update available", true, "0.13.1", "0.13.2", true, true},
+		{"already latest", true, "0.13.2", "0.13.2", false, true},
+		{"installed newer than latest, still compatible", true, "0.13.9", "0.13.2", false, true},
+		{"pre-release install sees the stable release", true, "0.13.1-rc.3", "0.13.1", true, true},
 		// Past the ceiling: the compatible release is offered even though it is
 		// older, because it is the one this lich speaks.
 		{"installed past the ceiling", true, PluginVersionCeiling, "0.13.1", true, false},
-		{"installed below the floor", true, "0.2.9", "0.13.1", true, false},
-		{"incompatible, no compatible release known", true, "0.2.9", "", false, false},
+		{"installed below the floor", true, "0.12.9", "0.13.1", true, false},
+		{"incompatible, no compatible release known", true, "0.12.9", "", false, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -279,9 +279,9 @@ func statusOf(t *testing.T, list []Status, provider string) Status {
 }
 
 func TestStatus(t *testing.T) {
-	t.Setenv("CLAUDE_CONFIG_DIR", writeClaudeState(t, `{"plugins":{"lich@lich-plugin":[{"scope":"user","version":"0.12.0-rc.3"}]}}`))
+	t.Setenv("CLAUDE_CONFIG_DIR", writeClaudeState(t, `{"plugins":{"lich@lich-plugin":[{"scope":"user","version":"0.13.1-rc.3"}]}}`))
 
-	s := serveBody(t, http.StatusOK, `[{"tag_name":"v0.12.0"}]`)
+	s := serveBody(t, http.StatusOK, `[{"tag_name":"v0.13.1"}]`)
 	// Codex's version comes from its CLI, which is not spawned here; only the
 	// Claude Code entry is asserted on.
 	s.lookPath = func(name string) (string, error) {
@@ -293,7 +293,7 @@ func TestStatus(t *testing.T) {
 
 	want := Status{
 		Provider: providers.Claude, Name: "Claude Code", Available: true,
-		Installed: true, InstalledVersion: "0.12.0-rc.3", LatestVersion: "0.12.0", UpdateAvailable: true,
+		Installed: true, InstalledVersion: "0.13.1-rc.3", LatestVersion: "0.13.1", UpdateAvailable: true,
 		Compatible: true,
 	}
 	if got := statusOf(t, s.Status(), providers.Claude); got != want {
@@ -306,7 +306,7 @@ func TestStatus(t *testing.T) {
 // install button on a CLI with nothing to install.
 func TestStatusListsEveryHarness(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	s := serveBody(t, http.StatusOK, `[{"tag_name":"v0.12.0"}]`)
+	s := serveBody(t, http.StatusOK, `[{"tag_name":"v0.13.1"}]`)
 	s.lookPath = func(string) (string, error) { return "", errors.New("not found") }
 
 	var got []string
@@ -339,14 +339,14 @@ func TestStatusWithoutTheCLI(t *testing.T) {
 
 func TestStatusNotInstalled(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	s := serveBody(t, http.StatusOK, `[{"tag_name":"v0.12.0"}]`)
+	s := serveBody(t, http.StatusOK, `[{"tag_name":"v0.13.1"}]`)
 
 	got := statusOf(t, s.Status(), providers.Claude)
 	if got.Installed || got.UpdateAvailable {
 		t.Fatalf("Status() = %+v, want not installed and no update", got)
 	}
-	if got.LatestVersion != "0.12.0" {
-		t.Fatalf("LatestVersion = %q, want %q", got.LatestVersion, "0.12.0")
+	if got.LatestVersion != "0.13.1" {
+		t.Fatalf("LatestVersion = %q, want %q", got.LatestVersion, "0.13.1")
 	}
 }
 

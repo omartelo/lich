@@ -41,9 +41,7 @@ Every line carries exactly one of `body` / `raw`, and exactly one of `accept` /
 `accept` is the payload **normalized**, not echoed: it is what the contract's
 defaulting and trimming produce, so it is where `provider` defaults to `claude`
 and a title loses its surrounding whitespace. It lists only the fields a case is
-about — a field absent from `accept` is not asserted, which is how the
-deprecated `claude_session_id` stays out of the expectations while still being
-exercised by the payloads that send it.
+about — a field absent from `accept` is not asserted.
 
 `reject` prose is documentation, not a matcher. lich's error strings are its own
 and change freely; what the fixture fixes is *that* the payload is refused.

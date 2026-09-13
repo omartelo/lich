@@ -505,15 +505,11 @@ func clampRunes(s string, max int) string {
 	return string(runes[:max])
 }
 
-// startRequest is a session-start POST body. LegacyClaudeSessionID accepts the
-// pre-multi-provider field name plugin releases before v0.3.0 send; parsing
-// folds it into ProviderSessionID, so nothing downstream sees two names. Drop it
-// once the install gate can no longer meet an older plugin.
+// startRequest is a session-start POST body.
 type startRequest struct {
-	SessionID             string `json:"session_id"`
-	ProviderSessionID     string `json:"provider_session_id"`
-	Provider              string `json:"provider"`
-	LegacyClaudeSessionID string `json:"claude_session_id"`
+	SessionID         string `json:"session_id"`
+	ProviderSessionID string `json:"provider_session_id"`
+	Provider          string `json:"provider"`
 }
 
 // sessionStart receives the session-start POST from a provider's hook running
@@ -540,9 +536,6 @@ func parseSessionStart(body []byte) (startRequest, error) {
 	var req startRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		return startRequest{}, fmt.Errorf("invalid session-start body: %w", err)
-	}
-	if req.ProviderSessionID == "" {
-		req.ProviderSessionID = req.LegacyClaudeSessionID
 	}
 	if req.Provider == "" {
 		req.Provider = providers.Claude

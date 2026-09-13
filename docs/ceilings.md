@@ -337,9 +337,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Neither CLI can change a declared ref, so an install removes the marketplace and adds it back; on Claude Code the
   remove also uninstalls the plugin, and an add that fails there (offline mid-install) leaves it uninstalled until
   the next attempt, which the install prompt then offers. An install that was already outside the range, from
-  before the pin or by hand, is caught by the `X-Lich-Plugin` header its hooks send (docs/hooks/README.md): only
-  once a session reports, and a plugin older than the header sends none, so until the floor passes that release
-  such a plugin is accepted in silence.
+  before the pin or by hand, is caught at startup from its installed version, and again by the `X-Lich-Plugin`
+  header its hooks send (docs/hooks/README.md) once a session reports. A report whose payload lich refuses never
+  reaches that check, so a plugin old enough to send one only shows up in the startup prompt and the log.
 - **The plan gauge answers to two undocumented endpoints, and only two providers have one**
   (`internal/quota`): Claude Code's and Codex's usage routes are what their own CLIs poll, not published API. A
   field renamed upstream drops the window it fed rather than raising anything — an entry lich has no name for is

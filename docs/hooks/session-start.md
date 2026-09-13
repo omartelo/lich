@@ -30,9 +30,6 @@ Content-Type: application/json
   field existed. An id outside the registry is rejected, like an unknown state
   on `/hook` — lich ships its side of a contract first, so a provider it has no
   entry for is a client running ahead of it.
-- `claude_session_id` — **deprecated** alias for `provider_session_id`, still
-  accepted so plugin releases before v0.3.0 keep working. When both are
-  present, `provider_session_id` wins. New clients must not send it.
 
 Responses: `204` ok · `401` invalid token · `400` invalid body · `500` lich
 failed to persist.
@@ -85,8 +82,7 @@ scripted run would have said this contract could not be closed.
 
 - **Endpoint** — `internal/terminal/transport.go`, `transport.sessionStart`:
   validates the token and body (`parseSessionStart`) on the same loopback
-  listener as terminal I/O, folds the deprecated `claude_session_id` into
-  `provider_session_id`, defaults an absent `provider` to `claude` and rejects
+  listener as terminal I/O, defaults an absent `provider` to `claude` and rejects
   an unregistered one, then forwards `(session_id, provider_session_id,
   provider)`.
 - **Persistence** — `internal/store/mutations.go`, `Service.SetProviderSession`:
@@ -163,6 +159,3 @@ scripted run would have said this contract could not be closed.
   there and withheld for one that is not. A lock held by the provider running
   right now is waited out briefly and then read as absent — the failure that
   costs a live conversation, which is why the wait exists at all.
-- **The deprecated `claude_session_id` alias stays until the install gate can
-  no longer meet a plugin older than v0.3.0.** Dropping it earlier silently
-  breaks resume for anyone who has not updated the plugin.
