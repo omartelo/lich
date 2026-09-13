@@ -2,6 +2,7 @@ package agentplugin
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -27,6 +28,7 @@ func repairHome(t *testing.T) (*Service, string, func() []string) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("OMP_PROFILE", "")
 	t.Setenv("PI_CODING_AGENT_DIR", "")
+	t.Setenv(devEnv, "")
 	if dir, err := os.UserHomeDir(); err != nil || dir != home {
 		t.Fatalf("home redirect missed: %q (err %v)", dir, err)
 	}
@@ -224,5 +226,41 @@ func TestRepairLeavesACrushBlockWithoutTheServer(t *testing.T) {
 
 	if got := readFile(t, rc); got != body {
 		t.Errorf("crushrc was rewritten:\n%s", got)
+	}
+}
+
+// A dev rig shares the installed lich's home, so it must not repoint the user's
+// registrations at itself.
+func TestRepairSkipsADevInstance(t *testing.T) {
+	s, home, _ := repairHome(t)
+	t.Setenv(devEnv, "1")
+	path := filepath.Join(home, ".cursor", cursorMCPFile)
+	writeDoc(t, path, staleDoc(staleLich))
+
+	s.RepairRegistrations()
+
+	if got := lichCommandIn(t, path); got != staleLich {
+		t.Errorf("lich command = %q, want it left at %q", got, staleLich)
+	}
+}
+
+func TestDevInstance(t *testing.T) {
+	goRun := filepath.Join(os.TempDir(), "go-build123", "b001", "exe", "lich")
+	tests := []struct {
+		name   string
+		flag   string
+		exe    string
+		exeErr error
+		want   bool
+	}{
+		{"installed", "", "/usr/bin/lich", nil, false},
+		{"LICH_DEV set", "1", "/usr/bin/lich", nil, true},
+		{"go run binary", "", goRun, nil, true},
+		{"unresolvable executable", "", "", errors.New("no exe"), false},
+	}
+	for _, tt := range tests {
+		if got := devInstance(tt.flag, tt.exe, tt.exeErr); got != tt.want {
+			t.Errorf("%s: devInstance = %v, want %v", tt.name, got, tt.want)
+		}
 	}
 }

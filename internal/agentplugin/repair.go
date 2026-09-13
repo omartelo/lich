@@ -47,6 +47,10 @@ func (s *Service) registrations() []registration {
 // other than this one. It runs once at startup, off the prompt: Crush's config
 // directory and two of the rewrites are CLI calls.
 func (s *Service) RepairRegistrations() {
+	exe, err := os.Executable()
+	if devInstance(os.Getenv(devEnv), exe, err) {
+		return
+	}
 	lichBin := s.lichBin()
 	if lichBin == "" {
 		return
@@ -56,6 +60,16 @@ func (s *Service) RepairRegistrations() {
 			slog.Warn("agentplugin: repair MCP registration", "provider", r.provider, "err", err)
 		}
 	}
+}
+
+// devEnv is what `task dev` sets to give its lich a database of its own.
+const devEnv = "LICH_DEV"
+
+// devInstance reports whether this lich is a development rig. One shares the
+// installed lich's home, so repairing from it would repoint the user's real
+// registrations at a dev binary, and the two would swap them back on every start.
+func devInstance(devFlag, exe string, exeErr error) bool {
+	return devFlag != "" || (exeErr == nil && underGoBuildCache(exe))
 }
 
 func (s *Service) repair(r registration, lichBin string) error {
