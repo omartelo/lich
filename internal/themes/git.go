@@ -61,7 +61,7 @@ func (s *Service) InstallFromGit(url string, overwrite bool) (GitInstallResult, 
 	if s.initErr != nil {
 		return GitInstallResult{}, s.initErr
 	}
-	installed, err := fetchPack(url)
+	installed, err := fetchPack(url, s.lichVersion)
 	if err != nil {
 		return GitInstallResult{}, err
 	}
@@ -82,7 +82,7 @@ func (s *Service) UpdateFromGit(id string) (GitInstallResult, error) {
 	if theme.Source == nil {
 		return GitInstallResult{}, fmt.Errorf("theme %q was imported as a single file and has no repository to update from", id)
 	}
-	latest, err := fetchPack(theme.Source.URL)
+	latest, err := fetchPack(theme.Source.URL, s.lichVersion)
 	if err != nil {
 		return GitInstallResult{}, err
 	}
@@ -159,7 +159,7 @@ func (s *Service) installPack(installed pack, overwrite bool) (GitInstallResult,
 // fetchPack clones url into a temporary directory and reads the pack out of
 // it. The clone is thrown away: an update is another clone, which costs one
 // shallow fetch and saves reconciling a cache nobody watches.
-func fetchPack(url string) (pack, error) {
+func fetchPack(url, lichVersion string) (pack, error) {
 	remote, err := validateRemote(url)
 	if err != nil {
 		return pack{}, err
@@ -175,7 +175,7 @@ func fetchPack(url string) (pack, error) {
 	if err := clone(ctx, remote, dir); err != nil {
 		return pack{}, err
 	}
-	return readPack(dir, remote)
+	return readPack(dir, remote, lichVersion)
 }
 
 func clone(ctx context.Context, url, dir string) error {
@@ -215,7 +215,7 @@ func gitError(out []byte, err error) string {
 
 // readPack validates a cloned working tree: the manifest first, then every
 // other JSON beside it as a theme.
-func readPack(dir, url string) (pack, error) {
+func readPack(dir, url, lichVersion string) (pack, error) {
 	raw, err := readThemeFile(filepath.Join(dir, manifestName))
 	if err != nil {
 		return pack{}, fmt.Errorf("repository has no readable %s: %w", manifestName, err)
@@ -224,7 +224,7 @@ func readPack(dir, url string) (pack, error) {
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		return pack{}, fmt.Errorf("parse %s: %w", manifestName, err)
 	}
-	if err := manifest.validate(); err != nil {
+	if err := manifest.validate(lichVersion); err != nil {
 		return pack{}, err
 	}
 	files, err := themeFiles(dir)

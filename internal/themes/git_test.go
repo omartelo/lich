@@ -466,7 +466,7 @@ func TestReadPackRejectsMalformedRepositories(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := readPack(packDir(t, tc.files), "https://example.invalid/themes.git")
+			_, err := readPack(packDir(t, tc.files), "https://example.invalid/themes.git", "")
 			if err == nil {
 				t.Fatalf("readPack accepted %s", tc.name)
 			}
@@ -474,6 +474,71 @@ func TestReadPackRejectsMalformedRepositories(t *testing.T) {
 				t.Fatalf("error %q does not mention %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func rawManifest(t *testing.T, manifest Manifest) string {
+	t.Helper()
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	return string(data)
+}
+
+func TestReadPackChecksTheManifestAgainstThisLich(t *testing.T) {
+	cases := []struct {
+		name     string
+		manifest Manifest
+		lich     string
+		wantErr  string
+	}{
+		{"no minimum", Manifest{}, "0.50.0", ""},
+		{"minimum met", Manifest{MinLichVersion: "0.50.0"}, "v0.50.0", ""},
+		{"minimum above this lich", Manifest{MinLichVersion: "0.51.0"}, "0.50.0", "needs lich 0.51.0 or newer (this is 0.50.0)"},
+		{"dev build skips the minimum", Manifest{MinLichVersion: "9.0.0"}, "dev", ""},
+		{"between tags skips the minimum", Manifest{MinLichVersion: "0.51.0"}, "0.50.0-3-gabc1234", ""},
+		{"minimum not a release", Manifest{MinLichVersion: "0.51"}, "0.50.0", "minLichVersion"},
+		{"newer manifest format", Manifest{FormatVersion: FormatVersion + 1}, "0.50.0", "manifest: theme format 2 is newer"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.manifest.Name, tc.manifest.Version = "Pack", "1.0.0"
+			files := map[string]string{
+				manifestName: rawManifest(t, tc.manifest),
+				"one.json":   rawTheme(t, customTheme("one")),
+			}
+			_, err := readPack(packDir(t, files), "https://example.invalid/themes.git", tc.lich)
+			if tc.wantErr == "" && err != nil {
+				t.Fatalf("readPack: %v", err)
+			}
+			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+				t.Fatalf("readPack error = %v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// The update is where a minimum bites in practice: the installed pack predates
+// it, and the newer one must be refused without touching what is installed.
+func TestUpdateFromGitRefusesAPackNeedingANewerLich(t *testing.T) {
+	s := &Service{dir: t.TempDir(), lichVersion: "0.50.0"}
+	repo := themeRepo(t, map[string]string{
+		manifestName:       manifestJSON(t, "Sample pack", "1.0.0"),
+		"tokyo-night.json": rawTheme(t, customTheme("tokyo-night")),
+	})
+	if _, err := s.InstallFromGit(repo, false); err != nil {
+		t.Fatalf("InstallFromGit: %v", err)
+	}
+	writeFile(t, repo, manifestName, rawManifest(t, Manifest{Name: "Sample pack", Version: "1.1.0", MinLichVersion: "0.51.0"}))
+	commitAll(t, repo, "needs a newer lich")
+
+	if _, err := s.UpdateFromGit("tokyo-night"); err == nil || !strings.Contains(err.Error(), "needs lich 0.51.0") {
+		t.Fatalf("UpdateFromGit error = %v, want the minimum named", err)
+	}
+	stored, err := s.read("tokyo-night")
+	if err != nil || stored.Source.Version != "1.0.0" {
+		t.Fatalf("stored after refused update = %#v, %v", stored.Source, err)
 	}
 }
 
@@ -488,7 +553,7 @@ func TestReadPackIgnoresNonThemeEntries(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	pack, err := readPack(dir, "https://example.invalid/themes.git")
+	pack, err := readPack(dir, "https://example.invalid/themes.git", "")
 	if err != nil {
 		t.Fatalf("readPack: %v", err)
 	}

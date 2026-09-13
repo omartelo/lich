@@ -98,14 +98,16 @@ type ImportResult struct {
 
 // Service reads bundled themes plus user-imported themes.
 type Service struct {
-	dir     string
-	initErr error
+	dir         string
+	lichVersion string
+	initErr     error
 }
 
-// New returns a theme service rooted under lich's config directory.
-func New() *Service {
+// New returns a theme service rooted under lich's config directory, checking
+// theme packs against lichVersion, the running build's version.
+func New(lichVersion string) *Service {
 	dir, err := defaultDir()
-	return &Service{dir: dir, initErr: err}
+	return &Service{dir: dir, lichVersion: lichVersion, initErr: err}
 }
 
 // NewInDir returns a theme service rooted at dir. It is used by tests.

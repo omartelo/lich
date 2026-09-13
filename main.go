@@ -286,7 +286,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// Its caller is not the window either: opening a session for an agent starts
 	// the PTY here rather than waiting for someone to click the card.
 	dispatcher.Register("spawn", spawn.New(db, proj, term, hub))
-	dispatcher.Register("themes", themes.New())
+	dispatcher.Register("themes", themes.New(version))
 	denyInternal(dispatcher)
 	term.Mount("/rpc/", dispatcher)
 	term.Mount("/drop", http.HandlerFunc(drops.Upload))
