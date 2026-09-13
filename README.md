@@ -176,6 +176,8 @@ needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
 - **Session hooks** — with the
   [lich plugin](https://github.com/omartelo/lich-plugin) installed from Settings,
   a session titles its own card and refreshes git the moment it writes a file.
+- **Stability**: which parts of lich are safe to script against, and which can
+  change in any release, is written down in [docs/stability.md](docs/stability.md).
 
 ## Privacy & updates
 

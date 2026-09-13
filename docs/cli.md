@@ -27,6 +27,9 @@ plugin ([`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin)) and
 whatever the user automated on top, neither of which this repo can see. Move the
 contract first.
 
+What semver promises about this surface, and what it leaves out, is in
+[stability.md](stability.md).
+
 ## Why an agent writes its own answer
 
 lich delivers a message by typing it at the target's prompt, exactly as the user

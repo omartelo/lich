@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A written stability promise.** [docs/stability.md](docs/stability.md) lists
+  what semver covers (the CLI, MCP tools, hooks, themes, project files and
+  environment variables) and what may change in any release.
+
 ### Changed
 
 - **Windows is no longer experimental.** The installer, Scoop and the portable
