@@ -31,7 +31,11 @@ has. And kurogane disabled the sandbox on every platform, which put Chrome's
 "unsupported command-line flag" bar on every window; the fork leaves it on
 for Linux, where Chromium needs nothing of the binary to confine its
 subprocesses, and `shell/src/main.rs` passes `--no-sandbox` on the machines
-that cannot (Ubuntu's AppArmor policy, root). All of it is carried meanwhile
+that cannot (Ubuntu's AppArmor policy, root). Last, the main window opened at
+CEF's default size every launch: the fork asks the browser delegate for its
+initial geometry and tells it the bounds the window closed with
+([omartelo/kurogane#1](https://github.com/omartelo/kurogane/pull/1)), and
+`shell/src/geometry.rs` remembers them. All of it is carried meanwhile
 on the fork `shell/Cargo.toml` pins:
 `omartelo/kurogane`, branch `lich-next`, on top of upstream `fda6cb6`.
 One wrinkle the patch works around: cef-rs hands CEF a *borrowed* string when

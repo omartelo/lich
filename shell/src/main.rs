@@ -12,12 +12,16 @@
 use cef::rc::Rc as _;
 use cef::sys::cef_event_flags_t;
 use cef::{
-    Browser, ImplKeyboardHandler, KeyEvent, KeyboardHandler, WrapKeyboardHandler,
+    Browser, ImplDisplay, ImplKeyboardHandler, KeyEvent, KeyboardHandler, WrapKeyboardHandler,
     wrap_keyboard_handler,
 };
-use kurogane::{App, ClientAppBrowserDelegate};
+use geometry::Geometry;
+use kurogane::{App, BrowserBounds, ClientAppBrowserDelegate, WindowState};
 use std::io::{ErrorKind, Read};
 use std::os::raw::c_int;
+use std::path::PathBuf;
+
+mod geometry;
 
 /// The title the window carries. The page title is never used for it.
 const TITLE: &str = "lich";
@@ -150,12 +154,67 @@ wrap_keyboard_handler! {
 /// out clones rather than building it in the getter.
 struct Window {
     keys: KeyboardHandler,
+    /// Where the geometry is remembered; None, a shell launched by hand
+    /// without a profile, opens at CEF's default every time.
+    geometry: Option<PathBuf>,
 }
 
 impl ClientAppBrowserDelegate for Window {
     fn keyboard_handler(&self) -> Option<KeyboardHandler> {
         Some(self.keys.clone())
     }
+
+    fn initial_window_geometry(&self) -> Option<(BrowserBounds, WindowState)> {
+        let saved = read_geometry(self.geometry.as_deref()?)?;
+        let rect = cef::Rect {
+            x: saved.x,
+            y: saved.y,
+            width: saved.width,
+            height: saved.height,
+        };
+        let area = cef::display_get_matching_bounds(Some(&rect), 0)
+            .map(|display| display.work_area())
+            .unwrap_or_default();
+        Some(saved.restore(BrowserBounds {
+            x: area.x,
+            y: area.y,
+            width: area.width,
+            height: area.height,
+        }))
+    }
+
+    fn on_window_closing(&self, bounds: BrowserBounds, state: WindowState) {
+        let Some(path) = &self.geometry else {
+            return;
+        };
+        let Some(geometry) = Geometry::closed(bounds, state, read_geometry(path)) else {
+            return;
+        };
+        if let Err(err) = std::fs::write(path, geometry.encode()) {
+            eprintln!(
+                "lich-shell: could not remember the window at {}: {err}",
+                path.display()
+            );
+        }
+    }
+}
+
+/// The saved geometry, or None the first time. A file that cannot be read or
+/// does not parse is reported, and overwritten at the next close.
+fn read_geometry(path: &std::path::Path) -> Option<Geometry> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(err) if err.kind() == ErrorKind::NotFound => return None,
+        Err(err) => {
+            eprintln!("lich-shell: could not read {}: {err}", path.display());
+            return None;
+        }
+    };
+    let geometry = Geometry::decode(&text);
+    if geometry.is_none() {
+        eprintln!("lich-shell: ignoring a damaged {}", path.display());
+    }
+    geometry
 }
 
 fn main() {
@@ -191,6 +250,7 @@ fn main() {
         .chromium_flag("disable-extensions")
         .delegate(Window {
             keys: PageFirstKeys::new(),
+            geometry: launch.profile_dir.as_deref().map(geometry::file),
         });
     // Chromium keeps the key for its cookie store in the Keychain, granted to
     // one code identity; an ad-hoc signed binary gets a new one every build,
