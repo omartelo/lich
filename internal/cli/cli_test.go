@@ -332,9 +332,11 @@ func TestSendPassesProjectAndTimeout(t *testing.T) {
 func TestSendPointsAtTheTicketWhenTheWaitRunsOut(t *testing.T) {
 	f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"pending","answer":""}`)
 
+	// Contract change: a ticket used to exit 0, which a script could not tell
+	// apart from an answer without parsing --json.
 	code, stdout, _ := run(t, f, "send", "docs", "long errand")
-	if code != 0 {
-		t.Fatalf("exit = %d", code)
+	if code != ExitPending {
+		t.Fatalf("exit = %d, want %d", code, ExitPending)
 	}
 	// A wait running out is not a dead end anymore: the answer comes back to the
 	// sending session's prompt on its own, and holding the line again is the
@@ -975,7 +977,7 @@ func TestSendSaysWhenTheTaskWasNeverPickedUp(t *testing.T) {
 	f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"unread"}`)
 
 	code, stdout, stderr := run(t, f, "send", "docs", "run the tests")
-	if code != 0 {
+	if code != ExitNoAnswer {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr)
 	}
 	// The sender cannot see that screen, so the output has to send a person to
@@ -994,7 +996,7 @@ func TestSendSaysWhenTheTaskNeverReachedAPrompt(t *testing.T) {
 	f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"undelivered"}`)
 
 	code, stdout, stderr := run(t, f, "send", "docs", "run the tests")
-	if code != 0 {
+	if code != ExitNoAnswer {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr)
 	}
 	// A queued task that never landed reads as a delivery to anyone who is not
@@ -1122,5 +1124,83 @@ func TestOpenSaysWhenTheSessionRunsConfined(t *testing.T) {
 		if !strings.Contains(stdout, phrase) {
 			t.Errorf("output is missing %q:\n%s", phrase, stdout)
 		}
+	}
+}
+
+// Every send and wait outcome has its own exit, and --json keeps it: the code is
+// what a script branches on, so the flag that changes the output must not
+// change the status. Pinned as literals because the numbers are the contract.
+func TestSendAndWaitExitOnTheirOutcome(t *testing.T) {
+	for status, want := range map[string]int{
+		"answered": 0, "pending": 2, "unread": 3, "unanswered": 3, "undelivered": 3,
+	} {
+		f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"`+status+`"}`)
+		for _, args := range [][]string{
+			{"send", "docs", "task"}, {"send", "--json", "docs", "task"},
+			{"wait", "a1b2c3d4"}, {"wait", "--json", "a1b2c3d4"},
+		} {
+			code, _, stderr := run(t, f, args...)
+			if code != want {
+				t.Errorf("%s: Run(%q) = %d, want %d", status, args, code, want)
+			}
+			if stderr != "" {
+				t.Errorf("%s: Run(%q) wrote stderr %q, want an outcome and not a failure", status, args, stderr)
+			}
+		}
+	}
+}
+
+// A collect that held the line and came back empty-handed is a timeout; one that
+// brought anything home, or found nothing open to wait on, is done.
+func TestCollectExitsPendingOnlyWhenItCameBackEmpty(t *testing.T) {
+	for body, want := range map[string]int{
+		`{"results":[],"open":["docs"]}`: 2,
+		`{"results":[{"ticket":"t1","target":"auth","status":"unread"}],"open":["docs"]}`: 0,
+		`{"results":[],"open":[]}`: 0,
+	} {
+		f := newFakeLich(t, body)
+		for _, args := range [][]string{{"wait"}, {"wait", "--json"}} {
+			if code, _, stderr := run(t, f, args...); code != want {
+				t.Errorf("%s: Run(%q) = %d (stderr %q), want %d", body, args, code, stderr, want)
+			}
+		}
+	}
+}
+
+func TestVersionReportsTheRunningServer(t *testing.T) {
+	f := newFakeLich(t, `{"version":"v1.2.3","platform":"linux/amd64","logPath":"/x"}`)
+
+	code, stdout, _ := run(t, f, "version")
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if stdout != "lich "+testVersion+"\nserver v1.2.3\n" {
+		t.Errorf("stdout = %q", stdout)
+	}
+	if call := f.calls[0]; call.method != "system.Diagnostics" {
+		t.Errorf("method = %q, want system.Diagnostics", call.method)
+	}
+
+	_, stdout, _ = run(t, f, "version", "--json")
+	if stdout != `{"cli":"`+testVersion+`","server":"v1.2.3"}`+"\n" {
+		t.Errorf("--json stdout = %q", stdout)
+	}
+}
+
+// No lich at all is the normal case for `lich version`, not a failure.
+func TestVersionWorksWithNoServer(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client{
+		env: func(string) string { return "" }, version: testVersion,
+		stdout: &stdout, stderr: &stderr, running: noInstance,
+	}
+	if code := dispatch([]string{"version", "--json"}, c); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if stdout.String() != `{"cli":"`+testVersion+`"}`+"\n" {
+		t.Errorf("stdout = %q, want the server key absent", stdout.String())
+	}
+	if stderr.String() != "" {
+		t.Errorf("stderr = %q", stderr.String())
 	}
 }

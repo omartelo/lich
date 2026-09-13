@@ -46,6 +46,21 @@ import (
 // the app" (and from `lich -- <chromium flags>`).
 const NotACommand = -1
 
+// Exit codes past 0 (done) and 1 (failed) are outcomes a script branches on
+// without parsing --json. docs/cli.md is the contract for them.
+const (
+	// ExitPending is a send or wait that ran out of time and handed back a live
+	// ticket: nothing failed, and no answer is in hand yet.
+	ExitPending = 2
+	// ExitNoAnswer is an errand that is over with no answer coming through lich:
+	// the task was never read, never delivered, or answered somewhere else.
+	ExitNoAnswer = 3
+)
+
+// versionCall bounds asking the server its version. `lich version` must answer
+// with no server at all, so a listener that hangs cannot be waited on long.
+const versionCall = 2 * time.Second
+
 // callSlack is how much longer than the wait it asked for the client gives the
 // request. The relay answers a pending errand on its own deadline; this only
 // has to outlast that answer's trip back.
@@ -132,8 +147,7 @@ func dispatch(args []string, c *client) int {
 		fmt.Fprint(c.stdout, usage)
 		return 0
 	case "version", "--version", "-v":
-		fmt.Fprintf(c.stdout, "lich %s\n", c.version)
-		return 0
+		return c.run(c.showVersion, args[1:])
 	}
 	// A word that names no subcommand is a typo, and opening the whole app for
 	// one is an answer nobody reads: the window it puts on screen says nothing
@@ -179,6 +193,12 @@ type client struct {
 // and asking for it succeeded.
 var errHelpShown = errors.New("help printed")
 
+// exitStatus ends a command whose output is already printed with an outcome
+// code rather than a failure: run passes the code on and prints nothing more.
+type exitStatus int
+
+func (e exitStatus) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
+
 // run reports a subcommand's failure the way a command line does — one line on
 // stderr, a non-zero exit — so an agent reading the output is told what went
 // wrong instead of being handed an empty answer.
@@ -186,6 +206,10 @@ func (c *client) run(fn func([]string) error, args []string) int {
 	err := fn(args)
 	if err == nil || errors.Is(err, errHelpShown) {
 		return 0
+	}
+	var status exitStatus
+	if errors.As(err, &status) {
+		return int(status)
 	}
 	fmt.Fprintf(c.stderr, "lich: %v\n", err)
 	return 1
@@ -267,7 +291,70 @@ func (c *client) send(args []string) error {
 	if err := c.call("relay.Send", call, waitBudget(*timeout), &result); err != nil {
 		return err
 	}
-	return c.report(result, *asJSON)
+	if err := c.report(result, *asJSON); err != nil {
+		return err
+	}
+	return outcome(result.Status)
+}
+
+// outcome is the exit a send or wait ends on once its result is printed.
+// `open --prompt` does not take it: a ticket is what a task handed to a session
+// born seconds ago is expected to come back as, and the open itself succeeded.
+func outcome(status string) error {
+	switch status {
+	case relay.StatusAnswered:
+		return nil
+	case relay.StatusPending:
+		return exitStatus(ExitPending)
+	default:
+		return exitStatus(ExitNoAnswer)
+	}
+}
+
+// collectedOutcome is a collect's exit: pending only when it held the line and
+// came back with nothing while errands are still open. Anything collected is
+// a success, whatever each result says, because a batch has no one status.
+func collectedOutcome(collected relay.Collected) error {
+	if len(collected.Results) == 0 && len(collected.Open) > 0 {
+		return exitStatus(ExitPending)
+	}
+	return nil
+}
+
+// versionReport is what `lich version --json` prints. Server is absent when no
+// lich answered, which is a normal state for this command, not a failure.
+type versionReport struct {
+	CLI    string `json:"cli"`
+	Server string `json:"server,omitempty"`
+}
+
+// showVersion prints this build's version and, when a lich is reachable, the
+// running server's. They differ after an update that has not been restarted
+// into, or when a session's LICH_BIN and the lich on PATH are different builds.
+func (c *client) showVersion(args []string) error {
+	flags := newFlagSet("version")
+	asJSON := flags.Bool("json", false, "print the result as JSON")
+	if err := c.parse(flags, args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return usageError("version")
+	}
+	report := versionReport{CLI: c.version}
+	var diagnostics struct {
+		Version string `json:"version"`
+	}
+	if c.call("system.Diagnostics", []any{}, versionCall, &diagnostics) == nil {
+		report.Server = diagnostics.Version
+	}
+	if *asJSON {
+		return c.emit(report)
+	}
+	fmt.Fprintf(c.stdout, "lich %s\n", report.CLI)
+	if report.Server != "" {
+		fmt.Fprintf(c.stdout, "server %s\n", report.Server)
+	}
+	return nil
 }
 
 func (c *client) wait(args []string) error {
@@ -287,17 +374,23 @@ func (c *client) wait(args []string) error {
 			return err
 		}
 		if *asJSON {
-			return c.emit(collected)
+			if err := c.emit(collected); err != nil {
+				return err
+			}
+		} else {
+			fmt.Fprintln(c.stdout, collectedText(collected))
 		}
-		fmt.Fprintln(c.stdout, collectedText(collected))
-		return nil
+		return collectedOutcome(collected)
 	}
 
 	var result relay.Result
 	if err := c.call("relay.Wait", []any{flags.Arg(0), *timeout}, waitBudget(*timeout), &result); err != nil {
 		return err
 	}
-	return c.report(result, *asJSON)
+	if err := c.report(result, *asJSON); err != nil {
+		return err
+	}
+	return outcome(result.Status)
 }
 
 func (c *client) reply(args []string) error {

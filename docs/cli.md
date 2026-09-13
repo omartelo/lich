@@ -86,18 +86,50 @@ relayed message spells the reply command that way.
 ## Commands
 
 Every command prints its result on stdout and its failure as one `lich: …` line
-on stderr, exiting 0 or 1.
+on stderr.
+
+**Exit status** is the part of the output a script reads without parsing any of
+it, so an outcome that is neither done nor failed has a code of its own:
+
+| Code | Meaning |
+|------|---------|
+| 0 | Done. For `send` and `wait`: an answer is in hand. |
+| 1 | Failed. The `lich: …` line on stderr says why. |
+| 2 | `send` / `wait` only: **the wait ran out and a ticket came back.** Nothing failed and the errand is still open: `lich wait <ticket>` picks the answer up later. |
+| 3 | `send` / `wait` only: **the errand is over and no answer is coming through lich**: never read, never delivered, or answered somewhere else. Retrying the wait is pointless; the output says what to do instead. |
+
+2 and 3 print their prose (or `--json`) on stdout like an answer does and write
+nothing on stderr: they are outcomes, not failures. No other command has an
+outcome that needs a code of its own. A refused `close` (no `--worktree`, a
+dirty checkout without `--force`) is a failure with a message to act on, and
+exits 1 like every other refusal.
 
 `lich help` lists every command below; `lich <command> --help` prints that one's
 own description and every flag it takes, generated from the flags the command
-actually parses. `lich version` prints the running build.
+actually parses.
+
+`lich version` prints this build's version, and on a second line the version of
+the lich it would talk to, when one answers:
+
+```
+lich v1.0.0
+server v0.99.2
+```
+
+The two differ after an update the running lich has not been restarted into, or
+when the `lich` on `PATH` is not the `$LICH_BIN` of the session. The server is
+found the same way every other command finds it (the environment, then the
+runtime file), and a lich that does not answer within 2 seconds is simply left
+out: no server running is a normal state for this command, never exit 1.
+`--json` prints `{"cli":"v1.0.0","server":"v0.99.2"}`, with `server` absent when
+none answered.
 
 A word that names no subcommand is refused with `lich: unknown command "…"`, a
 guess at the one it resembles, and exit 1 — a typo does not open a window.
 Arguments the app itself takes still do: bare `lich`, and `lich --` with the
 Chromium flags behind it.
 
-`--json` on `sessions`, `send`, `wait`, `open`, `close`, `worktrees` and `cost`
+`--json` on `sessions`, `send`, `wait`, `open`, `close`, `worktrees`, `cost` and `version`
 replaces the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
 `null` — a script should not have to tell those apart. One line is the contract:
@@ -160,27 +192,27 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
   this side controls rather than a killed process. Capped at 30 minutes.
 - Answered: prints the answer alone, exit 0.
 - Not answered in time: the message was still delivered, so it says so and hands
-  back a ticket, exit 0. **The answer is not lost by giving up on it** — see
+  back a ticket, exit 2. **The answer is not lost by giving up on it** — see
   below.
 - **Never read**: the task was typed at the target's prompt and nothing there
   picked it up — the session never started working. What has that terminal is
   usually a question of the provider's own (see the ceiling on trust prompts
   below), and lich cannot see it. The ticket is dropped rather than left open,
   and the output sends a person to that card: nothing is queued, so the task has
-  to be sent again once the screen is clear. Only reported for providers that
+  to be sent again once the screen is clear. Exit 3. Only reported for providers that
   report their state at all (the plugin, `docs/hooks/`) — silence has to mean
   something before it can be read as anything.
 - **Never delivered**: the task was held for a session that never reached a
   prompt — it ended, or whatever had its terminal outlasted the queue (10
   minutes). The ticket is dropped rather than left to expire, and the output
   says the task is gone rather than waiting anywhere: it has to be sent again
-  once that card shows what happened. A sender that had already stopped waiting
-  finds it in its inbox, like any other outcome.
+  once that card shows what happened. Exit 3. A sender that had already stopped
+  waiting finds it in its inbox, like any other outcome.
 - **Answered somewhere else**: the target worked through the request and ended
   its turn without replying here — it answered over its provider's own channel,
   or out loud to whoever was watching. The wait ends there rather than running
   its clock out, and says the answer is in that session and has to be read
-  there. The window raises a toast that opens the card. A sender that had
+  there, exit 3. The window raises a toast that opens the card. A sender that had
   already stopped waiting is told at its own prompt instead, the same way an
   answer would arrive — a pending result promises that prompt news, and a stall
   is that news. A session working two requests at once ends a turn that says
@@ -215,7 +247,7 @@ are the same across the `exec`, so nothing else can.
 
 ### `lich wait [--timeout <seconds>] [<ticket>]`
 
-With a ticket: waits again on that errand. Same output as `send`. A result that
+With a ticket: waits again on that errand. Same output and exit codes as `send`. A result that
 already came back unattended is handed over on the spot — it sits in the
 sender's inbox (see below) until collected or expired. A ticket that was
 collected already, or that nobody answered within an hour, is gone and waiting
@@ -225,7 +257,10 @@ Without a ticket: **collects**. Every result waiting for this session is
 printed at once, oldest first, each in the same words a single wait uses;
 sessions still owing an answer are listed after (`Still working: "docs"`).
 When nothing is ready and errands are open, it holds the line for the next
-result; when nothing is open either, it says so and returns at once. This is
+result; when nothing is open either, it says so and returns at once. It exits 2 when it
+held the line and came back with nothing while errands are still open, and 0
+otherwise: a batch has no single status, so anything collected is done, and the
+prose says what each result was. This is
 the command the nudge at a sender's prompt names, and it needs a session of
 its own — run from a plain shell it is an error, because there is no inbox to
 drain.
@@ -376,7 +411,10 @@ be read.
 session is printed as usual — prose or JSON, on stdout — and the failure is that
 same `lich: …` line and exit 1, naming the `lich send` that tries again. The
 `delivery` key stays absent rather than growing a shape for the failure: what
-went wrong is one send, and the exit code is what says so.
+went wrong is one send, and the exit code is what says so. A task that did
+reach the send exits 0 whatever its status, a ticket included: a session opened
+seconds ago is expected to hand one back, and the open is what this command
+does. `delivery.status` is where a script reads the rest.
 
 ### `lich close [--project <name>] [--worktree keep|remove] [--force] [--json] <session>`
 
@@ -827,6 +865,8 @@ receiving agent only because this text describes it.
   (`relay.MCPServerName`, `relay.MCPSubcommand`, `relay.ToolReply`) live in the
   relay because both this and the composed message need them, and only that
   direction closes no import cycle.
+- **Version**: `lich version` asks `system.Diagnostics`, the endpoint the
+  window's bug report already reads, rather than growing one of its own.
 - **Env** — `internal/terminal`, `Service.sessionEnv`: exports `LICH_BIN`
   alongside the hook coordinates.
 
