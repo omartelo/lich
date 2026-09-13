@@ -112,8 +112,8 @@ actually parses.
 the lich it would talk to, when one answers:
 
 ```
-lich v0.50.0
-server v0.49.0
+lich <cli-version>
+server <server-version>
 ```
 
 The two differ after an update the running lich has not been restarted into, or
@@ -121,7 +121,7 @@ when the `lich` on `PATH` is not the `$LICH_BIN` of the session. The server is
 found the same way every other command finds it (the environment, then the
 runtime file), and a lich that does not answer within 2 seconds is simply left
 out: no server running is a normal state for this command, never exit 1.
-`--json` prints `{"cli":"v0.50.0","server":"v0.49.0"}`, with `server` absent when
+`--json` prints `{"cli":"<cli-version>","server":"<server-version>"}`, with `server` absent when
 none answered.
 
 A word that names no subcommand is refused with `lich: unknown command "…"`, a
