@@ -121,10 +121,14 @@ var commands = []command{
 const helpHeader = "lich talks to the sessions open in the running lich window.\n\n"
 
 const helpFooter = `
-  lich version
-      Print the running build's version.
+  lich version [--json]
+      Print this build's version, and the running lich's when one answers.
 
 Every command takes --help for its own flags.
+
+Exit status: 0 done, 1 failed. send and wait also exit 2 when the wait ran
+out and a ticket came back, and 3 when the errand ended with no answer
+coming through lich (never read, never delivered, answered elsewhere).
 
 With no command, lich opens its window. Two flags belong to that launch:
 

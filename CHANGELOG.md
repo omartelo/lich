@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking for scripts: `lich send` and `lich wait` no longer exit 0 unless
+  an answer came back.** A wait that runs out and hands back a ticket exits 2,
+  and an errand that ended with no answer coming (never read, never delivered,
+  answered somewhere else) exits 3. A script that treated exit 0 as "done" after
+  a timeout now sees 2; errors still exit 1. The codes are listed in
+  `docs/cli.md`.
+
+- **`lich version` also names the running lich's version**, on a second line
+  and as `server` in the new `--json` output, so a CLI and a server that are
+  different builds show it. With no lich running it prints the CLI's version as
+  before.
+
 - **Windows is no longer experimental.** The installer, Scoop and the portable
   build have held up in real use, so the README, the install guide and the site
   list Windows beside Linux as supported. macOS keeps the label for now.
