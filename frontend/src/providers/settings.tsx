@@ -36,7 +36,12 @@ import {
   SYSTEM_THEME,
 } from "@/lib/themes"
 import type { Theme, ResolvedTheme } from "@/lib/themes"
-import type { ThemeDefinition, ThemeGitInstallResult, ThemeImportResult } from "@/lib/api-types"
+import type {
+  BrokenTheme,
+  ThemeDefinition,
+  ThemeGitInstallResult,
+  ThemeImportResult,
+} from "@/lib/api-types"
 
 export type { Theme, ResolvedTheme } from "@/lib/themes"
 export { DEFAULT_THEME } from "@/lib/themes"
@@ -158,6 +163,8 @@ interface SettingsValue {
   setTheme: (theme: Theme) => void
   /** Bundled and imported themes available to the app. */
   themes: ThemeDefinition[]
+  /** Stored themes lich cannot load; never selectable, only removable. */
+  brokenThemes: BrokenTheme[]
   importTheme: (path: string, overwrite: boolean) => Promise<ThemeImportResult>
   /** Install every theme of a repository, versioned by its manifest. */
   installThemesFromGit: (url: string, overwrite: boolean) => Promise<ThemeGitInstallResult>
@@ -199,6 +206,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [terminalFontSize, setTerminalFontSizeState] = useState<number>(readTerminalFontSize)
   const [themes, setThemes] = useState<ThemeDefinition[]>(BUNDLED_THEMES)
   const [themesLoaded, setThemesLoaded] = useState(false)
+  const [brokenThemes, setBrokenThemes] = useState<BrokenTheme[]>([])
+  // An install that lands an id replaces whatever broken file sat under it.
+  const clearBroken = useCallback((ids: readonly string[]) => {
+    setBrokenThemes((prev) => prev.filter((item) => !ids.includes(item.id)))
+  }, [])
   const [theme, setThemeState] = useState<Theme>(readTheme)
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(BUNDLED_THEMES[0])
   const [zoom, setZoomState] = useState<number>(readZoom)
@@ -315,6 +327,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       .catch((error) => {
         console.warn("[settings] failed to load custom themes", error)
       })
+    ThemeRPC.ListBroken()
+      .then((broken) => {
+        if (!cancelled) setBrokenThemes(broken ?? [])
+      })
+      .catch((error) => {
+        console.warn("[settings] failed to load broken themes", error)
+      })
     return () => {
       cancelled = true
     }
@@ -366,11 +385,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       const result = await ThemeRPC.Import(path, overwrite)
       if (!result.needsOverwrite) {
         setThemes((prev) => mergeImportedThemes(prev, [result.theme]))
+        clearBroken([result.theme.id])
         setTheme(result.theme.id)
       }
       return result
     },
-    [setTheme],
+    [setTheme, clearBroken],
   )
 
   // A pack installs as a whole, so its first theme is what gets selected —
@@ -379,11 +399,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     (installed: readonly ThemeDefinition[], select: boolean) => {
       if (installed.length === 0) return
       setThemes((prev) => mergeImportedThemes(prev, installed))
+      clearBroken(installed.map((item) => item.id))
       if (select) {
         setTheme(installed[0].id)
       }
     },
-    [setTheme],
+    [setTheme, clearBroken],
   )
 
   const installThemesFromGit = useCallback(
@@ -410,13 +431,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       await ThemeRPC.Remove(id)
       setThemes((prev) => mergeThemes(prev.filter((item) => item.id !== id)))
+      clearBroken([id])
       const next = themeAfterRemoval(id, theme)
       if (next !== theme) {
         setThemeState(next)
         persistTheme(next)
       }
     },
-    [theme, persistTheme],
+    [theme, persistTheme, clearBroken],
   )
 
   const setHotkey = useCallback(
@@ -554,6 +576,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       terminalFontSize,
       setTerminalFontSize,
       themes,
+      brokenThemes,
       theme,
       setTheme,
       importTheme,
@@ -583,6 +606,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       terminalFontSize,
       setTerminalFontSize,
       themes,
+      brokenThemes,
       theme,
       setTheme,
       importTheme,

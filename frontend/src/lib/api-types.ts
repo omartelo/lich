@@ -506,6 +506,8 @@ export interface Attachment {
 
 /** internal/themes.Theme — a color theme for the UI tokens and xterm. */
 export interface ThemeDefinition {
+  /** The theme file format; absent means 1. */
+  formatVersion?: number
   id: string
   name: string
   scheme: "light" | "dark"
@@ -514,6 +516,12 @@ export interface ThemeDefinition {
   source?: ThemeSource
   app: Record<string, string>
   terminal: Record<string, string>
+}
+
+/** internal/themes.BrokenTheme — a stored theme lich cannot load, kept visible so it can be removed. */
+export interface BrokenTheme {
+  id: string
+  reason: string
 }
 
 /** internal/themes.Source — the repository a theme was installed from. */

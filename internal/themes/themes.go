@@ -25,6 +25,10 @@ const (
 	themeNameMaxLength  = 128
 	colorValueMaxLength = 128
 	maxThemeFileSize    = 1 << 20
+	// FormatVersion is the newest theme file format this lich reads. A file
+	// that omits it is format 1; bump it only for a change an older lich would
+	// misread, so that lich refuses the file by name instead of by a token.
+	FormatVersion = 1
 	// App colors are set as CSS custom properties, so the allowlist is what
 	// both a CSS color context and xterm's parser accept — anything able to
 	// name a resource (url(), image-set()) or defer a value (var(), attr())
@@ -59,13 +63,21 @@ var (
 // Theme describes every color value the frontend needs to paint the app and
 // the xterm terminal.
 type Theme struct {
-	ID       string            `json:"id"`
-	Name     string            `json:"name"`
-	Scheme   string            `json:"scheme"`
-	Origin   string            `json:"origin"`
-	Source   *Source           `json:"source,omitempty"`
-	App      map[string]string `json:"app"`
-	Terminal map[string]string `json:"terminal"`
+	FormatVersion int               `json:"formatVersion,omitempty"`
+	ID            string            `json:"id"`
+	Name          string            `json:"name"`
+	Scheme        string            `json:"scheme"`
+	Origin        string            `json:"origin"`
+	Source        *Source           `json:"source,omitempty"`
+	App           map[string]string `json:"app"`
+	Terminal      map[string]string `json:"terminal"`
+}
+
+// BrokenTheme is a stored custom theme this lich cannot load. It is listed
+// rather than dropped, so the user sees why and can remove it by id.
+type BrokenTheme struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
 }
 
 // Source records the repository a theme was installed from and the manifest
@@ -118,7 +130,7 @@ func (s *Service) List() ([]Theme, error) {
 	if s.initErr != nil {
 		return nil, s.initErr
 	}
-	custom, err := s.customThemes()
+	custom, _, err := s.customThemes()
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +140,15 @@ func (s *Service) List() ([]Theme, error) {
 	}
 	out = append(out, custom...)
 	return out, nil
+}
+
+// ListBroken returns the stored custom themes List leaves out, sorted by id.
+func (s *Service) ListBroken() ([]BrokenTheme, error) {
+	if s.initErr != nil {
+		return nil, s.initErr
+	}
+	_, broken, err := s.customThemes()
+	return broken, err
 }
 
 // Import reads a picked JSON file and installs it as a custom theme. An
@@ -168,6 +189,11 @@ func (s *Service) Import(path string, overwrite bool) (ImportResult, error) {
 // untouched and install reports false, which the callers turn into a question
 // for the user.
 func (s *Service) install(theme Theme, overwrite bool) (bool, error) {
+	// Stamped so a downgraded lich reading a file installed by a newer one
+	// names the format it is missing rather than an unknown token.
+	if theme.FormatVersion == 0 {
+		theme.FormatVersion = FormatVersion
+	}
 	data, err := encodeTheme(theme)
 	if err != nil {
 		return false, err
@@ -192,11 +218,7 @@ func (s *Service) read(id string) (Theme, error) {
 	if err := validateID(id); err != nil {
 		return Theme{}, err
 	}
-	data, err := os.ReadFile(s.path(id))
-	if err != nil {
-		return Theme{}, fmt.Errorf("read theme %q: %w", id, err)
-	}
-	theme, err := decodeStored(data)
+	theme, err := s.readStored(id)
 	if err != nil {
 		return Theme{}, fmt.Errorf("theme %q: %w", id, err)
 	}
@@ -310,42 +332,36 @@ func (s *Service) Remove(id string) error {
 	return nil
 }
 
-func (s *Service) customThemes() ([]Theme, error) {
+func (s *Service) customThemes() ([]Theme, []BrokenTheme, error) {
 	// Stat before reading: a file sitting where the themes directory belongs
 	// makes ReadDir report not-exist on Windows, which the "nothing imported
 	// yet" branch below would swallow into an empty list on that OS and an
 	// error everywhere else.
 	info, err := os.Stat(s.dir)
 	if os.IsNotExist(err) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("read themes dir: %w", err)
+		return nil, nil, fmt.Errorf("read themes dir: %w", err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("themes path is not a directory: %s", s.dir)
+		return nil, nil, fmt.Errorf("themes path is not a directory: %s", s.dir)
 	}
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
-		return nil, fmt.Errorf("read themes dir: %w", err)
+		return nil, nil, fmt.Errorf("read themes dir: %w", err)
 	}
 	themes := make([]Theme, 0, len(entries))
+	var broken []BrokenTheme
 	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+		id, ok := storedID(entry)
+		if !ok {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(s.dir, entry.Name()))
+		theme, err := s.readStored(id)
 		if err != nil {
-			slog.Warn("themes: read custom theme", "file", entry.Name(), "err", err)
-			continue
-		}
-		theme, err := decodeStored(data)
-		if err != nil {
-			slog.Warn("themes: invalid custom theme", "file", entry.Name(), "err", err)
-			continue
-		}
-		if theme.ID+".json" != entry.Name() {
-			slog.Warn("themes: theme filename mismatch", "file", entry.Name(), "id", theme.ID)
+			slog.Warn("themes: cannot load custom theme", "file", entry.Name(), "err", err)
+			broken = append(broken, BrokenTheme{ID: id, Reason: err.Error()})
 			continue
 		}
 		themes = append(themes, theme)
@@ -353,7 +369,38 @@ func (s *Service) customThemes() ([]Theme, error) {
 	sort.Slice(themes, func(i, j int) bool {
 		return strings.ToLower(themes[i].Name) < strings.ToLower(themes[j].Name)
 	})
-	return themes, nil
+	return themes, broken, nil
+}
+
+// storedID is the id a directory entry is stored under. A name lich could never
+// have written, and so could not remove, is not a stored theme at all.
+func storedID(entry os.DirEntry) (string, bool) {
+	if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+		return "", false
+	}
+	id := strings.TrimSuffix(entry.Name(), ".json")
+	if validateID(id) != nil {
+		return "", false
+	}
+	if _, ok := reserved[id]; ok {
+		return "", false
+	}
+	return id, true
+}
+
+func (s *Service) readStored(id string) (Theme, error) {
+	data, err := os.ReadFile(s.path(id))
+	if err != nil {
+		return Theme{}, fmt.Errorf("read file: %w", err)
+	}
+	theme, err := decodeStored(data)
+	if err != nil {
+		return Theme{}, err
+	}
+	if theme.ID != id {
+		return Theme{}, fmt.Errorf("file %s.json holds theme id %q", id, theme.ID)
+	}
+	return theme, nil
 }
 
 func (s *Service) path(id string) string {
@@ -371,6 +418,9 @@ func validateCustom(theme Theme) error {
 }
 
 func validateTheme(theme Theme) error {
+	if err := validateFormatVersion(theme.FormatVersion); err != nil {
+		return err
+	}
 	if strings.TrimSpace(theme.Name) == "" {
 		return fmt.Errorf("theme name is required")
 	}
@@ -393,6 +443,16 @@ func validateTheme(theme Theme) error {
 		if strings.TrimSpace(theme.Terminal[key]) == "" {
 			return fmt.Errorf("terminal.%s is required", key)
 		}
+	}
+	return nil
+}
+
+func validateFormatVersion(version int) error {
+	if version < 0 {
+		return fmt.Errorf("theme formatVersion %d must be a positive integer", version)
+	}
+	if version > FormatVersion {
+		return fmt.Errorf("theme format %d is newer than this lich reads (up to %d); update lich", version, FormatVersion)
 	}
 	return nil
 }
@@ -448,12 +508,13 @@ func validateColorValue(group, key, value string, pattern *regexp.Regexp) error 
 
 func cloneTheme(theme Theme) Theme {
 	out := Theme{
-		ID:       theme.ID,
-		Name:     theme.Name,
-		Scheme:   theme.Scheme,
-		Origin:   theme.Origin,
-		App:      maps.Clone(theme.App),
-		Terminal: maps.Clone(theme.Terminal),
+		FormatVersion: theme.FormatVersion,
+		ID:            theme.ID,
+		Name:          theme.Name,
+		Scheme:        theme.Scheme,
+		Origin:        theme.Origin,
+		App:           maps.Clone(theme.App),
+		Terminal:      maps.Clone(theme.Terminal),
 	}
 	if theme.Source != nil {
 		source := *theme.Source

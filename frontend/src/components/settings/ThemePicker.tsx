@@ -1,11 +1,12 @@
 import { useState } from "react"
 import { ChevronDown, RefreshCw, Trash2, Upload } from "lucide-react"
-import type { ThemeDefinition } from "@/lib/api-types"
+import type { BrokenTheme, ThemeDefinition } from "@/lib/api-types"
 import { bundledThemes, repoLabel, SYSTEM_THEME } from "@/lib/themes"
 import type { Theme } from "@/providers/settings"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { BrokenThemeList } from "./BrokenThemeList"
 import { SettingRow } from "./SettingBlock"
 
 // A theme is a set of colors, and a dropdown of names says nothing about them:
@@ -85,6 +86,7 @@ function SystemMiniature({
 
 interface ThemePickerProps {
   themes: readonly ThemeDefinition[]
+  brokenThemes: readonly BrokenTheme[]
   /** The selected id, which may be SYSTEM_THEME rather than a theme's own. */
   value: Theme
   /** The theme those colors resolve to, which is what the trigger shows. */
@@ -93,17 +95,20 @@ interface ThemePickerProps {
   onImport: () => void
   onUpdate: (theme: ThemeDefinition) => void
   onRemove: (theme: ThemeDefinition) => void
+  onRemoveBroken: (theme: BrokenTheme) => void
   updatingID: string | null
 }
 
 export function ThemePicker({
   themes,
+  brokenThemes,
   value,
   resolved,
   onSelect,
   onImport,
   onUpdate,
   onRemove,
+  onRemoveBroken,
   updatingID,
 }: ThemePickerProps) {
   const [open, setOpen] = useState(false)
@@ -216,6 +221,7 @@ export function ThemePicker({
               />
             ))}
           </div>
+          <BrokenThemeList themes={brokenThemes} onRemove={onRemoveBroken} />
         </div>
       )}
     </div>

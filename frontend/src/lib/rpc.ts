@@ -21,6 +21,7 @@ import type {
   DiffStats,
   DraftReviewComment,
   Attachment,
+  BrokenTheme,
   DropItem,
   FileListing,
   Issue,
@@ -576,6 +577,8 @@ export const Spawn = {
 export const Themes = {
   /** Bundled themes plus user-imported themes from the config dir. */
   List: () => call<ThemeDefinition[] | null>("themes.List", []),
+  /** Stored custom themes List leaves out, each with the reason it cannot load. */
+  ListBroken: () => call<BrokenTheme[] | null>("themes.ListBroken", []),
   /** Import a picked theme file, reporting an existing id before replacement. */
   Import: (path: string, overwrite: boolean) =>
     call<ThemeImportResult>("themes.Import", [path, overwrite]),

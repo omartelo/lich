@@ -9,8 +9,12 @@ Imported themes are stored under the user config directory:
 - Production: `<config-dir>/lich/themes/<id>.json`
 - Dev mode (`LICH_DEV`): `<config-dir>/lich/themes-dev/<id>.json`
 
-The file name is managed by lich on import. A stored custom theme whose file name
-does not match `<id>.json` is ignored.
+The file name is managed by lich on import. A stored theme lich cannot load (a
+file that fails the rules below, is named anything but its own `<id>.json`, or
+carries a newer `formatVersion`) is not dropped: Settings › Appearance lists it
+as a theme that can't load, with the reason, and it can be removed from there. A
+file whose name is not a valid theme id is not one lich could have written, and
+is skipped with a warning in the log.
 
 The theme format and the pack manifest are covered by lich's semver promise; see
 [stability.md](stability.md).
@@ -64,6 +68,11 @@ The theme format and the pack manifest are covered by lich's semver promise; see
 }
 ```
 
+`formatVersion` is optional and names the theme file format; omitted means `1`,
+the only format so far. lich writes it into every theme it stores. A lich that
+reads an older format than the file declares refuses the theme by that number,
+instead of by whichever token it no longer recognizes.
+
 `origin` is optional in imported JSON. The backend overwrites it with `custom`
 before saving. `source` is written by lich for a theme installed from a
 repository (below) and stripped from a picked file — a standalone theme carries
@@ -83,6 +92,11 @@ into editor completion and errors, before the file is ever imported:
 ```
 
 The saved template already carries the line, and lich ignores the key on import.
+
+The URL follows `main` rather than a release tag: the schema is generated and
+checked in, so a tagged copy would need a release commit rewriting its own
+`$id`, and the file an editor fetches always describes the newest format. What a
+given lich accepts is decided by `formatVersion`, not by the schema URL.
 
 ## Theme Repositories
 
@@ -162,6 +176,8 @@ bump and lich reports the pack as already up to date.
 
 ## Validation Rules
 
+- `formatVersion`, when present, is a positive integer no greater than the
+  format this lich reads (currently `1`).
 - `id` is required, must match `^[a-z0-9][a-z0-9._-]{0,63}$`, and cannot be
   `light`, `dark`, `system`, or `match`. Windows device names (`con`, `prn`,
   `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9`) are rejected too: a theme id names

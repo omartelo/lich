@@ -40,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A theme lich cannot load stays in Settings › Appearance.** An installed theme
+  that stopped passing validation, after a downgrade or a renamed token, used to
+  disappear with only a line in the log. It is now listed under the theme strip
+  with the reason, and can be removed from there. Theme files also carry an
+  optional `formatVersion`, so a theme written for a newer lich is refused by
+  that number instead of by whichever token it happens to trip on.
+
 - **A theme whose name does not fit its card can be read in full.** The theme
   picker cuts long names and repository captions to the width of the card, and
   nothing showed the rest. Hovering a card now shows both in a tooltip.
