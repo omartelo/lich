@@ -36,7 +36,16 @@ if [ "$code" != "0" ]; then
   echo "::endgroup::"
 fi
 
-total="$(go tool cover -func="$cover" | awk '/^total:/ {print $3}')"
+# The root package is the main bootstrap invariant #1 exempts; its logic lives
+# in internal/, so its files leave the denominator. Every other boundary is counted.
+grep -v '^github.com/omartelo/lich/[^/]*\.go:' "$cover" >"$cover.gated"
+total="$(go tool cover -func="$cover.gated" | awk '/^total:/ {print $3}')"
+
+min=80
+if ! awk -v t="${total%\%}" -v m="$min" 'BEGIN { exit !(t != "" && t + 0 >= m) }'; then
+  echo "::error::backend coverage ${total:-n/a} is below the ${min}% bar (CLAUDE.md invariant 1)"
+  [ "$code" = "0" ] && code=1
+fi
 
 summary="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 {

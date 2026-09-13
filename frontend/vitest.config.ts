@@ -19,6 +19,8 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text-summary", "json-summary"],
       reportsDirectory: "coverage",
+      // Invariant #1, on the same number the CI summary reports.
+      thresholds: { lines: 80 },
       // The denominator is the logic this suite can actually target: pure
       // modules under `lib` — stores, parsers, reducers, gates. Everything the
       // node environment cannot reach is excluded rather than counted as
