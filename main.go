@@ -202,6 +202,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	dispatcher.Register("project", proj)
 	plugins := agentplugin.New(db)
 	dispatcher.Register("agentplugin", plugins)
+	go plugins.RepairRegistrations()
 	// In-place restart: the update flow (install.sh) POSTs /restart after
 	// replacing the binary. os.Environ() here carries the pinned LICH_LISTEN_PORT
 	// so the successor rebinds the same port. A missing executable path only
@@ -307,6 +308,8 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //   - terminal.SessionAccount hands back the environment of the process a
 //     session runs, credentials and all, so the quota reader can tell which
 //     account that session spends.
+//   - agentplugin.RepairRegistrations rewrites provider config files and
+//     shells out to their CLIs; it is a launch step, not something a page asks.
 //   - relay.RunSchedules is the scheduled-prompt loop, started once at launch
 //     and never returning: called over /rpc/ it holds that request open for the
 //     life of the process and starts a second loop racing the first for every
@@ -332,6 +335,7 @@ func denyInternal(d *rpc.Handler) {
 		"drop.SetPicker",
 		"relay.Observe",
 		"relay.RunSchedules",
+		"agentplugin.RepairRegistrations",
 		"relay.SetPlugins",
 		"project.SetAccounts",
 		"project.SetProjects",

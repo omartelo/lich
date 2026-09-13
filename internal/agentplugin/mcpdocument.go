@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/omartelo/lich/internal/relay"
 )
@@ -60,4 +61,17 @@ func mcpDocument(path, lichBin string) ([]byte, error) {
 		return nil, fmt.Errorf("encode %s: %w", path, err)
 	}
 	return append(body, '\n'), nil
+}
+
+// writeMCPDocument merges lich's server into the document at path and writes it,
+// creating the directory it lives in. lichBin must be non-empty.
+func writeMCPDocument(path, lichBin string) error {
+	registration, err := mcpDocument(path, lichBin)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", filepath.Dir(path), err)
+	}
+	return writeFile(path, registration, 0o644)
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/omartelo/lich/internal/agentplugin"
 	"github.com/omartelo/lich/internal/drop"
 	"github.com/omartelo/lich/internal/project"
 	"github.com/omartelo/lich/internal/relay"
@@ -21,18 +22,19 @@ import (
 // fails TestDeniedMethodsAreUnreachable and an entry that names nothing —
 // Deny takes any string — fails TestDeniedMethodsExist.
 var denied = map[string]reflect.Type{
-	"store.Close":          reflect.TypeFor[*store.Service](),
-	"store.SetSessionGone": reflect.TypeFor[*store.Service](),
-	"drop.Upload":          reflect.TypeFor[*drop.Service](),
-	"drop.Save":            reflect.TypeFor[*drop.Service](),
-	"drop.Purge":           reflect.TypeFor[*drop.Service](),
-	"drop.SetPicker":       reflect.TypeFor[*drop.Service](),
-	"relay.Observe":        reflect.TypeFor[*relay.Service](),
-	"relay.RunSchedules":   reflect.TypeFor[*relay.Service](),
-	"relay.SetPlugins":     reflect.TypeFor[*relay.Service](),
-	"project.SetAccounts":  reflect.TypeFor[*project.Service](),
-	"project.SetProjects":  reflect.TypeFor[*project.Service](),
-	"terminal.SetDropDir":  reflect.TypeFor[*terminal.Service](),
+	"store.Close":                     reflect.TypeFor[*store.Service](),
+	"store.SetSessionGone":            reflect.TypeFor[*store.Service](),
+	"drop.Upload":                     reflect.TypeFor[*drop.Service](),
+	"drop.Save":                       reflect.TypeFor[*drop.Service](),
+	"drop.Purge":                      reflect.TypeFor[*drop.Service](),
+	"drop.SetPicker":                  reflect.TypeFor[*drop.Service](),
+	"relay.Observe":                   reflect.TypeFor[*relay.Service](),
+	"relay.RunSchedules":              reflect.TypeFor[*relay.Service](),
+	"agentplugin.RepairRegistrations": reflect.TypeFor[*agentplugin.Service](),
+	"relay.SetPlugins":                reflect.TypeFor[*relay.Service](),
+	"project.SetAccounts":             reflect.TypeFor[*project.Service](),
+	"project.SetProjects":             reflect.TypeFor[*project.Service](),
+	"terminal.SetDropDir":             reflect.TypeFor[*terminal.Service](),
 }
 
 // stubService stands in for the registered services: dispatch resolves a
@@ -40,23 +42,24 @@ var denied = map[string]reflect.Type{
 // and a running terminal.
 type stubService struct{}
 
-func (stubService) Close() error          { return nil }
-func (stubService) SetSessionGone() error { return nil }
-func (stubService) Upload() error         { return nil }
-func (stubService) Save() error           { return nil }
-func (stubService) Purge() error          { return nil }
-func (stubService) SetPicker() error      { return nil }
-func (stubService) Observe() error        { return nil }
-func (stubService) RunSchedules() error   { return nil }
-func (stubService) SetPlugins() error     { return nil }
-func (stubService) SetAccounts() error    { return nil }
-func (stubService) SetProjects() error    { return nil }
-func (stubService) SetDropDir() error     { return nil }
-func (stubService) Allowed() error        { return nil }
+func (stubService) Close() error               { return nil }
+func (stubService) SetSessionGone() error      { return nil }
+func (stubService) Upload() error              { return nil }
+func (stubService) Save() error                { return nil }
+func (stubService) Purge() error               { return nil }
+func (stubService) SetPicker() error           { return nil }
+func (stubService) Observe() error             { return nil }
+func (stubService) RunSchedules() error        { return nil }
+func (stubService) RepairRegistrations() error { return nil }
+func (stubService) SetPlugins() error          { return nil }
+func (stubService) SetAccounts() error         { return nil }
+func (stubService) SetProjects() error         { return nil }
+func (stubService) SetDropDir() error          { return nil }
+func (stubService) Allowed() error             { return nil }
 
 func denyingDispatcher() *rpc.Handler {
 	d := rpc.New()
-	for _, service := range []string{"store", "drop", "relay", "project", "terminal"} {
+	for _, service := range []string{"store", "drop", "relay", "project", "terminal", "agentplugin"} {
 		d.Register(service, stubService{})
 	}
 	denyInternal(d)
