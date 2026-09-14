@@ -13,7 +13,7 @@ import (
 // is known to gate its rc on `[ -t 0 ]`, so wiring up ConPTY buys nothing a
 // pipe doesn't already give; ctx's cancellation kills the process (see
 // exec.CommandContext).
-func runShellDump(ctx context.Context, shell, cmdStr string, env []string) (string, <-chan struct{}, error) {
+func runShellDump(ctx context.Context, shell, cmdStr, _ string, env []string) (string, <-chan struct{}, error) {
 	cmd := exec.CommandContext(ctx, shell, "-l", "-i", "-c", cmdStr)
 	cmd.Env = env
 	out, err := cmd.Output() // stderr, carrying rc warnings, is discarded

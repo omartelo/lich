@@ -23,33 +23,43 @@ func TestParseShellEnvDump(t *testing.T) {
 		},
 		{
 			name: "chatter before sentinel is dropped",
-			out:  "Welcome to zsh!\nbash: no job control in this shell\n" + shellEnvSentinel + "\nTOKEN=secret\nPATH=/x\n",
+			out:  "Welcome to zsh!\nbash: no job control in this shell\n" + shellEnvSentinel + "\nTOKEN=secret\nPATH=/x\n" + shellEnvEnd + "\n",
 			want: []string{"TOKEN=secret", "PATH=/x"},
 		},
 		{
 			name: "last sentinel wins when rc echoes it",
-			out:  shellEnvSentinel + "\nSTALE=1\n" + shellEnvSentinel + "\nREAL=2\n",
+			out:  shellEnvSentinel + "\nSTALE=1\n" + shellEnvSentinel + "\nREAL=2\n" + shellEnvEnd + "\n",
 			want: []string{"REAL=2"},
 		},
 		{
 			name: "non-key lines are skipped",
-			out:  shellEnvSentinel + "\nGOOD=1\n  continuation of a value\nALSO_GOOD=2\n",
+			out:  shellEnvSentinel + "\nGOOD=1\n  continuation of a value\nALSO_GOOD=2\n" + shellEnvEnd + "\n",
 			want: []string{"GOOD=1", "ALSO_GOOD=2"},
 		},
 		{
 			name: "carriage returns are trimmed",
-			out:  shellEnvSentinel + "\r\nWIN=1\r\n",
+			out:  shellEnvSentinel + "\r\nWIN=1\r\n" + shellEnvEnd + "\r\n",
 			want: []string{"WIN=1"},
 		},
 		{
 			name: "empty value is preserved",
-			out:  shellEnvSentinel + "\nEMPTY=\n",
+			out:  shellEnvSentinel + "\nEMPTY=\n" + shellEnvEnd + "\n",
 			want: []string{"EMPTY="},
+		},
+		{
+			name: "dump cut before the end marker keeps launch env",
+			out:  shellEnvSentinel + "\nHOME=/h\nPA",
+			want: nil,
+		},
+		{
+			name: "background job chatter after the end marker is dropped",
+			out:  shellEnvSentinel + "\nA=1\n" + shellEnvEnd + "\nAGENT_PID=42\n",
+			want: []string{"A=1"},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseShellEnvDump(shellEnvSentinel, tt.out)
+			got := parseShellEnvDump(shellEnvSentinel, shellEnvEnd, tt.out)
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("parseShellEnvDump() = %v, want %v", got, tt.want)
 			}
@@ -103,7 +113,8 @@ func TestResolveShellEnv(t *testing.T) {
 		"echo " + shellEnvSentinel + "\n" +
 		"echo FROM_SHELL=yes\n" +
 		"echo PATH=/shell/bin\n" +
-		"echo INHERITED=$LAUNCH_ONLY\n"
+		"echo INHERITED=$LAUNCH_ONLY\n" +
+		"echo " + shellEnvEnd + "\n"
 	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +207,8 @@ func TestReresolveShellEnvRepinsPATH(t *testing.T) {
 	fake := filepath.Join(dir, "fakeshell")
 	script := "#!/bin/sh\n" +
 		"echo " + shellEnvSentinel + "\n" +
-		"echo PATH=/late/install:/orig\n"
+		"echo PATH=/late/install:/orig\n" +
+		"echo " + shellEnvEnd + "\n"
 	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}

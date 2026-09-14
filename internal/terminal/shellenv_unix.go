@@ -3,26 +3,15 @@
 package terminal
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
 	"os/exec"
+	"strings"
 	"syscall"
-	"time"
 
 	"github.com/creack/pty"
 )
-
-// shellDumpQuiet bounds how long the read waits after the last byte before
-// treating the dump as complete. It only matters once real output has
-// started — see the nil quiet channel below — so a shell that is merely slow
-// to speak (nvm/fnm's own init, among the common causes) is bounded solely
-// by ctx, same as before this file existed. Once the shell has spoken and
-// gone silent this long, whatever still holds the pty open is a background
-// job its rc left running (an agent daemon, a prompt tool) with its stdio
-// still wired to the terminal — not the shell itself still working.
-const shellDumpQuiet = 300 * time.Millisecond
 
 // runShellDump runs cmdStr under shell -l -i, attached to a pty rather than a
 // pipe: an rc file guarded on `[ -t 0 ]`/`tty -s` — the common guard around a
@@ -36,13 +25,18 @@ const shellDumpQuiet = 300 * time.Millisecond
 // interrupt an in-flight blocking read by closing the fd from elsewhere),
 // and SetReadDeadline never reaches a syscall that never goes non-blocking
 // here. So the read is driven from a goroutine that is allowed to outlive
-// this call, and its output arrives here over a channel: the moment nothing
-// new arrives for shellDumpQuiet, or ctx expires, whichever comes first,
-// this returns whatever has accumulated so far. The goroutine is left
-// running for whatever still holds the pty — a single leaked goroutine (and
-// its fd, and its zombie child once it exits) is the cost of never blocking
-// boot past ctx.
-func runShellDump(ctx context.Context, shell, cmdStr string, env []string) (string, <-chan struct{}, error) {
+// this call, and its output arrives here over a channel: the moment end has
+// been printed, the shell exits, or ctx expires, whichever comes first, this
+// returns whatever has accumulated so far. The goroutine is left running for
+// whatever still holds the pty (a background job its rc left wired to the
+// terminal: an agent daemon, a prompt tool), and a single leaked goroutine
+// (and its fd, and its zombie child once it exits) is the cost of never
+// blocking boot past ctx.
+//
+// Completion is end appearing, never a silence: a shell can go quiet for long
+// stretches mid-dump: on macOS the PATH search for `env` blocks on a
+// privacy-protected folder (~/Documents) until the user answers the prompt.
+func runShellDump(ctx context.Context, shell, cmdStr, end string, env []string) (string, <-chan struct{}, error) {
 	cmd := exec.Command(shell, "-l", "-i", "-c", cmdStr)
 	cmd.Env = env
 	ptmx, err := pty.Start(cmd)
@@ -92,8 +86,7 @@ func runShellDump(ctx context.Context, shell, cmdStr string, env []string) (stri
 		}
 	}()
 
-	var out bytes.Buffer
-	var quiet <-chan time.Time
+	var out strings.Builder
 	for {
 		select {
 		case result := <-results:
@@ -104,10 +97,10 @@ func runShellDump(ctx context.Context, shell, cmdStr string, env []string) (stri
 				return out.String(), nil, result.err
 			}
 			out.Write(result.chunk)
-			quiet = time.After(shellDumpQuiet)
-		case <-quiet:
-			close(abandoned)
-			return out.String(), collected, nil
+			if strings.Contains(out.String(), end) {
+				close(abandoned)
+				return out.String(), collected, nil
+			}
 		case <-ctx.Done():
 			close(abandoned)
 			_ = cmd.Process.Kill()

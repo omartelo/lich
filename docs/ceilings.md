@@ -209,21 +209,22 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   on screen says so. That the byte arrives at all depends on `heedCtrlC`: a lich started by a service passes an
   inherited "ignore Ctrl+C" to every agent it spawns, and clearing it before the first spawn is what the Windows
   close rests on.
-- **The shell-env pty read is bounded by silence, not by the child's exit, and Windows never gets one**
+- **The shell-env pty read ends on a printed end marker, not on the child's exit, and Windows never gets one**
   (`internal/terminal/shellenv_unix.go`, `runShellDump`): resolving PATH and friends runs the login shell on a
   pty rather than a pipe so an rc guarded on `[ -t 0 ]`/`tty -s` (nvm's and fnm's own init, among others) loads —
   but neither closing that pty from another goroutine nor `SetReadDeadline` interrupts a read already blocked in
   it (both measured directly against a blocked read: Close returns without error and the read stays parked in
   the kernel regardless, and the deadline is never enforced on this fd). So the read is driven from a goroutine
-  free to outlive the call, and the result is decided by `shellDumpQuiet`: once real output has started, 300ms
-  of silence is taken as "done", which is what lets an rc that backgrounds a job (an `ssh-agent`/`gpg-agent`
-  eval, a prompt tool) after printing still hand back what it printed instead of paying the full
-  `shellEnvTimeout` for nothing. Three edges follow. A background job that keeps printing on its own schedule
-  (a spinner, a periodic notice) keeps resetting that timer, so a shell like that is bounded by the 5s ceiling
-  instead of the 300ms one — the same outcome as a genuinely hung shell, and nothing distinguishes the two. A
-  quiet-window or ctx timeout leaves the reader goroutine running for whatever still holds the pty, and it is
-  never collected: the fd, the goroutine and the zombie child persist until that holder exits on its own or
-  lich itself does, whichever comes first — one leak per lich launch that hits this edge, not a recurring one.
+  free to outlive the call, and the dump is `echo <start>; env; echo <end>`: the read returns the moment the end
+  marker arrives, which is what lets an rc that backgrounds a job (an `ssh-agent`/`gpg-agent` eval, a prompt
+  tool) still hand back the dump instead of paying the full `shellEnvTimeout`. It replaced a 300ms silence
+  window that cut the dump whenever `env` itself was slow to start: on macOS the PATH search for it blocks on
+  a privacy-protected folder like `~/Documents` until the user answers the prompt, so a Dock launch resolved
+  nothing. Two edges follow. A shell that never prints the end marker (a hung rc, a prompt waiting on input, an
+  unanswered privacy prompt) is bounded only by the 5s ceiling, and a dump cut there is discarded whole rather
+  than merged half-read. And the reader goroutine outlives the call for whatever still holds the pty: the fd,
+  the goroutine and the zombie child persist until that holder exits on its own or lich itself does, one leak
+  per resolution that hits this edge, not a recurring one.
   And **Windows gets none of this**: `SHELL` is normally unset there, so `ResolveShellEnv` returns before
   `shellenv_windows.go`'s pipe-based `runShellDump` ever runs — but on a machine where the user sets it anyway
   (Git Bash, a POSIX-ish shell reached through PATH), that path still runs over a pipe, so an rc guarded the
