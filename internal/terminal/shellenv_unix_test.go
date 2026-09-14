@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ func TestRunShellDumpTimeoutDegrades(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	_, _, _ = runShellDump(ctx, "/bin/sh", "sleep 30", os.Environ())
+	_, _, _ = runShellDump(ctx, "/bin/sh", "sleep 30", shellEnvEnd, os.Environ())
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Fatalf("runShellDump took %v, want it cut off near the 200ms ctx deadline", elapsed)
 	}
@@ -39,23 +40,22 @@ func TestRunShellDumpBackgroundJobDoesNotBlockDeadline(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	_, _, _ = runShellDump(ctx, "/bin/sh", "(sleep 30 &); exit 0", os.Environ())
+	_, _, _ = runShellDump(ctx, "/bin/sh", "(sleep 30 &); exit 0", shellEnvEnd, os.Environ())
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Fatalf("runShellDump took %v, want it cut off near the 200ms ctx deadline despite the backgrounded job", elapsed)
 	}
 }
 
 // TestRunShellDumpBackgroundJobStillYieldsOutput pins the other half: a
-// background job must not cost the resolution its output. The dump has
-// already been fully printed before the job is backgrounded, so the quiet
-// window (shellDumpQuiet) — not the far longer ctx — is what ends the read,
-// and what it returns still carries what the shell said.
+// background job must not cost the resolution its output. The end marker is
+// printed before the job is backgrounded, so it, not the far longer ctx, is
+// what ends the read, and what it returns still carries what the shell said.
 func TestRunShellDumpBackgroundJobStillYieldsOutput(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	start := time.Now()
-	out, _, err := runShellDump(ctx, "/bin/sh", "echo REAL_OUTPUT=yes; (sleep 30 &); exit 0", os.Environ())
+	out, _, err := runShellDump(ctx, "/bin/sh", "echo REAL_OUTPUT=yes; echo "+shellEnvEnd+"; (sleep 30 &); exit 0", shellEnvEnd, os.Environ())
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("runShellDump error: %v", err)
@@ -64,7 +64,25 @@ func TestRunShellDumpBackgroundJobStillYieldsOutput(t *testing.T) {
 		t.Fatalf("output missing despite the backgrounded job: %q", out)
 	}
 	if elapsed > 2*time.Second {
-		t.Fatalf("runShellDump took %v, want it end near the %v quiet window rather than the 5s ctx", elapsed, shellDumpQuiet)
+		t.Fatalf("runShellDump took %v, want it end on the marker rather than the 5s ctx", elapsed)
+	}
+}
+
+// TestRunShellDumpWaitsOutSilenceBeforeEnd pins the macOS Dock launch: the
+// sentinel is printed, then `env` stalls (its PATH search blocked on a
+// privacy-protected folder) before printing. Measured on a user's Mac before
+// this test: a 300ms silence window returned the sentinel alone, 20 bytes.
+func TestRunShellDumpWaitsOutSilenceBeforeEnd(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	out, _, err := runShellDump(ctx, "/bin/sh",
+		"echo "+shellEnvSentinel+"; sleep 1; echo LATE=yes; echo "+shellEnvEnd, shellEnvEnd, os.Environ())
+	if err != nil {
+		t.Fatalf("runShellDump error: %v", err)
+	}
+	if got := parseShellEnvDump(shellEnvSentinel, shellEnvEnd, out); !slices.Equal(got, []string{"LATE=yes"}) {
+		t.Fatalf("dump after a silent stretch = %v (raw %q), want [LATE=yes]", got, out)
 	}
 }
 
@@ -72,7 +90,7 @@ func TestRunShellDumpSurfacesShellFailure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if _, _, err := runShellDump(ctx, "/bin/sh", "exit 7", os.Environ()); err == nil {
+	if _, _, err := runShellDump(ctx, "/bin/sh", "exit 7", shellEnvEnd, os.Environ()); err == nil {
 		t.Fatal("runShellDump: want the shell's exit error")
 	}
 }
@@ -94,8 +112,8 @@ func TestReresolveShellEnvSingleFlightWhileReaderParked(t *testing.T) {
 	spawns := filepath.Join(dir, "spawns")
 	fake := filepath.Join(dir, "fakeshell")
 	// The dump is printed in full and then the pty is held open — the shape a
-	// prompt tool or agent an rc hands off to leaves behind. The quiet window
-	// ends the read 300ms later with its reader still blocked on that pty.
+	// prompt tool or agent an rc hands off to leaves behind. The end marker
+	// ends the read with its reader still blocked on that pty.
 	// Held by the shell process itself rather than by a job it backgrounds:
 	// whether a background job keeps the slave open is the shell's and the
 	// platform's business, and this is the same edge either way.
@@ -103,6 +121,7 @@ func TestReresolveShellEnvSingleFlightWhileReaderParked(t *testing.T) {
 		"echo x >> " + spawns + "\n" +
 		"echo " + shellEnvSentinel + "\n" +
 		"echo PATH=/late/install\n" +
+		"echo " + shellEnvEnd + "\n" +
 		"exec " + sleep + " 30\n"
 	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
 		t.Fatal(err)

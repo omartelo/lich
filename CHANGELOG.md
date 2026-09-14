@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Opening lich from the macOS Dock finds your agents again.** lich reads your
+  shell's PATH at launch, and it stopped reading too early whenever the shell
+  was slow to print it, for example while macOS was asking for access to a
+  folder on that PATH. Agents installed outside the system folders then showed
+  as not found.
+
 ## [0.51.0] - 2026-09-13
 
 > [!WARNING]

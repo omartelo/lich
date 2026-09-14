@@ -19,6 +19,11 @@ const shellEnvTimeout = 5 * time.Second
 // job-control warnings). Matched by last occurrence so rc that echoes it loses.
 const shellEnvSentinel = "__LICH_SHELL_ENV__"
 
+// shellEnvEnd closes the dump: printed after env, it is what proves the dump is
+// whole, so neither a slow `env` nor a job still holding the pty afterwards can
+// be mistaken for the end of it. Not a substring of shellEnvSentinel or back.
+const shellEnvEnd = "__LICH_SHELL_ENV_END__"
+
 var (
 	// resolving admits one login-shell resolution at a time, and refuses rather
 	// than queues: the caller is a button press, and a second one waiting out the
@@ -89,8 +94,8 @@ func ResolveShellEnv(base []string) []string {
 // and carries on with the launch env; a re-check does, and must not hand back a
 // re-scan of the PATH lich booted with as if it were fresh.
 //
-// The bound is the same one boot pays — shellEnvTimeout and the quiet window in
-// runShellDump — so a login shell sitting on a prompt costs the button what it
+// The bound is the same one boot pays (shellEnvTimeout and the end marker in
+// runShellDump), so a login shell sitting on a prompt costs the button what it
 // costs a launch, and no more.
 func ReresolveShellEnv(base []string) ([]string, error) {
 	shell := os.Getenv("SHELL")
@@ -116,12 +121,13 @@ func ReresolveShellEnv(base []string) ([]string, error) {
 	// -l -i so both login profiles (bash/zsh) and interactive rc (fish's
 	// config.fish is interactive-only) run; `env` is external, so the command is
 	// identical across shells.
-	out, parked, err := runShellDump(ctx, shell, "echo "+shellEnvSentinel+"; env", base)
+	out, parked, err := runShellDump(ctx, shell,
+		"echo "+shellEnvSentinel+"; env; echo "+shellEnvEnd, shellEnvEnd, base)
 	if parked != nil {
 		noteParkedReader(parked)
 	}
 
-	extra := parseShellEnvDump(shellEnvSentinel, out)
+	extra := parseShellEnvDump(shellEnvSentinel, shellEnvEnd, out)
 	if extra == nil {
 		if err == nil {
 			err = errors.New("the shell printed no environment")
@@ -168,12 +174,18 @@ func shellDumpDigest(out string) string {
 	return fmt.Sprintf("%d bytes, starting: %s", len(out), strings.Join(lines, " | "))
 }
 
-// parseShellEnvDump returns the KEY=VALUE lines env printed after the last
-// sentinel, or nil when the sentinel is absent (shell died before env ran). It
-// is line-based, so a value spanning a newline loses its tail; switch the dump
-// to `env -0` and split on NUL if that ever bites.
-func parseShellEnvDump(sentinel, out string) []string {
+// parseShellEnvDump returns the KEY=VALUE lines env printed between the last
+// sentinel and end, or nil when either is missing: a dump cut short (the shell
+// died or ctx expired mid-env) is not an environment, and merging half of one
+// would pin a PATH the shell never had. It is line-based, so a value spanning a
+// newline loses its tail; switch the dump to `env -0` and split on NUL if that
+// ever bites.
+func parseShellEnvDump(sentinel, end, out string) []string {
 	_, dump, ok := strings.CutLast(out, sentinel)
+	if !ok {
+		return nil
+	}
+	dump, _, ok = strings.Cut(dump, end)
 	if !ok {
 		return nil
 	}
