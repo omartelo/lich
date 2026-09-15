@@ -171,6 +171,21 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   whose detail carries no commits. And there is no expanding *past the last hunk*: a unified diff carries
   no file length, so nothing here knows whether anything follows it, and an affordance drawn there would
   be a no-op on every file whose change reaches the end.
+- **A side-by-side diff never wraps, and its left column only mirrors** (`frontend/src/lib/git/split-doc.ts`,
+  `SplitDiffBody.tsx`): the two sides are two editors kept level by having the same number of rows, every row
+  exactly one line tall, so a long line scrolls sideways in its own column instead of wrapping. A change block
+  pairs deletions with additions by position, so the rows beside each other in a block that rewrites one thing
+  and inserts another are unrelated lines. Threads, comment boxes and the gap expanders live in the right
+  column only; the left one holds an empty gap resized by a `ResizeObserver` to match, and anything that grows
+  a right-hand gap without a resize the observer sees would push the columns out of step.
+- **A line revert rebuilds its patch, and some of it cannot be done** (`internal/project/revertlines.go`): the
+  panel sends line numbers and the text it drew, never a patch, so a file that moved since the draw is refused
+  instead of reverting whatever those numbers point at now. The index is reverted with the working tree when it
+  holds the change; when it holds a third version of the same lines (staged, then edited again) the revert is
+  refused whole and Discard is the way out. A renamed file offers no line revert, since its old side lives under
+  a path the one-file diff cannot see. The Undo is the reversed patch the frontend keeps for as long as the toast
+  is on screen (`REVERT_UNDO_MS`); nothing on disk records it after that. And a revert does exactly the lines it
+  names: reverting part of a block can leave code that no longer compiles, which is the reader's call to make.
 - **The Review panel's "Last turn" is a window of wall-clock time**
   (`internal/terminal/turnsnap.go`, `internal/project/turnsnap.go`): the panel brackets a turn with two
   `git write-tree` snapshots taken against an index of lich's own, so what it shows is everything that

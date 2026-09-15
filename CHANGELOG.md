@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Diffs can be drawn side by side.** Settings › Version Control has a Diff
+  layout choice: Unified, as before, or Side-by-side, with HEAD on the left and
+  your changes on the right. It applies to the Review tab and to pull requests,
+  and a panel too narrow for two columns shows unified until it is widened.
+
+- **Revert a single change without discarding the whole file.** Point at a
+  change in the Review tab and click Revert, or select lines and pick Revert
+  from the right-click menu. Staged changes are reverted in the index too, and
+  the toast that confirms it offers Undo.
+
 ### Fixed
 
 - **Cmd shortcuts work in the macOS window.** Cmd+C, Cmd+V, Cmd+X, Cmd+A,
