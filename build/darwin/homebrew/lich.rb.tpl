@@ -13,7 +13,7 @@ cask "lich" do
 
   url "https://github.com/omartelo/lich/releases/download/v#{version}/lich-v#{version}-darwin-#{arch}.zip"
   name "lich"
-  desc "Personal harness for AI-assisted development"
+  desc "Terminal-first ADE for the coding agents you already use"
   homepage "https://github.com/omartelo/lich"
 
   depends_on macos: ">= :ventura"

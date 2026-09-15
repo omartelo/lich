@@ -22,7 +22,7 @@ func Schema() ([]byte, error) {
 		"$schema":              "https://json-schema.org/draft/2020-12/schema",
 		"$id":                  schemaID,
 		"title":                "lich theme",
-		"description":          "A color theme for the lich harness.",
+		"description":          "A color theme for lich.",
 		"type":                 "object",
 		"additionalProperties": false,
 		"required":             []string{"id", "name", "scheme", "app", "terminal"},

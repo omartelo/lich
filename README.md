@@ -5,7 +5,7 @@
   </picture>
   <h1>lich</h1>
   <p><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
-  <p><strong>A terminal-first harness for coding with AI agents.</strong></p>
+  <p><strong>A terminal-first ADE for the coding agents you already use.</strong></p>
   <p>
     Open your projects, run agents like Claude Code, Codex and opencode in real
     terminals, and keep git — worktrees, diffs and pull requests — in view

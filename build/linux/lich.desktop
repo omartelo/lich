@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=lich
-GenericName=Coding Agent Harness
+GenericName=Agentic Development Environment
 Comment=Run and watch AI coding agents side by side
 Exec=lich
 Icon=lich

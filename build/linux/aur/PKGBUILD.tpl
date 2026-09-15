@@ -4,7 +4,7 @@
 pkgname=lich-bin
 pkgver=@VERSION@
 pkgrel=1
-pkgdesc="A personal harness for AI-assisted development"
+pkgdesc="A terminal-first ADE for the coding agents you already use"
 arch=('x86_64')
 url="https://github.com/omartelo/lich"
 license=('AGPL-3.0-only')

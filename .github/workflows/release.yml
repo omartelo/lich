@@ -397,7 +397,7 @@ jobs:
             exit 1
           fi
           {
-            printf '<img src="https://raw.githubusercontent.com/%s/%s/%s" alt="lich — a terminal-first harness for coding with AI agents" width="900" />\n\n' \
+            printf '<img src="https://raw.githubusercontent.com/%s/%s/%s" alt="lich: a terminal-first ADE for the coding agents you already use" width="900" />\n\n' \
               "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$BANNER"
             cat body.md
           } > notes.md

@@ -6,7 +6,7 @@
   <h1>lich</h1>
   <p><a href="README.md">English</a> · <strong>简体中文</strong></p>
   <p><a href="https://omartelo.github.io/lich/index.zh-CN.html"><strong>omartelo.github.io/lich</strong></a></p>
-  <p><strong>为 AI 编码智能体打造的终端优先工作台。</strong></p>
+  <p><strong>为你已在用的编码智能体打造的终端优先 ADE（智能体开发环境）。</strong></p>
   <p>
     打开你的项目，在真实终端里运行 Claude Code、Codex、opencode 这样的智能体，
     并把 git —— worktree、diff 和 Pull Request —— 一并留在视野里，无需离开窗口。
