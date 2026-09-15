@@ -35,7 +35,10 @@ that cannot (Ubuntu's AppArmor policy, root). Last, the main window opened at
 CEF's default size every launch: the fork asks the browser delegate for its
 initial geometry and tells it the bounds the window closed with
 ([0x48piraj/kurogane#19](https://github.com/0x48piraj/kurogane/pull/19)), and
-`shell/src/geometry.rs` remembers them. All of it is carried meanwhile
+`shell/src/geometry.rs` remembers them. On macOS kurogane installed no main
+menu, and AppKit delivers Cmd+C, Cmd+V and the other Command shortcuts through
+one, so none of them worked; the fork installs the application and Edit menus.
+All of it is carried meanwhile
 on the fork `shell/Cargo.toml` pins:
 `omartelo/kurogane`, branch `lich-next`, on top of upstream `fda6cb6`.
 One wrinkle the patch works around: cef-rs hands CEF a *borrowed* string when

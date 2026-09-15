@@ -58,6 +58,9 @@ describe("shortcutGroups", () => {
     const on = (isWindows: boolean) => shortcutGroups(DEFAULT_HOTKEYS, false, isWindows)
     expect(keysFor(on(false), "Attach an image from the clipboard")).toBe("Ctrl+V")
     expect(keysFor(on(true), "Attach an image from the clipboard")).toBe("Alt+V")
+    expect(
+      keysFor(shortcutGroups(DEFAULT_HOTKEYS, true, false), "Attach an image from the clipboard"),
+    ).toBe("⌘V or Ctrl+V")
   })
 
   it("keeps the platform-independent chords as Control, macOS included", () => {

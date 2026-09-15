@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Cmd shortcuts work in the macOS window.** Cmd+C, Cmd+V, Cmd+X, Cmd+A,
+  Cmd+Z and Cmd+Q did nothing. Cmd+V on a screenshot also attaches it in
+  Claude Code, the way Ctrl+V does.
+
 - **Opening lich from the macOS Dock finds your agents again.** lich reads your
   shell's PATH at launch, and it stopped reading too early whenever the shell
   was slow to print it, for example while macOS was asking for access to a

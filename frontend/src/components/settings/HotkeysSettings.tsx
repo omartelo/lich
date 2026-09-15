@@ -157,7 +157,7 @@ export function HotkeysSettings() {
           lich rewrites these on their way to the agent's terminal, so they are fixed rather than
           rebindable.
         </p>
-        {passthroughRows(isWindows).map((row) => (
+        {passthroughRows(isWindows, isMac).map((row) => (
           <ShortcutLine key={row.label} label={row.label} keys={row.keys} />
         ))}
       </Group>

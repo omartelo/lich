@@ -8,8 +8,9 @@
 //   hiding the keypress from TUIs that read the clipboard themselves on ^V
 //   (Claude Code image attach). Send SYN (\x16) like a real terminal — but on
 //   Windows Claude Code binds image-paste to Alt+V (ESC+v), not ^V, so emit
-//   that there instead. Text paste stays on Ctrl+Shift+V (untouched — native
-//   paste).
+//   that there instead. Text paste stays on Ctrl+Shift+V (Cmd+V on macOS),
+//   the browser's own paste; one carrying an image and no text is turned into
+//   the same chord (pastedImageSequence).
 // - Shift+Enter: xterm sends plain \r, indistinguishable from Enter. ESC+CR
 //   is what TUIs (Claude Code) accept as "insert newline" without
 //   kitty-protocol negotiation.
@@ -39,13 +40,31 @@ export function isSearchOpenChord(event: TermKeyState): boolean {
   )
 }
 
+function imageAttachSequence(isWindows: boolean): string {
+  return isWindows ? "\x1bv" : "\x16"
+}
+
+// pastedImageSequence answers a paste the terminal would drop: xterm only
+// reads text, and a screenshot on the clipboard has none. A macOS user pastes
+// with Cmd+V, never Ctrl+V, so this is what reaches Claude Code's image attach
+// there. The agent reads the image off the clipboard itself.
+export function pastedImageSequence(
+  data: Pick<DataTransfer, "types" | "getData"> | null,
+  isWindows = false,
+): string | null {
+  if (data === null || data.getData("text/plain") !== "" || !data.types.includes("Files")) {
+    return null
+  }
+  return imageAttachSequence(isWindows)
+}
+
 export function chordSequence(event: TermKeyState, isWindows = false): string | null {
   const ctrlOnly = event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
   if (ctrlOnly && event.key === "Backspace") {
     return "\x17"
   }
   if (ctrlOnly && (event.code === "KeyV" || event.key.toLowerCase() === "v")) {
-    return isWindows ? "\x1bv" : "\x16"
+    return imageAttachSequence(isWindows)
   }
   if (
     event.key === "Enter" &&

@@ -1,9 +1,35 @@
 import { describe, expect, it } from "vitest"
-import { chordSequence, isSearchOpenChord, type TermKeyState } from "./term-keys"
+import {
+  chordSequence,
+  isSearchOpenChord,
+  pastedImageSequence,
+  type TermKeyState,
+} from "./term-keys"
 
 function key(overrides: Partial<TermKeyState>): TermKeyState {
   return { ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, key: "", ...overrides }
 }
+
+function clipboard(types: string[], text = ""): Pick<DataTransfer, "types" | "getData"> {
+  return { types, getData: (format) => (format === "text/plain" ? text : "") }
+}
+
+describe("pastedImageSequence", () => {
+  it("turns an image-only paste into the image attach chord", () => {
+    expect(pastedImageSequence(clipboard(["Files"]))).toBe("\x16")
+    expect(pastedImageSequence(clipboard(["Files"]), true)).toBe("\x1bv")
+  })
+
+  it("leaves a paste carrying text to xterm, image or not", () => {
+    expect(pastedImageSequence(clipboard(["text/plain"], "hello"))).toBeNull()
+    expect(pastedImageSequence(clipboard(["text/plain", "Files"], "shot.png"))).toBeNull()
+  })
+
+  it("ignores a paste with neither text nor files", () => {
+    expect(pastedImageSequence(clipboard([]))).toBeNull()
+    expect(pastedImageSequence(null)).toBeNull()
+  })
+})
 
 describe("chordSequence", () => {
   it("maps Ctrl+Backspace to ETB (erase word)", () => {
