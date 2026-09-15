@@ -55,6 +55,7 @@ export const SETTING_ENTRIES: readonly SettingEntry[] = [
   { section: "sandbox", title: "SSH agent", also: "push keys" },
   { section: "sandbox", title: "GitHub token", also: "gh credentials" },
   { section: "version-control", title: "Command-line tools", also: "git gh install" },
+  { section: "version-control", title: "Diff layout", also: "side by side split unified review" },
   { section: "version-control", title: "GitHub account", also: "login gh switch" },
   { section: "updates", title: "Application", also: "version upgrade" },
   { section: "updates", title: "What's new", also: "changelog release notes" },

@@ -18,6 +18,7 @@ import { ProvidersPane } from "./ProvidersPane"
 import { SandboxSettings } from "./SandboxSettings"
 import { VersionControlSettings } from "./VersionControlSettings"
 import { VcsToolsSetting } from "./VcsToolsSetting"
+import { DiffLayoutSetting } from "./DiffLayoutSetting"
 import { UpdatesSettings } from "./UpdatesSettings"
 import { HelpSettings } from "./HelpSettings"
 import { SearchInput } from "@/components/common/SearchInput"
@@ -81,12 +82,13 @@ const SECTIONS: Section[] = [
     id: "version-control",
     icon: GitBranch,
     seam: true,
-    // The tools are the machine's, not the project's, so they render above the
-    // project block and outlive its "open a project first" state — a machine
-    // with no git has to be able to read that with nothing open.
+    // The tools and the diff layout are the machine's, not the project's, so
+    // they render above the project block and outlive its "open a project first"
+    // state: a machine with no git has to be able to read that with nothing open.
     render: (id) => (
       <>
         <VcsToolsSetting />
+        <DiffLayoutSetting />
         <VersionControlSettings projectId={id} />
       </>
     ),
