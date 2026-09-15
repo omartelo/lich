@@ -35,6 +35,9 @@ export interface ThreadSlot {
 /** The gaps a view currently holds, key → the element React renders into. */
 export type SlotElements = ReadonlyMap<string, HTMLElement>
 
+/** One shared empty set, the state every view starts from. */
+export const NO_SLOTS: SlotElements = new Map()
+
 const setSlots = StateEffect.define<ThreadSlot[]>()
 
 type Register = (key: string, element: HTMLElement | null) => void

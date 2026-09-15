@@ -11,8 +11,10 @@ import {
   type Hotkeys,
 } from "@/lib/hotkeys"
 import { zoomIntent } from "@/lib/terminal/zoom-keys"
+import { DIFF_LAYOUTS, type DiffLayout } from "@/lib/git/diff-layout"
 import {
   parseBoolPref,
+  parseEnumPref,
   parseNumberPref,
   parseOptionalBoolPref,
   readPref,
@@ -60,6 +62,7 @@ const CONTEXT_USAGE_STORAGE_KEY = "lich.footer.contextUsage"
 const COST_BUDGET_STORAGE_KEY = "lich.footer.costBudget"
 const DESKTOP_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.desktop"
 const FINISHED_TURN_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.finishedTurn"
+const DIFF_LAYOUT_STORAGE_KEY = "lich.diff.layout"
 
 // The workspace key the theme selection actually lives under. The localStorage
 // pref above keeps it too, but only as the cache the first frame paints from:
@@ -151,6 +154,11 @@ const readDesktopNotifications = (): boolean | null =>
 const readFinishedTurnNotifications = (): boolean =>
   parseBoolPref(readPref(FINISHED_TURN_NOTIFICATIONS_STORAGE_KEY), false)
 
+// Unified until chosen otherwise: it is how every diff was drawn before the
+// choice existed, so an update never changes what someone reviews in.
+const readDiffLayout = (): DiffLayout =>
+  parseEnumPref(readPref(DIFF_LAYOUT_STORAGE_KEY), DIFF_LAYOUTS, "unified")
+
 interface SettingsValue {
   /** Terminal font family, applied globally across all project terminals. */
   font: string
@@ -197,6 +205,9 @@ interface SettingsValue {
    * the user turns it on. */
   finishedTurnNotifications: boolean
   setFinishedTurnNotifications: (enabled: boolean) => void
+  /** How every diff draws: one column, or old and new side by side. */
+  diffLayout: DiffLayout
+  setDiffLayout: (layout: DiffLayout) => void
 }
 
 const SettingsContext = createContext<SettingsValue | null>(null)
@@ -229,6 +240,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [finishedTurnNotifications, setFinishedTurnNotificationsState] = useState<boolean>(
     readFinishedTurnNotifications,
   )
+  const [diffLayout, setDiffLayoutState] = useState<DiffLayout>(readDiffLayout)
 
   // A selection the user (or a reconcile) has already written must not be
   // overwritten by the stored one still in flight, so the load below stands down
@@ -486,6 +498,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     writePref(FINISHED_TURN_NOTIFICATIONS_STORAGE_KEY, next)
   }, [])
 
+  const setDiffLayout = useCallback((next: DiffLayout) => {
+    setDiffLayoutState(next)
+    writePref(DIFF_LAYOUT_STORAGE_KEY, next)
+  }, [])
+
   // Apply the resolved theme's CSS variables and toggle `.dark` for existing
   // dark variants. For "system", follow the OS scheme and keep following it
   // live.
@@ -599,6 +616,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setDesktopNotifications,
       finishedTurnNotifications,
       setFinishedTurnNotifications,
+      diffLayout,
+      setDiffLayout,
     }),
     [
       font,
@@ -629,6 +648,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setDesktopNotifications,
       finishedTurnNotifications,
       setFinishedTurnNotifications,
+      diffLayout,
+      setDiffLayout,
     ],
   )
 

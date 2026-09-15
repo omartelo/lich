@@ -25,17 +25,26 @@ export interface DiffEditor {
 // for GitHub or one waiting for the session, comes through it. It has to be a
 // stable reference: it rides the view's identity, so a new one on every render
 // would rebuild the editor on every render.
-export function useDiffEditor(doc: FileDoc, filename: string, extra?: Extension): DiffEditor {
+//
+// `side` makes it one column of a side-by-side diff: numbered from that side's
+// file, and unwrapped, so the two columns stay row for row.
+export function useDiffEditor(
+  doc: FileDoc,
+  filename: string,
+  extra?: Extension,
+  side?: "old" | "new",
+): DiffEditor {
   const source = useMemo(
     () => ({
       text: doc.text,
       extensions: [
-        diffGutter(doc.lineMeta),
+        diffGutter(doc.lineMeta, side),
         buildLineDecorations(doc.lineMeta),
         ...(extra ? [extra] : []),
       ],
+      wrap: side === undefined,
     }),
-    [doc, extra],
+    [doc, extra, side],
   )
   const { containerRef, getSelectedLines, view } = useCodeMirrorView(source, filename)
   return { containerRef, getSelectedDocLines: getSelectedLines, view }

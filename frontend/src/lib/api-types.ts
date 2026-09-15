@@ -318,6 +318,22 @@ export interface WorktreeSetup {
   detected?: string
 }
 
+/** internal/project.RevertLine: one changed line of a drawn diff. "old" is a
+ * deletion numbered in HEAD, "new" an addition numbered in the working tree;
+ * the text is what proves the number still means the same line. */
+export interface RevertLine {
+  side: "old" | "new"
+  line: number
+  text: string
+}
+
+/** internal/project.RevertResult: what undoing a line revert hands back. */
+export interface RevertResult {
+  patch: string
+  /** "" when the index did not hold the change and was left alone. */
+  indexPatch: string
+}
+
 /** internal/project.CommitIdentity — who the next commit in a checkout would
  * be authored as, which the project's gh account does not govern. Every field
  * empty means the checkout has no identity configured. */

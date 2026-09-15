@@ -217,6 +217,52 @@
   color: var(--accent-foreground);
 }
 
+/* Side-by-side: the row standing in for a line only the other side has. */
+.diff-filler {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklab, var(--foreground) 7%, transparent) 0 1px,
+    transparent 1px 6px
+  );
+}
+
+/* The change block under the pointer, a step deeper than its resting tint, and
+   the Revert button riding its first line. */
+.diff-block-hot {
+  position: relative;
+}
+.diff-block-hot.diff-add {
+  background-color: color-mix(in oklab, var(--color-emerald-500) 20%, transparent);
+}
+.diff-block-hot.diff-del {
+  background-color: color-mix(in oklab, var(--color-red-500) 17%, transparent);
+}
+.cm-diff-revert {
+  position: absolute;
+  top: 50%;
+  right: 0.375rem;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background-color: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  line-height: 1.3;
+}
+.cm-diff-revert:hover {
+  background-color: var(--accent);
+}
+.cm-diff-revert svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
 /* Syntax highlighting palette for @lezer/highlight's classHighlighter.
    Muted hues legible on both themes; dark overrides lift the lightness. */
 .tok-keyword { color: oklch(0.45 0.17 305); }

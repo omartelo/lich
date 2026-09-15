@@ -14,6 +14,8 @@ export interface CodeMirrorSource {
   /** Laid on top of the shared read-only base — a diff's gutter and line
    * decorations, a plain file's line numbers. */
   extensions: Extension[]
+  /** False for a side-by-side column; see readOnlyCodeExtensions. */
+  wrap?: boolean
 }
 
 export interface CodeMirrorView {
@@ -45,7 +47,7 @@ export function useCodeMirrorView(source: CodeMirrorSource, filename: string): C
     const view = new EditorView({
       state: EditorState.create({
         doc: source.text,
-        extensions: [...readOnlyCodeExtensions(), ...source.extensions],
+        extensions: [...readOnlyCodeExtensions({ wrap: source.wrap }), ...source.extensions],
       }),
       parent,
     })

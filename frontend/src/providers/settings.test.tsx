@@ -120,3 +120,39 @@ describe("the hotkey bindings", () => {
     await mounted.unmount()
   })
 })
+
+// The key is pinned by hand for the same reason as the theme leftover above: a
+// renamed key would silently reset everyone's choice to unified.
+describe("the diff layout", () => {
+  async function layoutAfter(change?: "unified" | "split"): Promise<string> {
+    let seen = ""
+    let choose: (() => void) | undefined
+    function Probe() {
+      const { diffLayout, setDiffLayout } = useSettings()
+      seen = diffLayout
+      choose = () => change && setDiffLayout(change)
+      return null
+    }
+    const mounted = await mountBudget(createElement(SettingsProvider, null, createElement(Probe)))
+    await mounted.act(() => {})
+    await mounted.act(() => choose?.())
+    await mounted.unmount()
+    return seen
+  }
+
+  it("is unified for an install that never chose", async () => {
+    expect(await layoutAfter()).toBe("unified")
+  })
+
+  it("reads back a stored choice and ignores one it does not know", async () => {
+    localStorage.setItem("lich.diff.layout", "split")
+    expect(await layoutAfter()).toBe("split")
+    localStorage.setItem("lich.diff.layout", "sideways")
+    expect(await layoutAfter()).toBe("unified")
+  })
+
+  it("persists a change", async () => {
+    expect(await layoutAfter("split")).toBe("split")
+    expect(localStorage.getItem("lich.diff.layout")).toBe("split")
+  })
+})

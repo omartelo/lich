@@ -68,10 +68,13 @@ const diffTheme = EditorView.theme({
 // EditorView.editable) blocks edits while keeping the DOM contenteditable,
 // which CodeMirror needs to track text selection. classHighlighter emits tok-*
 // classes; the palette lives in index.css.
-export function readOnlyCodeExtensions(): Extension[] {
+//
+// `wrap` is off only for a side-by-side diff, whose two editors stay level
+// because every row is exactly one line tall.
+export function readOnlyCodeExtensions({ wrap = true }: { wrap?: boolean } = {}): Extension[] {
   return [
     EditorState.readOnly.of(true),
-    EditorView.lineWrapping,
+    ...(wrap ? [EditorView.lineWrapping] : []),
     syntaxHighlighting(classHighlighter),
     diffTheme,
   ]
@@ -122,6 +125,7 @@ const lineClasses: Partial<Record<DiffLine["kind"], Decoration>> = {
   add: Decoration.line({ class: "diff-add" }),
   del: Decoration.line({ class: "diff-del" }),
   meta: Decoration.line({ class: "cm-diff-sep" }),
+  filler: Decoration.line({ class: "diff-filler" }),
 }
 
 // gutterLineClass markers carry only an elementClass — the colored strip and
@@ -135,6 +139,7 @@ class LineClassMarker extends GutterMarker {
 const gutterMarkers: Partial<Record<DiffLine["kind"], LineClassMarker>> = {
   add: new LineClassMarker("diff-gutter-add"),
   del: new LineClassMarker("diff-gutter-del"),
+  filler: new LineClassMarker("diff-filler"),
 }
 
 // buildLineDecorations colors added/deleted lines and hunk separators, in the
@@ -184,13 +189,14 @@ export function blockWidgetGutter(): Extension {
 // (old-file for deletions, new-file otherwise), not from doc line numbers.
 // lineNumbers' internal spacer probes formatNumber with out-of-range numbers
 // to size the gutter; those get the widest real number so it never collapses.
-export function diffGutter(lineMeta: DiffLine[]): Extension {
+// A side-by-side column passes its side, and numbers every row from that file.
+export function diffGutter(lineMeta: DiffLine[], side?: "old" | "new"): Extension {
   const widest = String(Math.max(1, ...lineMeta.map((meta) => meta.newLine ?? meta.oldLine ?? 0)))
   return [
     lineNumbers({
       formatNumber: (lineNo) => {
         const meta = lineMeta[lineNo - 1]
-        return meta ? gutterNumber(meta) : widest
+        return meta ? gutterNumber(meta, side) : widest
       },
     }),
     blockWidgetGutter(),

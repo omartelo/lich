@@ -1,7 +1,9 @@
 // Pure unified-diff parsing for the review panel: no DOM, no CodeMirror, so
 // everything here runs under vitest's node environment.
 
-export type DiffLineKind = "add" | "del" | "context" | "meta"
+/** "filler" exists only in a side-by-side document: the blank row standing in
+ * for a line the other side has and this one does not. */
+export type DiffLineKind = "add" | "del" | "context" | "meta" | "filler"
 
 export interface DiffLine {
   kind: DiffLineKind
@@ -313,8 +315,16 @@ export function discardTargets(file: DiffFile): string[] {
 // Either number is nullable by type, and a missing one renders as nothing rather
 // than as the string "null" — parseDiff always numbers the side it keeps, but
 // this also draws hunks assembled elsewhere (a GitHub diffHunk, thread-hunk.ts).
-export function gutterNumber(line: DiffLine): string {
-  const number = line.kind === "del" ? line.oldLine : line.newLine
+//
+// A side-by-side column numbers every row on its own side instead: `side` pins
+// the number to that file, so unchanged lines on the left read as HEAD's.
+export function gutterNumber(line: DiffLine, side?: "old" | "new"): string {
+  const number =
+    side === "old"
+      ? line.oldLine
+      : side === "new" || line.kind !== "del"
+        ? line.newLine
+        : line.oldLine
   return number === null ? "" : String(number)
 }
 
