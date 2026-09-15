@@ -14,7 +14,7 @@
   "$id": "https://raw.githubusercontent.com/omartelo/lich/main/themes/lich-theme.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "A color theme for the lich harness.",
+  "description": "A color theme for lich.",
   "properties": {
     "$schema": {
       "type": "string"

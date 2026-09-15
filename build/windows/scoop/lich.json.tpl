@@ -12,7 +12,7 @@
         "layout build/windows/lich.iss installs too."
     ],
     "version": "@VERSION@",
-    "description": "A personal harness for AI-assisted development",
+    "description": "A terminal-first ADE for the coding agents you already use",
     "homepage": "https://github.com/omartelo/lich",
     "license": "AGPL-3.0-only",
     "url": "https://github.com/omartelo/lich/releases/download/v@VERSION@/lich-v@VERSION@-windows-amd64.zip",

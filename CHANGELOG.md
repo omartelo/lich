@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **lich now calls itself an ADE, a terminal-first agentic development
+  environment for the coding agents you already use.** Claude Code, Codex and
+  the rest are the harnesses; lich is where you run them. The new wording is in
+  the app launcher entry, the package descriptions for AUR, Homebrew and Scoop,
+  the site and the release banner.
 - **Every release asset is now a complete package, lich with its window.**
   Linux gets `lich-vX-linux-amd64.tar.zst` (the binary and `shell/`) in place
   of `lich-vX-linux-amd64` and `lich-vX-linux-amd64-shell.tar.zst`; Windows gets
