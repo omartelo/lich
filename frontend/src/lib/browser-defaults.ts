@@ -33,13 +33,15 @@ export function isBrowserChord(event: ChordState): boolean {
   return event.shiftKey ? MOD_SHIFT_KEYS.has(key) : MOD_KEYS.has(key)
 }
 
-// isAppContextMenu reports a right-click on the app's own chrome — everything
-// outside a terminal. The terminal keeps Chromium's menu because that is where
-// its Copy and Paste entries live; the rest of the UI has no such use for it and
-// would only be offered Back, Reload, Save as, Print and View source.
+// isAppContextMenu reports a right-click that Chromium's menu must not answer.
+// A plain terminal keeps it because that is where its Copy and Paste entries
+// live; the rest of the UI would only be offered Back, Reload, Save as, Print and
+// View source. A terminal whose app reads the mouse (xterm marks it with
+// enable-mouse-events) owns the right button: xterm forwards it to the PTY, and
+// the app draws its own menu, which Chromium's would land on top of.
 export function isAppContextMenu(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null
-  return !element?.closest?.(".xterm")
+  return !element?.closest?.(".xterm:not(.enable-mouse-events)")
 }
 
 // installBrowserDefaults swallows the lot. preventDefault only, never
