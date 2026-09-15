@@ -17,6 +17,12 @@ var ErrLinesMoved = errors.New("the file changed since this diff was drawn. Refr
 // of these lines, neither HEAD's nor the working tree's.
 var ErrStagedDiverged = errors.New("these lines have staged changes that differ from the file. Discard the file instead")
 
+// The two sides a RevertLine can name.
+const (
+	sideOld = "old"
+	sideNew = "new"
+)
+
 // RevertLine names one changed line of the diff the panel drew. Side "old" is a
 // deletion, numbered in HEAD; "new" is an addition, numbered in the working
 // tree. Text is the line without its +/- prefix, and is what proves the number
@@ -51,7 +57,15 @@ func (s *Service) RevertLines(path, rel string, lines []RevertLine) (RevertResul
 		return RevertResult{}, errors.New("no changed lines to revert")
 	}
 	base := readWorkTree(path).base
-	hunks, err := parseHunks(fileDiff(path, rel, base))
+	tracked, err := isTracked(path, rel)
+	if err != nil {
+		return RevertResult{}, err
+	}
+	diff, err := fileDiff(path, rel, base, tracked)
+	if err != nil {
+		return RevertResult{}, err
+	}
+	hunks, err := parseHunks(diff)
 	if err != nil {
 		return RevertResult{}, err
 	}
@@ -62,7 +76,7 @@ func (s *Service) RevertLines(path, rel string, lines []RevertLine) (RevertResul
 	if !applies(path, patch, "-R", "--check") {
 		return RevertResult{}, ErrLinesMoved
 	}
-	indexPatch, err := stagedPatch(path, rel, base, lines)
+	indexPatch, err := stagedPatch(path, rel, base, lines, tracked)
 	if err != nil {
 		return RevertResult{}, err
 	}
@@ -92,30 +106,45 @@ func (s *Service) RestoreLines(path, rel string, undo RevertResult) error {
 	return applyBoth(path, undo, false)
 }
 
-// fileDiff is the one file's slice of what DiffText draws: tracked against the
-// same base, or an untracked file as a new-file diff.
-func fileDiff(path, rel, base string) string {
-	if out, ok := gitQuiet(path, "diff", base, "--", rel); ok && out != "" {
-		return out
+// isTracked asks the index about rel. An empty answer is untracked; a git that
+// fails to answer is an error, since reading it as untracked would diff the
+// whole file as additions.
+func isTracked(path, rel string) (bool, error) {
+	out, err := runGit(path, "ls-files", "-z", "--", rel)
+	if err != nil {
+		return false, err
 	}
-	return untrackedDiff(path, rel)
+	return out != "", nil
+}
+
+// fileDiff is the one file's slice of what DiffText draws: tracked against the
+// same base, or an untracked file as a new-file diff. Which one is decided by
+// the index, never by the tracked diff coming back empty: a committed file with
+// nothing left to diff would otherwise read as all additions, and a stale screen
+// could revert lines straight out of a clean file.
+func fileDiff(path, rel, base string, tracked bool) (string, error) {
+	if !tracked {
+		return untrackedDiff(path, rel), nil
+	}
+	return runGit(path, "diff", base, "--", rel)
 }
 
 // stagedPatch finds the picked lines in the index. Each is looked up in the
 // HEAD→index diff, an addition first carried to its index line number through
 // the index→worktree diff. None staged leaves the index alone; all staged
 // reverts it too; some staged is a third version of these lines, refused.
-func stagedPatch(path, rel, base string, lines []RevertLine) (string, error) {
-	if _, tracked := gitQuiet(path, "ls-files", "--error-unmatch", "--", rel); !tracked {
+//
+// A git that cannot answer is an error, never "nothing staged": leaving the
+// index behind unannounced is the trap this whole check exists to close.
+func stagedPatch(path, rel, base string, lines []RevertLine, tracked bool) (string, error) {
+	if !tracked {
 		return "", nil
 	}
-	cached, _ := gitQuiet(path, "diff", "--cached", base, "--", rel)
-	staged, err := parseHunks(cached)
+	staged, err := hunksOf(path, "diff", "--cached", base, "--", rel)
 	if err != nil {
 		return "", err
 	}
-	worktree, _ := gitQuiet(path, "diff", "--", rel)
-	unstaged, err := parseHunks(worktree)
+	unstaged, err := hunksOf(path, "diff", "--", rel)
 	if err != nil {
 		return "", err
 	}
@@ -138,10 +167,18 @@ func stagedPatch(path, rel, base string, lines []RevertLine) (string, error) {
 	return patch, nil
 }
 
+func hunksOf(path string, args ...string) ([]patchHunk, error) {
+	out, err := runGit(path, args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseHunks(out)
+}
+
 // inIndex restates one pick in the index's numbering, if the index holds it.
 func inIndex(staged, unstaged []patchHunk, line RevertLine) (RevertLine, bool) {
 	number := line.Line
-	if line.Side == "new" {
+	if line.Side == sideNew {
 		indexLine, unchanged := oldLineOf(unstaged, line.Line)
 		if !unchanged {
 			return RevertLine{}, false

@@ -121,7 +121,7 @@ type pickKey struct {
 func partialPatch(rel string, hunks []patchHunk, picks []RevertLine) (string, error) {
 	wanted := make(map[pickKey]string, len(picks))
 	for _, pick := range picks {
-		if pick.Side != "old" && pick.Side != "new" {
+		if pick.Side != sideOld && pick.Side != sideNew {
 			return "", fmt.Errorf("unknown side %q", pick.Side)
 		}
 		wanted[pickKey{pick.Side, pick.Line}] = pick.Text
@@ -174,9 +174,9 @@ func cutHunk(hunk patchHunk, wanted map[pickKey]string) ([]patchLine, int, error
 func changeKey(line patchLine) (pickKey, bool) {
 	switch line.kind {
 	case '-':
-		return pickKey{"old", line.old}, true
+		return pickKey{sideOld, line.old}, true
 	case '+':
-		return pickKey{"new", line.new}, true
+		return pickKey{sideNew, line.new}, true
 	}
 	return pickKey{}, false
 }

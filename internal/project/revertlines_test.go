@@ -148,8 +148,8 @@ func TestRevertLinesStagedDiverged(t *testing.T) {
 func TestRevertLinesStale(t *testing.T) {
 	repo, _ := revertRepo(t, strings.Replace(revertBase, "bravo\n", "bravo\nNEW1\n", 1))
 	cases := map[string]RevertLine{
-		"text moved":      {Side: "new", Line: 3, Text: "something else"},
-		"line not change": {Side: "new", Line: 1, Text: "alpha"},
+		"text moved":           {Side: "new", Line: 3, Text: "something else"},
+		"line is not a change": {Side: "new", Line: 1, Text: "alpha"},
 	}
 	for name, line := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -290,5 +290,37 @@ func TestRevertLinesStagedNewFile(t *testing.T) {
 	}
 	if got := git("show", ":fresh.txt"); got != "one" { // gitIn trims the trailing newline
 		t.Errorf("index content = %q", got)
+	}
+}
+
+// TestRevertLinesCleanTrackedFile is a screen drawn before the change was
+// committed: the file has nothing left to diff, and the line the panel names
+// still sits there with the same text. It must be refused, not deleted.
+func TestRevertLinesCleanTrackedFile(t *testing.T) {
+	repo, _ := revertRepo(t, revertBase)
+
+	_, err := New(nil).RevertLines(repo, "code.txt", []RevertLine{{Side: "new", Line: 2, Text: "bravo"}})
+	if !errors.Is(err, ErrLinesMoved) {
+		t.Fatalf("err = %v, want ErrLinesMoved", err)
+	}
+	if got := readFile(t, repo, "code.txt"); got != revertBase {
+		t.Errorf("committed content changed: %q", got)
+	}
+}
+
+// TestRevertLinesGitFailure keeps a git that cannot read the checkout from
+// passing for an empty diff.
+func TestRevertLinesGitFailure(t *testing.T) {
+	repo, _ := revertRepo(t, strings.Replace(revertBase, "bravo\n", "bravo\nNEW1\n", 1))
+	if err := os.WriteFile(filepath.Join(repo, ".git", "index"), []byte("not an index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := New(nil).RevertLines(repo, "code.txt", []RevertLine{{Side: "new", Line: 3, Text: "NEW1"}})
+	if err == nil {
+		t.Fatal("revert succeeded against an unreadable index")
+	}
+	if got := readFile(t, repo, "code.txt"); !strings.Contains(got, "NEW1") {
+		t.Errorf("file written despite the failure: %q", got)
 	}
 }
