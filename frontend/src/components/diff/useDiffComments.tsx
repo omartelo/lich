@@ -3,6 +3,7 @@ import type { ReactNode } from "react"
 import { createPortal } from "react-dom"
 import type { EditorView } from "@codemirror/view"
 import {
+  NO_SLOTS,
   threadSlots,
   type SlotElements,
   type ThreadSlot,
@@ -11,8 +12,6 @@ import {
 import { docLineAt, type DiffLine } from "@/lib/git/diff"
 import { COMPOSER_KEY, reviewSlots } from "@/lib/pulls/review-slots"
 import { type Composer, type DiffReview, type DiffSelection, ReviewSlot } from "./ReviewSlots"
-
-const NO_SLOTS: SlotElements = new Map()
 
 interface DiffCommentsInput {
   /** Per document line, what threads and the composer anchor against: the

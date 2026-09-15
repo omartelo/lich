@@ -1,20 +1,22 @@
 import { useLayoutEffect, useState } from "react"
 import type { RefObject } from "react"
 
-// useElementWidth is an element's content width, read before paint on mount and
-// followed after. The first read before paint is what lets a diff card that fits
-// side by side draw that way at once, instead of unified first and then again.
-export function useElementWidth(ref: RefObject<HTMLElement>): number {
-  const [width, setWidth] = useState(0)
+// useWidthAtLeast answers whether an element's content box is at least minPx
+// wide, or null before the first measure. A yes/no rather than the width: an
+// answer that did not change is a state update React drops, so dragging the dock
+// re-renders only the elements that crossed the line. Read before paint on mount,
+// so a diff card that fits side by side never draws unified first.
+export function useWidthAtLeast(ref: RefObject<HTMLElement>, minPx: number): boolean | null {
+  const [fits, setFits] = useState<boolean | null>(null)
   useLayoutEffect(() => {
     const element = ref.current
     if (!element) {
       return
     }
-    setWidth(Math.round(element.clientWidth))
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.round(entry.contentRect.width)))
+    setFits(element.clientWidth >= minPx)
+    const observer = new ResizeObserver(([entry]) => setFits(entry.contentRect.width >= minPx))
     observer.observe(element)
     return () => observer.disconnect()
-  }, [ref])
-  return width
+  }, [ref, minPx])
+  return fits
 }

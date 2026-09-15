@@ -7,7 +7,7 @@ import { CommentBatch } from "@/components/diff/CommentBatch"
 import { InjectMenu } from "@/components/diff/InjectMenu"
 import { type Composer, ReviewSlot } from "@/components/diff/ReviewSlots"
 import { FileTree } from "@/components/FileTree"
-import { threadSlots, type SlotElements } from "@/lib/codemirror-threads"
+import { NO_SLOTS, threadSlots, type SlotElements } from "@/lib/codemirror-threads"
 import { formatLineRef, parseDiff, type DiffFile } from "@/lib/git/diff"
 import { buildTree, treeFootnote, type TreeNode } from "@/lib/git/file-tree"
 import { updateFileBrowse, useFileBrowse } from "@/lib/file-browse"
@@ -343,8 +343,6 @@ interface PreviewBodyProps {
   onInject: (text: string) => void
   onComment: (lines: string, text: string) => void
 }
-
-const NO_SLOTS: SlotElements = new Map()
 
 // PreviewBody renders the file in a read-only CodeMirror view whose selection
 // drives the same inject context menu as the diff review — file lines map

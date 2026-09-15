@@ -126,16 +126,16 @@ describe("the hotkey bindings", () => {
 describe("the diff layout", () => {
   async function layoutAfter(change?: "unified" | "split"): Promise<string> {
     let seen = ""
+    let choose: (() => void) | undefined
     function Probe() {
       const { diffLayout, setDiffLayout } = useSettings()
       seen = diffLayout
-      if (change && diffLayout !== change) {
-        setDiffLayout(change)
-      }
+      choose = () => change && setDiffLayout(change)
       return null
     }
     const mounted = await mountBudget(createElement(SettingsProvider, null, createElement(Probe)))
     await mounted.act(() => {})
+    await mounted.act(() => choose?.())
     await mounted.unmount()
     return seen
   }

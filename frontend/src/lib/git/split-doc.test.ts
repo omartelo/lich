@@ -104,9 +104,9 @@ describe("buildSplitDoc", () => {
     expect(anchors[4]).toMatchObject({ kind: "add", oldLine: null, newLine: 4 })
   })
 
-  it("moves each gap to the row its separator landed on", () => {
+  it("moves each gap to the row its separator landed on, on the new side only", () => {
     const { right, left } = buildSplitDoc(unified())
     expect(right.gaps).toEqual([{ key: 8, docLine: 8, from: 8, to: 20, oldFrom: 7 }])
-    expect(left.gaps).toEqual(right.gaps)
+    expect(left.gaps).toEqual([])
   })
 })

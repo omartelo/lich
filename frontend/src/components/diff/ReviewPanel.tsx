@@ -9,7 +9,7 @@ import { onAppEvent } from "@/lib/app-events"
 import { readDiffSource, writeDiffSource, type DiffSource } from "@/lib/dock-prefs"
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/git/diff"
 import { revertStat } from "@/lib/git/diff-blocks"
-import { shownLayout } from "@/lib/git/diff-layout"
+import { SPLIT_MIN_WIDTH_PX } from "@/lib/git/diff-layout"
 import { splitPath } from "@/lib/git/lang-badge"
 import {
   lastTurnNotice,
@@ -25,7 +25,7 @@ import { isIdEvent, TURN_EVENT } from "@/lib/session/session-events"
 import { useSessionEverReported, useSessionStatus } from "@/lib/session/use-session-status"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { useInject } from "@/lib/use-inject"
-import { useElementWidth } from "@/lib/use-element-width"
+import { useWidthAtLeast } from "@/lib/use-width-at-least"
 import { errorText } from "@/lib/utils"
 import { useSettings } from "@/providers/settings"
 import { CommentBatch } from "./CommentBatch"
@@ -489,9 +489,8 @@ function PanelBody({
 // cards themselves measure against.
 function FileList({ children }: { children: ReactNode }) {
   const list = useRef<HTMLDivElement>(null)
-  const width = useElementWidth(list)
-  const { diffLayout } = useSettings()
-  const squeezed = diffLayout === "split" && width > 0 && shownLayout(diffLayout, width) !== "split"
+  const fits = useWidthAtLeast(list, SPLIT_MIN_WIDTH_PX)
+  const squeezed = useSettings().diffLayout === "split" && fits === false
   return (
     <div
       ref={list}

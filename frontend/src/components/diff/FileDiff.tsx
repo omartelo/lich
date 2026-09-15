@@ -12,10 +12,10 @@ import {
   type DiffGap,
   type Expansions,
 } from "@/lib/git/diff"
-import { shownLayout } from "@/lib/git/diff-layout"
+import { shownLayout, SPLIT_MIN_WIDTH_PX } from "@/lib/git/diff-layout"
 import { languageAbbr, splitPath } from "@/lib/git/lang-badge"
 import { isAnchored } from "@/lib/pulls/review-slots"
-import { useElementWidth } from "@/lib/use-element-width"
+import { useWidthAtLeast } from "@/lib/use-width-at-least"
 import { cn, errorText } from "@/lib/utils"
 import { useSettings } from "@/providers/settings"
 import { DiffBody, type DiffBodyProps } from "./DiffBody"
@@ -152,7 +152,7 @@ export function FileDiff({
   )
 
   const card = useRef<HTMLElement>(null)
-  const layout = shownLayout(useSettings().diffLayout, useElementWidth(card))
+  const layout = shownLayout(useSettings().diffLayout, useWidthAtLeast(card, SPLIT_MIN_WIDTH_PX))
   const Chevron = expanded ? ChevronDown : ChevronRight
   const badge = languageAbbr(file.newPath)
   const { dir, base } = splitPath(file.newPath)

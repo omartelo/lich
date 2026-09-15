@@ -8,8 +8,9 @@ export type DiffLayout = (typeof DIFF_LAYOUTS)[number]
 // width do not change with it either.
 export const SPLIT_MIN_WIDTH_PX = 560
 
-// shownLayout is what a card of this width draws for the chosen layout: a
-// split that would not fit falls back to unified until the card widens again.
-export function shownLayout(chosen: DiffLayout, widthPx: number): DiffLayout {
-  return chosen === "split" && widthPx >= SPLIT_MIN_WIDTH_PX ? "split" : "unified"
+// shownLayout is what a card draws for the chosen layout: a split that does not
+// fit falls back to unified until the card widens again. `fits` is null before
+// the card has been measured, which draws unified too.
+export function shownLayout(chosen: DiffLayout, fits: boolean | null): DiffLayout {
+  return chosen === "split" && fits === true ? "split" : "unified"
 }

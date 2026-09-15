@@ -8,7 +8,8 @@ import type { DiffGap, DiffLine, FileDoc } from "./diff"
 // editors that never wrap stay level without measuring anything.
 
 export interface SplitDoc {
-  /** HEAD's side: deletions, unchanged lines, separators and fillers. */
+  /** HEAD's side: deletions, unchanged lines, separators and fillers. Its gaps
+   * are empty: the expanders live on the new side alone. */
   left: FileDoc
   /** The new side: additions, unchanged lines, separators and fillers. */
   right: FileDoc
@@ -57,7 +58,7 @@ export function buildSplitDoc(doc: FileDoc): SplitDoc {
 
   const gaps = doc.gaps.map((gap): DiffGap => ({ ...gap, docLine: rowOf.get(gap.docLine) ?? 0 }))
   return {
-    left: sideDoc(left, gaps),
+    left: sideDoc(left, []),
     right: sideDoc(right, gaps),
     anchors: left.map((line, row) => ({
       kind: right[row].kind === "filler" ? line.kind : right[row].kind,
