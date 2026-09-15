@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Right-click in a terminal app that uses the mouse shows only that app's
+  menu.** File managers and other mouse-driven terminal apps got the browser's
+  Undo/Copy/Paste menu drawn on top of their own. A plain shell prompt still
+  offers Copy and Paste on right-click.
+
 - **Cmd shortcuts work in the macOS window.** Cmd+C, Cmd+V, Cmd+X, Cmd+A,
   Cmd+Z and Cmd+Q did nothing. Cmd+V on a screenshot also attaches it in
   Claude Code, the way Ctrl+V does.

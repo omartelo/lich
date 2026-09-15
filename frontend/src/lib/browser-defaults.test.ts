@@ -44,15 +44,26 @@ describe("isBrowserChord", () => {
 })
 
 describe("isAppContextMenu", () => {
-  const target = (closestHit: boolean) =>
-    ({ closest: () => (closestHit ? {} : null) }) as unknown as EventTarget
+  // Answers closest() the way the DOM would for the two selectors xterm's markup
+  // can meet: .xterm, and .xterm without the class it sets while an app reads the mouse.
+  const target = (inTerminal: boolean, mouseTracking = false) =>
+    ({
+      closest: (selector: string) => {
+        const excluded = mouseTracking && selector.includes(":not(.enable-mouse-events)")
+        return inTerminal && !excluded ? {} : null
+      },
+    }) as unknown as EventTarget
 
   it("claims the app's own chrome", () => {
     expect(isAppContextMenu(target(false))).toBe(true)
   })
 
-  it("leaves a terminal's menu alone — that is where Copy and Paste live", () => {
+  it("leaves a plain terminal's menu alone — that is where Copy and Paste live", () => {
     expect(isAppContextMenu(target(true))).toBe(false)
+  })
+
+  it("claims a terminal whose app reads the mouse, so only the app's menu shows", () => {
+    expect(isAppContextMenu(target(true, true))).toBe(true)
   })
 
   it("claims a null target rather than letting the browser menu through", () => {
@@ -96,8 +107,8 @@ describe("installBrowserDefaults", () => {
     ).not.toHaveBeenCalled()
   })
 
-  // The terminal keeps Chromium's menu — that is where its Copy and Paste live.
-  it("cancels the context menu on the app's chrome only", () => {
+  // A plain terminal keeps Chromium's menu — that is where its Copy and Paste live.
+  it("cancels the context menu everywhere but a plain terminal", () => {
     const { fire } = install()
 
     expect(fire("contextmenu", { target: { closest: () => null } })).toHaveBeenCalled()
