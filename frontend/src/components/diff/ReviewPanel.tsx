@@ -1,11 +1,16 @@
+import { Columns2 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import type { ReactNode } from "react"
 import { toast } from "sonner"
 import { Notice } from "@/components/common/Notice"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import type { LastSaid, LastTurn } from "@/lib/api-types"
+import type { LastSaid, LastTurn, RevertLine } from "@/lib/api-types"
 import { onAppEvent } from "@/lib/app-events"
 import { readDiffSource, writeDiffSource, type DiffSource } from "@/lib/dock-prefs"
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/git/diff"
+import { revertStat } from "@/lib/git/diff-blocks"
+import { shownLayout } from "@/lib/git/diff-layout"
+import { splitPath } from "@/lib/git/lang-badge"
 import {
   lastTurnNotice,
   saidNote,
@@ -20,7 +25,9 @@ import { isIdEvent, TURN_EVENT } from "@/lib/session/session-events"
 import { useSessionEverReported, useSessionStatus } from "@/lib/session/use-session-status"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { useInject } from "@/lib/use-inject"
+import { useElementWidth } from "@/lib/use-element-width"
 import { errorText } from "@/lib/utils"
+import { useSettings } from "@/providers/settings"
 import { CommentBatch } from "./CommentBatch"
 import type { DiffBulk } from "./diff-bulk"
 import { DiscardDialog } from "./DiscardDialog"
@@ -33,6 +40,10 @@ import { FileDiff } from "./FileDiff"
 // With no read of its own the panel held that stale diff for as long as the
 // counts stood still — not one tick, but indefinitely.
 const DIFF_POLL_MS = 2_000
+
+// How long a line revert's Undo stays on offer. Longer than a plain toast: the
+// reader has to look at the diff that just changed before deciding.
+const REVERT_UNDO_MS = 10_000
 
 // Said in full on the option itself, because the card cannot: the pair of
 // snapshots brackets wall-clock time, so every hand that touched the checkout
@@ -216,6 +227,32 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
     void refresh()
   }
 
+  // No confirmation, unlike Discard: a revert is a few lines, and the toast
+  // carries the undo for as long as it stays on screen.
+  const revertLines = async (file: DiffFile, lines: RevertLine[]) => {
+    const rel = file.newPath
+    const name = splitPath(rel).base
+    try {
+      const undo = await ProjectService.RevertLines(path, rel, lines)
+      const { added, deleted } = revertStat(lines)
+      toast(`Reverted +${added} -${deleted} in ${name}`, {
+        duration: REVERT_UNDO_MS,
+        action: {
+          label: "Undo",
+          onClick: () =>
+            void ProjectService.RestoreLines(path, rel, undo)
+              .catch((err: unknown) =>
+                toast.error(`Couldn't undo the revert in ${name}`, { description: errorText(err) }),
+              )
+              .finally(() => void refresh()),
+        },
+      })
+    } catch (err: unknown) {
+      toast.error(`Couldn't revert lines in ${name}`, { description: errorText(err) })
+    }
+    void refresh()
+  }
+
   return (
     <div className="flex h-full flex-col">
       {(switchable || unavailable !== "") && (
@@ -239,6 +276,9 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
           // working tree's own view. Offered on a finished turn it would read as
           // an undo for that turn, which is not what it does.
           onDiscard={source === "worktree" ? setPendingDiscard : undefined}
+          onRevertLines={
+            source === "worktree" ? (file, lines) => void revertLines(file, lines) : undefined
+          }
           onExpand={expandable ? expand : undefined}
           bulk={bulk}
         />
@@ -361,6 +401,8 @@ interface PanelBodyProps {
   onSessionComment: (path: string, lines: string, text: string) => void
   /** Absent when discarding does not belong to this source. */
   onDiscard?: (file: DiffFile) => void
+  /** Absent when reverting lines does not belong to this source, as Discard. */
+  onRevertLines?: (file: DiffFile, lines: RevertLine[]) => void
   /** Read a file's unchanged lines at the revision this source shows. */
   onExpand?: (path: string, from: number, to: number) => Promise<string[] | null>
   bulk: DiffBulk
@@ -374,6 +416,7 @@ function PanelBody({
   onInject,
   onSessionComment,
   onDiscard,
+  onRevertLines,
   onExpand,
   bulk,
 }: PanelBodyProps) {
@@ -423,7 +466,7 @@ function PanelBody({
     return <Notice>No uncommitted changes</Notice>
   }
   return (
-    <div className="flex flex-col p-2 [&>section:not(:first-child)]:mt-2.5 [&>section:not(:first-child)]:border-t [&>section:not(:first-child)]:border-border [&>section:not(:first-child)]:pt-2.5">
+    <FileList>
       {files.map((file) => (
         <FileDiff
           key={file.newPath}
@@ -431,10 +474,36 @@ function PanelBody({
           onInject={onInject}
           onSessionComment={onSessionComment}
           onDiscard={onDiscard && (() => onDiscard(file))}
+          onRevertLines={onRevertLines && ((lines) => onRevertLines(file, lines))}
           onExpand={onExpand}
           bulk={bulk}
         />
       ))}
+    </FileList>
+  )
+}
+
+// FileList lays the file cards out, and says so when a side-by-side choice is
+// being drawn unified because the dock is too narrow; otherwise the setting
+// reads as broken. Its content width is each card's width, which is what the
+// cards themselves measure against.
+function FileList({ children }: { children: ReactNode }) {
+  const list = useRef<HTMLDivElement>(null)
+  const width = useElementWidth(list)
+  const { diffLayout } = useSettings()
+  const squeezed = diffLayout === "split" && width > 0 && shownLayout(diffLayout, width) !== "split"
+  return (
+    <div
+      ref={list}
+      className="flex flex-col p-2 [&>section:not(:first-of-type)]:mt-2.5 [&>section:not(:first-of-type)]:border-t [&>section:not(:first-of-type)]:border-border [&>section:not(:first-of-type)]:pt-2.5"
+    >
+      {squeezed && (
+        <p className="flex items-center gap-1.5 px-1 pb-1.5 text-[0.6875rem] text-muted-foreground">
+          <Columns2 className="size-3.5" />
+          Side-by-side needs a wider panel
+        </p>
+      )}
+      {children}
     </div>
   )
 }

@@ -35,6 +35,8 @@ import type {
   PullRequestSummary,
   QuotaPlan,
   RecentProject,
+  RevertLine,
+  RevertResult,
   ReviewCandidate,
   ReviewEvent,
   StoredProject,
@@ -231,6 +233,12 @@ export const ProjectService = {
   FileLines: (path: string, rel: string, ref: string, from: number, to: number) =>
     call<string[] | null>("project.FileLines", [path, rel, ref, from, to]),
   DiscardFile: (path: string, rel: string) => call<null>("project.DiscardFile", [path, rel]),
+  /** Put these changed lines of rel back to HEAD (in the index too when it
+   * holds them) and hand back what RestoreLines needs to undo it. */
+  RevertLines: (path: string, rel: string, lines: RevertLine[]) =>
+    call<RevertResult>("project.RevertLines", [path, rel, lines]),
+  RestoreLines: (path: string, rel: string, undo: RevertResult) =>
+    call<null>("project.RestoreLines", [path, rel, undo]),
   ListBranches: (path: string) => call<Branches>("project.ListBranches", [path]),
   /** The setup script a new worktree of this project will run (or the
    * suggestion to offer when the repo ships none), and the run command its

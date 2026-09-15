@@ -231,6 +231,13 @@ describe("gutterNumber", () => {
     expect(gutterNumber(meta[5])).toBe("") // separator
   })
 
+  it("pins every row to one side for a side-by-side column", () => {
+    const context = { kind: "context" as const, text: "x", oldLine: 7, newLine: 9 }
+    expect(gutterNumber(context, "old")).toBe("7")
+    expect(gutterNumber(context, "new")).toBe("9")
+    expect(gutterNumber({ kind: "filler", text: "", oldLine: null, newLine: null }, "old")).toBe("")
+  })
+
   // parseDiff always numbers the side it keeps, but this also draws hunks
   // assembled elsewhere (thread-hunk.ts, off a GitHub diffHunk), and a gutter
   // reading the string "null" is worse than an empty one.

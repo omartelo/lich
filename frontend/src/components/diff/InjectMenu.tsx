@@ -1,8 +1,9 @@
-import type { RefObject } from "react"
+import type { ReactNode, RefObject } from "react"
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 
@@ -22,6 +23,14 @@ interface InjectMenuProps {
   /** Start a comment on the pull request itself. Absent wherever there is no
    * pull request behind the diff — the dock's working diff. */
   onReviewComment?: () => void
+  /** Revert the changed lines under the selection. Absent wherever reverting is
+   * not an edit this diff can make: a finished turn, a pull request. */
+  onRevert?: () => void
+  /** How many changed lines the selection covers; zero disables the revert. */
+  revertCount?: number
+  /** Laid inside the trigger, for a diff whose editors mount somewhere other
+   * than the trigger itself, like the two columns of a side-by-side one. */
+  children?: ReactNode
 }
 
 // The right-click menu over a code view — a file's diff, or the read-only
@@ -45,10 +54,15 @@ export function InjectMenu({
   onInject,
   onSessionComment,
   onReviewComment,
+  onRevert,
+  revertCount = 0,
+  children,
 }: InjectMenuProps) {
   return (
     <ContextMenu onOpenChange={onOpenChange}>
-      <ContextMenuTrigger render={<div className="isolate py-1" ref={containerRef} />} />
+      <ContextMenuTrigger render={<div className="isolate py-1" ref={containerRef} />}>
+        {children}
+      </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onClick={() => onInject(`@${path} `)}>Inject file</ContextMenuItem>
         <ContextMenuItem
@@ -68,6 +82,16 @@ export function InjectMenu({
               ? "Comment on the pull request…"
               : `Comment on the pull request ${lineRef}…`}
           </ContextMenuItem>
+        )}
+        {onRevert && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem variant="destructive" disabled={revertCount === 0} onClick={onRevert}>
+              {revertCount === 0
+                ? "Revert selected lines"
+                : `Revert ${revertCount} changed line${revertCount === 1 ? "" : "s"}`}
+            </ContextMenuItem>
+          </>
         )}
       </ContextMenuContent>
     </ContextMenu>
