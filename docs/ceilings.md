@@ -237,7 +237,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   a privacy-protected folder like `~/Documents` until the user answers the prompt, so a Dock launch resolved
   nothing. Two edges follow. A shell that never prints the end marker (a hung rc, a prompt waiting on input, an
   unanswered privacy prompt) is bounded only by the 5s ceiling, and a dump cut there is discarded whole rather
-  than merged half-read. And the reader goroutine outlives the call for whatever still holds the pty: the fd,
+  than merged half-read. A shell still alive after printing it (a slow `.zlogout`, an rc that `exec`s into
+  something holding the pty) also waits out the 5s, dump kept: the read ends on the marker *and* the shell's
+  exit, because the marker alone called a shell milliseconds from exiting parked and refused the next
+  resolution. And the reader goroutine outlives the call for whatever still holds the pty: the fd,
   the goroutine and the zombie child persist until that holder exits on its own or lich itself does, one leak
   per resolution that hits this edge, not a recurring one.
   And **Windows gets none of this**: `SHELL` is normally unset there, so `ResolveShellEnv` returns before
