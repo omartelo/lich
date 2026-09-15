@@ -13,9 +13,10 @@ license = "AGPL-3.0-only"
 # (kurogane#12), the NSApplication kept to the browser process (kurogane#14),
 # a relaunch on the profile raising the window it already has (451bd7c), the
 # Linux sandbox left on (bb27484) and the main window's geometry handed to the
-# delegate (kurogane#19); move back to 0x48piraj/kurogane once
+# delegate (kurogane#19) and the macOS application and Edit menus (286ae16);
+# move back to 0x48piraj/kurogane once
 # they land (build/linux/shell/README.md).
-kurogane = { git = "https://github.com/omartelo/kurogane", rev = "893debec328eccd69832ae7d0f801c7d0e127975" }
+kurogane = { git = "https://github.com/omartelo/kurogane", rev = "286ae1607f45cf4505e5bd029ccca0016db8febf" }
 
 # The CEF handler types a delegate returns (main.rs). Pinned to the revision
 # kurogane's own workspace pins: two cef crates in one binary are two different

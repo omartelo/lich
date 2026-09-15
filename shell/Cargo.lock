@@ -695,7 +695,7 @@ dependencies = [
 [[package]]
 name = "kurogane"
 version = "0.0.4"
-source = "git+https://github.com/omartelo/kurogane?rev=893debec328eccd69832ae7d0f801c7d0e127975#893debec328eccd69832ae7d0f801c7d0e127975"
+source = "git+https://github.com/omartelo/kurogane?rev=286ae1607f45cf4505e5bd029ccca0016db8febf#286ae1607f45cf4505e5bd029ccca0016db8febf"
 dependencies = [
  "cef",
  "ctrlc",
@@ -703,6 +703,7 @@ dependencies = [
  "mime_guess",
  "objc2",
  "objc2-app-kit",
+ "objc2-foundation",
  "percent-encoding",
  "serde",
  "serde_json",
@@ -712,7 +713,7 @@ dependencies = [
 [[package]]
 name = "kurogane-layout"
 version = "0.0.4"
-source = "git+https://github.com/omartelo/kurogane?rev=893debec328eccd69832ae7d0f801c7d0e127975#893debec328eccd69832ae7d0f801c7d0e127975"
+source = "git+https://github.com/omartelo/kurogane?rev=286ae1607f45cf4505e5bd029ccca0016db8febf#286ae1607f45cf4505e5bd029ccca0016db8febf"
 dependencies = [
  "dirs",
  "serde",

@@ -10,7 +10,7 @@ import { System, Terminal as Service } from "@/lib/rpc"
 import { errorText } from "@/lib/utils"
 import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/terminal/term-transport"
-import { chordSequence, isSearchOpenChord } from "@/lib/terminal/term-keys"
+import { chordSequence, isSearchOpenChord, pastedImageSequence } from "@/lib/terminal/term-keys"
 import { takePaste } from "@/lib/terminal/paste-queue"
 import { takeFork } from "@/lib/terminal/fork-queue"
 import { takeSetup } from "@/lib/terminal/setup-queue"
@@ -389,6 +389,19 @@ export function TerminalView({
       return false
     })
 
+    // Capture phase, ahead of xterm's own listener on its textarea, which would
+    // drop a paste with no text in it.
+    const onPaste = (event: ClipboardEvent) => {
+      const seq = pastedImageSequence(event.clipboardData, isWindows)
+      if (seq === null) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      writeInput(seq)
+    }
+    host.addEventListener("paste", onPaste, true)
+
     const dataInput = term.onData(writeInput)
     const resizeInput = term.onResize(({ cols, rows }) => {
       if (visibleRef.current) {
@@ -425,6 +438,7 @@ export function TerminalView({
       search,
       dispose() {
         window.clearTimeout(copyTimer)
+        host.removeEventListener("paste", onPaste, true)
         dataInput.dispose()
         resizeInput.dispose()
         selection.dispose()
