@@ -39,6 +39,7 @@ hits it.
 | How does it resume a conversation by id? | `--conversation <id>` (`--help`) |
 | How does it skip permission prompts? | `--dangerously-skip-permissions` (`--help`) |
 | How is it told which model to run? | `--model <name>` (`--help`) |
+| How is it told a reasoning effort? | `--effort <level>` (`--help`) |
 | Can it append to its system prompt at spawn? | No — its whole flag list has nothing for it |
 | Can it be handed an MCP server on its command line? | No — MCP lives behind `agy mcp add` |
 | Where are its credentials, config and conversations? | `~/.gemini` (+ `~/.gemini/antigravity-cli/`), found by running it against a throwaway `HOME` |
@@ -60,7 +61,7 @@ tool.
 | File | What it holds | What a new provider adds |
 |---|---|---|
 | `internal/providers/providers.go` | the registry | an id constant, a `Registry` entry (id, display name, binary names, install-docs URL), a line in `AcceptsMCPServer` if it takes an MCP server on its command line, and one in `SupportsFork` — that one is a table every provider must appear in, so a new id fails its test until it is answered |
-| `internal/terminal/command.go` | what a spawn runs | entries in `skipPermissionFlags`, `modelFlags`, `briefingFlags` and `resumeArgs` (with a fork arm there if the CLI branches a conversation) — each one optional, and absent means "no flag rather than somebody else's" — plus a `subcommandArgs` arm if the session is a subcommand rather than the bare binary |
+| `internal/terminal/command.go` | what a spawn runs | entries in `skipPermissionFlags`, `modelFlags`, `effortFlags`, `briefingFlags` and `resumeArgs` (with a fork arm there if the CLI branches a conversation) — each one optional, and absent means "no flag rather than somebody else's" — plus a `subcommandArgs` arm if the session is a subcommand rather than the bare binary |
 | `internal/terminal/resume.go` | whether a resume can be offered | a `ResumeAvailable` case answering from what that provider left on disk |
 | `internal/terminal/transcript.go`, `sessiondb.go` | where that state lives | the path resolver the case above calls |
 | `internal/terminal/usage.go` | the footer's session readout | a `usageSourceFor` arm, plus a `sessionCost` arm reading whatever that provider records about spend — and a `contextUsageFor` arm only if it also records the model's context window. Which rung that lands the provider on is a row in `docs/ceilings.md`, in the same PR |

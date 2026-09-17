@@ -153,9 +153,10 @@ func ticketFrom(term *wiredTerminal) string {
 
 // spawnStore is the workspace `lich open` writes into, over the real dispatcher.
 type spawnStore struct {
-	mu    sync.Mutex
-	rows  int
-	model string
+	mu     sync.Mutex
+	rows   int
+	model  string
+	effort string
 	// renamed is the session id and label the last rename wrote.
 	renamed [2]string
 	// confines is what the sandbox rung answers a caller with nobody to ask.
@@ -180,6 +181,13 @@ func (s *spawnStore) SetSessionModel(_, model string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.model = model
+	return nil
+}
+
+func (s *spawnStore) SetSessionEffort(_, effort string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.effort = effort
 	return nil
 }
 
@@ -295,14 +303,14 @@ func wiredSpawn(t *testing.T, git *spawnGit) (func(string) string, *spawnStore, 
 	}, rows, term
 }
 
-// TestOpenOverTheRealDispatcher proves the six arguments `lich open` posts land
+// TestOpenOverTheRealDispatcher proves the seven arguments `lich open` posts land
 // on spawn.Open in the order it declares them — a positional mismatch here would
 // otherwise open a session in a project named after a provider.
 func TestOpenOverTheRealDispatcher(t *testing.T) {
 	env, rows, term := wiredSpawn(t, &spawnGit{})
 
 	var stdout, stderr bytes.Buffer
-	args := []string{"open", "--kind", "codex", "--model", "gpt-5.2"}
+	args := []string{"open", "--kind", "codex", "--model", "gpt-5.2", "--effort", "high"}
 	if code := Run(args, "test", env, &stdout, &stderr); code != 0 {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
 	}
@@ -317,6 +325,9 @@ func TestOpenOverTheRealDispatcher(t *testing.T) {
 	}
 	if rows.model != "gpt-5.2" {
 		t.Errorf("row model = %q, want the one the flag named", rows.model)
+	}
+	if rows.effort != "high" {
+		t.Errorf("row effort = %q, want the one the flag named", rows.effort)
 	}
 }
 

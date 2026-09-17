@@ -671,3 +671,23 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   without systemd logs one warning per burst of work and sleeps, and a desktop that ignores logind idle
   inhibitors sleeps silently. The hold was measured on Linux only; on Windows and macOS CI proves the request
   is registered (`powercfg /requests`, `pmset -g assertions`), not that the machine stays up.
+- **A reasoning effort reaches five providers, and Cursor only through its model name**
+  (`internal/terminal/command.go`, `effortFlags`): `lich open --effort` and `open_session`'s `effort` are refused
+  for opencode, whose `--variant` lives on `run` only (1.18.31), and for Crush, which has no such option
+  (0.88.0), because the TUI lich spawns would drop the level and hand back a session on its default. Cursor
+  is refused too: the effort is part of its model id (`claude-opus-4-8-high`), and the
+  `model[effort=high]` override its own `--help` advertises spawns into "Cannot use this model" (2026.08.11),
+  so a caller who wants it passes that id as `--model`. The level is never validated, so a misspelled one
+  is each provider's to handle: Claude Code warns and runs at its default, and Codex, Antigravity, oh-my-pi and
+  Kiro start without a word (measured on the versions above).
+- **A model or effort is a birth value, and two providers forget it on resume** (`internal/terminal/command.go`,
+  `modelArgs`, `effortArgs`): lich passes neither when it resumes or forks a conversation, because a `/model` or
+  `/effort` typed inside the session is the user's decision and re-sending the birth value would undo it. What a
+  resume then runs on is the provider's call, measured in a real PTY after an in-session change. The model comes
+  back from the conversation on Claude Code 2.1.274, Codex 0.154.0, oh-my-pi 18.0.10, Kiro 2.21.0, Cursor
+  2026.09.15 and opencode 1.18.31, and the effort on Codex and oh-my-pi. **Claude Code's effort and all of
+  Antigravity 1.1.25 do not**: both resume on the saved default, which their own `/effort` and `/model` write
+  (`settings.json`), so a change made inside the session survives while a level or model lich set at birth
+  falls back to that default. Kiro's effort is unmeasured: no model on the measuring account accepts one. Cursor
+  also writes whatever model a spawn or resume runs on into `cli-config.json` as the default for every later
+  `cursor-agent`, so `lich open --kind cursor --model` changes the user's Cursor default too.

@@ -107,6 +107,8 @@ reads what each CLI writes down and no two of them write down the same things.
 | Review tab's **Last turn**, with the agent's recap | yes | yes | yes | yes | yes | no | no | yes |
 | Search the conversation from the palette | yes | yes | yes | yes | yes | yes | no | yes |
 | Fork a conversation into a new worktree | yes | yes | no | yes | no | no | no | no |
+| Open a session at a chosen reasoning effort | yes | yes | yes | no | yes | no | in the model name | yes |
+| A resumed session keeps the model and effort it was on | model only | yes | no | model | yes | no | model | model |
 
 Crush and Cursor CLI report neither the start nor the end of a turn, and that is
 where four of those rows go at once: nothing opens a window for the card's

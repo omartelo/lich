@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Open a session at a chosen reasoning effort.** `lich open --effort high`,
+  and the `effort` argument of the `open_session` tool, start the new session
+  at that level, spelled the way its provider spells it. Claude Code, Codex,
+  Antigravity, oh-my-pi and Kiro CLI take it; on Cursor CLI the effort is part
+  of the model name, and opencode and Crush have no way to be told one at start.
+
+### Fixed
+
+- **Resuming a session no longer undoes a model you picked inside it.** A
+  session opened with `lich open --model` was put back on that model every time
+  it was resumed, even after `/model` switched it. Resumes and forks now carry
+  on with whatever the conversation was using; a session started fresh still
+  gets the model it was opened with.
+
 ## [0.52.0] - 2026-09-17
 
 ### Added

@@ -125,14 +125,14 @@ func (s *Service) spawnSession(
 		mcpBin = lichBin()
 	}
 	skipPermissions := s.store.SkipPermissions(kind, projectID, cwd)
-	// The model is read from the row rather than passed in, so it survives every
-	// spawn this session ever gets: the window's first view, a respawn after a
-	// reload, and the resume of a parked worktree session all arrive here.
+	// The model and effort are read from the row rather than passed in, so every
+	// spawn that starts a conversation of its own gets them: the window's first
+	// view and a restart. A resume leaves them to the provider (modelArgs).
 	spec := ptySpec{
 		bin: resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
 		args: providerArgs(
-			kind, name, resume, s.store.SessionModel(id), mcpBin, kiroPluginAgent(kind),
-			fork, skipPermissions,
+			kind, name, resume, s.store.SessionModel(id), s.store.SessionEffort(id), mcpBin,
+			kiroPluginAgent(kind), fork, skipPermissions,
 		),
 		dir:  cwd,
 		env:  s.sessionEnv(id, projectID, cwd),

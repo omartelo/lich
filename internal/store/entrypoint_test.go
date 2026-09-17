@@ -88,6 +88,7 @@ func TestReopenWorktreeSessionCarriesSpawnOverrides(t *testing.T) {
 
 	_ = svc.AddSession("p1", "wt1", "worker", "claude", "/wt/foo", 3, "")
 	_ = svc.SetSessionModel("wt1", "opus")
+	_ = svc.SetSessionEffort("wt1", "high")
 	_ = svc.CloseSession("p1", "wt1", "base")
 
 	_ = svc.AddSession("p1", "sh1", "Terminal 1", "shell", "/wt/bar", 4, "")
@@ -99,6 +100,9 @@ func TestReopenWorktreeSessionCarriesSpawnOverrides(t *testing.T) {
 	}
 	if got := svc.SessionModel("wt2"); got != "opus" {
 		t.Errorf("resumed model = %q, want opus", got)
+	}
+	if got := svc.SessionEffort("wt2"); got != "high" {
+		t.Errorf("resumed effort = %q, want high", got)
 	}
 
 	restored, err := svc.ReopenWorktreeSession("p1", "/wt/bar", "sh2")
