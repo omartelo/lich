@@ -256,6 +256,45 @@ func TestSessionModelRoundTrips(t *testing.T) {
 	}
 }
 
+// TestSessionEffortRoundTrips pins the effort the same way: what was written is
+// what a spawn reads back, and no effort or no row reads "".
+func TestSessionEffortRoundTrips(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "claude", "", 2, "")
+	_ = svc.AddSession("p1", "s2", "Session 2", "claude", "", 3, "")
+
+	if err := svc.SetSessionEffort("s1", "xhigh"); err != nil {
+		t.Fatalf("SetSessionEffort: %v", err)
+	}
+	if got := svc.SessionEffort("s1"); got != "xhigh" {
+		t.Errorf("SessionEffort(s1) = %q, want xhigh", got)
+	}
+	if got := svc.SessionEffort("s2"); got != "" {
+		t.Errorf("SessionEffort(s2) = %q, want empty", got)
+	}
+	if got := svc.SessionEffort("ghost"); got != "" {
+		t.Errorf("SessionEffort(ghost) = %q, want empty", got)
+	}
+	if err := svc.SetSessionEffort("ghost", "high"); err != nil {
+		t.Errorf("SetSessionEffort unknown = %v, want nil", err)
+	}
+}
+
+// A closed database is the one failure both halves can meet: the write reports
+// it, and the read falls back to the provider's default.
+func TestSessionEffortOnAClosedStore(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.Close()
+
+	if err := svc.SetSessionEffort("s1", "high"); err == nil {
+		t.Error("SetSessionEffort on a closed store = nil, want an error")
+	}
+	if got := svc.SessionEffort("s1"); got != "" {
+		t.Errorf("SessionEffort on a closed store = %q, want empty", got)
+	}
+}
+
 // A model reported for a session whose row is gone matches nothing and is not an
 // error, exactly as the provider session id is.
 func TestSetSessionModelUnknownSessionNoop(t *testing.T) {

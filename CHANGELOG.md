@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Open a session at a chosen reasoning effort.** `lich open --effort high`,
+  and the `effort` argument of the `open_session` tool, start the new session
+  at that level, spelled the way its provider spells it, and every later
+  resume of it keeps the level. Claude Code, Codex, Antigravity, oh-my-pi and
+  Kiro CLI take it; on Cursor CLI the effort is part of the model name, and
+  opencode and Crush have no way to be told one at start.
+
 ## [0.52.0] - 2026-09-17
 
 ### Added

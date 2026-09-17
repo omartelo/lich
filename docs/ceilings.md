@@ -671,3 +671,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   without systemd logs one warning per burst of work and sleeps, and a desktop that ignores logind idle
   inhibitors sleeps silently. The hold was measured on Linux only; on Windows and macOS CI proves the request
   is registered (`powercfg /requests`, `pmset -g assertions`), not that the machine stays up.
+- **A reasoning effort reaches five providers, and Cursor only through its model name**
+  (`internal/terminal/command.go`, `effortFlags`): `lich open --effort` and `open_session`'s `effort` are refused
+  for opencode, whose `--variant` lives on `run` only (1.18.31), and for Crush, which has no such option
+  (0.88.0), because the TUI lich spawns would drop the level and hand back a session on its default. Cursor
+  is refused too: the effort is part of its model id (`claude-opus-4-8-high`), and the
+  `model[effort=high]` override its own `--help` advertises spawns into "Cannot use this model" (2026.08.11),
+  so a caller who wants it passes that id as `--model`. The level is never validated, so a misspelled one
+  is each provider's to handle: Claude Code warns and runs at its default, and Codex, Antigravity, oh-my-pi and
+  Kiro start without a word (measured on the versions above).

@@ -221,6 +221,7 @@ type Store interface {
 	SetProviderSession(sessionID, providerSessionID string) error
 	ProviderSession(sessionID string) (string, error)
 	SessionModel(sessionID string) string
+	SessionEffort(sessionID string) string
 	SessionEntrypoint(sessionID string) string
 	SessionSandbox(sessionID string) string
 	SetSessionSandbox(sessionID, sandbox string) error

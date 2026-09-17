@@ -26,7 +26,7 @@ func TestOpenAdoptsADirectoryNotOnScreen(t *testing.T) {
 	dir := t.TempDir()
 	svc, sessions, _, term, events := newService(t)
 
-	opened, err := svc.Open("s1", dir, "", "", "", "")
+	opened, err := svc.Open("s1", dir, "", "", "", "", "")
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestOpenReopensAProjectFromTheHistory(t *testing.T) {
 		Sessions: []store.Session{{ID: "parked", Label: "Session 6", Kind: "claude"}},
 	}}
 
-	opened, err := svc.Open("s1", dir, "", "", "", "")
+	opened, err := svc.Open("s1", dir, "", "", "", "", "")
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestOpenFindsAnOpenProjectByPath(t *testing.T) {
 	svc, sessions, _, _, events := newService(t)
 	sessions.projects[1].Path = dir
 
-	opened, err := svc.Open("s1", dir+string(filepath.Separator), "", "", "", "")
+	opened, err := svc.Open("s1", dir+string(filepath.Separator), "", "", "", "", "")
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestOpenRefusesAPathItCannotTrust(t *testing.T) {
 		{"missing", filepath.Join(t.TempDir(), "nope"), "no directory at"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := svc.Open("s1", tc.path, "", "", "", ""); err == nil ||
+			if _, err := svc.Open("s1", tc.path, "", "", "", "", ""); err == nil ||
 				!strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("Open(%q) = %v, want it to name %q", tc.path, err, tc.want)
 			}

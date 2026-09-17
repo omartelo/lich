@@ -14,6 +14,18 @@ import (
 // added later is an ALTER here, not a line there.
 var migrations = []func(*sql.Tx) error{
 	legacyMigrations,
+	addSessionEffort,
+}
+
+// addSessionEffort is version 2: the reasoning effort a session was opened at,
+// beside its model (SetSessionEffort). A workspace rewound to version 0 already
+// has the column, so the duplicate is tolerated as legacyMigrations tolerates it.
+func addSessionEffort(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE sessions ADD COLUMN effort TEXT NOT NULL DEFAULT ''`)
+	if err != nil && !migrationApplied(err) {
+		return err
+	}
+	return nil
 }
 
 // NewerSchemaError is an open refused because the database was written by a

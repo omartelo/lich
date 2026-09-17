@@ -110,7 +110,7 @@ func TestKiroSpawnsTheChatSubcommandBeforeEveryFlag(t *testing.T) {
 		name            string
 		agent           string
 		resume          string
-		model           string
+		model, effort   string
 		skipPermissions bool
 		want            []string
 	}{
@@ -121,6 +121,7 @@ func TestKiroSpawnsTheChatSubcommandBeforeEveryFlag(t *testing.T) {
 		// The two that only `chat` accepts, each on its own: either one is a
 		// dead spawn when the subcommand goes missing.
 		{name: "on a chosen model", model: "auto", want: []string{"chat", "--model", "auto"}},
+		{name: "at a chosen effort", effort: "high", want: []string{"chat", "--effort", "high"}},
 		{name: "with permissions skipped", skipPermissions: true,
 			want: []string{"chat", "--trust-all-tools"}},
 		{name: "everything at once", agent: "lich", resume: "s1", model: "auto", skipPermissions: true,
@@ -128,7 +129,7 @@ func TestKiroSpawnsTheChatSubcommandBeforeEveryFlag(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got := providerArgs(
-			providers.Kiro, "", tt.resume, tt.model, "/usr/bin/lich", tt.agent,
+			providers.Kiro, "", tt.resume, tt.model, tt.effort, "/usr/bin/lich", tt.agent,
 			false, tt.skipPermissions,
 		)
 		if !slices.Equal(got, tt.want) {

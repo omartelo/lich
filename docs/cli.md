@@ -293,7 +293,7 @@ lich: 2 requests are open against this session, and an answer that names no tick
 Outside a session, or with nothing open, it is an error rather than a guess, and
 the ticket is still the way to name a specific errand.
 
-### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--prompt <task>]`
+### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--prompt <task>]`
 
 Opens a new session, starts it, and prints the two names it is addressed by:
 
@@ -361,6 +361,14 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   for it would silently give you a session on the default. The model is
   recorded on the session, so every later spawn of it — a page reload, a
   respawn, the resume of a parked worktree session — starts on the same model.
+- `--effort` is the reasoning effort the session's provider starts at, passed
+  through unchecked like `--model` (`low`, `high`, and whatever else that
+  provider lists). It reaches Claude Code, Antigravity and Kiro as `--effort`,
+  oh-my-pi as `--thinking` and Codex as `-c model_reasoning_effort=<level>`, and
+  is recorded on the session the same way. **opencode, Crush, Cursor and
+  `shell` are refused**: opencode and Crush have no such flag on the TUI lich
+  spawns, and Cursor names the effort inside the model id
+  (`claude-opus-4-8-high`), so pass that as `--model` instead.
 - `--prompt` hands the new session that task as soon as its agent is up, so
   opening a worker *for* a task is one command rather than `open` then `send`.
   It is the same delivery `lich send` makes — a worker still running its setup
