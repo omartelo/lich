@@ -24,6 +24,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -238,7 +239,7 @@ func (c *client) sessions(args []string) error {
 	}
 
 	var peers []relay.Peer
-	if err := c.call("relay.Peers", []any{c.sessionID()}, shortCall, &peers); err != nil {
+	if err := c.call(context.Background(), "relay.Peers", []any{c.sessionID()}, shortCall, &peers); err != nil {
 		return err
 	}
 	peers = asList(peers)
@@ -288,7 +289,7 @@ func (c *client) send(args []string) error {
 
 	var result relay.Result
 	call := []any{c.sessionID(), flags.Arg(0), *project, flags.Arg(1), *timeout}
-	if err := c.call("relay.Send", call, waitBudget(*timeout), &result); err != nil {
+	if err := c.call(context.Background(), "relay.Send", call, waitBudget(*timeout), &result); err != nil {
 		return err
 	}
 	if err := c.report(result, *asJSON); err != nil {
@@ -311,8 +312,8 @@ func outcome(status string) error {
 	}
 }
 
-// collectedOutcome is a collect's exit: pending only when it held the line and
-// came back with nothing while errands are still open. Anything collected is
+// collectedOutcome is a collect's exit: pending only when nothing was ready
+// while errands are still open, whether or not it held the line first. Anything collected is
 // a success, whatever each result says, because a batch has no one status.
 func collectedOutcome(collected relay.Collected) error {
 	if len(collected.Results) == 0 && len(collected.Open) > 0 {
@@ -344,7 +345,7 @@ func (c *client) showVersion(args []string) error {
 	var diagnostics struct {
 		Version string `json:"version"`
 	}
-	if c.call("system.Diagnostics", []any{}, versionCall, &diagnostics) == nil {
+	if c.call(context.Background(), "system.Diagnostics", []any{}, versionCall, &diagnostics) == nil {
 		report.Server = diagnostics.Version
 	}
 	if *asJSON {
@@ -360,17 +361,18 @@ func (c *client) showVersion(args []string) error {
 func (c *client) wait(args []string) error {
 	flags := newFlagSet("wait")
 	timeout := flags.Int("timeout", 0, "seconds to wait before handing the ticket back again")
+	noWait := flags.Bool("no-wait", false, "collect only what is ready and return at once; takes no ticket")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := c.parse(flags, args); err != nil {
 		return err
 	}
-	if flags.NArg() > 1 {
+	if flags.NArg() > 1 || (*noWait && flags.NArg() > 0) {
 		return usageError("wait")
 	}
 
 	if flags.NArg() == 0 {
 		var collected relay.Collected
-		if err := c.call("relay.Collect", []any{c.sessionID(), *timeout}, waitBudget(*timeout), &collected); err != nil {
+		if err := c.collect(context.Background(), *noWait, *timeout, &collected); err != nil {
 			return err
 		}
 		if *asJSON {
@@ -384,13 +386,22 @@ func (c *client) wait(args []string) error {
 	}
 
 	var result relay.Result
-	if err := c.call("relay.Wait", []any{flags.Arg(0), *timeout}, waitBudget(*timeout), &result); err != nil {
+	if err := c.call(context.Background(), "relay.Wait", []any{flags.Arg(0), *timeout}, waitBudget(*timeout), &result); err != nil {
 		return err
 	}
 	if err := c.report(result, *asJSON); err != nil {
 		return err
 	}
 	return outcome(result.Status)
+}
+
+// collect drains this session's inbox, holding the line for the next result
+// unless noWait asks for only what is ready.
+func (c *client) collect(ctx context.Context, noWait bool, timeout int, out *relay.Collected) error {
+	if noWait {
+		return c.call(ctx, "relay.CollectNow", []any{c.sessionID()}, shortCall, out)
+	}
+	return c.call(ctx, "relay.Collect", []any{c.sessionID(), timeout}, waitBudget(timeout), out)
 }
 
 func (c *client) reply(args []string) error {
@@ -408,7 +419,7 @@ func (c *client) reply(args []string) error {
 	if flags.NArg() == 2 {
 		ticket, answer = flags.Arg(0), flags.Arg(1)
 	}
-	if err := c.call("relay.Reply", []any{c.sessionID(), ticket, answer}, shortCall, nil); err != nil {
+	if err := c.call(context.Background(), "relay.Reply", []any{c.sessionID(), ticket, answer}, shortCall, nil); err != nil {
 		return err
 	}
 	fmt.Fprintln(c.stdout, "Answer sent.")
@@ -438,7 +449,7 @@ func (c *client) open(args []string) error {
 
 	var opened spawn.Session
 	call := []any{c.sessionID(), *project, *kind, *worktree, *base, *model, *effort}
-	if err := c.call("spawn.Open", call, openCall, &opened); err != nil {
+	if err := c.call(context.Background(), "spawn.Open", call, openCall, &opened); err != nil {
 		return err
 	}
 	delivered, failure := c.handOff(opened, *prompt)
@@ -479,7 +490,7 @@ func (c *client) handOff(opened spawn.Session, prompt string) (*relay.Result, er
 	if prompt == "" {
 		return nil, nil
 	}
-	result, err := c.deliver(opened, prompt)
+	result, err := c.deliver(context.Background(), opened, prompt)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"the session is open, but the task did not reach it: %w — hand it the task with "+
@@ -493,10 +504,10 @@ func (c *client) handOff(opened spawn.Session, prompt string) (*relay.Result, er
 // deliver hands a just-opened session its first task, on both surfaces: the
 // command line's --prompt and the open_session tool's, which differ in how they
 // word the outcome and in nothing else.
-func (c *client) deliver(opened spawn.Session, prompt string) (relay.Result, error) {
+func (c *client) deliver(ctx context.Context, opened spawn.Session, prompt string) (relay.Result, error) {
 	var result relay.Result
 	call := []any{c.sessionID(), opened.Label, opened.Project, prompt, deliverWait}
-	err := c.call("relay.Send", call, waitBudget(deliverWait), &result)
+	err := c.call(ctx, "relay.Send", call, waitBudget(deliverWait), &result)
 	return result, err
 }
 
@@ -653,7 +664,7 @@ func (c *client) close(args []string) error {
 
 	var closed spawn.Closed
 	call := []any{c.sessionID(), flags.Arg(0), *project, *worktree, *force}
-	if err := c.call("spawn.Close", call, openCall, &closed); err != nil {
+	if err := c.call(context.Background(), "spawn.Close", call, openCall, &closed); err != nil {
 		return err
 	}
 	if *asJSON {
@@ -705,7 +716,7 @@ func (c *client) rename(args []string) error {
 
 	var renamed spawn.Renamed
 	call := []any{c.sessionID(), target, *project, label}
-	if err := c.call("spawn.Rename", call, shortCall, &renamed); err != nil {
+	if err := c.call(context.Background(), "spawn.Rename", call, shortCall, &renamed); err != nil {
 		return err
 	}
 	if *asJSON {
@@ -736,7 +747,7 @@ func (c *client) worktrees(args []string) error {
 	}
 
 	var checkouts []spawn.Checkout
-	if err := c.call("spawn.Worktrees", []any{c.sessionID(), *project}, shortCall, &checkouts); err != nil {
+	if err := c.call(context.Background(), "spawn.Worktrees", []any{c.sessionID(), *project}, shortCall, &checkouts); err != nil {
 		return err
 	}
 	checkouts = asList(checkouts)

@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -59,54 +60,66 @@ type inboxEntry struct {
 // ready and errands still open it holds the line for the next one; with
 // nothing ready and nothing open it returns empty at once. It is the batch
 // half of the nudge: one call picks up what any number of workers produced.
-func (s *Service) Collect(fromID string, waitSeconds int) (Collected, error) {
+//
+// ctx is the caller's: once it is done nothing is drained, because a result
+// handed to a caller that hung up (an interrupted tool call, a killed `lich
+// wait`) is a result nobody reads, and the nudge that would have announced it
+// was skipped for this very collector.
+func (s *Service) Collect(ctx context.Context, fromID string, waitSeconds int) (Collected, error) {
+	return s.collect(ctx, fromID, waitFor(waitSeconds))
+}
+
+// CollectNow is Collect without the wait: what is ready and who still owes one,
+// at once. It is how a sender deep in a turn of its own checks in at a decision
+// point, where holding the line would stall the work it is doing.
+func (s *Service) CollectNow(fromID string) (Collected, error) {
+	return s.collect(context.Background(), fromID, 0)
+}
+
+func (s *Service) collect(ctx context.Context, fromID string, wait time.Duration) (Collected, error) {
 	if fromID == "" {
 		return Collected{}, fmt.Errorf(
 			"collecting needs a session of your own — outside one, wait on the ticket instead: lich wait <ticket>")
 	}
-	deadline := s.now().Add(waitFor(waitSeconds))
+	deadline := s.now().Add(wait)
 	for {
 		s.mu.Lock()
+		if err := ctx.Err(); err != nil {
+			s.mu.Unlock()
+			s.renudge(fromID)
+			return Collected{}, err
+		}
 		expired, senders := s.sweep()
 		results := s.drainLocked(fromID)
 		open := s.openLocked(fromID)
-		if len(results) > 0 || len(open) == 0 {
-			s.mu.Unlock()
-			s.clearAll(expired)
-			s.announceInboxAll(senders)
-			if len(results) > 0 {
-				s.announceInbox(fromID)
-			}
-			return Collected{Results: results, Open: open}, nil
+		remaining := deadline.Sub(s.now())
+		var wake chan struct{}
+		if len(results) == 0 && len(open) > 0 && remaining > 0 {
+			wake = make(chan struct{}, 1)
+			s.collectors[fromID] = append(s.collectors[fromID], wake)
 		}
-		wake := make(chan struct{}, 1)
-		s.collectors[fromID] = append(s.collectors[fromID], wake)
 		s.mu.Unlock()
 		s.clearAll(expired)
 		s.announceInboxAll(senders)
-
-		remaining := deadline.Sub(s.now())
-		if remaining <= 0 {
-			s.unregister(fromID, wake)
-			return Collected{Results: []Result{}, Open: open}, nil
-		}
-		timer := time.NewTimer(remaining)
-		select {
-		case <-wake:
-			timer.Stop()
-			s.unregister(fromID, wake)
-		case <-timer.C:
-			s.unregister(fromID, wake)
-			// One last look: the result may have landed in the same instant.
-			s.mu.Lock()
-			results := s.drainLocked(fromID)
-			open := s.openLocked(fromID)
-			s.mu.Unlock()
+		if wake == nil {
 			if len(results) > 0 {
 				s.announceInbox(fromID)
 			}
 			return Collected{Results: results, Open: open}, nil
 		}
+
+		timer := time.NewTimer(remaining)
+		select {
+		case <-wake:
+		case <-ctx.Done():
+		case <-timer.C:
+			// One last look happens on the way round: the result may have landed
+			// in the same instant. Pulling the deadline in ends the wait there even
+			// on a clock that has not moved.
+			deadline = s.now()
+		}
+		timer.Stop()
+		s.unregister(fromID, wake)
 	}
 }
 
@@ -175,21 +188,45 @@ func (s *Service) stash(id string, t *ticket, status, answer string) {
 		ticket: id, fromID: t.fromID, target: t.target,
 		status: status, answer: answer, ready: s.now(),
 	}
-	woke := false
 	for _, wake := range s.collectors[t.fromID] {
 		select {
 		case wake <- struct{}{}:
 		default:
 		}
-		woke = true
 	}
-	nudgeable := !woke && t.fromID != "" && s.state[t.fromID] != stateBusy
-	if nudgeable && s.nudgeTimer[t.fromID] == nil {
-		fromID := t.fromID
-		s.nudgeTimer[fromID] = time.AfterFunc(s.nudgeDelay, func() { s.flushNudge(fromID) })
+	if len(s.collectors[t.fromID]) == 0 {
+		s.armNudgeLocked(t.fromID)
 	}
 	s.mu.Unlock()
 	s.announceInbox(t.fromID)
+}
+
+// armNudgeLocked starts the debounce for fromID's nudge unless the sender
+// cannot be typed at now: no session, or mid-turn, where Observe flushes at the
+// turn's end instead. Called under s.mu.
+func (s *Service) armNudgeLocked(fromID string) {
+	if fromID == "" || s.state[fromID] == stateBusy || s.nudgeTimer[fromID] != nil {
+		return
+	}
+	s.nudgeTimer[fromID] = time.AfterFunc(s.nudgeDelay, func() { s.flushNudge(fromID) })
+}
+
+// renudge arms the nudge for results a collector left behind when its caller
+// hung up. stash skips the nudge for a result it woke a collector with, so
+// without this a result that landed as the caller went away would sit in the
+// inbox with nothing ever saying so.
+func (s *Service) renudge(fromID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.collectors[fromID]) > 0 {
+		return
+	}
+	for _, e := range s.ready {
+		if e.fromID == fromID && !e.nudged {
+			s.armNudgeLocked(fromID)
+			return
+		}
+	}
 }
 
 // countLocked is how many results wait for fromID. Called under s.mu.

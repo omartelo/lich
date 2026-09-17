@@ -1,8 +1,10 @@
 package rpc
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,6 +24,15 @@ func (fakeService) Both(ok bool) (string, error)    { return "yes", nil }
 func (fakeService) Struct(p pair) (pair, error)     { return p, nil }
 func (fakeService) Nothing(id string) error         { return nil }
 func (fakeService) Slices(ids []string) (int, bool) { return len(ids), true }
+
+type ctxKey struct{}
+
+// Traced answers with what the request's context carries, which proves the
+// context handed in is the request's own and not a stand-in.
+func (fakeService) Traced(ctx context.Context, n int) (string, error) {
+	tag, _ := ctx.Value(ctxKey{}).(string)
+	return fmt.Sprintf("%s:%d", tag, n), nil
+}
 
 func newTestHandler() *Handler {
 	h := New()
@@ -122,5 +133,22 @@ func TestOptionsPreflightAndMethodGate(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("GET: %d", rec.Code)
+	}
+}
+
+func TestALeadingContextIsTheRequestsAndTakesNoArgument(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/rpc/fake.Traced", strings.NewReader(`[4]`))
+	req = req.WithContext(context.WithValue(req.Context(), ctxKey{}, "req"))
+	rec := httptest.NewRecorder()
+	newTestHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != `"req:4"` {
+		t.Fatalf("got %d %q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestALeadingContextIsNotCountedAsAnArgument(t *testing.T) {
+	rec := call(t, newTestHandler(), "fake.Traced", `[{}, 4]`)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "want 1 arguments, got 2") {
+		t.Fatalf("got %d %q", rec.Code, rec.Body.String())
 	}
 }

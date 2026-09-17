@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"strconv"
@@ -31,7 +32,7 @@ func (c *client) cost(args []string) error {
 	}
 
 	var report store.CostReport
-	if err := c.call("store.CostTotals", []any{*project, *provider, from}, shortCall, &report); err != nil {
+	if err := c.call(context.Background(), "store.CostTotals", []any{*project, *provider, from}, shortCall, &report); err != nil {
 		return err
 	}
 	report.Projects = asList(report.Projects)

@@ -7,11 +7,14 @@
 //	→ 4xx/5xx with {"error": "..."} otherwise
 //
 // Dispatch is reflection over explicitly registered services — the net/rpc
-// pattern — so a new service method is exposed by registration alone. Token
+// pattern — so a new service method is exposed by registration alone. A method
+// whose first parameter is a context.Context gets the request's, which is done
+// when the caller hangs up; the JSON array carries the arguments after it. Token
 // auth is applied by the transport mount, not here.
 package rpc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,7 +28,10 @@ import (
 // strings, so anything larger is malformed or hostile.
 const bodyLimit = 1 << 20
 
-var errType = reflect.TypeFor[error]()
+var (
+	errType     = reflect.TypeFor[error]()
+	contextType = reflect.TypeFor[context.Context]()
+)
 
 type Handler struct {
 	services map[string]reflect.Value
@@ -91,7 +97,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unreadable body")
 		return
 	}
-	args, err := decodeArgs(method.Type(), body)
+	args, err := decodeArgs(r.Context(), method.Type(), body)
 	if err != nil {
 		slog.Warn("rpc: bad arguments", "method", name, "err", err)
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -121,24 +127,28 @@ func (h *Handler) lookup(name string) (reflect.Value, error) {
 }
 
 // decodeArgs unmarshals the JSON argument array positionally into the
-// method's parameter types.
-func decodeArgs(t reflect.Type, body []byte) ([]reflect.Value, error) {
+// method's parameter types, handing ctx to a leading context.Context.
+func decodeArgs(ctx context.Context, t reflect.Type, body []byte) ([]reflect.Value, error) {
 	var raw []json.RawMessage
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &raw); err != nil {
 			return nil, fmt.Errorf("arguments must be a JSON array: %w", err)
 		}
 	}
-	if len(raw) != t.NumIn() {
-		return nil, fmt.Errorf("want %d arguments, got %d", t.NumIn(), len(raw))
+	args := make([]reflect.Value, 0, t.NumIn())
+	if t.NumIn() > 0 && t.In(0) == contextType {
+		args = append(args, reflect.ValueOf(ctx))
 	}
-	args := make([]reflect.Value, t.NumIn())
-	for i := range args {
-		value := reflect.New(t.In(i))
-		if err := json.Unmarshal(raw[i], value.Interface()); err != nil {
+	skipped := len(args)
+	if len(raw) != t.NumIn()-skipped {
+		return nil, fmt.Errorf("want %d arguments, got %d", t.NumIn()-skipped, len(raw))
+	}
+	for i, arg := range raw {
+		value := reflect.New(t.In(skipped + i))
+		if err := json.Unmarshal(arg, value.Interface()); err != nil {
 			return nil, fmt.Errorf("argument %d: %w", i, err)
 		}
-		args[i] = value.Elem()
+		args = append(args, value.Elem())
 	}
 	return args, nil
 }

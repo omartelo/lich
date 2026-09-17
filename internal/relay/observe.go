@@ -51,8 +51,10 @@ func (s *Service) Observe(sessionID, state string) {
 		}
 	}
 	// This session as a sender: its turn ending frees its prompt, which is what
-	// a nudge held back during the turn was waiting for.
-	if state == stateDone {
+	// a nudge held back during the turn was waiting for. A turn stopped with Esc
+	// or Ctrl-C frees it just the same, and is how a wait for results is usually
+	// abandoned, so it flushes too.
+	if state == stateDone || state == stateInterrupted {
 		s.flushNudge(sessionID)
 	}
 }

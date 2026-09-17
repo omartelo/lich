@@ -109,6 +109,7 @@ reads what each CLI writes down and no two of them write down the same things.
 | Fork a conversation into a new worktree | yes | yes | no | yes | no | no | no | no |
 | Open a session at a chosen reasoning effort | yes | yes | yes | no | yes | no | in the model name | yes |
 | A resumed session keeps the model and effort it was on | model only | yes | no | model | yes | no | model | model |
+| A result still waits for you after you interrupt a wait for it | yes | yes | yes | yes | no | yes | yes | yes |
 
 Crush and Cursor CLI report neither the start nor the end of a turn, and that is
 where four of those rows go at once: nothing opens a window for the card's

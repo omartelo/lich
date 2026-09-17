@@ -328,6 +328,18 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the handoff, and the relay's own hold is not drawn at all: a delivery held there answers to its sender, through
   the ticket. What stays open is the provider that takes keystrokes through anything other than this PTY, which is
   invisible to every part of this.
+- **An interrupted wait lets go only when the caller says so, and oh-my-pi never says so**
+  (`internal/cli/mcp.go`, `runMCP`; `internal/relay/inbox.go`, `collect`): a wait whose caller is gone must not
+  take a result, because nothing reads it and the nudge was skipped for its sake. `lich wait` killed with Ctrl-C
+  closes its connection and the backend sees the request's context end. An MCP tool call interrupted with Esc
+  does not close anything: the `lich mcp` process lives on, so the backend only lets go when the client sends
+  `notifications/cancelled`. The MCP clients of Claude Code, Codex, Antigravity, opencode, Crush, Cursor CLI and
+  Kiro CLI carry that message (read in their shipped binaries, not measured Esc by Esc); oh-my-pi's does not, so
+  an interrupted `wait_for_answer` or `send_to_session` there keeps holding the line until its own timeout, at most
+  90 seconds (`mcpMaxWait`), and a result landing in that window is taken by a wait nobody reads. And even where
+  the cancellation arrives, delivery is not acknowledged: a result drained in the instant before the hang-up
+  reaches the backend, or already written back when the client withdraws the call, is lost with the reply. The
+  window is the round-trip of one message, not the length of the wait.
 - **A relayed Enter is timed against silence, not against the target** (`internal/relay`, `awaitSettled`): lich
   presses Enter once the target's PTY has been quiet for `defaultSubmitDelay`, because nothing here can read a TUI's
   screen to know it has taken the paste in. The window that opens on the target's own keyboard is closed rather
