@@ -14,6 +14,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { PlanUsageSetting } from "./PlanUsageSetting"
 import { ProviderBinary } from "./ProviderBinary"
+import { RestoreSetting } from "./RestoreSetting"
 import { SettingBlock } from "./SettingBlock"
 
 const GLOBAL_SCOPE = ""
@@ -147,6 +148,8 @@ export function ProviderBinSettings({
           </ConfirmDialog>
         </SettingBlock>
       )}
+
+      <RestoreSetting providerId={providerId} providerName={providerName} />
     </>
   )
 }

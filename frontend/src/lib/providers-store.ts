@@ -104,6 +104,21 @@ export function climbsToRiskier<T extends string>(
   return order.indexOf(next) > order.indexOf(current)
 }
 
+// restoreKey holds what a restored card of this provider does on its first open
+// when its conversation is still there: ask, or answer the resume prompt for the
+// user. Global only, like skipPermissionsKey.
+export function restoreKey(id: string): string {
+  return `provider.${id}.on-restore`
+}
+
+export type RestoreChoice = "ask" | "resume" | "fresh"
+
+// restoreChoice reads the stored value. Anything but the two answers is ask,
+// which is what every card did before the key existed.
+export function restoreChoice(value: string): RestoreChoice {
+  return value === "resume" || value === "fresh" ? value : "ask"
+}
+
 // sandboxKey holds which sessions of a provider run confined (mirrors
 // store.sandboxKey in Go, which is what the spawn reads). Scoped like binKey —
 // a project value wins over the global one — because the checkout full of

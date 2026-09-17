@@ -541,13 +541,17 @@ export function forkableSession(session: Session): Session | null {
 // this run, providers with no resume wired, and shell sessions — whose shell
 // cannot reopen a conversation even when a hand-run provider CLI left an id on
 // their row.
+export function canResume(kind: string): boolean {
+  return (RESUMABLE_KINDS as readonly string[]).includes(kind)
+}
+
 export function resumableSession(
   state: SessionState,
   projectId: string,
   sessionId: string,
 ): Session | null {
   const session = state[projectId]?.sessions.find((s) => s.id === sessionId)
-  if (!session || !RESUMABLE_KINDS.includes(session.kind) || !session.providerSessionId) {
+  if (!session || !canResume(session.kind) || !session.providerSessionId) {
     return null
   }
   return session

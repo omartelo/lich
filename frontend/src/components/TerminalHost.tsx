@@ -8,7 +8,8 @@ import { CloseButton } from "./common/CloseButton"
 import { ErrorBoundary } from "./common/ErrorBoundary"
 import { WorktreeCloseDialogs } from "./sidebar/WorktreeCloseDialogs"
 import { useWorktreeClose } from "./sidebar/useWorktreeClose"
-import { Terminal as TerminalService } from "@/lib/rpc"
+import { Store, Terminal as TerminalService } from "@/lib/rpc"
+import { restoreChoice, restoreKey } from "@/lib/providers-store"
 import { useProjects } from "@/providers/projects"
 import { activeSessionId, hasSession, resumableSession, sessionsOf } from "@/lib/session/sessions"
 import { paletteSessions } from "@/lib/session/command-palette"
@@ -19,14 +20,15 @@ import { paneTracks } from "@/lib/session/panes"
 import { usePanes } from "@/lib/session/use-panes"
 import { useStageSize } from "@/lib/session/use-stage-size"
 import { spawnedSessions } from "@/lib/terminal/terminal-registry"
-import { cn } from "@/lib/utils"
+import { cn, errorText } from "@/lib/utils"
 import type { Session } from "@/lib/session/sessions"
 
-// The gate's two backend checks. Module-level so the effect below never takes a
+// The gate's backend reads. Module-level so the effect below never takes a
 // new object as a reason to run again.
 const probe: SpawnProbe = {
   workdirMissing: TerminalService.WorkdirMissing,
   resumeAvailable: TerminalService.ResumeAvailable,
+  restoreChoice: (kind) => Store.GetSetting(restoreKey(kind), "").then(restoreChoice),
 }
 
 interface PaneDrag {
@@ -234,6 +236,9 @@ export function TerminalHost() {
         setAsking(resumable)
         return
       }
+      if (decision.verdict === "resume" && resumable) {
+        setResuming((prev) => ({ ...prev, [sessionId]: resumable.providerSessionId ?? "" }))
+      }
       if (decision.verdict === "fresh") {
         toast(decision.notice)
       }
@@ -404,6 +409,11 @@ export function TerminalHost() {
         session={asking}
         onStartNew={() => asking && answerResume(asking, "")}
         onResume={() => asking && answerResume(asking, asking.providerSessionId ?? "")}
+        onRemember={(kind, choice) =>
+          Store.SetSetting(restoreKey(kind), "", choice).catch((err) =>
+            toast.error(`Couldn't remember the choice: ${errorText(err)}`),
+          )
+        }
       />
       <WorktreeCloseDialogs close={worktreeClose} />
     </div>

@@ -13,6 +13,7 @@ function probe(over: Partial<SpawnProbe> = {}): SpawnProbe {
   return {
     workdirMissing: () => Promise.resolve(false),
     resumeAvailable: () => Promise.resolve(true),
+    restoreChoice: () => Promise.resolve("ask"),
     ...over,
   }
 }
@@ -79,6 +80,47 @@ describe("spawnDecision", () => {
       probe({ workdirMissing: () => Promise.reject(new Error("rpc down")) }),
     )
     expect(decision).toEqual({ verdict: "spawn" })
+  })
+
+  it("resumes without asking when the provider is set to resume", async () => {
+    const decision = await spawnDecision(
+      "/repo",
+      resumable,
+      probe({ restoreChoice: () => Promise.resolve("resume") }),
+    )
+    expect(decision).toEqual({ verdict: "resume" })
+  })
+
+  it("spawns fresh without asking when the provider is set to start new", async () => {
+    const decision = await spawnDecision(
+      "/repo",
+      resumable,
+      probe({ restoreChoice: () => Promise.resolve("fresh") }),
+    )
+    expect(decision).toEqual({ verdict: "spawn" })
+  })
+
+  // A default can only answer a question that is still open: a conversation
+  // that is gone says so, whatever the provider is set to.
+  it("tells a resume default the conversation is gone", async () => {
+    const decision = await spawnDecision(
+      "/repo",
+      resumable,
+      probe({
+        resumeAvailable: () => Promise.resolve(false),
+        restoreChoice: () => Promise.resolve("resume"),
+      }),
+    )
+    expect(decision).toEqual({ verdict: "fresh", notice: CONVERSATION_GONE })
+  })
+
+  it("asks when the stored default cannot be read", async () => {
+    const decision = await spawnDecision(
+      "/repo",
+      resumable,
+      probe({ restoreChoice: () => Promise.reject(new Error("rpc down")) }),
+    )
+    expect(decision).toEqual({ verdict: "ask" })
   })
 
   it("still asks when the resume check fails", async () => {

@@ -13,6 +13,8 @@ import {
   resolveDefaultProvider,
   resolveImplicitSessionKind,
   resolveProjectDefaultProvider,
+  restoreChoice,
+  restoreKey,
   sandboxDefaultFor,
   sandboxDrift,
   sandboxKey,
@@ -73,6 +75,21 @@ describe("provider setting keys", () => {
     // is real.
     expect(skipPermissionFlags.kiro).toBe("--trust-all-tools")
     expect(skipPermissionFlags.shell).toBeUndefined()
+  })
+})
+
+describe("the restored-session default", () => {
+  it("namespaces the key per provider", () => {
+    expect(restoreKey("codex")).toBe("provider.codex.on-restore")
+  })
+
+  // An absent key is every provider before this setting existed, and those
+  // asked; a value nobody wrote must not answer for the user either.
+  it("reads anything but the two answers as ask", () => {
+    expect(restoreChoice("resume")).toBe("resume")
+    expect(restoreChoice("fresh")).toBe("fresh")
+    expect(restoreChoice("")).toBe("ask")
+    expect(restoreChoice("always")).toBe("ask")
   })
 })
 

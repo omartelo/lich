@@ -1,3 +1,4 @@
+import type { RestoreChoice } from "@/lib/providers-store"
 import type { Session } from "./sessions"
 
 // What has to be settled before a session's terminal spawns. Both questions are
@@ -10,15 +11,18 @@ export type SpawnDecision =
   | { verdict: "spawn" }
   /** A conversation is still there: raise the resume prompt. */
   | { verdict: "ask" }
+  /** A conversation is still there and the provider is set to resume it. */
+  | { verdict: "resume" }
   /** The conversation is gone: spawn without it, and say so. */
   | { verdict: "fresh"; notice: string }
   /** The checkout is gone: there is nothing to spawn into. */
   | { verdict: "park"; notice: string }
 
-/** The two backend checks, injected so the decision is testable without the RPC. */
+/** The backend reads, injected so the decision is testable without the RPC. */
 export interface SpawnProbe {
   workdirMissing: (cwd: string) => Promise<boolean>
   resumeAvailable: (kind: string, providerSessionID: string, cwd: string) => Promise<boolean>
+  restoreChoice: (kind: string) => Promise<RestoreChoice>
 }
 
 export const CHECKOUT_GONE =
@@ -52,5 +56,13 @@ export async function spawnDecision(
   const available = await probe
     .resumeAvailable(resumable.kind, resumable.providerSessionId ?? "", cwd)
     .catch(() => true)
-  return available ? { verdict: "ask" } : { verdict: "fresh", notice: CONVERSATION_GONE }
+  if (!available) {
+    return { verdict: "fresh", notice: CONVERSATION_GONE }
+  }
+  // A failed read asks, for the same reason a failed resume check does.
+  const choice = await probe.restoreChoice(resumable.kind).catch(() => "ask" as const)
+  if (choice === "resume") {
+    return { verdict: "resume" }
+  }
+  return choice === "fresh" ? { verdict: "spawn" } : { verdict: "ask" }
 }

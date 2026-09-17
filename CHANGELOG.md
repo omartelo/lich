@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Restored cards can resume without asking.** Each provider's screen in
+  Settings › Providers has a Restored sessions choice: Ask, as before, Resume or
+  Start new. The resume prompt also offers "Always do this for …", which stores
+  the same choice. A conversation that is no longer there still opens empty.
+
 - **Diffs can be drawn side by side.** Settings › Version Control has a Diff
   layout choice: Unified, as before, or Side-by-side, with HEAD on the left and
   your changes on the right. It applies to the Review tab and to pull requests,
