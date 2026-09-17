@@ -39,8 +39,9 @@ const SKIP_LEVELS: { level: SkipLevel; label: string; consequence: string }[] = 
 ]
 
 // ProviderBinSettings is the config section a provider gets when enabled: what
-// its plan has left, which binary its sessions spawn, and how far it runs
-// without asking. Footer visibility is configured globally in Appearance.
+// its plan has left, which binary its sessions spawn, how far it runs without
+// asking, and what its restored cards do on first open. Footer visibility is
+// configured globally in Appearance.
 export function ProviderBinSettings({
   providerId,
   providerName,

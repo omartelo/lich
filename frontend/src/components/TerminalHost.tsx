@@ -23,12 +23,14 @@ import { spawnedSessions } from "@/lib/terminal/terminal-registry"
 import { cn, errorText } from "@/lib/utils"
 import type { Session } from "@/lib/session/sessions"
 
+const GLOBAL_SCOPE = ""
+
 // The gate's backend reads. Module-level so the effect below never takes a
 // new object as a reason to run again.
 const probe: SpawnProbe = {
   workdirMissing: TerminalService.WorkdirMissing,
   resumeAvailable: TerminalService.ResumeAvailable,
-  restoreChoice: (kind) => Store.GetSetting(restoreKey(kind), "").then(restoreChoice),
+  restoreChoice: (kind) => Store.GetSetting(restoreKey(kind), GLOBAL_SCOPE).then(restoreChoice),
 }
 
 interface PaneDrag {
@@ -410,7 +412,7 @@ export function TerminalHost() {
         onStartNew={() => asking && answerResume(asking, "")}
         onResume={() => asking && answerResume(asking, asking.providerSessionId ?? "")}
         onRemember={(kind, choice) =>
-          Store.SetSetting(restoreKey(kind), "", choice).catch((err) =>
+          Store.SetSetting(restoreKey(kind), GLOBAL_SCOPE, choice).catch((err) =>
             toast.error(`Couldn't remember the choice: ${errorText(err)}`),
           )
         }

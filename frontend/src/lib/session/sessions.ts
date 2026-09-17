@@ -535,16 +535,16 @@ export function forkableSession(session: Session): Session | null {
   return session
 }
 
+export function canResume(kind: string): boolean {
+  return (RESUMABLE_KINDS as readonly string[]).includes(kind)
+}
+
 // resumableSession returns the session whose PTY should ask before it spawns,
 // because it carries the provider conversation it ran before the last restart.
 // Null for everything with nothing to resume: unknown ids, sessions created in
 // this run, providers with no resume wired, and shell sessions — whose shell
 // cannot reopen a conversation even when a hand-run provider CLI left an id on
 // their row.
-export function canResume(kind: string): boolean {
-  return (RESUMABLE_KINDS as readonly string[]).includes(kind)
-}
-
 export function resumableSession(
   state: SessionState,
   projectId: string,

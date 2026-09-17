@@ -5,7 +5,7 @@
 //
 // The harness is imported first for the reason render-budget.test.tsx names.
 import { mountBudget } from "@/test/render-budget"
-import { createElement } from "react"
+import { createElement, useState } from "react"
 import { expect, test, vi } from "vitest"
 import type { Session } from "@/lib/session/sessions"
 import { ResumeSessionDialog } from "./ResumeSessionDialog"
@@ -65,5 +65,43 @@ test("a ticked answer is stored as the provider's default", async () => {
   await mounted.act(() => button("Start new").click())
   expect(calls.startNew).toBe(1)
   expect(calls.remembered).toEqual(["claude=fresh"])
+  await mounted.unmount()
+})
+
+// Escape still starts new, since the spawn is waiting on an answer, but nobody
+// chose it: a ticked box must not turn a dismiss into a stored default.
+test("dismissing a ticked prompt stores nothing", async () => {
+  const { mounted, calls } = await mount()
+  await mounted.act(() => document.getElementById("resume-remember")?.click())
+  await mounted.act(() => {
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    )
+  })
+  expect(calls.startNew).toBe(1)
+  expect(calls.remembered).toEqual([])
+  await mounted.unmount()
+})
+
+test("the next restored card opens unticked", async () => {
+  const swap = { next: (_s: Session) => {} }
+  function Host() {
+    const [current, setCurrent] = useState(session)
+    swap.next = setCurrent
+    return createElement(ResumeSessionDialog, {
+      session: current,
+      onStartNew: () => {},
+      onResume: () => {},
+      onRemember: () => {},
+    })
+  }
+  const mounted = await mountBudget(createElement(Host))
+  await mounted.act(() => {})
+  const box = () => document.querySelector<HTMLElement>("[role=checkbox]")
+  await mounted.act(() => box()?.click())
+  expect(box()?.getAttribute("aria-checked")).toBe("true")
+
+  await mounted.act(() => swap.next({ ...session, id: "s2" }))
+  expect(box()?.getAttribute("aria-checked")).toBe("false")
   await mounted.unmount()
 })
