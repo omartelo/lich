@@ -312,8 +312,8 @@ func outcome(status string) error {
 	}
 }
 
-// collectedOutcome is a collect's exit: pending only when it held the line and
-// came back with nothing while errands are still open. Anything collected is
+// collectedOutcome is a collect's exit: pending only when nothing was ready
+// while errands are still open, whether or not it held the line first. Anything collected is
 // a success, whatever each result says, because a batch has no one status.
 func collectedOutcome(collected relay.Collected) error {
 	if len(collected.Results) == 0 && len(collected.Open) > 0 {

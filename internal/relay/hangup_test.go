@@ -179,3 +179,113 @@ func TestAWaitWhoseCallerHungUpLeavesTheAnswerToTheInbox(t *testing.T) {
 	}
 	assertStashedAndNudged(t, svc, term, "all green")
 }
+
+// A wait that runs out comes back empty-handed with who still owes, once. The
+// frozen clock is the case the timer path has to end on its own: a deadline
+// read off a clock that never moves would otherwise hold the line forever.
+func TestACollectWhoseWaitRunsOutReturnsWhoStillOwes(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		clock func() time.Time
+	}{
+		{"real clock", time.Now},
+		{"frozen clock", at(1000)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			term := newFakeTerminal("s1", "s2")
+			svc := newRelay(workspace(), term, nil)
+			plant(svc, "t1", "s1", "s2", "docs")
+			svc.now = tt.clock
+
+			done := make(chan Collected, 1)
+			go func() {
+				collected, _ := svc.Collect(context.Background(), "s1", 1)
+				done <- collected
+			}()
+			select {
+			case collected := <-done:
+				if len(collected.Results) != 0 || len(collected.Open) != 1 || collected.Open[0] != "docs" {
+					t.Fatalf("collected %+v, want nothing ready and docs still owing", collected)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("Collect held the line past the wait it was given")
+			}
+			awaitHolding(t, svc, "s1", 0)
+		})
+	}
+}
+
+// An abandoned ticket wait whose errand closed without an answer (here: typed
+// and never read) had that news meant for its caller; with the caller gone it
+// goes to the inbox.
+func TestAnAbandonedWaitStashesTheOutcomeItWasHolding(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	plant(svc, "t1", "s1", "s2", "docs")
+	svc.mu.Lock()
+	tk := svc.tickets["t1"]
+	tk.attended = 1
+	delete(svc.tickets, "t1")
+	close(tk.unread)
+	svc.mu.Unlock()
+
+	svc.abandon("t1", tk)
+
+	if !awaitWritten(term, "s1", "[lich]") {
+		t.Errorf("the sender was never nudged: %q", term.written("s1"))
+	}
+	collected, err := svc.CollectNow("s1")
+	if err != nil {
+		t.Fatalf("CollectNow: %v", err)
+	}
+	if len(collected.Results) != 1 || collected.Results[0].Status != StatusUnread {
+		t.Fatalf("inbox holds %+v, want the unread outcome", collected)
+	}
+}
+
+// Another caller still holding the ticket carries the outcome out itself, so
+// one hanging up must not also stash it.
+func TestAnAbandonedWaitLeavesTheOutcomeToAnotherWaiter(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	plant(svc, "t1", "s1", "s2", "docs")
+	svc.mu.Lock()
+	tk := svc.tickets["t1"]
+	tk.attended = 2
+	delete(svc.tickets, "t1")
+	close(tk.unread)
+	svc.mu.Unlock()
+
+	svc.abandon("t1", tk)
+
+	collected, err := svc.CollectNow("s1")
+	if err != nil {
+		t.Fatalf("CollectNow: %v", err)
+	}
+	if len(collected.Results) != 0 {
+		t.Fatalf("inbox holds %+v, want the outcome left to the waiter still there", collected)
+	}
+}
+
+// A result held back for a busy sender is announced when its turn is stopped,
+// not only when one finishes: Esc is how a wait for results is abandoned, and
+// the next turn end may be a long way off.
+func TestAnInterruptedSenderIsNudged(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	svc.Observe("s1", stateBusy)
+	plant(svc, "t1", "s1", "s2", "docs")
+
+	if err := svc.Reply("", "t1", "all green"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if typed := term.written("s1"); typed != "" {
+		t.Fatalf("nudged a sender mid-turn: %q", typed)
+	}
+
+	svc.Observe("s1", stateInterrupted)
+	if !awaitWritten(term, "s1", "[lich]") {
+		t.Fatalf("the turn was stopped and no nudge came: %q", term.writesTo("s1"))
+	}
+}

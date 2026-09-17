@@ -82,6 +82,12 @@ func wiredLich(t *testing.T) (func(string) string, *wiredTerminal) {
 	t.Cleanup(server.Close)
 
 	port := strconv.Itoa(server.Listener.Addr().(*net.TCPAddr).Port)
+	return sessionEnv(port), term
+}
+
+// sessionEnv is the environment a PTY of the lich listening on port carries,
+// for the session "s1".
+func sessionEnv(port string) func(string) string {
 	return func(key string) string {
 		switch key {
 		case "LICH_PORT":
@@ -92,7 +98,7 @@ func wiredLich(t *testing.T) (func(string) string, *wiredTerminal) {
 			return "s1"
 		}
 		return ""
-	}, term
+	}
 }
 
 func TestSessionsOverTheRealDispatcher(t *testing.T) {
@@ -290,17 +296,7 @@ func wiredSpawn(t *testing.T, git *spawnGit) (func(string) string, *spawnStore, 
 	server := httptest.NewServer(dispatcher)
 	t.Cleanup(server.Close)
 	port := strconv.Itoa(server.Listener.Addr().(*net.TCPAddr).Port)
-	return func(key string) string {
-		switch key {
-		case "LICH_PORT":
-			return port
-		case "LICH_TOKEN":
-			return "tok"
-		case "LICH_SESSION_ID":
-			return "s1"
-		}
-		return ""
-	}, rows, term
+	return sessionEnv(port), rows, term
 }
 
 // TestOpenOverTheRealDispatcher proves the seven arguments `lich open` posts land

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -50,17 +51,7 @@ func wiredRelay(t *testing.T) (func(string) string, *wiredTerminal, *relay.Servi
 	t.Cleanup(server.Close)
 
 	port := strconv.Itoa(server.Listener.Addr().(*net.TCPAddr).Port)
-	env := func(key string) string {
-		switch key {
-		case "LICH_PORT":
-			return port
-		case "LICH_TOKEN":
-			return "tok"
-		case "LICH_SESSION_ID":
-			return "s1"
-		}
-		return ""
-	}
+	env := sessionEnv(port)
 	return env, term, svc, gate
 }
 
@@ -201,4 +192,71 @@ func (b *lockedBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.buf.String()
+}
+
+func TestCancelsMatchesOnlyItsOwnRequest(t *testing.T) {
+	id := json.RawMessage(`7`)
+	for _, tt := range []struct {
+		name    string
+		message string
+		want    bool
+	}{
+		{"its own id", `{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":7}}`, true},
+		{"another id", `{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":99}}`, false},
+		{"the id as a string", `{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"7"}}`, false},
+		{"unreadable params", `{"jsonrpc":"2.0","method":"notifications/cancelled","params":[7]}`, false},
+		{"another notification", `{"jsonrpc":"2.0","method":"notifications/progress","params":{"requestId":7}}`, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var message jsonRPC
+			if err := json.Unmarshal([]byte(tt.message), &message); err != nil {
+				t.Fatalf("fixture: %v", err)
+			}
+			if got := cancels(message, id); got != tt.want {
+				t.Errorf("cancels = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// A cancellation for some other request, or one that cannot be read, must leave
+// the call in flight alone: dropping it would lose a wait the client still wants.
+func TestAStrayCancellationLeavesTheCallInFlightAnswered(t *testing.T) {
+	env, term, _, gate := wiredRelay(t)
+	openErrand(t, env, term)
+
+	stdinRead, stdinWrite := io.Pipe()
+	var stdout lockedBuffer
+	c := &client{env: env, stdin: stdinRead, stdout: &stdout, stderr: io.Discard, running: noInstance}
+	served := make(chan int, 1)
+	go func() { served <- dispatch([]string{"mcp"}, c) }()
+	lines := make(chan string, 4)
+	go func() {
+		for line := range lines {
+			_, _ = io.WriteString(stdinWrite, line+"\n")
+		}
+		_ = stdinWrite.Close()
+	}()
+
+	lines <- `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"wait_for_answer","arguments":{"timeout_seconds":1}}}`
+	if !awaitSignal(gate.entered, 2*time.Second) {
+		t.Fatal("the tool call never reached the dispatcher")
+	}
+	lines <- `{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":99}}`
+	lines <- `{"jsonrpc":"2.0","method":"notifications/cancelled","params":"garbled"}`
+	close(lines)
+	if code := <-served; code != 0 {
+		t.Fatalf("mcp exit = %d", code)
+	}
+
+	var reply jsonRPC
+	if err := json.Unmarshal([]byte(stdout.String()), &reply); err != nil {
+		t.Fatalf("stdout = %q, want one response: %v", stdout.String(), err)
+	}
+	if string(reply.ID) != "7" {
+		t.Fatalf("answered id %s, want the call in flight", reply.ID)
+	}
+	if text, _ := textOf(t, reply); !strings.Contains(text, `Still working: "docs"`) {
+		t.Errorf("text = %q, want the wait's own outcome", text)
+	}
 }

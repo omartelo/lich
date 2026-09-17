@@ -213,13 +213,17 @@ func (s *Service) await(ctx context.Context, id string, t *ticket, wait time.Dur
 	case <-timer.C:
 		return Result{Ticket: id, Target: t.target, Status: s.giveUp(id, t)}
 	case <-ctx.Done():
-		// Nobody reads what this returns, so whatever giveUp would have told the
-		// caller goes to the inbox instead, the way it reaches any sender that
-		// stopped waiting.
-		if status := s.giveUp(id, t); status != StatusPending {
-			s.stash(id, t, status, "")
-		}
+		s.abandon(id, t)
 		return Result{Ticket: id, Target: t.target, Status: StatusPending}
+	}
+}
+
+// abandon drops the claim of a caller that hung up mid-wait. Nobody reads what
+// that caller would have been told, so giveUp's news goes to the inbox instead,
+// the way it reaches any sender that stopped waiting.
+func (s *Service) abandon(id string, t *ticket) {
+	if status := s.giveUp(id, t); status != StatusPending {
+		s.stash(id, t, status, "")
 	}
 }
 

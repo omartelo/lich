@@ -122,6 +122,9 @@ const (
 	stateDone    = "done"
 	stateIdle    = "idle"
 	stateWaiting = "waiting"
+	// stateInterrupted is not a hook report: lich raises it for a turn the user
+	// stopped at the PTY (internal/terminal, noteInterrupt).
+	stateInterrupted = "interrupted"
 )
 
 // RelayEventName carries which session is waiting on which, so the sidebar can
