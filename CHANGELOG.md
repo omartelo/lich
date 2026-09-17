@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **An orchestrating agent can check for results without waiting.**
+  `wait_for_answer` takes `no_wait`, and `lich wait` takes `--no-wait`: both
+  return at once with whatever results are ready and which sessions are still
+  working. Agents are told to take that look before handing out more work,
+  after a long validation and before their final summary, instead of only when
+  a `[lich]` note arrives.
+
+### Fixed
+
+- **Interrupting a wait for results no longer loses the next one.** Pressing
+  Esc while an agent was in `wait_for_answer` or `send_to_session`, or killing
+  `lich wait` with Ctrl-C, left the wait running where nobody could read it:
+  the next result went to it, no `[lich]` note arrived, and the answer was gone.
+  It now stays waiting to be collected and the note arrives as usual. oh-my-pi
+  does not tell lich a tool call was interrupted, so there a result landing in
+  the rest of that wait, at most 90 seconds, is still lost.
+
 ## [0.52.0] - 2026-09-17
 
 ### Added

@@ -37,9 +37,10 @@ var commands = []command{
 	},
 	{
 		name: "wait",
-		args: "[--timeout <seconds>] [--json] [<ticket>]",
+		args: "[--timeout <seconds>] [--no-wait] [--json] [<ticket>]",
 		about: "With a ticket, wait again on that errand. Without one, collect every\n" +
-			"result that is ready — and when none is, wait for the next.",
+			"result that is ready, and when none is, wait for the next, unless\n" +
+			"--no-wait asks to return at once with what is ready and who still owes one.",
 	},
 	{
 		name: "reply",

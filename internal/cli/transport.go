@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,8 +16,9 @@ import (
 	"github.com/omartelo/lich/internal/singleton"
 )
 
-// call posts one RPC to the lich this session belongs to.
-func (c *client) call(method string, args []any, timeout time.Duration, out any) error {
+// call posts one RPC to the lich this session belongs to. Cancelling ctx drops
+// the connection, which is how the backend learns its caller stopped waiting.
+func (c *client) call(ctx context.Context, method string, args []any, timeout time.Duration, out any) error {
 	port, token, err := c.coordinates()
 	if err != nil {
 		return err
@@ -27,7 +29,7 @@ func (c *client) call(method string, args []any, timeout time.Duration, out any)
 	}
 
 	httpClient := &http.Client{Timeout: timeout}
-	status, payload, err := post(httpClient, endpoint(port, token, method), body)
+	status, payload, err := post(ctx, httpClient, endpoint(port, token, method), body)
 	if err != nil {
 		return err
 	}
@@ -39,7 +41,7 @@ func (c *client) call(method string, args []any, timeout time.Duration, out any)
 		if err != nil {
 			return err
 		}
-		if status, payload, err = post(httpClient, endpoint(port, token, method), body); err != nil {
+		if status, payload, err = post(ctx, httpClient, endpoint(port, token, method), body); err != nil {
 			return err
 		}
 	}
@@ -58,8 +60,13 @@ func (c *client) call(method string, args []any, timeout time.Duration, out any)
 // post sends one RPC and reads the whole reply. The body is read here rather
 // than returned open because a refused call is sent a second time, and the
 // first response has to be finished with before the second one starts.
-func post(httpClient *http.Client, endpoint string, body []byte) (int, []byte, error) {
-	resp, err := httpClient.Post(endpoint, "application/json", bytes.NewReader(body))
+func post(ctx context.Context, httpClient *http.Client, endpoint string, body []byte) (int, []byte, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return 0, nil, fmt.Errorf("build the request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	resp, err := httpClient.Do(request)
 	if err != nil {
 		return 0, nil, fmt.Errorf("reach lich: %w", err)
 	}

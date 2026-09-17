@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -80,7 +82,7 @@ type mcpTool struct {
 	Description string
 	Schema      map[string]any
 	ReadOnly    bool
-	Run         func(c *client, args mcpArgs) (string, error)
+	Run         func(ctx context.Context, c *client, args mcpArgs) (string, error)
 }
 
 // mcpInstructions is the server's own briefing, injected into the client's
@@ -92,11 +94,13 @@ const mcpInstructions = `lich runs coding-agent sessions side by side in one win
 
 Delegate in parallel: for work that can run beside yours, open a worker session in its own git worktree (open_session with worktree) so it gets its own checkout, then hand it the task with send_to_session. Check list_worktrees first — a branch already checked out is opened, not created. Workers are full sessions on the user's screen: visible, steerable, and yours to close (close_session) when the work is done. That is the difference from the subagents your own harness runs, and it is what the user is asking for when they say to fan work out across branches or worktrees: a subagent has no checkout of its own and no card they can open, read or take over mid-task. Reach for one of those to read something and throw it away, not to run the implementation somebody asked to see.
 
-Never poll for results. A send that outlives its wait hands back a ticket and you carry on with your own work; when results are ready, one short [lich] note arrives at your prompt — collect everything at once with wait_for_answer (no ticket). Polling in a loop burns the tokens this design exists to save.
+Never poll for results. A send that outlives its wait hands back a ticket and you carry on with your own work; when results are ready, one short [lich] note arrives at your prompt — collect everything at once with wait_for_answer (no ticket). That note only lands between your turns, so while a long turn of your own is running, look in with wait_for_answer and no_wait at the points where a result would change what you do next (before delegating more, after a long validation, before the final synthesis): it returns what is ready and who still owes one without waiting. One look per decision point: if nothing is ready, carry on. Calling it again in a loop is polling, and it burns the tokens this design exists to save.
 
 When a [lich] message carrying a ticket arrives at YOUR prompt, you are the worker: do the task, then answer with ` + relay.ToolReply + ` — a concise report (what was done, where, what remains), never a transcript.`
 
-// serveMCP runs the stdio server until its input ends.
+// serveMCP runs the stdio server until its input ends. Messages are answered
+// one at a time, in order, but input is read the whole time: a cancellation for
+// the call in flight has to reach it while it is still blocked.
 func (c *client) serveMCP(args []string) error {
 	flags := newFlagSet("mcp")
 	if err := c.parse(flags, args); err != nil {
@@ -106,17 +110,23 @@ func (c *client) serveMCP(args []string) error {
 		return fmt.Errorf("no input to serve")
 	}
 
-	decoder := json.NewDecoder(c.stdin)
+	messages := make(chan jsonRPC)
+	readErr := make(chan error, 1)
+	go readMCP(c.stdin, messages, readErr)
+
 	encoder := json.NewEncoder(c.stdout)
+	var queued []jsonRPC
 	for {
 		var request jsonRPC
-		if err := decoder.Decode(&request); err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil
-			}
-			return fmt.Errorf("read message: %w", err)
+		if len(queued) > 0 {
+			request, queued = queued[0], queued[1:]
+		} else if next, ok := <-messages; ok {
+			request = next
+		} else {
+			break
 		}
-		response, answer := c.handleMCP(request)
+		response, answer, arrived := c.runMCP(request, messages)
+		queued = append(queued, arrived...)
 		if !answer {
 			continue
 		}
@@ -124,12 +134,88 @@ func (c *client) serveMCP(args []string) error {
 			return fmt.Errorf("write message: %w", err)
 		}
 	}
+	if err := <-readErr; !errors.Is(err, io.EOF) {
+		return fmt.Errorf("read message: %w", err)
+	}
+	return nil
+}
+
+// readMCP decodes messages off the input until it ends or stops parsing, then
+// closes messages after reporting why.
+func readMCP(input io.Reader, messages chan<- jsonRPC, readErr chan<- error) {
+	decoder := json.NewDecoder(input)
+	for {
+		var message jsonRPC
+		if err := decoder.Decode(&message); err != nil {
+			readErr <- err
+			close(messages)
+			return
+		}
+		messages <- message
+	}
+}
+
+// runMCP answers one message. A tool call runs while the input is still being
+// read, because it can block for a minute and a client whose user interrupts it
+// (Esc) says so with notifications/cancelled: the call's context is cancelled,
+// which drops its request to lich, and the call is not answered, as the protocol
+// asks. Anything else arriving meanwhile is handed back to be answered next.
+func (c *client) runMCP(request jsonRPC, messages <-chan jsonRPC) (jsonRPC, bool, []jsonRPC) {
+	if request.Method != "tools/call" || len(request.ID) == 0 {
+		response, answer := c.handleMCP(context.Background(), request)
+		return response, answer, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	type outcome struct {
+		response jsonRPC
+		answer   bool
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		response, answer := c.handleMCP(ctx, request)
+		done <- outcome{response, answer}
+	}()
+
+	var arrived []jsonRPC
+	for {
+		select {
+		case o := <-done:
+			if ctx.Err() != nil {
+				return jsonRPC{}, false, arrived
+			}
+			return o.response, o.answer, arrived
+		case message, ok := <-messages:
+			switch {
+			case !ok:
+				messages = nil
+			case cancels(message, request.ID):
+				cancel()
+			default:
+				arrived = append(arrived, message)
+			}
+		}
+	}
+}
+
+// cancels reports whether message is the client withdrawing the request with id.
+func cancels(message jsonRPC, id json.RawMessage) bool {
+	if message.Method != "notifications/cancelled" {
+		return false
+	}
+	var params struct {
+		RequestID json.RawMessage `json:"requestId"`
+	}
+	if err := json.Unmarshal(message.Params, &params); err != nil {
+		return false
+	}
+	return bytes.Equal(bytes.TrimSpace(params.RequestID), bytes.TrimSpace(id))
 }
 
 // handleMCP answers one message. The second return is false for a notification,
 // which the protocol says gets no reply — answering one is a protocol error on
 // this side, not a courtesy.
-func (c *client) handleMCP(request jsonRPC) (jsonRPC, bool) {
+func (c *client) handleMCP(ctx context.Context, request jsonRPC) (jsonRPC, bool) {
 	if len(request.ID) == 0 {
 		return jsonRPC{}, false
 	}
@@ -141,7 +227,7 @@ func (c *client) handleMCP(request jsonRPC) (jsonRPC, bool) {
 	case "tools/list":
 		response.Result = map[string]any{"tools": mcpToolList()}
 	case "tools/call":
-		response.Result, response.Error = c.callMCPTool(request.Params)
+		response.Result, response.Error = c.callMCPTool(ctx, request.Params)
 	case "ping":
 		response.Result = map[string]any{}
 	default:
@@ -172,7 +258,7 @@ func mcpHandshake(params json.RawMessage, version string) map[string]any {
 // callMCPTool runs one tool. A tool that fails answers with isError so the
 // agent sees the reason; only an unknown tool or unreadable arguments are
 // protocol errors.
-func (c *client) callMCPTool(params json.RawMessage) (any, *jsonRPCError) {
+func (c *client) callMCPTool(ctx context.Context, params json.RawMessage) (any, *jsonRPCError) {
 	var call struct {
 		Name      string  `json:"name"`
 		Arguments mcpArgs `json:"arguments"`
@@ -184,7 +270,7 @@ func (c *client) callMCPTool(params json.RawMessage) (any, *jsonRPCError) {
 		if tool.Name != call.Name {
 			continue
 		}
-		text, err := tool.Run(c, call.Arguments)
+		text, err := tool.Run(ctx, c, call.Arguments)
 		if err != nil {
 			return mcpText(err.Error(), true), nil
 		}
@@ -299,9 +385,9 @@ var mcpTools = []mcpTool{
 			"free.",
 		Schema:   schema(map[string]any{}),
 		ReadOnly: true,
-		Run: func(c *client, _ mcpArgs) (string, error) {
+		Run: func(ctx context.Context, c *client, _ mcpArgs) (string, error) {
 			var peers []relay.Peer
-			if err := c.call("relay.Peers", []any{c.sessionID()}, shortCall, &peers); err != nil {
+			if err := c.call(ctx, "relay.Peers", []any{c.sessionID()}, shortCall, &peers); err != nil {
 				return "", err
 			}
 			if len(peers) == 0 {
@@ -339,11 +425,11 @@ var mcpTools = []mcpTool{
 					"because a call running past 120s is detached by the client and stops being a "+
 					"wait at all. Running out costs nothing: the answer arrives at your prompt."),
 		}, "session", "prompt"),
-		Run: func(c *client, args mcpArgs) (string, error) {
+		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			var result relay.Result
 			timeout := args.seconds("timeout_seconds")
 			call := []any{c.sessionID(), args.text("session"), args.text("project"), args.text("prompt"), timeout}
-			if err := c.call("relay.Send", call, waitBudget(timeout), &result); err != nil {
+			if err := c.call(ctx, "relay.Send", call, waitBudget(timeout), &result); err != nil {
 				return "", err
 			}
 			return mcpOutcome(result), nil
@@ -354,26 +440,36 @@ var mcpTools = []mcpTool{
 		Description: "Collect the results of tasks you sent with send_to_session. Without a " +
 			"ticket it returns every result that is ready — the one call to make when a " +
 			"[lich] note says results are waiting — and, when none is, holds the line for " +
-			"the next one. With a ticket it waits on that one errand. Use it to pick " +
-			"results up, or when you have nothing to do but wait; results announce " +
-			"themselves at your prompt either way, so there is never a reason to poll.",
+			"the next one. With no_wait it returns at once instead, with what is ready and " +
+			"who still owes one: the look to take mid-turn, where the note cannot reach you, " +
+			"at the points where an answer would change your next step: before delegating " +
+			"more, after a long validation, before the final synthesis. Once per such point; " +
+			"if nothing is ready, carry on, never call it again in a loop. With a ticket it " +
+			"waits on that one errand.",
 		Schema: schema(map[string]any{
 			"ticket": property("string",
 				"A ticket send_to_session returned. Omit to collect everything that is ready."),
 			"timeout_seconds": property("number",
 				"Seconds to hold the line when nothing is ready yet, at most 90. Call again for longer."),
+			"no_wait": property("boolean",
+				"Return at once with whatever is ready instead of holding the line. Takes no ticket."),
 		}),
-		Run: func(c *client, args mcpArgs) (string, error) {
+		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			timeout := args.seconds("timeout_seconds")
+			noWait := args.flag("no_wait")
 			if ticket := args.text("ticket"); ticket != "" {
+				if noWait {
+					return "", fmt.Errorf("no_wait collects everything that is ready and takes no ticket: " +
+						"drop the ticket to look without waiting, or drop no_wait to wait on it")
+				}
 				var result relay.Result
-				if err := c.call("relay.Wait", []any{ticket, timeout}, waitBudget(timeout), &result); err != nil {
+				if err := c.call(ctx, "relay.Wait", []any{ticket, timeout}, waitBudget(timeout), &result); err != nil {
 					return "", err
 				}
 				return mcpOutcome(result), nil
 			}
 			var collected relay.Collected
-			if err := c.call("relay.Collect", []any{c.sessionID(), timeout}, waitBudget(timeout), &collected); err != nil {
+			if err := c.collect(ctx, noWait, timeout, &collected); err != nil {
 				return "", err
 			}
 			return collectedText(collected), nil
@@ -416,20 +512,20 @@ var mcpTools = []mcpTool{
 					"and send later. Capped at 8 KB, like send_to_session: name what to read, "+
 					"do not paste it."),
 		}),
-		Run: func(c *client, args mcpArgs) (string, error) {
+		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			var opened spawn.Session
 			call := []any{
 				c.sessionID(), args.text("project"), args.text("kind"),
 				args.text("worktree"), args.text("base"), args.text("model"),
 			}
-			if err := c.call("spawn.Open", call, openCall, &opened); err != nil {
+			if err := c.call(ctx, "spawn.Open", call, openCall, &opened); err != nil {
 				return "", err
 			}
 			prompt := args.text("prompt")
 			if prompt == "" {
 				return openedText(opened), nil
 			}
-			return openedText(opened) + "\n" + c.handOver(opened, prompt), nil
+			return openedText(opened) + "\n" + c.handOver(ctx, opened, prompt), nil
 		},
 	},
 	{
@@ -454,13 +550,13 @@ var mcpTools = []mcpTool{
 			"force": property("boolean",
 				"Remove a checkout that still has uncommitted work. Ask the user first."),
 		}, "session"),
-		Run: func(c *client, args mcpArgs) (string, error) {
+		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			var closed spawn.Closed
 			call := []any{
 				c.sessionID(), args.text("session"), args.text("project"),
 				args.text("worktree"), args.flag("force"),
 			}
-			if err := c.call("spawn.Close", call, openCall, &closed); err != nil {
+			if err := c.call(ctx, "spawn.Close", call, openCall, &closed); err != nil {
 				return "", err
 			}
 			return closedText(closed), nil
@@ -483,10 +579,10 @@ var mcpTools = []mcpTool{
 				"Project to narrow to, by name or by directory path, when the same label "+
 					"exists in more than one."),
 		}, "label"),
-		Run: func(c *client, args mcpArgs) (string, error) {
+		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			var renamed spawn.Renamed
 			call := []any{c.sessionID(), args.text("session"), args.text("project"), args.text("label")}
-			if err := c.call("spawn.Rename", call, shortCall, &renamed); err != nil {
+			if err := c.call(ctx, "spawn.Rename", call, shortCall, &renamed); err != nil {
 				return "", err
 			}
 			return renamedText(renamed), nil
@@ -503,10 +599,10 @@ var mcpTools = []mcpTool{
 				"Project to list, by name or by directory path. Defaults to your own."),
 		}),
 		ReadOnly: true,
-		Run: func(c *client, args mcpArgs) (string, error) {
+		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			var checkouts []spawn.Checkout
 			call := []any{c.sessionID(), args.text("project")}
-			if err := c.call("spawn.Worktrees", call, shortCall, &checkouts); err != nil {
+			if err := c.call(ctx, "spawn.Worktrees", call, shortCall, &checkouts); err != nil {
 				return "", err
 			}
 			out, err := json.Marshal(asList(checkouts))
@@ -530,9 +626,9 @@ var mcpTools = []mcpTool{
 				"says which request it belongs to: retry with the ticket you mean."),
 			"answer": property("string", "Your answer, in full — nothing else is sent back."),
 		}, "answer"),
-		Run: func(c *client, args mcpArgs) (string, error) {
+		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			call := []any{c.sessionID(), args.text("ticket"), args.text("answer")}
-			if err := c.call("relay.Reply", call, shortCall, nil); err != nil {
+			if err := c.call(ctx, "relay.Reply", call, shortCall, nil); err != nil {
 				return "", err
 			}
 			return "Answer sent.", nil
@@ -548,8 +644,8 @@ var mcpTools = []mcpTool{
 // failed call. The session exists either way, and a failed call would read as if
 // nothing had happened — leaving an agent that opens three workers convinced it
 // has none.
-func (c *client) handOver(opened spawn.Session, prompt string) string {
-	result, err := c.deliver(opened, prompt)
+func (c *client) handOver(ctx context.Context, opened spawn.Session, prompt string) string {
+	result, err := c.deliver(ctx, opened, prompt)
 	if err != nil {
 		return fmt.Sprintf(
 			"The task did not reach it: %v. The session is open, so hand it the task with "+

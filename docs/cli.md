@@ -245,7 +245,7 @@ expire. `internal/terminal` tells the setup script and the agent apart by a
 marker the setup wrapper prints between them (`setupDone`): the PTY and the pid
 are the same across the `exec`, so nothing else can.
 
-### `lich wait [--timeout <seconds>] [<ticket>]`
+### `lich wait [--timeout <seconds>] [--no-wait] [<ticket>]`
 
 With a ticket: waits again on that errand. Same output and exit codes as `send`. A result that
 already came back unattended is handed over on the spot — it sits in the
@@ -264,6 +264,13 @@ prose says what each result was. This is
 the command the nudge at a sender's prompt names, and it needs a session of
 its own — run from a plain shell it is an error, because there is no inbox to
 drain.
+
+`--no-wait` collects without holding the line: what is ready and who still owes
+one, at once, with the same output and exit codes (2 when nothing is ready and
+errands are open). It is the look for a sender busy in a turn of its own, where
+the nudge cannot land; it takes no ticket. `--timeout 0` still means the default
+wait, not this. A `lich wait` killed mid-wait takes nothing with it: a result
+that lands afterwards stays in the inbox and is nudged like any other.
 
 ### `lich reply [<ticket>] <answer>`
 

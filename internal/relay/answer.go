@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -9,8 +10,9 @@ import (
 
 // Wait blocks on an already-delivered ticket for another round, so a caller
 // whose first wait ran out can come back without sending the message twice.
-// An outcome already sitting in the inbox is handed over on the spot.
-func (s *Service) Wait(ticketID string, waitSeconds int) (Result, error) {
+// An outcome already sitting in the inbox is handed over on the spot. ctx is
+// the caller's, as in Collect.
+func (s *Service) Wait(ctx context.Context, ticketID string, waitSeconds int) (Result, error) {
 	s.mu.Lock()
 	expired, senders := s.sweep()
 	if e, ok := s.ready[ticketID]; ok {
@@ -28,7 +30,7 @@ func (s *Service) Wait(ticketID string, waitSeconds int) (Result, error) {
 	if !ok {
 		return Result{}, fmt.Errorf("unknown ticket %q — it was answered long ago, or expired", ticketID)
 	}
-	return s.await(ticketID, t, waitFor(waitSeconds)), nil
+	return s.await(ctx, ticketID, t, waitFor(waitSeconds)), nil
 }
 
 // Reply hands an answer back to whoever is waiting on ticketID. It is what the
@@ -177,7 +179,7 @@ func askedExcerpt(prompt string) string {
 // reads: the ticket is dropped by whoever closes it (Reply, or sweep), because
 // a wait that expired leaves an errand that is still open and still has to be
 // waitable, and an answer has to reach a caller who stopped waiting for it too.
-func (s *Service) await(id string, t *ticket, wait time.Duration) Result {
+func (s *Service) await(ctx context.Context, id string, t *ticket, wait time.Duration) Result {
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
 
@@ -210,6 +212,14 @@ func (s *Service) await(id string, t *ticket, wait time.Duration) Result {
 		return Result{Ticket: id, Target: t.target, Status: StatusUndelivered}
 	case <-timer.C:
 		return Result{Ticket: id, Target: t.target, Status: s.giveUp(id, t)}
+	case <-ctx.Done():
+		// Nobody reads what this returns, so whatever giveUp would have told the
+		// caller goes to the inbox instead, the way it reaches any sender that
+		// stopped waiting.
+		if status := s.giveUp(id, t); status != StatusPending {
+			s.stash(id, t, status, "")
+		}
+		return Result{Ticket: id, Target: t.target, Status: StatusPending}
 	}
 }
 

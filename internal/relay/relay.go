@@ -14,6 +14,7 @@
 package relay
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -440,8 +441,9 @@ func (s *Service) Peers(fromID string) ([]Peer, error) {
 // The wait running out is not a failure: the errand is open, and the returned
 // ticket is what picks its outcome up later. A target that is not at a prompt
 // yet is not a failure either — the task is queued and delivered when it is
-// (see queueDelivery).
-func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) (Result, error) {
+// (see queueDelivery). ctx is the caller's: one that hangs up mid-wait hears
+// nothing, and the errand's outcome goes to its inbox as if its wait had run out.
+func (s *Service) Send(ctx context.Context, fromID, target, project, prompt string, waitSeconds int) (Result, error) {
 	prompt = sanitize(prompt)
 	if strings.TrimSpace(prompt) == "" {
 		return Result{}, fmt.Errorf("nothing to send: the prompt is empty")
@@ -498,7 +500,7 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 	// outlives it either way, and blocking past what was asked would run past
 	// the HTTP client's own budget (internal/cli, waitBudget) and report a
 	// timeout on an errand that is running perfectly well.
-	return s.await(id, t, waitFor(waitSeconds)), nil
+	return s.await(ctx, id, t, waitFor(waitSeconds)), nil
 }
 
 // handOff puts a composed message in the target's PTY and starts everything
