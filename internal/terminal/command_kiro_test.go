@@ -124,8 +124,12 @@ func TestKiroSpawnsTheChatSubcommandBeforeEveryFlag(t *testing.T) {
 		{name: "at a chosen effort", effort: "high", want: []string{"chat", "--effort", "high"}},
 		{name: "with permissions skipped", skipPermissions: true,
 			want: []string{"chat", "--trust-all-tools"}},
-		{name: "everything at once", agent: "lich", resume: "s1", model: "auto", skipPermissions: true,
-			want: []string{"chat", "--agent", "lich", "--resume-id", "s1", "--trust-all-tools", "--model", "auto"}},
+		{name: "everything at birth", agent: "lich", model: "auto", effort: "high", skipPermissions: true,
+			want: []string{"chat", "--agent", "lich", "--trust-all-tools", "--model", "auto", "--effort", "high"}},
+		// The model and effort are birth values: a resume leaves them to the conversation.
+		{name: "resuming leaves model and effort off", agent: "lich", resume: "s1", model: "auto",
+			effort: "high", skipPermissions: true,
+			want: []string{"chat", "--agent", "lich", "--resume-id", "s1", "--trust-all-tools"}},
 	}
 	for _, tt := range tests {
 		got := providerArgs(

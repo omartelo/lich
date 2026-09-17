@@ -359,13 +359,17 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   are refused**: Crush spells `--model` on its non-interactive `run` subcommand
   only, so the TUI lich spawns has nowhere to receive one, and naming a model
   for it would silently give you a session on the default. The model is
-  recorded on the session, so every later spawn of it — a page reload, a
-  respawn, the resume of a parked worktree session — starts on the same model.
+  recorded on the session and passed again whenever the card starts a new
+  conversation (a restart, or declining to resume), never when it resumes or
+  forks one: after birth, a `/model` typed inside the session is yours, and the
+  conversation's own model is what the provider restores
+  ([`docs/ceilings.md`](ceilings.md) names the providers that fall back to
+  their default instead).
 - `--effort` is the reasoning effort the session's provider starts at, passed
   through unchecked like `--model` (`low`, `high`, and whatever else that
   provider lists). It reaches Claude Code, Antigravity and Kiro as `--effort`,
   oh-my-pi as `--thinking` and Codex as `-c model_reasoning_effort=<level>`, and
-  is recorded on the session the same way. **opencode, Crush, Cursor and
+  is recorded and repeated the same way, birth only. **opencode, Crush, Cursor and
   `shell` are refused**: opencode and Crush have no such flag on the TUI lich
   spawns, and Cursor names the effort inside the model id
   (`claude-opus-4-8-high`), so pass that as `--model` instead.

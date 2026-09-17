@@ -1018,7 +1018,7 @@ func TestModelArgs(t *testing.T) {
 		{"flag-like model", providers.Claude, "--dangerously-skip-permissions", nil},
 	}
 	for _, tc := range cases {
-		got := modelArgs(tc.kind, tc.model)
+		got := modelArgs(tc.kind, tc.model, "")
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("%s: modelArgs(%q, %q) = %v, want %v", tc.name, tc.kind, tc.model, got, tc.want)
 		}
@@ -1067,7 +1067,7 @@ func TestEffortArgs(t *testing.T) {
 		{"flag-like effort on codex", providers.Codex, "-c", nil},
 	}
 	for _, tc := range cases {
-		got := effortArgs(tc.kind, tc.effort)
+		got := effortArgs(tc.kind, tc.effort, "")
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("%s: effortArgs(%q, %q) = %v, want %v", tc.name, tc.kind, tc.effort, got, tc.want)
 		}
@@ -1340,20 +1340,40 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 		t.Errorf("codex args = %v, want the conversation id last", codex)
 	}
 
-	// The model is the one flag Codex takes on both sides of the subcommand
-	// (`codex resume --help` lists it), and it goes after: a flag the resumed
-	// conversation's own parser accepts is one less thing riding on where the
-	// global options end.
-	resumed := providerArgs(providers.Codex, "", "conv-1", "gpt-5.2", "high", "/usr/bin/lich", "", false, false)
-	model := slices.Index(resumed, "--model")
-	if model < 0 || model < slices.Index(resumed, "resume") {
-		t.Errorf("codex args = %v, want --model after the resume subcommand", resumed)
+}
+
+// TestModelAndEffortAreBirthValues pins the argv each provider is born with and
+// proves a resume or a fork carries neither: after birth the conversation's own
+// model and effort are the user's, and a `/model` or `/effort` typed inside it
+// must survive the next resume (the contract nameArgs already keeps for names).
+func TestModelAndEffortAreBirthValues(t *testing.T) {
+	cases := []struct {
+		kind, model, effort string
+		born                []string
+	}{
+		{providers.Claude, "opus", "high", []string{"--model", "opus", "--effort", "high"}},
+		{providers.Codex, "gpt-5.2", "high",
+			[]string{"--model", "gpt-5.2", "-c", `model_reasoning_effort="high"`}},
+		{providers.Antigravity, "gemini-3.7-flash-high", "low",
+			[]string{"--model", "gemini-3.7-flash-high", "--effort", "low"}},
+		{providers.OMP, "opus", "minimal", []string{"--model", "opus", "--thinking", "minimal"}},
+		{providers.Kiro, "auto", "max", []string{"--model", "auto", "--effort", "max"}},
+		{providers.OpenCode, "openai/gpt-5.2", "", []string{"--model", "openai/gpt-5.2"}},
+		{providers.Cursor, "claude-opus-4-8-high", "", []string{"--model", "claude-opus-4-8-high"}},
 	}
-	// The effort rides the same side: `codex resume --help` lists -c too
-	// (0.154.0), and a resumed session that lost it would run at the default.
-	effort := slices.Index(resumed, `model_reasoning_effort="high"`)
-	if effort < 1 || resumed[effort-1] != "-c" || effort < slices.Index(resumed, "resume") {
-		t.Errorf("codex args = %v, want the effort override after the resume subcommand", resumed)
+	for _, tc := range cases {
+		born := append(modelArgs(tc.kind, tc.model, ""), effortArgs(tc.kind, tc.effort, "")...)
+		if !slices.Equal(born, tc.born) {
+			t.Errorf("%s at birth = %v, want %v", tc.kind, born, tc.born)
+		}
+		for _, fork := range []bool{false, true} {
+			args := providerArgs(tc.kind, "", "conv-1", tc.model, tc.effort, "", "", fork, false)
+			for _, flag := range tc.born {
+				if slices.Contains(args, flag) {
+					t.Errorf("%s resume (fork=%v) = %v, carries birth value %q", tc.kind, fork, args, flag)
+				}
+			}
+		}
 	}
 }
 

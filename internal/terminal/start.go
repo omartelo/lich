@@ -125,9 +125,9 @@ func (s *Service) spawnSession(
 		mcpBin = lichBin()
 	}
 	skipPermissions := s.store.SkipPermissions(kind, projectID, cwd)
-	// The model and effort are read from the row rather than passed in, so they
-	// survive every spawn this session ever gets: the window's first view, a
-	// respawn after a reload, and the resume of a parked worktree session.
+	// The model and effort are read from the row rather than passed in, so every
+	// spawn that starts a conversation of its own gets them: the window's first
+	// view and a restart. A resume leaves them to the provider (modelArgs).
 	spec := ptySpec{
 		bin: resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
 		args: providerArgs(

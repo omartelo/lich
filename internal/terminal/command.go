@@ -300,8 +300,8 @@ func providerArgs(
 	args = append(args, agentArgs(kind, agent)...)
 	args = append(args, resumeArgs(kind, resume, fork)...)
 	args = append(args, skipPermissionArgs(kind, skipPermissions)...)
-	args = append(args, modelArgs(kind, model)...)
-	args = append(args, effortArgs(kind, effort)...)
+	args = append(args, modelArgs(kind, model, resume)...)
+	args = append(args, effortArgs(kind, effort, resume)...)
 	args = append(args, briefingArgs(kind)...)
 	if kind == providers.Codex {
 		return append(mcp, args...)
@@ -344,27 +344,31 @@ func agentArgs(kind, agent string) []string {
 }
 
 // modelArgs returns the arguments that pick the model a provider runs, or nil
-// when none was named or the provider has no flag for it. The name is passed
+// when none was named, the provider has no flag for it, or the spawn resumes a
+// conversation (a fork included). The model is a birth value, like the name in
+// nameArgs: after birth a `/model` typed inside the session is the user's
+// decision, and repeating the flag on resume would undo it silently. The name is passed
 // through unchecked — every provider spells its own model names, they change
 // with each release, and a list kept here would reject a model that works. A
 // wrong one dies in the provider's own error message, which is the one the user
 // can act on. A value that would be read as a flag is dropped instead, as it is
 // for a session name.
-func modelArgs(kind, model string) []string {
+func modelArgs(kind, model, resume string) []string {
 	flag, wired := modelFlags[kind]
 	model, usable := flagValue(model)
-	if !wired || !usable {
+	if !wired || !usable || resume != "" {
 		return nil
 	}
 	return []string{flag, model}
 }
 
 // effortArgs returns the arguments that set a provider's reasoning effort, or
-// nil when none was named or the provider cannot take one. The level passes
-// through unchecked for modelArgs' reason: every provider spells its own levels.
-func effortArgs(kind, effort string) []string {
+// nil when none was named, the provider cannot take one, or the spawn resumes a
+// conversation: a birth value, for modelArgs' reason. The level passes through
+// unchecked because every provider spells its own levels.
+func effortArgs(kind, effort, resume string) []string {
 	effort, usable := flagValue(effort)
-	if !usable {
+	if !usable || resume != "" {
 		return nil
 	}
 	if kind == providers.Codex {

@@ -315,11 +315,10 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// stomp the chosen name, breaking SetSessionTitle's contract.
 		//
 		// model, effort and entrypoint ride along for the same reason, one rung lower:
-		// both are spawn overrides their own doc comments promise survive every
-		// later spawn of the session, and a reinsert that dropped them would put
-		// the provider back on its default model and the terminal back on a bare
-		// shell — silently, on the one path where the card keeps its identity but
-		// not its id.
+		// they are what the session was born with, and a resumed card that the
+		// user restarts as a new conversation starts on them again; a reinsert
+		// that dropped the entrypoint would put the terminal back on a bare shell
+		// silently, on the one path where the card keeps its identity but not its id.
 		//
 		// The run mark rides along with the entrypoint it belongs to: a resumed
 		// Run card that came back unmarked would leave its checkout's slot free,
@@ -548,11 +547,10 @@ func (s *Service) SetSessionTitle(sessionID, title string) (bool, error) {
 	return n > 0, nil
 }
 
-// SetSessionModel records the model a session's provider was asked to run, so
-// every later spawn of that session repeats the flag: a reload, a respawn, and
-// the resume of a parked worktree session all go through the same path, and a
-// model that only survived the first spawn would silently become the provider's
-// default on the second.
+// SetSessionModel records the model a session was born on, so every spawn that
+// starts a new conversation for it (the first view, a restart) repeats the
+// flag. A resume does not: the conversation's own model is the provider's to
+// restore (terminal.modelArgs).
 //
 // It is written once, right after the row is created. A session whose row is
 // gone matches nothing and is not an error.
@@ -580,7 +578,7 @@ func (s *Service) SessionModel(sessionID string) string {
 }
 
 // SetSessionEffort records the reasoning effort a session's provider was asked
-// to run at, for SetSessionModel's reason: every later spawn repeats it.
+// to run at, read back the way SetSessionModel's is.
 func (s *Service) SetSessionEffort(sessionID, effort string) error {
 	if _, err := s.db.Exec(
 		`UPDATE sessions SET effort = ? WHERE id = ?`, effort, sessionID,
