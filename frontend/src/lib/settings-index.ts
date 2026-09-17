@@ -49,6 +49,12 @@ export const SETTING_ENTRIES: readonly SettingEntry[] = [
     also: "yolo dangerous approvals",
     perProvider: true,
   },
+  {
+    section: "providers",
+    title: "Restored sessions",
+    also: "resume conversation start new restart ask",
+    perProvider: true,
+  },
   { section: "providers", title: "Right now", also: "open sessions docs", perProvider: true },
   { section: "sandbox", title: "Which sessions run confined", also: "isolate bwrap seatbelt" },
   { section: "sandbox", title: "What a confined session may carry in" },

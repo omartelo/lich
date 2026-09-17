@@ -535,6 +535,10 @@ export function forkableSession(session: Session): Session | null {
   return session
 }
 
+export function canResume(kind: string): boolean {
+  return (RESUMABLE_KINDS as readonly string[]).includes(kind)
+}
+
 // resumableSession returns the session whose PTY should ask before it spawns,
 // because it carries the provider conversation it ran before the last restart.
 // Null for everything with nothing to resume: unknown ids, sessions created in
@@ -547,7 +551,7 @@ export function resumableSession(
   sessionId: string,
 ): Session | null {
   const session = state[projectId]?.sessions.find((s) => s.id === sessionId)
-  if (!session || !RESUMABLE_KINDS.includes(session.kind) || !session.providerSessionId) {
+  if (!session || !canResume(session.kind) || !session.providerSessionId) {
     return null
   }
   return session
