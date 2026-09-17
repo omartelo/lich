@@ -104,6 +104,30 @@ func TestOpenUpgradesTheOldestWorkspace(t *testing.T) {
 	}
 }
 
+// A database stamped at version 1 predates the effort column, and opening it
+// must add one rather than leave every spawn reading "".
+func TestOpenAddsTheEffortColumnToAVersionOneWorkspace(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v1.db")
+	seedDB(t, path, schema+`PRAGMA user_version = 1;`)
+
+	svc, err := open(path)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer svc.Close()
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "claude", "", 2, "")
+	if err := svc.SetSessionEffort("s1", "high"); err != nil {
+		t.Fatalf("SetSessionEffort on a version-1 workspace: %v", err)
+	}
+	if got := svc.SessionEffort("s1"); got != "high" {
+		t.Errorf("SessionEffort = %q, want high", got)
+	}
+	if v := userVersion(t, path); v != 2 {
+		t.Errorf("user_version = %d, want 2", v)
+	}
+}
+
 func TestOpenRefusesANewerWorkspace(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "newer.db")
 	svc, err := open(path)

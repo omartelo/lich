@@ -40,6 +40,7 @@ type stubBins struct {
 	providerSession string
 	providerErr     error
 	model           string
+	effort          string
 	entrypoint      string
 	sandbox         string
 	sandboxOn       bool
@@ -111,6 +112,7 @@ func (s stubBins) ProviderBin(_, _ string) string      { return s.bin }
 func (s stubBins) SkipPermissions(_, _, _ string) bool { return s.skipPerms }
 func (s stubBins) ProjectPath(_ string) string         { return s.projectPath }
 func (s stubBins) SessionModel(_ string) string        { return s.model }
+func (s stubBins) SessionEffort(_ string) string       { return s.effort }
 func (s stubBins) SessionEntrypoint(_ string) string   { return s.entrypoint }
 func (s stubBins) SessionSandbox(_ string) string      { return s.sandbox }
 func (s stubBins) SetSessionSandbox(_, _ string) error { return nil }
@@ -1016,7 +1018,7 @@ func TestModelArgs(t *testing.T) {
 		{"flag-like model", providers.Claude, "--dangerously-skip-permissions", nil},
 	}
 	for _, tc := range cases {
-		got := modelArgs(tc.kind, tc.model)
+		got := modelArgs(tc.kind, tc.model, "")
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("%s: modelArgs(%q, %q) = %v, want %v", tc.name, tc.kind, tc.model, got, tc.want)
 		}
@@ -1039,6 +1041,71 @@ func TestSupportsModel(t *testing.T) {
 			t.Errorf("SupportsModel(%q) = true, want false", kind)
 		}
 	}
+}
+
+// TestEffortArgs pins each provider's own spelling, literally, for TestModelArgs'
+// reason, and the kinds that must never be handed one.
+func TestEffortArgs(t *testing.T) {
+	cases := []struct {
+		name, kind, effort string
+		want               []string
+	}{
+		{"claude", providers.Claude, "xhigh", []string{"--effort", "xhigh"}},
+		{"antigravity", providers.Antigravity, "high", []string{"--effort", "high"}},
+		{"kiro", providers.Kiro, "max", []string{"--effort", "max"}},
+		{"oh-my-pi spells it thinking", providers.OMP, "minimal", []string{"--thinking", "minimal"}},
+		{"codex takes a config override", providers.Codex, "low",
+			[]string{"-c", `model_reasoning_effort="low"`}},
+		{"opencode takes none at spawn", providers.OpenCode, "high", nil},
+		{"crush takes none at spawn", providers.Crush, "high", nil},
+		{"cursor names it in the model", providers.Cursor, "high", nil},
+		{"a shell is not a provider", KindShell, "high", nil},
+		{"no effort named", providers.Claude, "", nil},
+		{"blank effort", providers.Codex, "  ", nil},
+		{"effort trimmed", providers.Claude, " low ", []string{"--effort", "low"}},
+		{"flag-like effort", providers.Claude, "--dangerously-skip-permissions", nil},
+		{"flag-like effort on codex", providers.Codex, "-c", nil},
+	}
+	for _, tc := range cases {
+		got := effortArgs(tc.kind, tc.effort, "")
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: effortArgs(%q, %q) = %v, want %v", tc.name, tc.kind, tc.effort, got, tc.want)
+		}
+	}
+}
+
+// TestSupportsEffort pins what the spawn service rejects on, as TestSupportsModel does.
+func TestSupportsEffort(t *testing.T) {
+	for _, kind := range []string{
+		providers.Claude, providers.Codex, providers.Antigravity, providers.OMP, providers.Kiro,
+	} {
+		if !SupportsEffort(kind) {
+			t.Errorf("SupportsEffort(%q) = false, want true", kind)
+		}
+	}
+	for _, kind := range []string{providers.OpenCode, providers.Crush, providers.Cursor, KindShell, "gemini"} {
+		if SupportsEffort(kind) {
+			t.Errorf("SupportsEffort(%q) = true, want false", kind)
+		}
+	}
+}
+
+// TestStartPassesTheStoredEffortToTheProcess proves the effort on the row reaches
+// argv, read from the store like the model so a respawn keeps it.
+func TestStartPassesTheStoredEffortToTheProcess(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin, model: "opus", effort: "high"}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	got := spawnedArgs(t, svc, "s1")
+	svc.mu.Unlock()
+
+	spawnPins(t, got, bin, "--model", "opus", "--effort", "high", "--mcp-config")
 }
 
 // TestStartPassesTheStoredModelToTheProcess proves the model recorded on the row
@@ -1201,7 +1268,7 @@ func spawnPins(t *testing.T, got []string, want ...string) {
 func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 	const bin = "/usr/bin/lich"
 
-	claude := providerArgs(providers.Claude, "", "", "", bin, "", false, false)
+	claude := providerArgs(providers.Claude, "", "", "", "", bin, "", false, false)
 	at := slices.Index(claude, "--mcp-config")
 	if at < 0 || at+1 >= len(claude) {
 		t.Fatalf("claude args = %v", claude)
@@ -1226,7 +1293,7 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 		t.Errorf("a secret reached the argv, which /proc exposes: %q", claude[at+1])
 	}
 
-	codex := providerArgs(providers.Codex, "", "", "", bin, "", false, false)
+	codex := providerArgs(providers.Codex, "", "", "", "", bin, "", false, false)
 	want := []string{
 		"-c", `mcp_servers.lich.command="/usr/bin/lich"`,
 		"-c", `mcp_servers.lich.args=["mcp"]`,
@@ -1241,7 +1308,7 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 // follows it, and Codex reads resume as a subcommand that every global option
 // must precede.
 func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
-	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "", "/usr/bin/lich", "", false, true)
+	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "", "", "/usr/bin/lich", "", false, true)
 	if claude[len(claude)-2] != "--mcp-config" {
 		t.Errorf("--mcp-config is not last, so it eats what follows: %v", claude)
 	}
@@ -1253,7 +1320,7 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 
 	// A resuming session is not named (nameArgs), so --name is pinned on the
 	// spawn that carries it: a session being born.
-	born := providerArgs(providers.Claude, "lich-4f2a", "", "", "/usr/bin/lich", "", false, true)
+	born := providerArgs(providers.Claude, "lich-4f2a", "", "", "", "/usr/bin/lich", "", false, true)
 	if born[len(born)-2] != "--mcp-config" {
 		t.Errorf("--mcp-config is not last, so it eats what follows: %v", born)
 	}
@@ -1261,7 +1328,7 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 		t.Errorf("claude args lost --name: %v", born)
 	}
 
-	codex := providerArgs(providers.Codex, "", "conv-1", "", "/usr/bin/lich", "", false, false)
+	codex := providerArgs(providers.Codex, "", "conv-1", "", "", "/usr/bin/lich", "", false, false)
 	resume := slices.Index(codex, "resume")
 	if resume < 0 {
 		t.Fatalf("codex args lost the resume subcommand: %v", codex)
@@ -1273,14 +1340,40 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 		t.Errorf("codex args = %v, want the conversation id last", codex)
 	}
 
-	// The model is the one flag Codex takes on both sides of the subcommand
-	// (`codex resume --help` lists it), and it goes after: a flag the resumed
-	// conversation's own parser accepts is one less thing riding on where the
-	// global options end.
-	resumed := providerArgs(providers.Codex, "", "conv-1", "gpt-5.2", "/usr/bin/lich", "", false, false)
-	model := slices.Index(resumed, "--model")
-	if model < 0 || model < slices.Index(resumed, "resume") {
-		t.Errorf("codex args = %v, want --model after the resume subcommand", resumed)
+}
+
+// TestModelAndEffortAreBirthValues pins the argv each provider is born with and
+// proves a resume or a fork carries neither: after birth the conversation's own
+// model and effort are the user's, and a `/model` or `/effort` typed inside it
+// must survive the next resume (the contract nameArgs already keeps for names).
+func TestModelAndEffortAreBirthValues(t *testing.T) {
+	cases := []struct {
+		kind, model, effort string
+		born                []string
+	}{
+		{providers.Claude, "opus", "high", []string{"--model", "opus", "--effort", "high"}},
+		{providers.Codex, "gpt-5.2", "high",
+			[]string{"--model", "gpt-5.2", "-c", `model_reasoning_effort="high"`}},
+		{providers.Antigravity, "gemini-3.7-flash-high", "low",
+			[]string{"--model", "gemini-3.7-flash-high", "--effort", "low"}},
+		{providers.OMP, "opus", "minimal", []string{"--model", "opus", "--thinking", "minimal"}},
+		{providers.Kiro, "auto", "max", []string{"--model", "auto", "--effort", "max"}},
+		{providers.OpenCode, "openai/gpt-5.2", "", []string{"--model", "openai/gpt-5.2"}},
+		{providers.Cursor, "claude-opus-4-8-high", "", []string{"--model", "claude-opus-4-8-high"}},
+	}
+	for _, tc := range cases {
+		born := append(modelArgs(tc.kind, tc.model, ""), effortArgs(tc.kind, tc.effort, "")...)
+		if !slices.Equal(born, tc.born) {
+			t.Errorf("%s at birth = %v, want %v", tc.kind, born, tc.born)
+		}
+		for _, fork := range []bool{false, true} {
+			args := providerArgs(tc.kind, "", "conv-1", tc.model, tc.effort, "", "", fork, false)
+			for _, flag := range tc.born {
+				if slices.Contains(args, flag) {
+					t.Errorf("%s resume (fork=%v) = %v, carries birth value %q", tc.kind, fork, args, flag)
+				}
+			}
+		}
 	}
 }
 
@@ -1306,7 +1399,7 @@ func TestProviderArgsWithoutARegistration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := providerArgs(tt.kind, "", "", "", tt.bin, "", false, false)
+			args := providerArgs(tt.kind, "", "", "", "", tt.bin, "", false, false)
 			if tt.bare && len(args) != 0 {
 				t.Errorf("args = %v, want none", args)
 			}
@@ -1331,7 +1424,7 @@ func TestTheBriefingGoesToTheProvidersThatTakeOne(t *testing.T) {
 	}
 	for kind, want := range briefed {
 		t.Run(kind, func(t *testing.T) {
-			args := providerArgs(kind, "", "", "", "/usr/bin/lich", "", false, false)
+			args := providerArgs(kind, "", "", "", "", "/usr/bin/lich", "", false, false)
 			flag := slices.Index(args, "--append-system-prompt")
 			if flag < 0 || flag+1 >= len(args) {
 				t.Fatalf("args = %v, want a briefing", args)
@@ -1344,7 +1437,7 @@ func TestTheBriefingGoesToTheProvidersThatTakeOne(t *testing.T) {
 
 	for _, kind := range []string{providers.Codex, providers.OpenCode, providers.Crush, KindShell} {
 		t.Run(kind+" takes none", func(t *testing.T) {
-			args := providerArgs(kind, "", "", "", "/usr/bin/lich", "", false, false)
+			args := providerArgs(kind, "", "", "", "", "/usr/bin/lich", "", false, false)
 			if slices.Contains(args, "--append-system-prompt") {
 				t.Errorf("args = %v, want no briefing: %s has no flag that appends one", args, kind)
 			}

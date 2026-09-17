@@ -507,6 +507,11 @@ var mcpTools = []mcpTool{
 					"--model flag takes it — the name or alias, never a lich name for it. Omit "+
 					"to leave the provider on its default. Crush and shell sessions cannot be "+
 					"given one."),
+			"effort": property("string",
+				"Reasoning effort the new session's provider runs at, spelled as that provider "+
+					"takes it (low, medium, high, and whatever else it lists). Omit to leave the "+
+					"provider on its default. opencode, Crush, Cursor and shell sessions cannot be "+
+					"given one; on Cursor the effort is part of the model name."),
 			"prompt": property("string",
 				"Task to hand the new session as soon as its agent is up. Omit to open it idle "+
 					"and send later. Capped at 8 KB, like send_to_session: name what to read, "+
@@ -517,6 +522,7 @@ var mcpTools = []mcpTool{
 			call := []any{
 				c.sessionID(), args.text("project"), args.text("kind"),
 				args.text("worktree"), args.text("base"), args.text("model"),
+				args.text("effort"),
 			}
 			if err := c.call(ctx, "spawn.Open", call, openCall, &opened); err != nil {
 				return "", err

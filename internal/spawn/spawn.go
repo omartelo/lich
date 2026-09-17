@@ -85,6 +85,7 @@ type Sessions interface {
 	) error
 	SandboxDefault(providerID, projectID, cwd string) bool
 	SetSessionModel(sessionID, model string) error
+	SetSessionEffort(sessionID, effort string) error
 	SetRunEntrypoint(sessionID, entrypoint string) error
 	RenameSession(sessionID, label string) error
 	DeleteSession(projectID, sessionID, activeID string) error
@@ -194,7 +195,8 @@ func New(sessions Sessions, worktrees Worktrees, term Terminal, events Events) *
 //
 // model, when given, is the model the provider is spawned on, in that provider's
 // own spelling. It is recorded on the row so every later spawn repeats it.
-func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) (Session, error) {
+// effort, when given, is the reasoning effort, passed and recorded the same way.
+func (s *Service) Open(fromID, projectName, kind, worktree, base, model, effort string) (Session, error) {
 	if base != "" && worktree == "" {
 		return Session{}, fmt.Errorf(
 			"a base is the branch a new worktree starts from, and no worktree was asked "+
@@ -221,12 +223,9 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) 
 	if err != nil {
 		return Session{}, err
 	}
-	model = strings.TrimSpace(model)
-	if model != "" && !terminal.SupportsModel(kind) {
-		return Session{}, fmt.Errorf(
-			"%s cannot be told which model to run when lich starts it — open the session without a model and pick one inside it",
-			kindName(kind),
-		)
+	model, effort = strings.TrimSpace(model), strings.TrimSpace(effort)
+	if err := checkOverrides(kind, model, effort); err != nil {
+		return Session{}, err
 	}
 
 	// cwd is where the PTY starts; stored is what the row records, which is
@@ -282,23 +281,57 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) 
 	// which is the state this package exists to prevent; the spawn below reads
 	// the model back from the row, so the session starts on the provider's own
 	// default and the failure is reported once it is running.
-	var modelErr error
-	if model != "" {
-		if err := s.sessions.SetSessionModel(id, model); err != nil {
-			modelErr = fmt.Errorf(
-				"session %q is open, but the model could not be recorded, so it runs on the "+
-					"provider's own default: %w",
-				label, err,
-			)
-		}
-	}
+	overrideErr := s.recordOverrides(id, label, model, effort)
 	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, false, setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)
 	}
-	if modelErr != nil {
-		return Session{}, modelErr
+	if overrideErr != nil {
+		return Session{}, overrideErr
 	}
 	return opened, nil
+}
+
+// checkOverrides refuses a model or effort the provider would silently drop,
+// so the caller hears about it instead of getting a session on its defaults.
+func checkOverrides(kind, model, effort string) error {
+	if model != "" && !terminal.SupportsModel(kind) {
+		return fmt.Errorf(
+			"%s cannot be told which model to run when lich starts it — open the session without a model and pick one inside it",
+			kindName(kind),
+		)
+	}
+	if effort != "" && !terminal.SupportsEffort(kind) {
+		return fmt.Errorf(
+			"%s cannot be told a reasoning effort when lich starts it: open the session without an effort and set one inside it",
+			kindName(kind),
+		)
+	}
+	return nil
+}
+
+// recordOverrides writes the model and effort a session was opened with onto
+// its row, where every later spawn reads them back.
+func (s *Service) recordOverrides(id, label, model, effort string) error {
+	record := []struct {
+		what, value string
+		set         func(string, string) error
+	}{
+		{"model", model, s.sessions.SetSessionModel},
+		{"reasoning effort", effort, s.sessions.SetSessionEffort},
+	}
+	for _, r := range record {
+		if r.value == "" {
+			continue
+		}
+		if err := r.set(id, r.value); err != nil {
+			return fmt.Errorf(
+				"session %q is open, but the %s could not be recorded, so it runs on the "+
+					"provider's own default: %w",
+				label, r.what, err,
+			)
+		}
+	}
+	return nil
 }
 
 // checkout is the worktree a session is being opened in: where it lives,

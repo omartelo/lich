@@ -302,7 +302,7 @@ func (s *Service) ReopenSession(sessionID, newSessionID string) (*Session, error
 // reopen is the resume behind both doors: it finds one parked session with the
 // given WHERE clause and re-adds it to the workspace under a fresh id
 // (newSessionID), carrying over the old label, kind, path, provider session id,
-// label_auto flag, model, entrypoint, sandbox, pin, origin and scheduled prompt.
+// label_auto flag, model, effort, entrypoint, sandbox, pin, origin and scheduled prompt.
 // The fresh id is deliberate: it makes the frontend treat the card as
 // never-spawned, so its resume prompt fires and the provider conversation
 // continues instead of starting cold.
@@ -314,12 +314,11 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// cycle — reinserting without it would reset to 1 and let the ai-title
 		// stomp the chosen name, breaking SetSessionTitle's contract.
 		//
-		// model and entrypoint ride along for the same reason, one rung lower:
-		// both are spawn overrides their own doc comments promise survive every
-		// later spawn of the session, and a reinsert that dropped them would put
-		// the provider back on its default model and the terminal back on a bare
-		// shell — silently, on the one path where the card keeps its identity but
-		// not its id.
+		// model, effort and entrypoint ride along for the same reason, one rung lower:
+		// they are what the session was born with, and a resumed card that the
+		// user restarts as a new conversation starts on them again; a reinsert
+		// that dropped the entrypoint would put the terminal back on a bare shell
+		// silently, on the one path where the card keeps its identity but not its id.
 		//
 		// The run mark rides along with the entrypoint it belongs to: a resumed
 		// Run card that came back unmarked would leave its checkout's slot free,
@@ -339,19 +338,19 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// project_id is read rather than passed: reopening by id knows only the
 		// session, and the row is what says where it belongs.
 		var labelAuto int
-		var projectID, model, entrypoint, sandbox string
+		var projectID, model, effort, entrypoint, sandbox string
 		var run bool
 		var forkOffset float64
 		row := tx.QueryRow(
 			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
-			        model, entrypoint, run, sandbox, pinned, origin_session_id, origin_label,
+			        model, effort, entrypoint, run, sandbox, pinned, origin_session_id, origin_label,
 			        scheduled_at, scheduled_prompt, fork_cost_offset
 			   FROM sessions `+where,
 			args...,
 		)
 		if err := row.Scan(
 			&old.ID, &projectID, &old.Label, &old.Kind, &old.Path, &old.ProviderSessionID,
-			&labelAuto, &model, &entrypoint, &run, &sandbox, &old.Pinned,
+			&labelAuto, &model, &effort, &entrypoint, &run, &sandbox, &old.Pinned,
 			&old.OriginSessionID, &old.OriginLabel,
 			&old.ScheduledAt, &old.ScheduledPrompt, &forkOffset,
 		); err != nil {
@@ -387,11 +386,11 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		if _, err := tx.Exec(
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
-			    model, entrypoint, run, sandbox, pinned, origin_session_id, origin_label,
+			    model, effort, entrypoint, run, sandbox, pinned, origin_session_id, origin_label,
 			    scheduled_at, scheduled_prompt, fork_cost_offset, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, old.Path, old.ProviderSessionID, labelAuto,
-			model, entrypoint, run, sandbox, old.Pinned, old.OriginSessionID, old.OriginLabel,
+			model, effort, entrypoint, run, sandbox, old.Pinned, old.OriginSessionID, old.OriginLabel,
 			old.ScheduledAt, old.ScheduledPrompt, forkOffset, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
@@ -548,11 +547,10 @@ func (s *Service) SetSessionTitle(sessionID, title string) (bool, error) {
 	return n > 0, nil
 }
 
-// SetSessionModel records the model a session's provider was asked to run, so
-// every later spawn of that session repeats the flag: a reload, a respawn, and
-// the resume of a parked worktree session all go through the same path, and a
-// model that only survived the first spawn would silently become the provider's
-// default on the second.
+// SetSessionModel records the model a session was born on, so every spawn that
+// starts a new conversation for it (the first view, a restart) repeats the
+// flag. A resume does not: the conversation's own model is the provider's to
+// restore (terminal.modelArgs).
 //
 // It is written once, right after the row is created. A session whose row is
 // gone matches nothing and is not an error.
@@ -577,6 +575,29 @@ func (s *Service) SessionModel(sessionID string) string {
 		return ""
 	}
 	return model.String
+}
+
+// SetSessionEffort records the reasoning effort a session's provider was asked
+// to run at, read back the way SetSessionModel's is.
+func (s *Service) SetSessionEffort(sessionID, effort string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET effort = ? WHERE id = ?`, effort, sessionID,
+	); err != nil {
+		return fmt.Errorf("set effort on %q: %w", sessionID, err)
+	}
+	return nil
+}
+
+// SessionEffort returns the effort recorded for a session, or "" for none or on
+// a read failure, which leaves the provider on its own default as SessionModel does.
+func (s *Service) SessionEffort(sessionID string) string {
+	var effort string
+	if err := s.db.QueryRow(
+		`SELECT effort FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&effort); err != nil {
+		return ""
+	}
+	return effort
 }
 
 // SetSessionEntrypoint records the command a terminal session opens into, so

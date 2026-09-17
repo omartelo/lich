@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Open a session at a chosen reasoning effort.** `lich open --effort high`,
+  and the `effort` argument of the `open_session` tool, start the new session
+  at that level, spelled the way its provider spells it. Claude Code, Codex,
+  Antigravity, oh-my-pi and Kiro CLI take it; on Cursor CLI the effort is part
+  of the model name, and opencode and Crush have no way to be told one at start.
+
 - **An orchestrating agent can check for results without waiting.**
   `wait_for_answer` takes `no_wait`, and `lich wait` takes `--no-wait`: both
   return at once with whatever results are ready and which sessions are still
@@ -17,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a `[lich]` note arrives.
 
 ### Fixed
+
+- **Resuming a session no longer undoes a model you picked inside it.** A
+  session opened with `lich open --model` was put back on that model every time
+  it was resumed, even after `/model` switched it. Resumes and forks now carry
+  on with whatever the conversation was using; a session started fresh still
+  gets the model it was opened with.
 
 - **Interrupting a wait for results no longer loses the next one.** Pressing
   Esc while an agent was in `wait_for_answer` or `send_to_session`, or killing

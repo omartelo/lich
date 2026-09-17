@@ -437,6 +437,7 @@ func (c *client) open(args []string) error {
 	worktree := flags.String("worktree", "", "branch name of a git worktree to root the session in; an existing branch is checked out as it stands")
 	base := flags.String("base", "", "branch a new worktree starts from; defaults to the project's current branch, ignored when the branch exists")
 	model := flags.String("model", "", "model the provider runs, in the provider's own spelling")
+	effort := flags.String("effort", "", "reasoning effort the provider runs at, in the provider's own spelling")
 	prompt := flags.String("prompt", "", "task to hand the new session as soon as its agent is up")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := c.parse(flags, args); err != nil {
@@ -447,7 +448,7 @@ func (c *client) open(args []string) error {
 	}
 
 	var opened spawn.Session
-	call := []any{c.sessionID(), *project, *kind, *worktree, *base, *model}
+	call := []any{c.sessionID(), *project, *kind, *worktree, *base, *model, *effort}
 	if err := c.call(context.Background(), "spawn.Open", call, openCall, &opened); err != nil {
 		return err
 	}

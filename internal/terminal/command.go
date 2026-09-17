@@ -63,11 +63,11 @@ const (
 
 // kiroChatSubcmd is the subcommand a Kiro session runs, and it is not optional.
 // Kiro splits the flags lich passes across two parsers: its root takes --agent
-// and --resume-id, but --model and --trust-all-tools belong to `chat` alone, and
-// either one at the root exits 2 with `unexpected argument` before the session
-// exists (measured on 2.21.0). `chat` takes every flag the root does, so lich
-// spawns it whether or not those two are set rather than assembling a different
-// command per setting.
+// and --resume-id, but --model, --effort and --trust-all-tools belong to `chat`
+// alone, and any of them at the root exits 2 with `unexpected argument` before
+// the session exists (measured on 2.21.0). `chat` takes every flag the root
+// does, so lich spawns it whether or not those are set rather than assembling a
+// different command per setting.
 const kiroChatSubcmd = "chat"
 
 // kiroAgentFlag picks the agent profile a Kiro session runs. lich passes it only
@@ -129,6 +129,33 @@ var modelFlags = map[string]string{
 func SupportsModel(kind string) bool {
 	_, ok := modelFlags[kind]
 	return ok
+}
+
+// effortFlags is how each provider is told how hard to reason, for a session
+// opened with an effort named (internal/spawn). Read off `--help` like
+// modelFlags: Claude Code 2.1.274, Antigravity 1.1.25, Kiro 2.21.0 (a `chat`
+// flag, like --model) and oh-my-pi 18.0.10, whose flag is --thinking. Codex has
+// no flag and takes a config override instead (codexEffortKey, 0.154.0).
+//
+// Three are out. opencode's --variant exists on `run` only (1.18.31) and Crush
+// has nothing (0.88.0), the same wall modelFlags hits. Cursor names the effort
+// inside the model id (`claude-opus-4-8-high`), which --model already passes;
+// the `model[effort=high]` override its `--help` advertises is refused as
+// "Cannot use this model" at spawn (2026.08.11), so there is nothing to compose.
+var effortFlags = map[string]string{
+	providers.Claude:      "--effort",
+	providers.Antigravity: "--effort",
+	providers.OMP:         "--thinking",
+	providers.Kiro:        "--effort",
+}
+
+const codexEffortKey = "model_reasoning_effort"
+
+// SupportsEffort reports whether a provider can be told a reasoning effort when
+// lich spawns it, which is what rejects one SupportsModel's way.
+func SupportsEffort(kind string) bool {
+	_, ok := effortFlags[kind]
+	return ok || kind == providers.Codex
 }
 
 // briefingFlags is how each provider spells "append this to your system
@@ -265,7 +292,7 @@ func flagValue(value string) (string, bool) {
 // come last. Kiro's subcommand opens the session rather than a conversation, so
 // it comes before every flag.
 func providerArgs(
-	kind, name, resume, model, lichBin, agent string, fork, skipPermissions bool,
+	kind, name, resume, model, effort, lichBin, agent string, fork, skipPermissions bool,
 ) []string {
 	mcp := mcpArgs(kind, lichBin)
 	args := append([]string{}, subcommandArgs(kind)...)
@@ -273,7 +300,8 @@ func providerArgs(
 	args = append(args, agentArgs(kind, agent)...)
 	args = append(args, resumeArgs(kind, resume, fork)...)
 	args = append(args, skipPermissionArgs(kind, skipPermissions)...)
-	args = append(args, modelArgs(kind, model)...)
+	args = append(args, modelArgs(kind, model, resume)...)
+	args = append(args, effortArgs(kind, effort, resume)...)
 	args = append(args, briefingArgs(kind)...)
 	if kind == providers.Codex {
 		return append(mcp, args...)
@@ -316,19 +344,41 @@ func agentArgs(kind, agent string) []string {
 }
 
 // modelArgs returns the arguments that pick the model a provider runs, or nil
-// when none was named or the provider has no flag for it. The name is passed
+// when none was named, the provider has no flag for it, or the spawn resumes a
+// conversation (a fork included). The model is a birth value, like the name in
+// nameArgs: after birth a `/model` typed inside the session is the user's
+// decision, and repeating the flag on resume would undo it silently. The name is passed
 // through unchecked — every provider spells its own model names, they change
 // with each release, and a list kept here would reject a model that works. A
 // wrong one dies in the provider's own error message, which is the one the user
 // can act on. A value that would be read as a flag is dropped instead, as it is
 // for a session name.
-func modelArgs(kind, model string) []string {
+func modelArgs(kind, model, resume string) []string {
 	flag, wired := modelFlags[kind]
 	model, usable := flagValue(model)
-	if !wired || !usable {
+	if !wired || !usable || resume != "" {
 		return nil
 	}
 	return []string{flag, model}
+}
+
+// effortArgs returns the arguments that set a provider's reasoning effort, or
+// nil when none was named, the provider cannot take one, or the spawn resumes a
+// conversation: a birth value, for modelArgs' reason. The level passes through
+// unchecked because every provider spells its own levels.
+func effortArgs(kind, effort, resume string) []string {
+	effort, usable := flagValue(effort)
+	if !usable || resume != "" {
+		return nil
+	}
+	if kind == providers.Codex {
+		return []string{codexConfigFlag, fmt.Sprintf("%s=%q", codexEffortKey, effort)}
+	}
+	flag, wired := effortFlags[kind]
+	if !wired {
+		return nil
+	}
+	return []string{flag, effort}
 }
 
 // briefingArgs returns the arguments that append lich's own briefing to a

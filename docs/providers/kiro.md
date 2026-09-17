@@ -1,6 +1,6 @@
 # Kiro CLI
 
-`kiro-cli` (`internal/providers.Registry`), spawned as `kiro-cli chat`, since `--model` and `--trust-all-tools`
+`kiro-cli` (`internal/providers.Registry`), spawned as `kiro-cli chat`, since `--model`, `--effort` and `--trust-all-tools`
 are the `chat` subcommand's while `--agent` and `--resume-id` are the root's. `~/.kiro` hangs off the home alone,
 with no environment variable to honour (2.21.0 resolves `$HOME/.kiro`), and holds the agents, the settings and
 the conversations; the login token is a row in the SQLite store under `$XDG_DATA_HOME/kiro-cli/data.sqlite3`. A

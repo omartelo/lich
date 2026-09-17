@@ -553,7 +553,7 @@ func TestMCPOpenSessionReturnsTheNamesItIsAddressedBy(t *testing.T) {
 
 	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
 		{"name":"open_session","arguments":{"worktree":"auth-fix","base":"main","kind":"codex",
-		"model":"gpt-5.2"}}}`)
+		"model":"gpt-5.2","effort":"high"}}}`)
 
 	text, failed := textOf(t, replies[0])
 	if failed {
@@ -563,7 +563,7 @@ func TestMCPOpenSessionReturnsTheNamesItIsAddressedBy(t *testing.T) {
 	if call.method != "spawn.Open" {
 		t.Errorf("method = %q", call.method)
 	}
-	want := []any{"s1", "", "codex", "auth-fix", "main", "gpt-5.2"}
+	want := []any{"s1", "", "codex", "auth-fix", "main", "gpt-5.2", "high"}
 	if len(call.args) != len(want) {
 		t.Fatalf("args = %v, want %v", call.args, want)
 	}

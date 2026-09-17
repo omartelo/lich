@@ -14,6 +14,14 @@ import (
 // added later is an ALTER here, not a line there.
 var migrations = []func(*sql.Tx) error{
 	legacyMigrations,
+	addSessionEffort,
+}
+
+// addSessionEffort is version 2: the reasoning effort a session was opened at,
+// beside its model (SetSessionEffort).
+func addSessionEffort(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE sessions ADD COLUMN effort TEXT NOT NULL DEFAULT ''`)
+	return err
 }
 
 // NewerSchemaError is an open refused because the database was written by a
