@@ -287,9 +287,21 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     baseIsRemote: boolean,
     sandbox: string,
     prompt: string,
+    carryFrom: string,
   ) => {
     const wt = await ProjectService.CreateWorktree(path, projectId, name, base, baseIsRemote)
     if (wt) {
+      // Before the session opens, so the agent's first look at the checkout is
+      // the state it was forked from. A failed copy is said out loud and the
+      // session still opens: the worktree exists either way, and the work it
+      // was carrying is still sitting in the card it came from.
+      if (carryFrom) {
+        try {
+          await ProjectService.CarryUncommitted(carryFrom, wt.path)
+        } catch (err: unknown) {
+          toast.error(`Couldn’t carry the uncommitted work over: ${errorText(err)}`)
+        }
+      }
       const opened = newWorktreeSession(projectId, wt, sandbox, forking)
       // Queued before the card mounts, so the first spawn branches the parent's
       // conversation instead of opening an empty one (fork-queue.ts).
@@ -570,7 +582,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         currentBranch={git?.branch ?? ""}
         onCreate={createWorktree}
         onResume={resumeWorktree}
-        forkOf={forking}
+        forkOf={forking && { label: forking.label, path: forking.path || path }}
       />
       <WorktreeCloseDialogs close={worktreeClose} />
       <ConfirmDialog

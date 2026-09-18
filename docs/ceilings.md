@@ -260,6 +260,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The worktree setup script answers to the main checkout, never the new branch**
   (`internal/project/setup.go`): improve `.lich/setup-worktree.sh` on a feature branch and fresh worktrees keep
   running the old one until the change reaches the checkout the project points at.
+- **A fork's working-tree row carries what git can name, and nothing else**
+  (`internal/project/carry.go`): the copy is `git diff HEAD --binary` applied to the new checkout plus the
+  untracked files `--exclude-standard` lists, so what `.gitignore` covers — `node_modules`, a `.env`, a build
+  directory — is not carried, and the worktree setup script is what answers for it. Everything arrives
+  unstaged: which changes the source had staged is a fact about the commit *it* is preparing. The row is
+  offered only when the base is the forked session's own branch, because the patch is read against that
+  checkout's HEAD; picking any other base branches off it at its last commit, the way every fork did before.
+  And it rides on the fork entry itself, so the five providers whose CLI only resumes (README's provider
+  table) cannot reach it either.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
 - **The status badge has a single source** (`internal/project/status.go`): the branch, the HEAD commit and the

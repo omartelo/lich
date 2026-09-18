@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toBranchName } from "@/lib/git/branch-name"
+import { useGitStatus } from "@/lib/git/use-git-status"
 import { issueBrief, issueName, parseIssueRef } from "@/lib/issue"
 import { useSandboxChoice, type SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { cn, errorText } from "@/lib/utils"
@@ -41,22 +42,34 @@ interface WorktreeDialogProps {
    * sandbox is the confinement answer for that session ("on"/"off", "" when the
    * machine cannot confine and nothing was asked). prompt is what that session
    * is handed once it comes up — the issue this worktree is for, or "" when the
-   * name was not one. */
+   * name was not one. carryFrom is the checkout whose uncommitted work the new
+   * one starts with, or "" when it starts at the base's last commit. */
   onCreate: (
     name: string,
     base: string,
     baseIsRemote: boolean,
     sandbox: SandboxAnswer,
     prompt: string,
+    carryFrom: string,
   ) => Promise<void>
   /** Reopen a session on an already-existing worktree. */
   onResume: (wt: { name: string; path: string }) => void
   /** The session whose conversation this worktree's session will carry, when
-   * the dialog was opened by a fork rather than by the + button. It only
-   * changes what the dialog says: the branching itself is the caller's, and
-   * the base list, the setup row and the confinement row are the same either
-   * way. */
-  forkOf?: { label: string } | null
+   * the dialog was opened by a fork rather than by the + button: its label for
+   * the sentence, and its checkout, which is both the base the fork opens on
+   * and the source of the working-tree row. */
+  forkOf?: { label: string; path: string } | null
+}
+
+// The forked session's checkout as a base: its branch at the same commit, plus
+// the work it has not committed. A fork is usually made at the moment there is
+// uncommitted work to take two ways, so this is the row the dialog opens on —
+// the branch itself stays right below it, and is that same branch at its last
+// commit.
+interface WorkingTree {
+  path: string
+  branch: string
+  files: number
 }
 
 // Row values carry their group so one string identifies the selection:
@@ -69,11 +82,13 @@ const splitValue = (value: string): [string, string] => {
 }
 
 // filterBranches narrows every group to the rows matching the search, so a repo
-// with dozens of remote branches collapses to the one being looked for.
-function filterBranches(branches: Branches | null, query: string) {
+// with dozens of remote branches collapses to the one being looked for. The
+// working-tree row answers to its branch name, which is the only name it has.
+function filterBranches(branches: Branches | null, query: string, tree: WorkingTree | null) {
   const needle = query.trim().toLowerCase()
   const match = (name: string) => name.toLowerCase().includes(needle)
   return {
+    tree: tree && match(tree.branch) ? tree : null,
     worktrees: (branches?.worktrees ?? []).filter((w) => match(w.name)),
     local: (branches?.local ?? []).filter(match),
     remote: (branches?.remote ?? []).filter(match),
@@ -84,6 +99,7 @@ function filterBranches(branches: Branches | null, query: string) {
 // filter's auto-select can walk them without caring which group they sit in.
 function flatValues(vis: ReturnType<typeof filterBranches>): string[] {
   return [
+    ...(vis.tree ? [rowValue("tree", vis.tree.path)] : []),
     ...vis.worktrees.map((w) => rowValue("worktree", w.path)),
     ...vis.local.map((b) => rowValue("local", b)),
     ...vis.remote.map((b) => rowValue("remote", b)),
@@ -92,7 +108,7 @@ function flatValues(vis: ReturnType<typeof filterBranches>): string[] {
 
 interface GroupProps {
   title: string
-  items: ReadonlyArray<{ value: string; label: string }>
+  items: ReadonlyArray<{ value: string; label: string; note?: string }>
   base: string
   onSelect: (value: string) => void
 }
@@ -114,11 +130,16 @@ function Group({ title, items, base, onSelect }: GroupProps) {
           aria-selected={base === item.value}
           onClick={() => onSelect(item.value)}
           className={cn(
-            "flex w-full items-center rounded-md px-2 py-1.5 text-left font-mono text-xs outline-none transition-colors",
+            "flex w-full flex-col items-start rounded-md px-2 py-1.5 text-left font-mono text-xs outline-none transition-colors",
             base === item.value ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
           )}
         >
-          <span className="truncate">{item.label}</span>
+          <span className="w-full truncate">{item.label}</span>
+          {item.note && (
+            <span className="w-full truncate font-sans text-2xs text-muted-foreground">
+              {item.note}
+            </span>
+          )}
         </button>
       ))}
     </div>
@@ -152,8 +173,19 @@ export function WorktreeDialog({
   const listRef = useRef<HTMLDivElement>(null)
   // A worktree is always the linked checkout, so the rung is read on that side.
   const sandbox = useSandboxChoice(providerId, projectId, true, open)
+  // The forked session's checkout, polled by the shared store the card behind
+  // this dialog is already subscribed to. An empty path subscribes to nothing,
+  // which is what the + button's dialog passes.
+  const source = useGitStatus(forkOf?.path ?? "")
+  // The branch has to be one git will take as a base: a checkout sitting on a
+  // detached HEAD reports something that names no branch, and offering it would
+  // buy a git refusal at the end of a dialog the user already filled in.
+  const tree: WorkingTree | null =
+    forkOf && source && source.files > 0 && (branches?.local ?? []).includes(source.branch)
+      ? { path: forkOf.path, branch: source.branch, files: source.files }
+      : null
 
-  const vis = filterBranches(branches, filter)
+  const vis = filterBranches(branches, filter, tree)
   const flat = flatValues(vis)
   const noMatches = branches !== null && flat.length === 0
   // The issue the field names, if it names one. The reference is what was
@@ -228,9 +260,6 @@ export function WorktreeDialog({
           return
         }
         setBranches(loaded)
-        const local = loaded.local ?? []
-        const preferred = local.includes(currentBranch) ? currentBranch : local[0]
-        setBase(preferred ? rowValue("local", preferred) : "")
       })
       .catch((err: unknown) => {
         if (!stale) {
@@ -240,13 +269,35 @@ export function WorktreeDialog({
     return () => {
       stale = true
     }
-  }, [open, projectPath, currentBranch])
+  }, [open, projectPath])
+
+  // The row the dialog opens on, applied while nothing is selected yet: the
+  // forked session's working tree when it has work to carry, then the branch
+  // that session is on, then the repository's own branch. A fork waits for its
+  // source's git status instead of preselecting a branch it would have to move
+  // off a tick later — the card behind the dialog is polling that path already,
+  // so the wait is usually no wait at all.
+  useEffect(() => {
+    if (!open || base !== "" || branches === null || (forkOf && source === null)) {
+      return
+    }
+    if (tree) {
+      setBase(rowValue("tree", tree.path))
+      return
+    }
+    const local = branches.local ?? []
+    const preferred =
+      [source?.branch ?? "", currentBranch].find((branch) => local.includes(branch)) ?? local[0]
+    if (preferred) {
+      setBase(rowValue("local", preferred))
+    }
+  }, [open, base, branches, forkOf, source, tree, currentBranch])
 
   // Typing a filter drops the current base only when it scrolls out of view, so
   // "type develop, press Enter" lands on the top match without a click.
   const onFilter = (value: string) => {
     setFilter(value)
-    const next = flatValues(filterBranches(branches, value))
+    const next = flatValues(filterBranches(branches, value, tree))
     if (next.length > 0 && !next.includes(base)) {
       setBase(next[0])
     }
@@ -290,12 +341,15 @@ export function WorktreeDialog({
     setSubmitting(true)
     setSubmitError("")
     try {
+      // The working-tree row branches off the same branch every other row would
+      // have named; what makes it different is the checkout it copies after.
       await onCreate(
         newBranch,
-        id,
+        group === "tree" ? (tree?.branch ?? "") : id,
         group === "remote",
         sandbox.answer,
         issue ? issueBrief(issue) : "",
+        group === "tree" ? id : "",
       )
     } catch (err) {
       setSubmitError(errorText(err))
@@ -388,6 +442,24 @@ export function WorktreeDialog({
             aria-label="Base branch"
             className="min-h-0 flex-1 overflow-y-auto rounded-md border border-input p-1"
           >
+            <Group
+              title="This session"
+              items={
+                vis.tree
+                  ? [
+                      {
+                        value: rowValue("tree", vis.tree.path),
+                        label: `${vis.tree.branch} · working tree`,
+                        note: `Same commit, plus the ${vis.tree.files} ${
+                          vis.tree.files === 1 ? "file" : "files"
+                        } this session has not committed.`,
+                      },
+                    ]
+                  : []
+              }
+              base={base}
+              onSelect={setBase}
+            />
             <Group
               title="Worktrees"
               items={

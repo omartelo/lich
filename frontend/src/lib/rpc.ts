@@ -346,6 +346,14 @@ export const ProjectService = {
       base,
       baseIsRemote,
     ]),
+  /**
+   * Copy what src has not committed into dst — the fork's "working tree" base,
+   * which starts the new checkout where the forked session actually is rather
+   * than at its last commit. Both must sit on the same commit, and everything
+   * lands unstaged; what git ignores stays behind.
+   */
+  CarryUncommitted: (src: string, dst: string) =>
+    call<null>("project.CarryUncommitted", [src, dst]),
   /** One GitHub issue, for the New worktree dialog: its title names the branch,
    * its body is handed to the session. A pull request's number is refused. */
   Issue: (path: string, number: number) => call<Issue>("project.Issue", [path, number]),
