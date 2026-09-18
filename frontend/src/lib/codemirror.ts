@@ -32,8 +32,10 @@ const diffTheme = EditorView.theme({
   },
   ".cm-line": { padding: "0 0.5rem" },
   "&.cm-focused": { outline: "none" },
+  // Solid, not transparent: the gutter is sticky, so on a horizontally scrolled
+  // view (the side-by-side columns are narrow) the code slides underneath it.
   ".cm-gutters": {
-    backgroundColor: "transparent",
+    backgroundColor: "var(--background)",
     border: "none",
     color: "var(--muted-foreground)",
     fontFamily: "'FiraCode Nerd Font Mono', monospace",
