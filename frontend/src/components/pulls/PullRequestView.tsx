@@ -55,7 +55,13 @@ import { PullsConflicts } from "./PullsConflicts"
 import { PullsConversation } from "./PullsConversation"
 import { PullsFiles } from "./PullsFiles"
 import { PullsOverview } from "./PullsOverview"
-import { ChecksStat, MergeableStat, ReviewStat, StateStat } from "./PullsStats"
+import {
+  ChecksStat,
+  MergeableStat,
+  ReviewStat,
+  reviewStatCountsThreads,
+  StateStat,
+} from "./PullsStats"
 import type { ThreadActions } from "./ReviewThread"
 import { SubmitReviewDialog } from "./SubmitReviewDialog"
 
@@ -157,7 +163,7 @@ export function PullRequestView({
   const threads = threadTally(timeline)
   // The chip earns a click only when it has a count behind it: that count lives
   // in the Conversation tab, and so does the way to clear the verdict.
-  const reviewLeadsToThreads = detail.reviewDecision === "CHANGES_REQUESTED" && threads.total > 0
+  const reviewLeadsToThreads = reviewStatCountsThreads(detail.reviewDecision, threads)
   const blocked = mergeBlockedReason(detail)
   const methods = allowedMergeMethods(rules)
   const editableMethods = methods.filter((method) => method !== "rebase")

@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import type { ChecksRollup, PullRequestDetail } from "@/lib/api-types"
+import type { ThreadTally } from "@/lib/pulls/conversation-timeline"
 import { conflictsWithBase } from "@/lib/pulls/merge-gate"
 import { cn } from "@/lib/utils"
 
@@ -107,6 +108,14 @@ const REVIEW_STAT: Record<string, { icon: LucideIcon; tone: Tone; label: string 
   REVIEW_REQUIRED: { icon: CircleDashed, tone: "muted", label: "Review required" },
 }
 
+// Whether the chip carries a thread count, and so has somewhere to lead. The
+// header reads this to decide whether to make the chip a way into the
+// Conversation tab: a count on screen with no way to reach what it counts, or a
+// link on a chip that counts nothing, are the two ways this drifts apart.
+export function reviewStatCountsThreads(decision: string, threads: ThreadTally): boolean {
+  return decision === "CHANGES_REQUESTED" && threads.total > 0
+}
+
 // A requested change that has run out of open threads is not a failure any more,
 // it is a wait, and what it waits on is the reviewer, not the branch. That is
 // what the row already means by the pending tone, next to the checks running.
@@ -119,13 +128,13 @@ export function ReviewStat({
 }: {
   decision: string
   /** The review threads, as threadTally counts them. */
-  threads: { open: number; total: number }
+  threads: ThreadTally
 }) {
   const stat = REVIEW_STAT[decision]
   if (!stat) {
     return null
   }
-  if (decision !== "CHANGES_REQUESTED" || threads.total === 0) {
+  if (!reviewStatCountsThreads(decision, threads)) {
     return (
       <Stat icon={stat.icon} tone={stat.tone}>
         {stat.label}

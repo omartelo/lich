@@ -266,6 +266,13 @@ const STATE_GLYPH: Record<string, LucideIcon> = {
 
 // Only a decision worth acting on shows: REVIEW_REQUIRED is the resting state
 // of most rows, and labelling every one of them says nothing.
+//
+// The row stops at the verdict where the detail's chip goes on to say whether
+// any thread is still open, so a pull request whose threads are all resolved
+// reads as a plain "changes requested" here and as a wait over there. The
+// counts come from the conversation read, and one of those per row is a GraphQL
+// round-trip per row: the deliberate trade is that the list summarises and the
+// screen behind it qualifies.
 const REVIEW_LABEL: Record<string, { text: string; className: string }> = {
   APPROVED: { text: "approved", className: "text-tone-pass" },
   CHANGES_REQUESTED: { text: "changes requested", className: "text-destructive" },

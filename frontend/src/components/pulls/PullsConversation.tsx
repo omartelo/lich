@@ -146,7 +146,7 @@ export function PullsConversation({
 }
 
 // Which verdicts can still be withdrawn. A dismissed review is already gone, and
-// a bare comment never counted towards anything, and GitHub refuses both. A review
+// a bare comment never counted towards anything. GitHub refuses both. A review
 // older than the conversation read's cap arrives without a node id and gets no
 // button either, because there is nothing to address the mutation to.
 const DISMISSABLE = new Set(["CHANGES_REQUESTED", "APPROVED"])

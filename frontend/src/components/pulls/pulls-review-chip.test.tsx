@@ -10,7 +10,7 @@
 import { mountBudget } from "@/test/render-budget"
 import { createElement } from "react"
 import { expect, it } from "vitest"
-import { ReviewStat } from "./PullsStats"
+import { ReviewStat, reviewStatCountsThreads } from "./PullsStats"
 
 const NONE = { open: 0, total: 0 }
 
@@ -49,4 +49,15 @@ it("says the branch is done once nothing is open", async () => {
   expect(await chipText("CHANGES_REQUESTED", { open: 0, total: 3 })).toBe(
     "Changes requested · all threads resolved",
   )
+})
+
+// The header reads this to decide whether the chip is a link. It has to answer
+// for exactly the readings that carry a count, or a chip gains a suffix without
+// gaining a way to reach what it counts.
+it("says which readings carry a count", () => {
+  expect(reviewStatCountsThreads("CHANGES_REQUESTED", { open: 2, total: 3 })).toBe(true)
+  expect(reviewStatCountsThreads("CHANGES_REQUESTED", { open: 0, total: 3 })).toBe(true)
+  expect(reviewStatCountsThreads("CHANGES_REQUESTED", NONE)).toBe(false)
+  expect(reviewStatCountsThreads("APPROVED", { open: 2, total: 3 })).toBe(false)
+  expect(reviewStatCountsThreads("", { open: 2, total: 3 })).toBe(false)
 })
