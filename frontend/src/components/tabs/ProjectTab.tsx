@@ -45,8 +45,8 @@ export function ProjectTab({ project, sessionIds, to, active, onClose }: Project
         )}
       >
         {badge === "busy" && <LoaderCircle className="size-3 shrink-0 animate-spin" />}
-        {badge === "done" && <Check className="size-3 shrink-0 text-emerald-500" />}
-        {badge === "waiting" && <Bell className="size-3 shrink-0 text-amber-500" />}
+        {badge === "done" && <Check className="size-3 shrink-0 text-tone-pass" />}
+        {badge === "waiting" && <Bell className="size-3 shrink-0 text-tone-wait" />}
         <span className="truncate">{project.name}</span>
         {/* preventDefault, not stopPropagation: the parent is a link, and the
             click must not navigate to the tab being closed. */}

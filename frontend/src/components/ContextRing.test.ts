@@ -7,13 +7,13 @@ describe("usageColor", () => {
     expect(usageColor(79)).toBe("text-muted-foreground")
   })
 
-  it("turns amber from 80% up to 95%", () => {
-    expect(usageColor(80)).toBe("text-amber-500")
-    expect(usageColor(94)).toBe("text-amber-500")
+  it("warns from 80% up to 95%", () => {
+    expect(usageColor(80)).toBe("text-tone-wait")
+    expect(usageColor(94)).toBe("text-tone-wait")
   })
 
-  it("turns red from 95%", () => {
-    expect(usageColor(95)).toBe("text-red-500")
-    expect(usageColor(100)).toBe("text-red-500")
+  it("goes critical from 95%", () => {
+    expect(usageColor(95)).toBe("text-destructive")
+    expect(usageColor(100)).toBe("text-destructive")
   })
 })

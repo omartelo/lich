@@ -31,7 +31,7 @@ export function PullRequestCard({ path, active, onSelect, onClose }: PullRequest
       {pr && (
         <span className="flex items-center gap-1.5 text-xs">
           <span className="text-muted-foreground">#{pr.number}</span>
-          <span className="text-emerald-500">Open</span>
+          <span className="text-tone-pass">Open</span>
         </span>
       )}
     </SidebarCard>

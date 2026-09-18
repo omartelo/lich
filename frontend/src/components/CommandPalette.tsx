@@ -439,7 +439,7 @@ function HistoryRow({
               beside it: there is no branch to read off a directory that is not
               there, and it is the same absence that makes the row unresumable. */}
           {session.gone ? (
-            <span className="flex shrink-0 items-center gap-1 text-amber-500">
+            <span className="flex shrink-0 items-center gap-1 text-tone-wait">
               <TriangleAlert className="size-3 shrink-0" />
               checkout gone
             </span>

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import {
   Check,
+  CheckCheck,
   CircleDashed,
   Clock,
   GitMerge,
@@ -9,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import type { ChecksRollup, PullRequestDetail } from "@/lib/api-types"
+import type { ThreadTally } from "@/lib/pulls/conversation-timeline"
 import { conflictsWithBase } from "@/lib/pulls/merge-gate"
 import { cn } from "@/lib/utils"
 
@@ -18,10 +20,14 @@ import { cn } from "@/lib/utils"
 
 type Tone = "pass" | "fail" | "pending" | "muted"
 
+// Tokens, not palette steps. A value that reads on the dark card is thin on the
+// light one (emerald-500 measured 2.33:1 against it, amber-500 2.02:1, where
+// 12px text wants 4.5:1), so each tone is defined per theme in index.css and
+// carried by the theme file, the way --destructive always was.
 const toneClass: Record<Tone, string> = {
-  pass: "text-emerald-500",
+  pass: "text-tone-pass",
   fail: "text-destructive",
-  pending: "text-amber-500",
+  pending: "text-tone-wait",
   muted: "text-muted-foreground",
 }
 
@@ -102,14 +108,49 @@ const REVIEW_STAT: Record<string, { icon: LucideIcon; tone: Tone; label: string 
   REVIEW_REQUIRED: { icon: CircleDashed, tone: "muted", label: "Review required" },
 }
 
-export function ReviewStat({ decision }: { decision: string }) {
+// Whether the chip carries a thread count, and so has somewhere to lead. The
+// header reads this to decide whether to make the chip a way into the
+// Conversation tab: a count on screen with no way to reach what it counts, or a
+// link on a chip that counts nothing, are the two ways this drifts apart.
+export function reviewStatCountsThreads(decision: string, threads: ThreadTally): boolean {
+  return decision === "CHANGES_REQUESTED" && threads.total > 0
+}
+
+// A requested change that has run out of open threads is not a failure any more,
+// it is a wait, and what it waits on is the reviewer, not the branch. That is
+// what the row already means by the pending tone, next to the checks running.
+//
+// Only CHANGES_REQUESTED is annotated: everywhere else the verdict is not a
+// question the threads can answer.
+export function ReviewStat({
+  decision,
+  threads,
+}: {
+  decision: string
+  /** The review threads, as threadTally counts them. */
+  threads: ThreadTally
+}) {
   const stat = REVIEW_STAT[decision]
   if (!stat) {
     return null
   }
+  if (!reviewStatCountsThreads(decision, threads)) {
+    return (
+      <Stat icon={stat.icon} tone={stat.tone}>
+        {stat.label}
+      </Stat>
+    )
+  }
+  if (threads.open > 0) {
+    return (
+      <Stat icon={stat.icon} tone={stat.tone}>
+        {stat.label} · {threads.open} of {threads.total} threads unresolved
+      </Stat>
+    )
+  }
   return (
-    <Stat icon={stat.icon} tone={stat.tone}>
-      {stat.label}
+    <Stat icon={CheckCheck} tone="pending">
+      {stat.label} · all threads resolved
     </Stat>
   )
 }

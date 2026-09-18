@@ -9,10 +9,10 @@ import (
 const conversationPayload = `{"data":{"repository":{"pullRequest":{
   "headRefOid": "21e6cdc4336e8f5db46724d82fecf0423bc41a0a",
   "reviews": {"nodes": [
-    {"author":{"login":"omartelo"},"state":"CHANGES_REQUESTED","body":"two things first","submittedAt":"2026-07-30T10:00:00Z"},
+    {"id":"PRR_kw1","author":{"login":"omartelo"},"state":"CHANGES_REQUESTED","body":"two things first","submittedAt":"2026-07-30T10:00:00Z"},
     {"author":{"login":"bot"},"state":"COMMENTED","body":"","submittedAt":"2026-07-30T10:05:00Z"},
     {"author":{"login":"drafting"},"state":"PENDING","body":"not submitted","submittedAt":null},
-    {"author":{"login":"reviewer"},"state":"APPROVED","body":"","submittedAt":"2026-07-30T11:00:00Z"}
+    {"id":"PRR_kw2","author":{"login":"reviewer"},"state":"APPROVED","body":"","submittedAt":"2026-07-30T11:00:00Z"}
   ]},
   "comments": {"nodes": [
     {"author":{"login":"omartelo"},"body":"rebased on main","createdAt":"2026-07-30T09:00:00Z"}
@@ -53,6 +53,11 @@ func TestParseConversation(t *testing.T) {
 		}
 		if convo.Reviews[0].State != "CHANGES_REQUESTED" || convo.Reviews[0].Body != "two things first" {
 			t.Errorf("first review = %+v", convo.Reviews[0])
+		}
+		// The node id is what dismissing the review is addressed to, and this
+		// read is the only place it comes from.
+		if convo.Reviews[0].ID != "PRR_kw1" {
+			t.Errorf("first review id = %q, want PRR_kw1", convo.Reviews[0].ID)
 		}
 		// An approval with no body still carries its verdict.
 		if convo.Reviews[1].State != "APPROVED" || convo.Reviews[1].Author != "reviewer" {

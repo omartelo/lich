@@ -197,7 +197,7 @@ export function useSessionEvents({
             Due {scheduledFor(data.at, new Date())}: {data.prompt}
           </span>
         </div>,
-        { duration: FORFEIT_TOAST_MS, icon: <AlarmClockOff className="size-4 text-amber-500" /> },
+        { duration: FORFEIT_TOAST_MS, icon: <AlarmClockOff className="size-4 text-tone-wait" /> },
       )
     })
     return () => off()
@@ -389,7 +389,7 @@ export function useSessionEvents({
         </div>,
         {
           duration: ATTENTION_TOAST_MS,
-          icon: <Bell className="size-4 text-amber-500" />,
+          icon: <Bell className="size-4 text-tone-wait" />,
           action: {
             label: "Open",
             onClick: () => {

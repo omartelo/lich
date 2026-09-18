@@ -1,8 +1,9 @@
 import { useState } from "react"
-import { Check, CheckCheck, ChevronDown, ChevronRight, MessageSquare, X } from "lucide-react"
+import { Check, CheckCheck, ChevronDown, ChevronRight, MessageSquare, Undo2, X } from "lucide-react"
 import { toast } from "sonner"
 import { Markdown } from "@/components/Markdown"
 import { Notice } from "@/components/common/Notice"
+import { Button } from "@/components/ui/button"
 import type { PullRequestConversation, PullRequestReview } from "@/lib/api-types"
 import { conversationTimeline } from "@/lib/pulls/conversation-timeline"
 import type { DraftScope } from "@/lib/pulls/draft-store"
@@ -22,6 +23,8 @@ interface PullsConversationProps {
   actions: ThreadActions
   /** Leave a comment on the pull request itself. */
   onComment: (body: string) => Promise<void>
+  /** Withdraw a submitted review, with the reason GitHub records for it. */
+  onDismiss: (reviewID: string, message: string) => Promise<void>
 }
 
 // PullsConversation is the "Conversation" tab: everything said about the pull
@@ -35,6 +38,7 @@ export function PullsConversation({
   pull,
   actions,
   onComment,
+  onDismiss,
 }: PullsConversationProps) {
   const [draft, setDraft] = useDraft(pull, "comment")
   const [sending, setSending] = useState(false)
@@ -68,7 +72,13 @@ export function PullsConversation({
 
       {timeline.items.map((item) => {
         if (item.kind === "review") {
-          return <ReviewVerdict key={`r${item.at}${item.review.author}`} review={item.review} />
+          return (
+            <ReviewVerdict
+              key={`r${item.at}${item.review.author}`}
+              review={item.review}
+              onDismiss={onDismiss}
+            />
+          )
         }
         if (item.kind === "comment") {
           return (
@@ -135,17 +145,47 @@ export function PullsConversation({
   )
 }
 
+// Which verdicts can still be withdrawn. A dismissed review is already gone, and
+// a bare comment never counted towards anything. GitHub refuses both. A review
+// older than the conversation read's cap arrives without a node id and gets no
+// button either, because there is nothing to address the mutation to.
+const DISMISSABLE = new Set(["CHANGES_REQUESTED", "APPROVED"])
+
 // A verdict is the one thing in the timeline with a colour: it is the answer to
-// "can this land", which is what the eye comes here for.
-function ReviewVerdict({ review }: { review: PullRequestReview }) {
+// "can this land", which is what the eye comes here for. It is also the only
+// place that answer can be taken back: resolving every thread a review opened
+// leaves its verdict standing, and this is the door out of that.
+function ReviewVerdict({
+  review,
+  onDismiss,
+}: {
+  review: PullRequestReview
+  onDismiss: (reviewID: string, message: string) => Promise<void>
+}) {
+  const [why, setWhy] = useState<string | null>(null)
+  const [dismissing, setDismissing] = useState(false)
+  const canDismiss = review.id !== "" && DISMISSABLE.has(review.state)
+
+  const dismiss = async () => {
+    setDismissing(true)
+    try {
+      await onDismiss(review.id, why ?? "")
+      setWhy(null)
+    } catch (err: unknown) {
+      toast.error(`Dismiss failed: ${errorText(err)}`)
+    } finally {
+      setDismissing(false)
+    }
+  }
+
   const verdict =
     review.state === "APPROVED" ? (
-      <span className="flex items-center gap-1 text-emerald-500">
+      <span className="flex items-center gap-1 text-tone-pass">
         <Check className="size-3.5" />
         approved
       </span>
     ) : review.state === "CHANGES_REQUESTED" ? (
-      <span className="flex items-center gap-1 text-amber-500">
+      <span className="flex items-center gap-1 text-tone-wait">
         <X className="size-3.5" />
         requested changes
       </span>
@@ -160,10 +200,46 @@ function ReviewVerdict({ review }: { review: PullRequestReview }) {
 
   return (
     <div className="flex flex-col gap-1">
-      <Byline author={review.author} date={review.date}>
-        {verdict}
-      </Byline>
+      <div className="flex items-baseline gap-2">
+        <div className="min-w-0 flex-1">
+          <Byline author={review.author} date={review.date}>
+            {verdict}
+          </Byline>
+        </div>
+        {/* Only while the box is shut: an open box carries its own buttons, and
+            two ways to start the same thing read as two different things. */}
+        {canDismiss && why === null && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto flex-none px-2 py-1 text-xs"
+            onClick={() => setWhy("")}
+          >
+            <Undo2 />
+            Dismiss
+          </Button>
+        )}
+      </div>
       {review.body.trim() !== "" && <Markdown>{review.body}</Markdown>}
+      {/* GitHub will not dismiss without a reason and records the one given, so
+          the box is the confirmation: CommentBox already refuses to send empty.
+          Inline, under the review it undoes: nothing opens over what is being
+          read. */}
+      {why !== null && (
+        <div className="mt-1 flex flex-col gap-1.5">
+          <span className="text-xs text-muted-foreground">Why this review no longer applies</span>
+          <CommentBox
+            value={why}
+            onChange={(next) => setWhy(next)}
+            onSubmit={() => void dismiss()}
+            onCancel={() => setWhy(null)}
+            submitLabel="Dismiss review"
+            busy={dismissing}
+            autoFocus
+            placeholder="What changed since it was written"
+          />
+        </div>
+      )}
     </div>
   )
 }

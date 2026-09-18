@@ -30,6 +30,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   forked: a new worktree gets its `.env` files from the main checkout and the
   rest from the setup script, the way it always has.
 
+- **The review chip says whether it is waiting on you.** A pull request whose
+  review asked for changes now reads "Changes requested · 2 of 3 threads
+  unresolved" while work is still open, and "Changes requested · all threads
+  resolved" once there is none: amber, the tone the row already uses for a
+  wait. Clicking it opens the Conversation tab.
+
+- **Dismiss a review without leaving lich.** A submitted review in the
+  Conversation tab carries a Dismiss button; GitHub requires a reason and
+  records it on the pull request, so the box asks for one. Resolving threads
+  never clears a "changes requested" verdict on its own; this is what does.
+
+### Changed
+
+- **Status colors are readable on the light theme, and themes can set them.**
+  The green, amber and red that mark passed, waiting and critical were one
+  value for both themes, picked for the dark card: on the light one they
+  measured 2.0 to 2.3:1 where small text wants 4.5:1. They are now the
+  `tone-pass`, `tone-wait` and `destructive` theme tokens, darker on light and
+  unchanged on dark. A theme file can set the first two; one that does not
+  takes lich's values, as with any token added by a release.
+
 ### Fixed
 
 - **Line numbers stay readable when a diff is scrolled sideways.** The number
@@ -50,7 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It now stays waiting to be collected and the note arrives as usual. oh-my-pi
   does not tell lich a tool call was interrupted, so there a result landing in
   the rest of that wait, at most 90 seconds, is still lost.
-
 ## [0.52.0] - 2026-09-17
 
 ### Added

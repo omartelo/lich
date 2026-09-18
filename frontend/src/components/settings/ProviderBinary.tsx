@@ -274,7 +274,7 @@ function Verdict({ check, bin }: { check: BinaryCheck | null; bin: string }) {
     return <X className="size-3.5 shrink-0 text-destructive" aria-label={label} />
   }
   if (check.status === "ok") {
-    return <Check className="size-3.5 shrink-0 text-emerald-500" aria-label={label} />
+    return <Check className="size-3.5 shrink-0 text-tone-pass" aria-label={label} />
   }
   return null
 }

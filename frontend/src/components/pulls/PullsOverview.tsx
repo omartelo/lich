@@ -227,7 +227,7 @@ function Reviewers({ path, detail, onRefresh }: PullRequestPaneProps) {
 // What each verdict reads as on a chip. A reviewer with no verdict yet is the
 // default below: the review is still owed.
 const VERDICTS: Record<string, { icon: LucideIcon; tone: string; label: string }> = {
-  APPROVED: { icon: Check, tone: "text-emerald-500", label: "approved" },
+  APPROVED: { icon: Check, tone: "text-tone-pass", label: "approved" },
   CHANGES_REQUESTED: { icon: X, tone: "text-destructive", label: "requested changes" },
   COMMENTED: { icon: MessageSquare, tone: "text-muted-foreground", label: "commented" },
   DISMISSED: { icon: CircleDashed, tone: "text-muted-foreground", label: "review dismissed" },

@@ -519,7 +519,7 @@ export function SessionCard({
                 </span>
               ) : status === "waiting" ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs">
-                  <CircleQuestionMark className="size-3 shrink-0 text-amber-500" />
+                  <CircleQuestionMark className="size-3 shrink-0 text-tone-wait" />
                   {/* The question takes the whole line when there is one: the
                       amber glyph and the ring around the icon already say the
                       session is waiting, so spending the width on saying it
@@ -527,7 +527,7 @@ export function SessionCard({
                       cannot already see. Not every provider has them (see
                       docs/hooks/session-state.md), and the generic line is what
                       those fall back to. */}
-                  <span className="truncate font-medium text-amber-500">
+                  <span className="truncate font-medium text-tone-wait">
                     {waitingReason || "Waiting on you"}
                   </span>
                 </span>
@@ -628,7 +628,7 @@ export function SessionCard({
                       <span
                         className={cn(
                           "flex items-center gap-0.5 tabular-nums",
-                          base.kind === "conflict" && "text-amber-500",
+                          base.kind === "conflict" && "text-tone-wait",
                         )}
                       >
                         {base.kind === "conflict" ? (

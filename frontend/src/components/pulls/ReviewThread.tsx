@@ -131,7 +131,7 @@ export function ReviewThread({
         >
           <Chevron className="size-3.5 shrink-0" />
           {thread.isResolved ? (
-            <CheckCheck className="size-3.5 shrink-0 text-emerald-500" />
+            <CheckCheck className="size-3.5 shrink-0 text-tone-pass" />
           ) : (
             <MessageSquare className="size-3.5 shrink-0" />
           )}
@@ -143,7 +143,7 @@ export function ReviewThread({
           ) : (
             <span className="shrink-0">Line {thread.line}</span>
           )}
-          {thread.isResolved && <span className="shrink-0 text-emerald-500">Resolved</span>}
+          {thread.isResolved && <span className="shrink-0 text-tone-pass">Resolved</span>}
           {thread.isOutdated && <span className="shrink-0">· outdated</span>}
           {/* Closed, the count is all that says how much is under the line. */}
           {!open && (

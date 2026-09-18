@@ -84,7 +84,7 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
         {conflicts && (
           // Amber because it is a state, not a failure: the binding was stored,
           // and whichever listener runs first is the one that will answer to it.
-          <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-amber-500">
+          <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-tone-wait">
             <TriangleAlert className="size-3 shrink-0" />
             Also bound to {conflicts.map(hotkeyLabel).join(", ")}
           </span>
@@ -101,7 +101,7 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
           "min-w-36 shrink-0 rounded-md border px-3 py-1 text-left text-sm tabular-nums outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
           recording ? "border-ring text-muted-foreground" : "border-border hover:bg-accent",
           !recording && (isUnassigned ? "text-muted-foreground" : "text-foreground"),
-          conflicts && !recording && "border-amber-500/60",
+          conflicts && !recording && "border-tone-wait/60",
         )}
       >
         {recording ? "Press keys…" : formatCombo(combo, isMac)}

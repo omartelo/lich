@@ -56,15 +56,27 @@ The only chromatic color in the app. It encodes state, never decorates, and is n
 
 | Color | Meaning | Where |
 | --- | --- | --- |
-| `emerald-500` | done / added | session status ring, diff additions, diff-stat `+n` |
-| `amber-500` | waiting on user | session status ring, project-tab badge |
+| `--tone-pass` (green) | done / passed | session status ring, check and review verdicts, provider tick |
+| `--tone-wait` (amber) | waiting on user | session status ring, project-tab badge, running checks |
 | `muted` spinner | busy / producing | animated status ring |
-| `--destructive` (red) | destructive action, deletions | diff removals, "Close session", discard |
+| `--destructive` (red) | destructive action, deletions, critical | diff removals, "Close session", context over 95% |
+| `emerald` / `red` mixes | added / removed lines | diff gutters and line fills (`index.css`) |
 | language badge hues | file language | diff file header only (`lang-badge.ts`) |
+
+**The three status tones are theme tokens, not palette steps.** They are defined per scheme in
+`index.css` beside `--destructive` and carried by every theme file, because a value that reads on the
+dark card is thin on the light one: `emerald-500` measured 2.33:1 against the light card and
+`amber-500` 2.02:1, where 12px text wants 4.5:1. The bundled values are Tailwind's 700 on light and 500
+on dark. Write `text-tone-pass` / `text-tone-wait`, never `text-emerald-500`: a raw step is invisible
+to an installed theme and answers to one scheme only.
+
+Added and removed lines keep the raw `emerald`/`red` mixes: those are background tints at 10–20%, a
+different question from text on a card, and the diff-stat `+n`/`-n` keeps its own `600`/`400` split
+because it means added/removed, not passed/failed.
 
 A busy/done/waiting ring wraps the provider glyph (`SessionStatusIcon`); the same three states badge an
 inactive project tab (`ProjectTab`). The done ring carries one opacity step of its own: solid while the
-finished turn is still unread, `emerald-500/30` once the user has watched that card.
+finished turn is still unread, `tone-pass/30` once the user has watched that card.
 
 ### Typography
 
