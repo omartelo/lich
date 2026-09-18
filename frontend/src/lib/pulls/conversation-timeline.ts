@@ -66,3 +66,14 @@ export function conversationTimeline(conversation: PullRequestConversation | nul
 export function conversationCount(timeline: Timeline): number {
   return timeline.items.length + timeline.resolved.length
 }
+
+/** How the review threads stand. The status line reads this next to the verdict:
+ * GitHub keeps a CHANGES_REQUESTED until the reviewer moves, so the verdict
+ * alone cannot say whether there is anything left to move it for.
+ *
+ * A thread GitHub marked outdated and nobody resolved counts as open, because
+ * GitHub never resolved it: rewriting the line is not answering the remark. */
+export function threadTally(timeline: Timeline): { open: number; total: number } {
+  const open = timeline.items.filter((item) => item.kind === "thread").length
+  return { open, total: open + timeline.resolved.length }
+}

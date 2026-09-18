@@ -201,6 +201,8 @@ export interface ReviewCandidate {
 
 /** internal/project.PRReview — one submitted review and its verdict. */
 export interface PullRequestReview {
+  /** The GraphQL node id: what dismissing this review is addressed to. */
+  id: string
   author: string
   /** gh: APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED */
   state: string

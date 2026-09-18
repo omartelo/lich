@@ -310,6 +310,11 @@ export const ProjectService = {
   /** Resolve a thread, or reopen it. threadID is the GraphQL node id. */
   ResolveReviewThread: (path: string, threadID: string, resolved: boolean) =>
     call<null>("project.ResolveReviewThread", [path, threadID, resolved]),
+  /** Withdraw a submitted review so its verdict stops counting. reviewID is
+   * the GraphQL node id the conversation read carries; GitHub requires the
+   * reason and records it on the pull request. */
+  DismissReview: (path: string, reviewID: string, message: string) =>
+    call<null>("project.DismissReview", [path, reviewID, message]),
   /** Comment on the pull request itself — no file, no line. */
   CommentOnPullRequest: (path: string, number: number, body: string) =>
     call<null>("project.CommentOnPullRequest", [path, number, body]),

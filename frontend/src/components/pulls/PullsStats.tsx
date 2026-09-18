@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import {
   Check,
+  CheckCheck,
   CircleDashed,
   Clock,
   GitMerge,
@@ -102,14 +103,41 @@ const REVIEW_STAT: Record<string, { icon: LucideIcon; tone: Tone; label: string 
   REVIEW_REQUIRED: { icon: CircleDashed, tone: "muted", label: "Review required" },
 }
 
-export function ReviewStat({ decision }: { decision: string }) {
+// A requested change that has run out of open threads is not a failure any more,
+// it is a wait, and what it waits on is the reviewer, not the branch. Amber is
+// what the row already means by that, next to the checks still running.
+//
+// Only CHANGES_REQUESTED is annotated: everywhere else the verdict is not a
+// question the threads can answer.
+export function ReviewStat({
+  decision,
+  threads,
+}: {
+  decision: string
+  /** The review threads, as threadTally counts them. */
+  threads: { open: number; total: number }
+}) {
   const stat = REVIEW_STAT[decision]
   if (!stat) {
     return null
   }
+  if (decision !== "CHANGES_REQUESTED" || threads.total === 0) {
+    return (
+      <Stat icon={stat.icon} tone={stat.tone}>
+        {stat.label}
+      </Stat>
+    )
+  }
+  if (threads.open > 0) {
+    return (
+      <Stat icon={stat.icon} tone={stat.tone}>
+        {stat.label} · {threads.open} of {threads.total} threads unresolved
+      </Stat>
+    )
+  }
   return (
-    <Stat icon={stat.icon} tone={stat.tone}>
-      {stat.label}
+    <Stat icon={CheckCheck} tone="pending">
+      {stat.label} · all threads resolved
     </Stat>
   )
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { PullRequestConversation, ReviewThread } from "@/lib/api-types"
-import { conversationCount, conversationTimeline } from "./conversation-timeline"
+import { conversationCount, conversationTimeline, threadTally } from "./conversation-timeline"
 
 const thread = (id: string, at: string, resolved = false): ReviewThread => ({
   id,
@@ -17,6 +17,7 @@ const conversation: PullRequestConversation = {
   headRefOid: "abc",
   reviews: [
     {
+      id: "PRR_kw1",
       author: "omartelo",
       state: "CHANGES_REQUESTED",
       body: "two things",
@@ -96,5 +97,20 @@ describe("conversationTimeline", () => {
       threads: null,
     })
     expect(timeline.items).toHaveLength(1)
+  })
+})
+
+describe("threadTally", () => {
+  it("counts the open threads against every thread there is", () => {
+    expect(threadTally(conversationTimeline(conversation))).toEqual({ open: 2, total: 3 })
+  })
+
+  it("reports nothing for a pull request nobody has threaded", () => {
+    expect(threadTally(conversationTimeline(null))).toEqual({ open: 0, total: 0 })
+  })
+
+  it("counts a resolved-only conversation as settled, not as empty", () => {
+    const settled = { ...conversation, threads: [thread("t-done", "2026-07-30T07:00:00Z", true)] }
+    expect(threadTally(conversationTimeline(settled))).toEqual({ open: 0, total: 1 })
   })
 })

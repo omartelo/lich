@@ -207,6 +207,43 @@ func TestResolveReviewThreadFlow(t *testing.T) {
 	})
 }
 
+func TestDismissReviewFlow(t *testing.T) {
+	t.Run("the node id and the reason both reach the mutation", func(t *testing.T) {
+		gh := &fakeGH{}
+		if err := withGH(gh).DismissReview("/repo", "PRR_kw1", "fixed in 4a1c2f0"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := []string{
+			"api", "graphql", "-f", "query=" + dismissReviewMutation,
+			"-f", "id=PRR_kw1", "-f", "message=fixed in 4a1c2f0",
+		}
+		if !slices.Equal(gh.args, want) {
+			t.Errorf("args = %v, want %v", gh.args, want)
+		}
+	})
+
+	// Both refusals are GitHub's own; making them here spares a round-trip that
+	// could only come back rejected.
+	t.Run("no review and no reason never reach gh", func(t *testing.T) {
+		for _, c := range []struct {
+			name, id, message string
+		}{
+			{"no review", "", "fixed"},
+			{"no reason", "PRR_kw1", ""},
+		} {
+			t.Run(c.name, func(t *testing.T) {
+				gh := &fakeGH{}
+				if err := withGH(gh).DismissReview("/repo", c.id, c.message); err == nil {
+					t.Error("expected an error")
+				}
+				if gh.calls != 0 {
+					t.Errorf("gh was called %d times, want 0", gh.calls)
+				}
+			})
+		}
+	})
+}
+
 func TestCommentOnPullRequestFlow(t *testing.T) {
 	t.Run("a numbered pull request is addressed by number", func(t *testing.T) {
 		gh := &fakeGH{}

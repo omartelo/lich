@@ -13,11 +13,15 @@ import (
 //     the comment that opened it;
 //   - resolving a thread has no REST endpoint at all, only the GraphQL mutation;
 //   - a review lands as one call carrying every line comment at once, which is
-//     what makes it a review rather than a pile of separate remarks.
+//     what makes it a review rather than a pile of separate remarks;
+//   - dismissing takes the review's node id, which only the conversation read
+//     carries (prthreads.go); `gh pr view` never reports one.
 const (
 	resolveThreadMutation = `mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}`
 
 	unresolveThreadMutation = `mutation($id:ID!){unresolveReviewThread(input:{threadId:$id}){thread{isResolved}}}`
+
+	dismissReviewMutation = `mutation($id:ID!,$message:String!){dismissPullRequestReview(input:{pullRequestReviewId:$id,message:$message}){pullRequestReview{state}}}`
 )
 
 // reviewEvents allow-lists what a submitted review can say, and doubles as the
@@ -184,6 +188,26 @@ func (s *Service) ResolveReviewThread(path, threadID string, resolved bool) erro
 		mutation = resolveThreadMutation
 	}
 	_, err := s.gh(prReviewTimeout, path, "api", "graphql", "-f", "query="+mutation, "-f", "id="+threadID)
+	return err
+}
+
+// DismissReview withdraws a submitted review, so its verdict stops counting
+// towards the pull request's. reviewID is the GraphQL node id the conversation
+// read carries. GitHub requires a reason and records it on the pull request,
+// which is why an empty message is refused here rather than round-tripped.
+//
+// Resolving every thread a review opened does not undo it: GitHub keeps the
+// verdict until the reviewer submits another one or dismisses this one. This is
+// the second door, for a review whose author was talked out of it.
+func (s *Service) DismissReview(path, reviewID, message string) error {
+	if reviewID == "" {
+		return fmt.Errorf("a review is required")
+	}
+	if message == "" {
+		return fmt.Errorf("dismissing a review needs a reason")
+	}
+	_, err := s.gh(prReviewTimeout, path, "api", "graphql", "-f", "query="+dismissReviewMutation,
+		"-f", "id="+reviewID, "-f", "message="+message)
 	return err
 }
 

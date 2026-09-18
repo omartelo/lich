@@ -23,7 +23,7 @@ const prConversationQuery = `query($owner:String!,$repo:String!,$number:Int!){
   repository(owner:$owner,name:$repo){
     pullRequest(number:$number){
       headRefOid
-      reviews(last:50){nodes{author{login} state body submittedAt}}
+      reviews(last:50){nodes{id author{login} state body submittedAt}}
       comments(last:50){nodes{author{login} body createdAt}}
       reviewThreads(last:100){nodes{
         id isResolved isOutdated path line originalLine startLine originalStartLine diffSide
@@ -52,6 +52,8 @@ type PRConversation struct {
 // PRReview is one submitted review: its verdict, and whatever was written in the
 // summary box above the line comments.
 type PRReview struct {
+	// ID is the GraphQL node id, which is what dismissing the review takes.
+	ID     string `json:"id"`
 	Author string `json:"author"`
 	// State is gh's APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED.
 	State string `json:"state"`
@@ -128,6 +130,7 @@ type ghActor struct {
 }
 
 type ghReview struct {
+	ID          string  `json:"id"`
 	Author      ghActor `json:"author"`
 	State       string  `json:"state"`
 	Body        string  `json:"body"`
@@ -208,6 +211,7 @@ func toReviews(nodes []ghReview) []PRReview {
 			continue
 		}
 		out = append(out, PRReview{
+			ID:     r.ID,
 			Author: r.Author.Login,
 			State:  r.State,
 			Body:   r.Body,

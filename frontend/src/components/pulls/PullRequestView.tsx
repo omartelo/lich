@@ -25,7 +25,11 @@ import {
   setReviewBody,
   subscribePendingReview,
 } from "@/lib/pulls/pending-review-store"
-import { conversationCount, conversationTimeline } from "@/lib/pulls/conversation-timeline"
+import {
+  conversationCount,
+  conversationTimeline,
+  threadTally,
+} from "@/lib/pulls/conversation-timeline"
 import {
   allowedMergeMethods,
   canAdminOverride,
@@ -148,7 +152,12 @@ export function PullRequestView({
   const commitCount = detail.commits?.length ?? 0
   const review = useSyncExternalStore(subscribePendingReview, () => pendingReview(detail.url))
   const pending = review.comments.length
-  const talk = conversationCount(conversationTimeline(conversation))
+  const timeline = conversationTimeline(conversation)
+  const talk = conversationCount(timeline)
+  const threads = threadTally(timeline)
+  // The chip earns a click only when it has a count behind it: that count lives
+  // in the Conversation tab, and so does the way to clear the verdict.
+  const reviewLeadsToThreads = detail.reviewDecision === "CHANGES_REQUESTED" && threads.total > 0
   const blocked = mergeBlockedReason(detail)
   const methods = allowedMergeMethods(rules)
   const editableMethods = methods.filter((method) => method !== "rebase")
@@ -217,6 +226,15 @@ export function PullRequestView({
   const comment = async (body: string) => {
     await ProjectService.CommentOnPullRequest(path, detail.number, body)
     onConversationRefresh()
+  }
+
+  // Dismissing changes the verdict, which lives on the detail and not on the
+  // conversation, so both are re-read, or the header keeps showing the review
+  // the timeline has just buried.
+  const dismiss = async (reviewID: string, message: string) => {
+    await ProjectService.DismissReview(path, reviewID, message)
+    onConversationRefresh()
+    onRefresh()
   }
 
   // The whole review in one call: the verdict, the summary, and every comment
@@ -438,7 +456,17 @@ export function PullRequestView({
             <ChecksStat checks={detail.checks} />
           )}
           <MergeableStat detail={detail} />
-          <ReviewStat decision={detail.reviewDecision} />
+          {reviewLeadsToThreads ? (
+            <button
+              type="button"
+              onClick={() => showTab("conversation")}
+              className="rounded-sm transition-opacity hover:opacity-80"
+            >
+              <ReviewStat decision={detail.reviewDecision} threads={threads} />
+            </button>
+          ) : (
+            <ReviewStat decision={detail.reviewDecision} threads={threads} />
+          )}
         </div>
 
         {/* Keyed by the pull request: whether the whole list is unfolded is a
@@ -503,6 +531,7 @@ export function PullRequestView({
                 loading={conversationLoading}
                 actions={actions}
                 onComment={comment}
+                onDismiss={dismiss}
               />
             )}
             {tab === "overview" && (
