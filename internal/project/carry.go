@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -62,20 +63,30 @@ func copyUntracked(src, dst string) error {
 	return nil
 }
 
-// carryFile is seedWorktree's copyFile with the two answers this caller gives
-// differently. A symlink or any other non-regular file is skipped rather than
-// reported: git lists them and a fork missing one is a smaller surprise than a
-// fork that turned it into a file. So is a file that is already gone — the
-// listing and the copy are two calls, and a build running in the source
-// checkout deletes its own scratch files between them. Every other failure is
-// the caller's to report: silently dropping a file the user is about to look
-// for is the outcome this carry exists to avoid.
+// carryFile is seedWorktree's copyFile with the two skips this caller wants,
+// both of them decided by looking at the source rather than by reading the
+// copy's error. A symlink or any other non-regular file is stepped over: git
+// lists them, and a fork missing one is a smaller surprise than a fork that
+// turned it into a file. So is a file that is already gone — the listing and
+// the copy are two calls, and a build running in the source checkout deletes
+// its own scratch files between them.
+//
+// Reading those skips out of the error instead is what Windows caught: a
+// destination whose parent is a file answers ERROR_PATH_NOT_FOUND, which Go
+// maps onto fs.ErrNotExist, so a copy that could never land read as a source
+// that was never there. Every failure of the copy itself is the caller's to
+// report — silently dropping a file the user is about to look for is the
+// outcome this carry exists to avoid.
 func carryFile(from, to string) error {
-	if err := copyFile(from, to); err != nil {
-		if errors.Is(err, errNotRegular) || errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
+	info, err := os.Lstat(from)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
-	return nil
+	if !info.Mode().IsRegular() {
+		return nil
+	}
+	return copyFile(from, to)
 }

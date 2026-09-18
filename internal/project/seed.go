@@ -2,6 +2,7 @@ package project
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -108,11 +109,6 @@ func matchesInclude(rel string, patterns []string) bool {
 	return false
 }
 
-// errNotRegular is copyFile refusing a symlink, a socket or a directory. The
-// seed logs it like any other failure; the fork's carry skips it on purpose
-// (carryFile), which is why the refusal is a value and not a string.
-var errNotRegular = errors.New("not a regular file")
-
 // copyFile copies a regular file preserving its permission bits — a private
 // key seeded world-readable would be a downgrade. Symlinks and other
 // non-regular files are refused so the caller logs them.
@@ -122,7 +118,7 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	if !info.Mode().IsRegular() {
-		return errNotRegular
+		return fmt.Errorf("not a regular file")
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err

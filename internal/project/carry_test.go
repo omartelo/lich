@@ -123,8 +123,11 @@ func TestCarryFileVanished(t *testing.T) {
 	}
 }
 
-// TestCarryFileReportsRealFailure proves the two skips are the only ones: a
-// source that cannot be written to its destination is the caller's to report.
+// TestCarryFileReportsRealFailure proves the two skips are the only ones, and
+// that they are decided on the source rather than read out of the error: a
+// destination whose parent is a file answers ERROR_PATH_NOT_FOUND on Windows,
+// which Go maps onto fs.ErrNotExist — the same error a vanished source gives.
+// Caught by the Windows runner after passing here (#616).
 func TestCarryFileReportsRealFailure(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "from.txt", "data\n")
