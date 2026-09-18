@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Line numbers stay readable when a diff is scrolled sideways.** The number
+  column keeps its place as a diff scrolls, but it was see-through, so the code
+  passing behind it ran straight over the numbers. It is now opaque. The narrow
+  columns of a side-by-side diff hit this the hardest.
+
 - **Resuming a session no longer undoes a model you picked inside it.** A
   session opened with `lich open --model` was put back on that model every time
   it was resumed, even after `/model` switched it. Resumes and forks now carry
