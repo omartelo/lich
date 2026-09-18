@@ -180,12 +180,12 @@ function ReviewVerdict({
 
   const verdict =
     review.state === "APPROVED" ? (
-      <span className="flex items-center gap-1 text-emerald-500">
+      <span className="flex items-center gap-1 text-tone-pass">
         <Check className="size-3.5" />
         approved
       </span>
     ) : review.state === "CHANGES_REQUESTED" ? (
-      <span className="flex items-center gap-1 text-amber-500">
+      <span className="flex items-center gap-1 text-tone-wait">
         <X className="size-3.5" />
         requested changes
       </span>

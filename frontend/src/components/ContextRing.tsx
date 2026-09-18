@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils"
 // two palettes.
 export function usageColor(percent: number): string {
   if (percent >= 95) {
-    return "text-red-500"
+    return "text-destructive"
   }
   if (percent >= 80) {
-    return "text-amber-500"
+    return "text-tone-wait"
   }
   return "text-muted-foreground"
 }

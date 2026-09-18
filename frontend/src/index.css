@@ -53,6 +53,12 @@
     --color-input: var(--input);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
+    /* The two semantic tones the status readouts speak in: something went
+       right, something is being waited on. Per theme, because a value that
+       carries on the dark card is unreadable on the light one, and because a
+       theme that cannot reach them can only recolour half a status line. */
+    --color-tone-pass: var(--tone-pass);
+    --color-tone-wait: var(--tone-wait);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
@@ -88,6 +94,8 @@
     --accent: oklch(0.9 0.004 286.32);
     --accent-foreground: oklch(0.21 0.006 285.885);
     --destructive: oklch(0.577 0.245 27.325);
+    --tone-pass: oklch(0.508 0.118 165.612);
+    --tone-wait: oklch(0.555 0.163 48.998);
     --border: oklch(0.888 0.004 286.32);
     --input: oklch(0.888 0.004 286.32);
     --ring: oklch(0.6 0.015 286.067);
@@ -122,6 +130,8 @@
     --accent: oklch(0.274 0.006 286.033);
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
+    --tone-pass: oklch(0.696 0.17 162.48);
+    --tone-wait: oklch(0.769 0.188 70.08);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.552 0.016 285.938);

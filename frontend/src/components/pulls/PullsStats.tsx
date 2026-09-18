@@ -19,10 +19,14 @@ import { cn } from "@/lib/utils"
 
 type Tone = "pass" | "fail" | "pending" | "muted"
 
+// Tokens, not palette steps. A value that reads on the dark card is thin on the
+// light one (emerald-500 measured 2.33:1 against it, amber-500 2.02:1, where
+// 12px text wants 4.5:1), so each tone is defined per theme in index.css and
+// carried by the theme file, the way --destructive always was.
 const toneClass: Record<Tone, string> = {
-  pass: "text-emerald-500",
+  pass: "text-tone-pass",
   fail: "text-destructive",
-  pending: "text-amber-500",
+  pending: "text-tone-wait",
   muted: "text-muted-foreground",
 }
 
@@ -104,8 +108,8 @@ const REVIEW_STAT: Record<string, { icon: LucideIcon; tone: Tone; label: string 
 }
 
 // A requested change that has run out of open threads is not a failure any more,
-// it is a wait, and what it waits on is the reviewer, not the branch. Amber is
-// what the row already means by that, next to the checks still running.
+// it is a wait, and what it waits on is the reviewer, not the branch. That is
+// what the row already means by the pending tone, next to the checks running.
 //
 // Only CHANGES_REQUESTED is annotated: everywhere else the verdict is not a
 // question the threads can answer.

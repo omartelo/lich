@@ -41,6 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   records it on the pull request, so the box asks for one. Resolving threads
   never clears a "changes requested" verdict on its own; this is what does.
 
+### Changed
+
+- **Status colors are readable on the light theme, and themes can set them.**
+  The green, amber and red that mark passed, waiting and critical were one
+  value for both themes, picked for the dark card: on the light one they
+  measured 2.0 to 2.3:1 where small text wants 4.5:1. They are now the
+  `tone-pass`, `tone-wait` and `destructive` theme tokens, darker on light and
+  unchanged on dark. A theme file can set the first two; one that does not
+  takes lich's values, as with any token added by a release.
+
 ### Fixed
 
 - **Resuming a session no longer undoes a model you picked inside it.** A

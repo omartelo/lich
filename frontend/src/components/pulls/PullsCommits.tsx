@@ -28,7 +28,7 @@ export function PullsCommits({
   return (
     <div className="flex flex-col py-1">
       {notice && (
-        <p className="mx-6 mb-1 mt-2 border-l-2 border-amber-500 pl-3 text-xs leading-relaxed text-muted-foreground">
+        <p className="mx-6 mb-1 mt-2 border-l-2 border-tone-wait pl-3 text-xs leading-relaxed text-muted-foreground">
           {notice}
         </p>
       )}

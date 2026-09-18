@@ -19,6 +19,8 @@
     "accent": "#3a2d57",
     "accent-foreground": "#f4efff",
     "destructive": "#ff5c8a",
+    "tone-pass": "oklch(0.696 0.17 162.48)",
+    "tone-wait": "oklch(0.769 0.188 70.08)",
     "border": "#4a3a68",
     "input": "#554178",
     "ring": "#c4a7ff",

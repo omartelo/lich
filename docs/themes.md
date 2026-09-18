@@ -42,6 +42,8 @@ The theme format and the pack manifest are covered by lich's semver promise; see
     "accent": "oklch(0.32 0.07 276)",
     "accent-foreground": "oklch(0.92 0.03 270)",
     "destructive": "oklch(0.7 0.18 25)",
+    "tone-pass": "oklch(0.72 0.14 160)",
+    "tone-wait": "oklch(0.8 0.15 75)",
     "border": "oklch(0.95 0.02 270 / 12%)",
     "input": "oklch(0.95 0.02 270 / 16%)",
     "ring": "oklch(0.75 0.13 255)",

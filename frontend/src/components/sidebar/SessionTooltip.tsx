@@ -190,7 +190,7 @@ export function SessionTooltip({ session, path, projectId }: SessionTooltipProps
             against is named. */}
         {base?.behind && <span className="text-muted-foreground">{base.behind}</span>}
         {base?.conflict && (
-          <span className="flex items-center gap-1 text-amber-500">
+          <span className="flex items-center gap-1 text-tone-wait">
             <TriangleAlert className="size-3 shrink-0" />
             {base.conflict}
           </span>

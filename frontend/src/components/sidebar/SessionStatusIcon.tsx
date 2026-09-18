@@ -8,8 +8,8 @@ import type { SessionStatus } from "@/lib/session/session-events"
 // it is blocked on the user.
 const RING: Record<SessionStatus, string> = {
   busy: "animate-spin border-muted-foreground/25 border-t-muted-foreground",
-  done: "border-emerald-500",
-  waiting: "border-amber-500",
+  done: "border-tone-pass",
+  waiting: "border-tone-wait",
 }
 
 // A finished turn nobody has read yet keeps the ring at full strength; one that
@@ -18,7 +18,7 @@ const RING: Record<SessionStatus, string> = {
 // which is the question the ring is there to answer when you come back to a
 // sidebar of finished agents. It is an opacity step on a semantic color, the
 // way every other weight in the app is (frontend/DESIGN.md).
-const READ_RING = "border-emerald-500/30"
+const READ_RING = "border-tone-pass/30"
 
 interface SessionStatusIconProps {
   kind: SessionKind

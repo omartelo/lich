@@ -16,9 +16,9 @@ import { usePendingStatuses } from "@/lib/session/use-session-status"
 
 function StatusIcon({ status }: { status: SessionStatus }) {
   if (status === "waiting") {
-    return <Bell className="size-4 shrink-0 text-amber-500" />
+    return <Bell className="size-4 shrink-0 text-tone-wait" />
   }
-  return <Check className="size-4 shrink-0 text-emerald-500" />
+  return <Check className="size-4 shrink-0 text-tone-pass" />
 }
 
 // NotificationsButton is the top-strip bell: the flat, cross-project queue of
@@ -60,7 +60,7 @@ export function NotificationsButton() {
         {items.length > 0 && (
           <span
             aria-hidden
-            className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-red-500 ring-2 ring-sidebar"
+            className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-destructive ring-2 ring-sidebar"
           />
         )}
       </DropdownMenuTrigger>

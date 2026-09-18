@@ -13,9 +13,9 @@ const RELEASE_TAG_BASE = "https://github.com/omartelo/lich/releases/tag/v"
 function dotColor(label: string): string {
   switch (label.toLowerCase()) {
     case "added":
-      return "bg-emerald-500"
+      return "bg-tone-pass"
     case "changed":
-      return "bg-amber-500"
+      return "bg-tone-wait"
     case "fixed":
       return "bg-sky-500"
     default:

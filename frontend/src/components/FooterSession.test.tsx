@@ -172,8 +172,8 @@ test("model and context visibility are independent", async () => {
 test("context and budget warnings stay attached to their visible readings", async () => {
   state.usage = { ...reading(200000, 9), percent: 80 }
   await render()
-  expect(button("Context window").classList.contains("text-amber-500")).toBe(true)
-  expect(button("Session cost").classList.contains("text-amber-500")).toBe(true)
+  expect(button("Context window").classList.contains("text-tone-wait")).toBe(true)
+  expect(button("Session cost").classList.contains("text-tone-wait")).toBe(true)
   state.context = false
   state.cost = false
   await render()

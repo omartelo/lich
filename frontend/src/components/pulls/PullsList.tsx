@@ -51,7 +51,7 @@ import { cn } from "@/lib/utils"
 const VERDICT_DOT: Record<CheckVerdict, string> = {
   failed: "bg-destructive",
   pending: "bg-muted-foreground",
-  passed: "bg-emerald-500",
+  passed: "bg-tone-pass",
   none: "",
 }
 
@@ -267,7 +267,7 @@ const STATE_GLYPH: Record<string, LucideIcon> = {
 // Only a decision worth acting on shows: REVIEW_REQUIRED is the resting state
 // of most rows, and labelling every one of them says nothing.
 const REVIEW_LABEL: Record<string, { text: string; className: string }> = {
-  APPROVED: { text: "approved", className: "text-emerald-500" },
+  APPROVED: { text: "approved", className: "text-tone-pass" },
   CHANGES_REQUESTED: { text: "changes requested", className: "text-destructive" },
 }
 
@@ -288,7 +288,7 @@ function PullRow({ pr, active, isCheckedOut, onSelect }: PullRowProps) {
       <StateGlyph
         className={cn(
           "mt-0.5 size-3.5 shrink-0",
-          pr.isDraft ? "text-amber-500" : "text-muted-foreground",
+          pr.isDraft ? "text-tone-wait" : "text-muted-foreground",
         )}
       />
       <span className="flex min-w-0 flex-col gap-0.5">
@@ -302,7 +302,7 @@ function PullRow({ pr, active, isCheckedOut, onSelect }: PullRowProps) {
           {verdict !== "none" && (
             <span className={cn("size-1.5 shrink-0 rounded-full", VERDICT_DOT[verdict])} />
           )}
-          {pr.isDraft && <span className="text-amber-500">Draft</span>}
+          {pr.isDraft && <span className="text-tone-wait">Draft</span>}
           {review && <span className={review.className}>{review.text}</span>}
           {pr.isCrossRepository && <span>fork</span>}
           {isCheckedOut && (

@@ -114,6 +114,12 @@
         },
         "sidebar-ring": {
           "$ref": "#/$defs/appColor"
+        },
+        "tone-pass": {
+          "$ref": "#/$defs/appColor"
+        },
+        "tone-wait": {
+          "$ref": "#/$defs/appColor"
         }
       },
       "required": [
@@ -147,7 +153,9 @@
         "sidebar-foreground",
         "sidebar-primary",
         "sidebar-primary-foreground",
-        "sidebar-ring"
+        "sidebar-ring",
+        "tone-pass",
+        "tone-wait"
       ],
       "type": "object"
     },

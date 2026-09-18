@@ -6,9 +6,9 @@ import { System } from "@/lib/rpc"
 import { cn } from "@/lib/utils"
 
 const stateIcon = {
-  passed: { icon: Check, className: "text-emerald-500" },
+  passed: { icon: Check, className: "text-tone-pass" },
   failed: { icon: X, className: "text-destructive" },
-  pending: { icon: Clock, className: "text-amber-500" },
+  pending: { icon: Clock, className: "text-tone-wait" },
 } as const
 
 // PullsChecks is the "Checks" tab of the Pulls screen: every check the rollup
