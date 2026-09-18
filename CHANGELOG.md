@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after a long validation and before their final summary, instead of only when
   a `[lich]` note arrives.
 
+- **Fork a session from where it is now, not from its last commit.** The fork
+  dialog opens on a new base row — the session's own branch plus everything it
+  has not committed — so two takes on the same half-finished work can run side
+  by side. The branch itself is still right below it, for a fork that starts at
+  the last commit. Files git ignores are not carried from the session you
+  forked: a new worktree gets its `.env` files from the main checkout and the
+  rest from the setup script, the way it always has.
+
 ### Fixed
 
 - **Resuming a session no longer undoes a model you picked inside it.** A

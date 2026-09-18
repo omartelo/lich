@@ -49,6 +49,7 @@ import { WorktreeCloseDialogs } from "./WorktreeCloseDialogs"
 import { SessionGroup } from "./SessionGroup"
 import { WorktreeDialog } from "./WorktreeDialog"
 import { useWorktreeClose } from "./useWorktreeClose"
+import { carryInto } from "@/lib/git/carry"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePanelWidth } from "@/lib/use-panel-width"
 import { useWorktreeDialogIntent } from "@/lib/use-sidebar-intent"
@@ -287,9 +288,13 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     baseIsRemote: boolean,
     sandbox: string,
     prompt: string,
+    carryFrom: string,
   ) => {
     const wt = await ProjectService.CreateWorktree(path, projectId, name, base, baseIsRemote)
     if (wt) {
+      // Before the session opens, so the agent's first look at the checkout is
+      // the state it was forked from.
+      await carryInto(carryFrom, wt)
       const opened = newWorktreeSession(projectId, wt, sandbox, forking)
       // Queued before the card mounts, so the first spawn branches the parent's
       // conversation instead of opening an empty one (fork-queue.ts).
@@ -570,7 +575,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         currentBranch={git?.branch ?? ""}
         onCreate={createWorktree}
         onResume={resumeWorktree}
-        forkOf={forking}
+        forkOf={forking && { label: forking.label, path: forking.path || path }}
       />
       <WorktreeCloseDialogs close={worktreeClose} />
       <ConfirmDialog
