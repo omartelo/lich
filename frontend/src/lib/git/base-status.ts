@@ -1,4 +1,5 @@
 import type { BaseStatus } from "@/lib/api-types"
+import { count } from "@/lib/utils"
 
 // How many conflicting paths the tooltip names before it starts counting. A
 // merge can collide on dozens of files, and a tooltip that grows with them
@@ -45,8 +46,4 @@ export function baseReadout(status: BaseStatus | null): BaseReadout | null {
     paths: conflicts.slice(0, NAMED_CONFLICTS),
     more: Math.max(0, conflicts.length - NAMED_CONFLICTS),
   }
-}
-
-function count(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? "" : "s"}`
 }

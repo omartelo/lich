@@ -20,6 +20,10 @@ import (
 type Worktree struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
+	// Whether CreateWorktree checked out a branch that already existed instead
+	// of starting one at the base it was given — the one case where the base
+	// the caller picked decided nothing. Always false on a listed worktree.
+	Reused bool `json:"reused,omitempty"`
 }
 
 // Branches groups everything the base-branch picker offers: local and remote
@@ -278,7 +282,8 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 	// with it — it decides where a branch starts, and this one already started.
 	args := []string{"worktree", "add"}
 	source := base
-	if branchExists(projectPath, name) {
+	reused := branchExists(projectPath, name)
+	if reused {
 		source = name
 	} else {
 		if baseIsRemote {
@@ -316,7 +321,7 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 		return nil, errors.New("The worktree was created but git does not read it as a checkout.")
 	}
 	seedWorktree(projectPath, wtPath)
-	return &Worktree{Name: name, Path: canonicalPath(wtPath)}, nil
+	return &Worktree{Name: name, Path: canonicalPath(wtPath), Reused: reused}, nil
 }
 
 // prHead is the little of a pull request CreateWorktreeFromPR needs: which

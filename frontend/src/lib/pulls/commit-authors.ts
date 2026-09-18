@@ -1,4 +1,5 @@
 import type { PullRequestCommit } from "@/lib/api-types"
+import { count } from "@/lib/utils"
 
 // How many addresses or accounts the line names before it folds the rest into a
 // count. Three is enough to recognise the mistake; a branch that made it under
@@ -80,8 +81,4 @@ function list(values: string[]): string {
   const hidden = values.length - NAMED
   const shown = values.slice(0, NAMED).join(", ")
   return hidden > 0 ? `${shown} and ${hidden} more` : shown
-}
-
-function count(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? "" : "s"}`
 }

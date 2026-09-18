@@ -262,8 +262,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   running the old one until the change reaches the checkout the project points at.
 - **A fork's working-tree row carries what git can name, and nothing else**
   (`internal/project/carry.go`): the copy is `git diff HEAD --binary` applied to the new checkout plus the
-  untracked files `--exclude-standard` lists, so what `.gitignore` covers — `node_modules`, a `.env`, a build
-  directory — is not carried, and the worktree setup script is what answers for it. Everything arrives
+  untracked files `--exclude-standard` lists. What `.gitignore` covers is not carried from the forked
+  session at all — and the fork is not without it either, which is the trap: `seedWorktree` copies the
+  ignored files the project names (`.env*`, or `.worktreeinclude`) out of the **main checkout** into every
+  new worktree, so an ignored file the forked session had edited arrives as the main checkout's version of
+  it, silently disagreeing with the tracked work that came from the fork. `node_modules` and the rest of
+  the build output are the setup script's, as always. Everything arrives
   unstaged: which changes the source had staged is a fact about the commit *it* is preparing. The row is
   offered only when the base is the forked session's own branch, because the patch is read against that
   checkout's HEAD; picking any other base branches off it at its last commit, the way every fork did before.

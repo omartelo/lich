@@ -1,9 +1,9 @@
 package project
 
 import (
+	"errors"
 	"fmt"
-	"io"
-	"os"
+	"io/fs"
 	"path/filepath"
 	"strings"
 )
@@ -21,9 +21,12 @@ import (
 // carried: it is a fact about the commit src is preparing, and dst is a
 // different piece of work from here on.
 //
-// What git ignores is not carried either (--exclude-standard). A new worktree
-// never had node_modules or a .env, and the project's setup script is what
-// answers for those (seedWorktree).
+// What git ignores is not carried either (--exclude-standard), and it is the
+// one part of the checkout a fork does not get from the session it forked:
+// seedWorktree copies the ignored files the project names (`.env*` by default)
+// out of the *main* checkout into every new worktree, and the setup script
+// builds the rest. So an ignored file the forked session edited arrives as the
+// main checkout's copy of it.
 func (s *Service) CarryUncommitted(src, dst string) error {
 	// --binary, so an edited image or any other non-text file comes over as
 	// bytes instead of as an unappliable "Binary files differ" line.
@@ -52,38 +55,27 @@ func copyUntracked(src, dst string) error {
 		if rel == "" {
 			continue
 		}
-		if err := copyInto(filepath.Join(src, rel), filepath.Join(dst, rel)); err != nil {
+		if err := carryFile(filepath.Join(src, rel), filepath.Join(dst, rel)); err != nil {
 			return fmt.Errorf("Copying %s into the new worktree failed: %w", rel, err)
 		}
 	}
 	return nil
 }
 
-// copyInto copies one regular file, creating the directories leading to it.
-// Anything else git listed — a symlink, a socket a tool left behind — is
-// skipped rather than dereferenced: a fork missing one is a smaller surprise
-// than a fork that turned it into a file, and a dangling one would fail the
-// whole carry.
-func copyInto(from, to string) error {
-	info, err := os.Lstat(from)
-	if err != nil || !info.Mode().IsRegular() {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+// carryFile is seedWorktree's copyFile with the two answers this caller gives
+// differently. A symlink or any other non-regular file is skipped rather than
+// reported: git lists them and a fork missing one is a smaller surprise than a
+// fork that turned it into a file. So is a file that is already gone — the
+// listing and the copy are two calls, and a build running in the source
+// checkout deletes its own scratch files between them. Every other failure is
+// the caller's to report: silently dropping a file the user is about to look
+// for is the outcome this carry exists to avoid.
+func carryFile(from, to string) error {
+	if err := copyFile(from, to); err != nil {
+		if errors.Is(err, errNotRegular) || errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
 		return err
 	}
-	in, err := os.Open(from)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return err
-	}
-	return out.Close()
+	return nil
 }

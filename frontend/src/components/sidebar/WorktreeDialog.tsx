@@ -21,7 +21,7 @@ import { toBranchName } from "@/lib/git/branch-name"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { issueBrief, issueName, parseIssueRef } from "@/lib/issue"
 import { useSandboxChoice, type SandboxAnswer } from "@/lib/use-sandbox-choice"
-import { cn, errorText } from "@/lib/utils"
+import { cn, count, errorText } from "@/lib/utils"
 
 // How long the field has to settle before the issue behind a reference is
 // looked up. Every keystroke of "#381" is a valid reference on its way to the
@@ -278,6 +278,14 @@ export function WorktreeDialog({
   // off a tick later — the card behind the dialog is polling that path already,
   // so the wait is usually no wait at all.
   useEffect(() => {
+    // A working-tree row that is gone takes its selection with it: the source
+    // session committing while this dialog is open drops the row, and a base
+    // still naming it would reach git as no base at all. Clearing it re-runs
+    // this effect on the branch below, which is that same branch.
+    if (base.startsWith("tree:") && tree === null) {
+      setBase("")
+      return
+    }
     if (!open || base !== "" || branches === null || (forkOf && source === null)) {
       return
     }
@@ -450,9 +458,7 @@ export function WorktreeDialog({
                       {
                         value: rowValue("tree", vis.tree.path),
                         label: `${vis.tree.branch} · working tree`,
-                        note: `Same commit, plus the ${vis.tree.files} ${
-                          vis.tree.files === 1 ? "file" : "files"
-                        } this session has not committed.`,
+                        note: `Same commit, plus the ${count(vis.tree.files, "file")} this session has not committed.`,
                       },
                     ]
                   : []

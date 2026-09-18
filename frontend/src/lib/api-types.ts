@@ -286,6 +286,9 @@ export interface FileListing {
 export interface Worktree {
   name: string
   path: string
+  /** Set when creation checked out a branch that already existed instead of
+   * starting one at the base it was given; absent on a listed worktree. */
+  reused?: boolean
 }
 
 /** internal/project.Branches — everything the base-branch picker offers. */

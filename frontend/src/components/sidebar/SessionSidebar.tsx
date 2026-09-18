@@ -49,6 +49,7 @@ import { WorktreeCloseDialogs } from "./WorktreeCloseDialogs"
 import { SessionGroup } from "./SessionGroup"
 import { WorktreeDialog } from "./WorktreeDialog"
 import { useWorktreeClose } from "./useWorktreeClose"
+import { carryInto } from "@/lib/git/carry"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePanelWidth } from "@/lib/use-panel-width"
 import { useWorktreeDialogIntent } from "@/lib/use-sidebar-intent"
@@ -292,16 +293,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     const wt = await ProjectService.CreateWorktree(path, projectId, name, base, baseIsRemote)
     if (wt) {
       // Before the session opens, so the agent's first look at the checkout is
-      // the state it was forked from. A failed copy is said out loud and the
-      // session still opens: the worktree exists either way, and the work it
-      // was carrying is still sitting in the card it came from.
-      if (carryFrom) {
-        try {
-          await ProjectService.CarryUncommitted(carryFrom, wt.path)
-        } catch (err: unknown) {
-          toast.error(`Couldn’t carry the uncommitted work over: ${errorText(err)}`)
-        }
-      }
+      // the state it was forked from.
+      await carryInto(carryFrom, wt)
       const opened = newWorktreeSession(projectId, wt, sandbox, forking)
       // Queued before the card mounts, so the first spawn branches the parent's
       // conversation instead of opening an empty one (fork-queue.ts).

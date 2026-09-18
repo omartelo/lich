@@ -26,8 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dialog opens on a new base row — the session's own branch plus everything it
   has not committed — so two takes on the same half-finished work can run side
   by side. The branch itself is still right below it, for a fork that starts at
-  the last commit. Files git ignores stay behind, and the setup script answers
-  for those as it always has.
+  the last commit. Files git ignores are not carried from the session you
+  forked: a new worktree gets its `.env` files from the main checkout and the
+  rest from the setup script, the way it always has.
 
 ### Fixed
 

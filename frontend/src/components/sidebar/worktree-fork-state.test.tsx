@@ -134,3 +134,69 @@ test("a detached source offers no working-tree row: git would refuse the base", 
   expect(selected()?.textContent).toBe("main")
   await mounted.unmount()
 })
+
+const search = () =>
+  document.querySelector('[aria-label="Search base branches"]') as HTMLInputElement | null
+
+// Typing into the filter, the way a user narrows a long branch list. jsdom
+// needs the native setter to make React see the change.
+async function type(mounted: { act: (run: () => void) => Promise<void> }, value: string) {
+  const input = search()
+  if (!input) {
+    throw new Error("search field not rendered")
+  }
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
+  await mounted.act(() => {
+    setter?.call(input, value)
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+}
+
+test("a filter that hides the working-tree row moves the selection off it", async () => {
+  const created: Created[] = []
+  const mounted = await mountBudget(dialog(created))
+  await mounted.act(async () => {})
+  await type(mounted, "main")
+
+  expect(rows().some((row) => row.textContent?.includes("working tree"))).toBe(false)
+  expect(selected()?.textContent).toBe("main")
+
+  const button = forkButton()
+  if (!button) {
+    throw new Error("Fork button not rendered")
+  }
+  await mounted.act(() => button.click())
+
+  expect(created).toEqual([["", "main", false, "", ""]])
+  await mounted.unmount()
+})
+
+test("the row going away takes its selection with it, rather than leaving no base", async () => {
+  const created: Created[] = []
+  const mounted = await mountBudget(dialog(created))
+  await mounted.act(async () => {})
+  expect(selected()?.textContent).toContain("working tree")
+
+  // The forked session commits while the dialog is open: the row it was
+  // selecting is gone by the next render.
+  source.status = {
+    branch: "icy-glacier",
+    files: 0,
+    added: 0,
+    deleted: 0,
+    head: "def5678",
+    base: null,
+  }
+  await type(mounted, "icy")
+
+  expect(selected()?.textContent).toBe("icy-glacier")
+
+  const button = forkButton()
+  if (!button) {
+    throw new Error("Fork button not rendered")
+  }
+  await mounted.act(() => button.click())
+
+  expect(created).toEqual([["", "icy-glacier", false, "", ""]])
+  await mounted.unmount()
+})

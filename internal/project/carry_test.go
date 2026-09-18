@@ -88,3 +88,49 @@ func read(t *testing.T, dir, name string) string {
 	}
 	return string(got)
 }
+
+// TestCarryUncommittedSkipsNonRegular proves a symlink git listed as untracked
+// is stepped over rather than dereferenced or reported: the rest of the carry
+// still lands.
+func TestCarryUncommittedSkipsNonRegular(t *testing.T) {
+	repo, git := initRepo(t)
+	if err := os.Symlink("a.txt", filepath.Join(repo, "link.txt")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	write(t, repo, "real.txt", "carried\n")
+
+	dst := filepath.Join(t.TempDir(), "fork")
+	git("worktree", "add", "-b", "fork", dst, "main")
+
+	if err := New(nil).CarryUncommitted(repo, dst); err != nil {
+		t.Fatalf("CarryUncommitted: %v", err)
+	}
+	if got := read(t, dst, "real.txt"); got != "carried\n" {
+		t.Errorf("real.txt = %q, want the carried content", got)
+	}
+	if _, err := os.Lstat(filepath.Join(dst, "link.txt")); !os.IsNotExist(err) {
+		t.Errorf("the symlink was carried (%v)", err)
+	}
+}
+
+// TestCarryFileVanished proves a file that is gone by the time it is copied —
+// the listing and the copy are two calls, and a build in the source checkout
+// deletes its own scratch between them — is not a failure.
+func TestCarryFileVanished(t *testing.T) {
+	dir := t.TempDir()
+	if err := carryFile(filepath.Join(dir, "gone.txt"), filepath.Join(dir, "copy.txt")); err != nil {
+		t.Fatalf("carryFile on a missing source: %v", err)
+	}
+}
+
+// TestCarryFileReportsRealFailure proves the two skips are the only ones: a
+// source that cannot be written to its destination is the caller's to report.
+func TestCarryFileReportsRealFailure(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "from.txt", "data\n")
+	// The destination's parent is a file, so MkdirAll cannot make the directory.
+	write(t, dir, "blocked", "")
+	if err := carryFile(filepath.Join(dir, "from.txt"), filepath.Join(dir, "blocked", "to.txt")); err == nil {
+		t.Fatal("carryFile reported success on a destination it cannot create")
+	}
+}
