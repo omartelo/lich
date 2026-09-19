@@ -8,8 +8,7 @@ import { checkoutLabel } from "@/lib/git/checkout-label"
 import type { ProviderState } from "@/lib/providers-store"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { readGroupCollapsed, writeGroupCollapsed } from "@/lib/session/group-prefs"
-import { collapsedMark } from "@/lib/session/sidebar-groups"
-import { usePendingStatuses } from "@/lib/session/use-session-status"
+import { useCollapsedMark } from "@/lib/session/use-session-status"
 import type { PaneGroup } from "@/lib/session/panes"
 import { delegatesOf, type Session, sessionOrigin } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
@@ -43,9 +42,8 @@ interface SessionGroupProps {
   // Every folder this project holds, for the two menus that file a card into
   // one: the card's own, and the checkout header's "Move group to folder".
   folders: string[]
-  // File one session, or this whole block, under a folder — "" takes it out of
-  // the one it is in. Both land on the same write per session.
-  onFile: (sessionId: string, folder: string) => void
+  // File sessions under a folder — "" takes them out of the one they are in.
+  onFile: (sessionIds: string[], folder: string) => void
   // Ask for a name, then file what the caller names with it: one session, or
   // every session in this block.
   onNewFolder: (sessionIds: string[]) => void
@@ -162,25 +160,18 @@ export function SessionGroup({
     : pinned
       ? "Pinned"
       : folder || checkoutLabel(path, projectPath, projectId)
-  // Read here rather than per card: the queue is workspace-wide and already
-  // stable between changes, and what the folded header needs is one answer for
-  // the whole block.
-  const pending = usePendingStatuses()
-  const mark = collapsedMark(pending, ids)
+  // One answer for the whole block rather than one per card — and null while the
+  // block is open, so a turn ending in another block never repaints this one.
+  const mark = useCollapsedMark(ids, collapsed)
+  // Whether this block can be filed as a whole: a checkout's, and only while the
+  // list on screen is the whole list.
+  const filable = sortable && !fixed && !stage && !folder
   const group = useSortable({ id: sortId, disabled: !sortable || !showHeader || fixed })
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature
   // branch parks its card too, not only worktrees.
   const checkout = path || projectPath
   const pullsOpen = useSyncExternalStore(subscribePullsCard, () => isPullsOpen(checkout))
-
-  // Filing the block files its cards: a folder is a set of sessions carrying a
-  // name, so there is nothing else to write.
-  const fileAll = (target: string) => {
-    for (const id of ids) {
-      onFile(id, target)
-    }
-  }
 
   // Written from the handler rather than from the state updater: React may
   // discard and replay an updater, and a pref written in one is a pref written
@@ -230,9 +221,13 @@ export function SessionGroup({
           // Offered on a checkout's block alone: a folder's cards are already
           // filed, a wall is an arrangement rather than a set to file, and the
           // pinned block's cards are filed one at a time from the card.
+          //
+          // Withheld under a filter for the reason the drag is (`sortable`): the
+          // cards this block drew are the ones that survived the query, so
+          // "move the group" would move part of it and say nothing.
           folders={folders}
-          onFileAll={!fixed && !stage && !folder ? (target) => fileAll(target) : undefined}
-          onNewFolder={!fixed && !stage && !folder ? () => onNewFolder(ids) : undefined}
+          onFileAll={filable ? (target) => onFile(ids, target) : undefined}
+          onNewFolder={filable ? () => onNewFolder(ids) : undefined}
           collapsed={collapsed}
           isDragging={group.isDragging}
           providers={providers}
@@ -299,10 +294,13 @@ export function SessionGroup({
                       }
                       onPin={(pinned) => pinSession(projectId, session.id, pinned)}
                       // The folder it is already in is not a place to move it
-                      // to; leaving it is its own item on the card.
+                      // to; leaving it is its own item on the card. A card drawn
+                      // in a wall is offered nothing: the wall outranks the
+                      // folder, so filing it would write a folder the card never
+                      // moves into.
                       folders={folders.filter((name) => name !== session.folder)}
-                      onFile={(target) => onFile(session.id, target)}
-                      onNewFolder={() => onNewFolder([session.id])}
+                      onFile={stage ? undefined : (target) => onFile([session.id], target)}
+                      onNewFolder={stage ? undefined : () => onNewFolder([session.id])}
                       onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
                       onPulls={onPulls}
                       sortable={sortable}

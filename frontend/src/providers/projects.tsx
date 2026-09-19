@@ -19,7 +19,7 @@ import {
   setActiveSession,
   setSessionEntrypoint as recordEntrypoint,
   renameFolder,
-  setSessionFolder,
+  setSessionsFolder,
   setSessionPinned,
   setSessionSchedule,
   type Session,
@@ -646,14 +646,20 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // Filing is a write on the session, exactly like the pin above it: the sidebar
   // lifts the card into the folder's block at render time, so nothing here has
   // to touch the order. A name nothing carries yet is a folder that starts
-  // existing with this card in it.
-  const fileSession = useCallback((projectId: string, sessionId: string, folder: string) => {
-    const next = setSessionFolder(sessionsRef.current, projectId, sessionId, folder)
+  // existing with these cards in it.
+  //
+  // The list is committed once and written per session: filing a checkout's
+  // whole block is one gesture, and a commit per card would repaint the sidebar
+  // once per card.
+  const fileSessions = useCallback((projectId: string, sessionIds: string[], folder: string) => {
+    const next = setSessionsFolder(sessionsRef.current, projectId, sessionIds, folder)
     if (next === sessionsRef.current) {
       return
     }
     commit(next)
-    void Store.SetSessionFolder(sessionId, folder)
+    for (const id of sessionIds) {
+      void Store.SetSessionFolder(id, folder)
+    }
   }, [])
 
   // Renaming a folder rewrites every session filed under it, here and in the
@@ -689,7 +695,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       setEntrypoint,
       scheduleSession,
       pinSession,
-      fileSession,
+      fileSessions,
       renameSessionFolder,
       reorderProjects,
       reorderSessions,
@@ -714,7 +720,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       setEntrypoint,
       scheduleSession,
       pinSession,
-      fileSession,
+      fileSessions,
       renameSessionFolder,
       reorderProjects,
       reorderSessions,

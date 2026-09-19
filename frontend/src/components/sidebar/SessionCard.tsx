@@ -118,10 +118,11 @@ interface SessionCardProps {
   // The folders this card can be filed into — every folder its project holds,
   // minus the one it is already in — and the two ways to file it: an existing
   // folder by name, "" to take it out of the one it is in, or a new folder the
-  // dialog names.
+  // dialog names. Both handlers are absent for a card drawn in a wall, which
+  // outranks the folder: the write would land and the card would not move.
   folders: string[]
-  onFile: (folder: string) => void
-  onNewFolder: () => void
+  onFile?: (folder: string) => void
+  onNewFolder?: () => void
   // Pin the card to the head of the list, or unpin it. A pinned card offers no
   // close affordance at all — unpinning is the way back to closing it.
   onPin: (pinned: boolean) => void
@@ -717,31 +718,33 @@ export function SessionCard({
           {/* Beside the pin, because they are the same move at two scales: the
               pin promises one card the top of the list, a folder gathers a set
               of them under a name. Neither closes or moves anything else. */}
-          <ContextMenuSub>
-            <ContextMenuSubTrigger>
-              <Folder />
-              Move to folder
-            </ContextMenuSubTrigger>
-            <ContextMenuSubContent>
-              {folders.map((target) => (
-                <ContextMenuItem key={target} onClick={() => onFile(target)}>
-                  <Folder />
-                  <span className="truncate">{target}</span>
+          {onFile && onNewFolder && (
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>
+                <Folder />
+                Move to folder
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent>
+                {folders.map((target) => (
+                  <ContextMenuItem key={target} onClick={() => onFile(target)}>
+                    <Folder />
+                    <span className="truncate">{target}</span>
+                  </ContextMenuItem>
+                ))}
+                {session.folder && (
+                  <ContextMenuItem onClick={() => onFile("")}>
+                    <FolderMinus />
+                    <span className="truncate">Take out of {session.folder}</span>
+                  </ContextMenuItem>
+                )}
+                {(folders.length > 0 || session.folder) && <ContextMenuSeparator />}
+                <ContextMenuItem onClick={onNewFolder}>
+                  <Plus />
+                  New folder&hellip;
                 </ContextMenuItem>
-              ))}
-              {session.folder && (
-                <ContextMenuItem onClick={() => onFile("")}>
-                  <FolderMinus />
-                  <span className="truncate">Take out of {session.folder}</span>
-                </ContextMenuItem>
-              )}
-              {(folders.length > 0 || session.folder) && <ContextMenuSeparator />}
-              <ContextMenuItem onClick={onNewFolder}>
-                <Plus />
-                New folder&hellip;
-              </ContextMenuItem>
-            </ContextMenuSubContent>
-          </ContextMenuSub>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          )}
           <SessionEntrypointItem session={session} onOpen={() => setEntrypointOpen(true)} />
           {!active && (
             <ContextMenuItem onClick={onStageToggle}>

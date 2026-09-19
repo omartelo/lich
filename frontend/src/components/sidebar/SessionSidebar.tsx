@@ -39,12 +39,14 @@ import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { activeSessionId, foldersOf, sessionsOf, type Session } from "@/lib/session/sessions"
 import {
   dragOrder,
+  folderKey,
   reorderSubset,
   runCardIn,
   sidebarGroups,
   type SidebarGroup,
 } from "@/lib/session/sidebar-groups"
 import { useSortableList, verticalAxis, withinList } from "@/lib/use-sortable-list"
+import { moveGroupCollapsed } from "@/lib/session/group-prefs"
 import { NewFolderDialog } from "./NewFolderDialog"
 import { WorktreeCloseDialogs } from "./WorktreeCloseDialogs"
 import { SessionGroup } from "./SessionGroup"
@@ -85,7 +87,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     reopenWorktreeSession,
     activateSession,
     reorderSessions,
-    fileSession,
+    fileSessions,
     renameSessionFolder,
   } = useProjects()
   // Match the project subtree ("/*") so the sidebar stays mounted — and keeps
@@ -400,6 +402,9 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
           if (group.stage) {
             panes.rename(group.stage.id, name)
           } else if (group.folder) {
+            // The fold moves with the folder: its block is keyed by the name, so
+            // the rename remounts it under a key nothing was stored against.
+            moveGroupCollapsed(projectId, group.key, folderKey(name))
             renameSessionFolder(projectId, group.folder, name)
           }
         }}
@@ -407,11 +412,12 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
           if (group.stage) {
             panes.dissolve(group.stage.id)
           } else if (group.folder) {
+            moveGroupCollapsed(projectId, group.key, "")
             renameSessionFolder(projectId, group.folder, "")
           }
         }}
         folders={folders}
-        onFile={(sessionId, folder) => fileSession(projectId, sessionId, folder)}
+        onFile={(sessionIds, folder) => fileSessions(projectId, sessionIds, folder)}
         onNewFolder={setNaming}
         projectId={projectId}
         path={group.path}
@@ -612,9 +618,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         count={naming?.length ?? 0}
         existing={folders}
         onCreate={(name) => {
-          for (const id of naming ?? []) {
-            fileSession(projectId, id, name)
-          }
+          fileSessions(projectId, naming ?? [], name)
           setNaming(null)
         }}
       />

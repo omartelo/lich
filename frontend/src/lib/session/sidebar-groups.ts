@@ -47,6 +47,81 @@ export interface SidebarGroup {
   sessions: Session[]
 }
 
+// Which block a session is drawn in — asked once and used by both the bucketing
+// and the walk that orders the blocks, so the two can never disagree about where
+// a card went. The order of the checks is the precedence sidebarGroups
+// documents: wall, then pin, then folder, then the session's own checkout.
+type Block = "wall" | "pin" | "folder" | "checkout"
+
+function blockOf(session: Session, wallOf: Map<string, PaneGroup>): Block {
+  if (wallOf.has(session.id)) {
+    return "wall"
+  }
+  if (session.pinned) {
+    return "pin"
+  }
+  return session.folder ? "folder" : "checkout"
+}
+
+// The wall each session is on, if any. A cell naming a session the project no
+// longer holds is skipped rather than carried: a wall outlives its members
+// leaving, and a stale id would key a block with nothing to draw.
+function wallMembers(
+  stage: readonly PaneGroup[],
+  byId: Map<string, Session>,
+): Map<string, PaneGroup> {
+  const wallOf = new Map<string, PaneGroup>()
+  for (const group of stage) {
+    for (const id of group.cells) {
+      if (byId.has(id)) {
+        wallOf.set(id, group)
+      }
+    }
+  }
+  return wallOf
+}
+
+// The key of the block a session is drawn in: the wall's own id, the folder's
+// name behind its prefix, or the checkout's path. The pinned block has none of
+// its own — it is drawn before the walk starts.
+function blockKey(session: Session, where: Block, wall: PaneGroup | undefined): string {
+  if (where === "wall" && wall) {
+    return wall.id
+  }
+  return where === "folder" ? folderKey(session.folder ?? "") : groupKey(session.path ?? "")
+}
+
+// One block, with the defaults the three gathered kinds share: no wall, no
+// folder, no checkout of its own. Each caller names only what it is.
+function block(
+  key: string,
+  sessions: Session[],
+  of: Partial<Pick<SidebarGroup, "pinned" | "stage" | "folder" | "path">> = {},
+): SidebarGroup {
+  return { key, pinned: false, stage: null, folder: "", path: "", sessions, ...of }
+}
+
+// The sessions filed under each folder name, each keeping the stored order.
+function folderMembers(
+  sessions: Session[],
+  gathered: (session: Session) => Block,
+): Map<string, Session[]> {
+  const byFolder = new Map<string, Session[]>()
+  for (const session of sessions) {
+    if (gathered(session) !== "folder") {
+      continue
+    }
+    const name = session.folder ?? ""
+    const members = byFolder.get(name)
+    if (members) {
+      members.push(session)
+    } else {
+      byFolder.set(name, [session])
+    }
+  }
+  return byFolder
+}
+
 // sidebarGroups splits a project's sessions into the blocks the sidebar draws:
 // the pinned ones first — that is what a pin promises — then the walls, the
 // folders and the worktrees interleaved, each block landing where its first card
@@ -74,50 +149,16 @@ export function sidebarGroups(
   stage: readonly PaneGroup[] = [],
 ): SidebarGroup[] {
   const byId = new Map(sessions.map((session) => [session.id, session]))
-  const wallOf = new Map<string, PaneGroup>()
-  for (const group of stage) {
-    for (const id of group.cells) {
-      if (byId.has(id)) {
-        wallOf.set(id, group)
-      }
-    }
-  }
-  // What a session is drawn as, once and for all, so the bucketing below and the
-  // walk that orders the blocks can never disagree about where a card went.
-  const gathered = (session: Session): "wall" | "pin" | "folder" | "checkout" => {
-    if (wallOf.has(session.id)) {
-      return "wall"
-    }
-    if (session.pinned) {
-      return "pin"
-    }
-    return session.folder ? "folder" : "checkout"
-  }
+  const wallOf = wallMembers(stage, byId)
+  const gathered = (session: Session) => blockOf(session, wallOf)
 
   const blocks: SidebarGroup[] = []
   const pinned = sessions.filter((session) => gathered(session) === "pin")
   if (pinned.length > 0) {
-    blocks.push({
-      key: PINNED_GROUP_KEY,
-      pinned: true,
-      stage: null,
-      folder: "",
-      path: "",
-      sessions: pinned,
-    })
+    blocks.push(block(PINNED_GROUP_KEY, pinned, { pinned: true }))
   }
 
-  const byFolder = new Map<string, Session[]>()
-  for (const session of sessions) {
-    if (gathered(session) === "folder") {
-      const members = byFolder.get(session.folder ?? "")
-      if (members) {
-        members.push(session)
-      } else {
-        byFolder.set(session.folder ?? "", [session])
-      }
-    }
-  }
+  const byFolder = folderMembers(sessions, gathered)
   const loose = sessions.filter((session) => gathered(session) === "checkout")
   const byPath = new Map(
     groupByWorktree(loose).map((group) => [groupKey(group.path), group] as const),
@@ -130,48 +171,23 @@ export function sidebarGroups(
     }
     const wall = wallOf.get(session.id)
     const folder = session.folder ?? ""
-    const key =
-      where === "wall" && wall
-        ? wall.id
-        : where === "folder"
-          ? folderKey(folder)
-          : groupKey(session.path ?? "")
+    const key = blockKey(session, where, wall)
     if (drawn.has(key)) {
       continue
     }
     drawn.add(key)
     if (where === "wall" && wall) {
-      blocks.push({
-        key,
-        pinned: false,
-        stage: wall,
-        folder: "",
-        path: "",
-        sessions: wall.cells.flatMap((id) => byId.get(id) ?? []),
-      })
+      const cells = wall.cells.flatMap((id) => byId.get(id) ?? [])
+      blocks.push(block(key, cells, { stage: wall }))
       continue
     }
     if (where === "folder") {
-      blocks.push({
-        key,
-        pinned: false,
-        stage: null,
-        folder,
-        path: "",
-        sessions: byFolder.get(folder) ?? [],
-      })
+      blocks.push(block(key, byFolder.get(folder) ?? [], { folder }))
       continue
     }
     const group = byPath.get(key)
     if (group) {
-      blocks.push({
-        key,
-        pinned: false,
-        stage: null,
-        folder: "",
-        path: group.path,
-        sessions: group.sessions,
-      })
+      blocks.push(block(key, group.sessions, { path: group.path }))
     }
   }
   return blocks

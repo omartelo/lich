@@ -45,6 +45,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   owns an isolated `DndContext`, which is what keeps a drag inside a worktree from rewriting the list around it
   — so dropping a card into another block is a cross-list transfer nothing here implements. The checkout
   header's "Move group to folder" is what covers the case the menu is slow at, filing a whole block in one go.
+  Two places withhold filing rather than let it half-work: a block whose list is filtered offers no
+  "Move group to folder" (the cards it drew are the ones that survived the query, so filing "the group" would
+  file part of it), and a card drawn on a wall is offered no folder at all, because the wall outranks the
+  folder and the write would land with nothing moving on screen.
+- **Renaming a folder remounts its block** (`frontend/src/lib/session/group-prefs.ts`): the block is keyed by
+  the folder's name, so a rename is a new key to React and to the fold preference — `moveGroupCollapsed`
+  carries the fold across and drops the old entry, and anything else keyed off that block starts again. A
+  wall avoids this by keeping one id across its renames; a folder cannot, because the name *is* the folder.
+  Renaming onto a name the project already holds merges the two folders, silently: they are the same set of
+  sessions afterwards and nothing warns first, where the New folder dialog does say a typed name already
+  exists.
 - **The header of a folded block reports at most one thing** (`collapsedMark`): a waiting session, else an
   unread finished turn, else nothing. It is a dot rather than a count, so a folder hiding four unread turns and
   one hiding one read the same, and it speaks only for the cards in that block — a folder whose members are all

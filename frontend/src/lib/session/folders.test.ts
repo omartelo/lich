@@ -4,7 +4,7 @@ import {
   foldersOf,
   renameFolder,
   sessionsOf,
-  setSessionFolder,
+  setSessionsFolder,
   setSessionPinned,
   type SessionState,
 } from "./sessions"
@@ -30,11 +30,11 @@ function buildState(n: number): SessionState {
 const ids = (groups: ReturnType<typeof sidebarGroups>) =>
   groups.map((group) => [group.key, group.sessions.map((s) => s.id)])
 
-describe("setSessionFolder", () => {
+describe("setSessionsFolder", () => {
   it("files a session and takes it back out", () => {
-    let state = setSessionFolder(buildState(2), P, "s1", "Apps")
+    let state = setSessionsFolder(buildState(2), P, ["s1"], "Apps")
     expect(sessionsOf(state, P)[0].folder).toBe("Apps")
-    state = setSessionFolder(state, P, "s1", "")
+    state = setSessionsFolder(state, P, ["s1"], "")
     expect(sessionsOf(state, P)[0].folder).toBeUndefined()
   })
 
@@ -42,26 +42,54 @@ describe("setSessionFolder", () => {
   // filed and one taken out of a folder have to be the same shape, or a
   // comparison somewhere reads them as two different cards.
   it("leaves no folder key behind when a session is unfiled", () => {
-    const state = setSessionFolder(setSessionFolder(buildState(1), P, "s1", "Apps"), P, "s1", "")
+    const filed = setSessionsFolder(buildState(1), P, ["s1"], "Apps")
+    const state = setSessionsFolder(filed, P, ["s1"], "")
     expect("folder" in sessionsOf(state, P)[0]).toBe(false)
   })
 
   it("leaves the stored order alone", () => {
-    const state = setSessionFolder(buildState(3), P, "s1", "Apps")
+    const state = setSessionsFolder(buildState(3), P, ["s1"], "Apps")
     expect(sessionsOf(state, P).map((s) => s.id)).toEqual(["s1", "s2", "s3"])
   })
 
   it("ignores an unknown project or session", () => {
     const state = buildState(2)
-    expect(setSessionFolder(state, "nope", "s1", "Apps")).toBe(state)
-    expect(setSessionFolder(state, P, "ghost", "Apps")).toBe(state)
+    expect(setSessionsFolder(state, "nope", ["s1"], "Apps")).toBe(state)
+    expect(setSessionsFolder(state, P, ["ghost"], "Apps")).toBe(state)
+    expect(setSessionsFolder(state, P, [], "Apps")).toBe(state)
+  })
+
+  // A checkout's whole block is filed in one gesture, so the reducer takes the
+  // list: one commit for the lot, not one repaint per card.
+  it("files every session in the list at once", () => {
+    const state = setSessionsFolder(buildState(4), P, ["s1", "s3"], "Apps")
+    expect(sessionsOf(state, P).map((s) => s.folder)).toEqual([
+      "Apps",
+      undefined,
+      "Apps",
+      undefined,
+    ])
+  })
+
+  it("takes a whole list back out of its folder", () => {
+    let state = setSessionsFolder(buildState(3), P, ["s1", "s2"], "Apps")
+    state = setSessionsFolder(state, P, ["s1", "s2"], "")
+    expect(sessionsOf(state, P).every((s) => s.folder === undefined)).toBe(true)
+  })
+
+  // An id the project does not hold cannot make the write fail for the ones it
+  // does: the block hands over what it drew, and a card closed mid-gesture is
+  // exactly that.
+  it("files the sessions it knows and ignores the rest", () => {
+    const state = setSessionsFolder(buildState(2), P, ["s1", "ghost"], "Apps")
+    expect(sessionsOf(state, P).map((s) => s.folder)).toEqual(["Apps", undefined])
   })
 })
 
 describe("renameFolder", () => {
   it("rewrites every session filed under the name", () => {
-    let state = setSessionFolder(buildState(3), P, "s1", "Apps")
-    state = setSessionFolder(state, P, "s3", "Apps")
+    let state = setSessionsFolder(buildState(3), P, ["s1"], "Apps")
+    state = setSessionsFolder(state, P, ["s3"], "Apps")
     state = renameFolder(state, P, "Apps", "Applications")
     expect(sessionsOf(state, P).map((s) => s.folder)).toEqual([
       "Applications",
@@ -71,8 +99,8 @@ describe("renameFolder", () => {
   })
 
   it("ungroups the folder when the new name is empty", () => {
-    let state = setSessionFolder(buildState(2), P, "s1", "Apps")
-    state = setSessionFolder(state, P, "s2", "Apps")
+    let state = setSessionsFolder(buildState(2), P, ["s1"], "Apps")
+    state = setSessionsFolder(state, P, ["s2"], "Apps")
     state = renameFolder(state, P, "Apps", "")
     expect(sessionsOf(state, P).every((s) => s.folder === undefined)).toBe(true)
   })
@@ -80,21 +108,21 @@ describe("renameFolder", () => {
   // Without the guard this would sweep every unfiled session into a folder
   // nobody asked for — the same guard the store carries.
   it("refuses the empty source name", () => {
-    const state = setSessionFolder(buildState(2), P, "s1", "Apps")
+    const state = setSessionsFolder(buildState(2), P, ["s1"], "Apps")
     expect(renameFolder(state, P, "", "Everything")).toBe(state)
   })
 
   it("ignores a folder nothing is filed under", () => {
-    const state = setSessionFolder(buildState(2), P, "s1", "Apps")
+    const state = setSessionsFolder(buildState(2), P, ["s1"], "Apps")
     expect(renameFolder(state, P, "Infra", "Ops")).toBe(state)
   })
 })
 
 describe("foldersOf", () => {
   it("names each folder once, in the order its first card sits in", () => {
-    let state = setSessionFolder(buildState(4), P, "s2", "Apps")
-    state = setSessionFolder(state, P, "s3", "Design system")
-    state = setSessionFolder(state, P, "s4", "Apps")
+    let state = setSessionsFolder(buildState(4), P, ["s2"], "Apps")
+    state = setSessionsFolder(state, P, ["s3"], "Design system")
+    state = setSessionsFolder(state, P, ["s4"], "Apps")
     expect(foldersOf(state, P)).toEqual(["Apps", "Design system"])
   })
 
@@ -109,7 +137,7 @@ describe("sidebarGroups with folders", () => {
     let state = addSession({}, P, "s1")
     state = addSession(state, P, "wt1", "claude", "/wt/a")
     state = addSession(state, P, "wt2", "claude", "/wt/a")
-    state = setSessionFolder(state, P, "wt1", "Apps")
+    state = setSessionsFolder(state, P, ["wt1"], "Apps")
     expect(ids(sidebarGroups(sessionsOf(state, P)))).toEqual([
       [ROOT_GROUP_KEY, ["s1"]],
       [folderKey("Apps"), ["wt1"]],
@@ -123,9 +151,9 @@ describe("sidebarGroups with folders", () => {
     let state = addSession({}, P, "s1")
     state = addSession(state, P, "wt1", "claude", "/wt/a")
     state = addSession(state, P, "wt2", "claude", "/wt/b")
-    state = setSessionFolder(state, P, "s1", "Apps")
-    state = setSessionFolder(state, P, "wt1", "Apps")
-    state = setSessionFolder(state, P, "wt2", "Apps")
+    state = setSessionsFolder(state, P, ["s1"], "Apps")
+    state = setSessionsFolder(state, P, ["wt1"], "Apps")
+    state = setSessionsFolder(state, P, ["wt2"], "Apps")
     expect(ids(sidebarGroups(sessionsOf(state, P)))).toEqual([
       [folderKey("Apps"), ["s1", "wt1", "wt2"]],
     ])
@@ -136,7 +164,7 @@ describe("sidebarGroups with folders", () => {
   it("keys a folder apart from a worktree of the same name", () => {
     let state = addSession({}, P, "s1")
     state = addSession(state, P, "wt1", "claude", "/wt/a")
-    state = setSessionFolder(state, P, "s1", "/wt/a")
+    state = setSessionsFolder(state, P, ["s1"], "/wt/a")
     const keys = sidebarGroups(sessionsOf(state, P)).map((group) => group.key)
     expect(keys).toEqual([`${FOLDER_KEY_PREFIX}/wt/a`, "/wt/a"])
     expect(new Set(keys).size).toBe(2)
@@ -145,7 +173,7 @@ describe("sidebarGroups with folders", () => {
   // The pin promises the head of the list, not one particular header, so it
   // outranks the folder — the same rule a wall already outranks the pin by.
   it("draws a pinned card in the pinned block even when it is filed", () => {
-    let state = setSessionFolder(buildState(2), P, "s1", "Apps")
+    let state = setSessionsFolder(buildState(2), P, ["s1"], "Apps")
     state = setSessionPinned(state, P, "s1", true)
     expect(ids(sidebarGroups(sessionsOf(state, P)))).toEqual([
       [PINNED_GROUP_KEY, ["s1"]],
@@ -155,8 +183,8 @@ describe("sidebarGroups with folders", () => {
 
   it("keeps the block where its first card sits in the stored list", () => {
     let state = buildState(4)
-    state = setSessionFolder(state, P, "s3", "Apps")
-    state = setSessionFolder(state, P, "s4", "Apps")
+    state = setSessionsFolder(state, P, ["s3"], "Apps")
+    state = setSessionsFolder(state, P, ["s4"], "Apps")
     expect(ids(sidebarGroups(sessionsOf(state, P)))).toEqual([
       [ROOT_GROUP_KEY, ["s1", "s2"]],
       [folderKey("Apps"), ["s3", "s4"]],
@@ -166,13 +194,13 @@ describe("sidebarGroups with folders", () => {
   // A folder is the set of sessions carrying its name, so the last card leaving
   // is what ends it — there is no empty folder to draw.
   it("stops drawing a folder once its last card leaves", () => {
-    let state = setSessionFolder(buildState(2), P, "s1", "Apps")
-    state = setSessionFolder(state, P, "s1", "")
+    let state = setSessionsFolder(buildState(2), P, ["s1"], "Apps")
+    state = setSessionsFolder(state, P, ["s1"], "")
     expect(ids(sidebarGroups(sessionsOf(state, P)))).toEqual([[ROOT_GROUP_KEY, ["s1", "s2"]]])
   })
 
   it("carries the folder's name on the block it draws", () => {
-    const state = setSessionFolder(buildState(2), P, "s2", "Design system")
+    const state = setSessionsFolder(buildState(2), P, ["s2"], "Design system")
     const folder = sidebarGroups(sessionsOf(state, P)).find((group) => group.folder)
     expect(folder?.folder).toBe("Design system")
     expect(folder?.path).toBe("")

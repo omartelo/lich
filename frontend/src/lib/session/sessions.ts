@@ -455,34 +455,41 @@ export function setSessionPinned(
   }
 }
 
-// setSessionFolder files a session under a folder, or takes it out of one with
-// an empty name. Like a pin, it leaves the list order alone — sidebarGroups is
-// what lifts the card into the folder's block at render time, so a session taken
-// out of a folder falls back among the neighbours it always had. Unknown project
-// or session ids are ignored, returning the input state unchanged.
-export function setSessionFolder(
+// withFolder returns the session filed under `folder`, or unfiled when it is
+// empty. The key is dropped rather than set to "", so a session that has never
+// been filed and one taken out of a folder are the same shape — which is what
+// both hydration paths produce.
+function withFolder(session: Session, folder: string): Session {
+  const { folder: _was, ...rest } = session
+  return folder ? { ...rest, folder } : rest
+}
+
+// setSessionsFolder files sessions under a folder, or takes them out of one with
+// an empty name. It takes a list because a checkout's whole block is filed in
+// one gesture, and one commit for that gesture is one repaint rather than one
+// per card.
+//
+// Like a pin, it leaves the list order alone — sidebarGroups is what lifts a
+// card into the folder's block at render time, so a session taken out of a
+// folder falls back among the neighbours it always had. An unknown project, or
+// a list naming no session the project holds, is ignored and returns the input
+// state unchanged.
+export function setSessionsFolder(
   state: SessionState,
   projectId: string,
-  sessionId: string,
+  sessionIds: readonly string[],
   folder: string,
 ): SessionState {
   const current = state[projectId]
-  if (!current || !current.sessions.some((s) => s.id === sessionId)) {
+  const ids = new Set(sessionIds)
+  if (!current || !current.sessions.some((s) => ids.has(s.id))) {
     return state
   }
   return {
     ...state,
     [projectId]: {
       ...current,
-      sessions: current.sessions.map((s) => {
-        if (s.id !== sessionId) {
-          return s
-        }
-        // Dropped rather than set to "", so an unfiled session carries no key at
-        // all — the shape both hydration paths produce.
-        const { folder: _was, ...rest } = s
-        return folder ? { ...rest, folder } : rest
-      }),
+      sessions: current.sessions.map((s) => (ids.has(s.id) ? withFolder(s, folder) : s)),
     },
   }
 }
@@ -507,13 +514,7 @@ export function renameFolder(
     ...state,
     [projectId]: {
       ...current,
-      sessions: current.sessions.map((s) => {
-        if (s.folder !== from) {
-          return s
-        }
-        const { folder: _was, ...rest } = s
-        return to ? { ...rest, folder: to } : rest
-      }),
+      sessions: current.sessions.map((s) => (s.folder === from ? withFolder(s, to) : s)),
     },
   }
 }
