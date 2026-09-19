@@ -7,11 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.53.1] - 2026-09-19
+
+> [!IMPORTANT]
+> **If 0.53.0 opened on an empty workspace, this release brings it back.** The
+> folders 0.53.0 added never reached a workspace that already existed, so lich
+> listed no projects and opening one did nothing. Nothing was lost: install this
+> release and every project and session is there again.
+
 ### Fixed
 
-- Upgrading to 0.53.0 left the workspace empty: the session folders it added never reached a
-  database that already existed, so lich loaded no projects and opening one did nothing. The
-  column is added on the next launch and the projects come back.
+- **The workspace 0.53.0 opened empty.** The column behind session folders was added in the
+  step a workspace only runs the first time it is created, so it reached none that already
+  existed and every session read failed: no projects listed, and opening one did nothing. It
+  is its own upgrade step now, applied on the next launch, and a workspace 0.53.0 created is
+  left as it is.
 
 ## [0.53.0] - 2026-09-19
 
@@ -5079,7 +5089,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.53.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.53.1...HEAD
+[0.53.1]: https://github.com/omartelo/lich/compare/v0.53.0...v0.53.1
 [0.53.0]: https://github.com/omartelo/lich/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/omartelo/lich/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/omartelo/lich/compare/v0.50.0...v0.51.0
