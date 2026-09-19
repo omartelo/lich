@@ -131,14 +131,6 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- because a branch moves inside a checkout while the worktree keeps the name
     -- it was created with.
     parked_branch       TEXT NOT NULL DEFAULT '',
-    -- The folder this session was filed under, "" for one the user has not
-    -- filed. Folders are the sidebar's own grouping, above the one derived from
-    -- the checkout: a folder gathers cards from any worktree, so the name has to
-    -- live on the session rather than anywhere a path could be read off. The
-    -- name is the identity — there is no folder row to point at, so renaming one
-    -- rewrites every session filed under it (RenameFolder) and a folder nothing
-    -- is filed under has stopped existing.
-    folder              TEXT NOT NULL DEFAULT '',
     -- What the conversation this session was forked from had already cost when
     -- the fork was spawned, in USD, and 0 for every session that is not one. A
     -- fork's own transcript carries the history it was branched from, so the

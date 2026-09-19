@@ -520,9 +520,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   migration down: going back to an older lich means installing the newer one again or starting a fresh
   workspace. The refusal only exists from the release that stamped version 1; a lich before it reads no version
   and opens anything, which costs nothing until the first migration after version 1 adds a column. The trap for
-  a contributor: `schema` is frozen at the version-1 shape and every change after it is an appended entry in
-  `migrations`, never an edit to the `CREATE TABLE`, or a fresh database is created with the column its own
-  ALTER then fails to add.
+  a contributor: `schema` and `legacyAlters` are frozen at the version-1 shape and every change after it is an
+  appended entry in `migrations`, never an edit to the `CREATE TABLE` and never a line in `legacyAlters`: the
+  version-1 step is the one step every database that already exists has long since run, so a column added
+  there reaches none of them and every read of that table fails. 0.53.0 shipped a column that way and loaded
+  no projects at all.
 - **A history snippet folds case in ASCII, so a shouted accented word is a hit with no snippet**
   (`internal/store/transcripts.go`, `firstMention`): the window around a match is cut in the query rather than
   out of the whole conversation, which is what keeps a page of a hundred rows off the megabytes behind it. The

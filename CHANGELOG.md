@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Upgrading to 0.53.0 left the workspace empty: the session folders it added never reached a
+  database that already existed, so lich loaded no projects and opening one did nothing. The
+  column is added on the next launch and the projects come back.
+
 ## [0.53.0] - 2026-09-19
 
 > [!IMPORTANT]
