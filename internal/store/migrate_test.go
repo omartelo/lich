@@ -123,8 +123,8 @@ func TestOpenAddsTheEffortColumnToAVersionOneWorkspace(t *testing.T) {
 	if got := svc.SessionEffort("s1"); got != "high" {
 		t.Errorf("SessionEffort = %q, want high", got)
 	}
-	if v := userVersion(t, path); v != 2 {
-		t.Errorf("user_version = %d, want 2", v)
+	if v := userVersion(t, path); v != len(migrations) {
+		t.Errorf("user_version = %d, want %d", v, len(migrations))
 	}
 }
 
@@ -205,5 +205,63 @@ func TestOpenRollsBackAFailedMigration(t *testing.T) {
 	var n int
 	if err := after.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name = 'half_done'`).Scan(&n); err != nil || n != 0 {
 		t.Errorf("half_done tables = %d (err %v), want the step rolled back", n, err)
+	}
+}
+
+// A database stamped at version 2 predates the folder column: 0.53.0 added it
+// in legacyMigrations, the one step every workspace that already existed had
+// long since run. Opening it has to add the column, or every read of a session
+// row fails and the window draws no projects at all.
+func TestOpenAddsTheFolderColumnToAVersionTwoWorkspace(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v2.db")
+	seedDB(t, path, schema+`
+ALTER TABLE sessions ADD COLUMN effort TEXT NOT NULL DEFAULT '';
+INSERT INTO projects (id, name, path) VALUES ('p1', 'alpha', '/src/alpha');
+INSERT INTO sessions (id, project_id, label) VALUES ('s1', 'p1', 'Session 1');
+PRAGMA user_version = 2;`)
+
+	svc, err := open(path)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer svc.Close()
+	got, err := svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState on a version-2 workspace: %v", err)
+	}
+	if len(got) != 1 || len(got[0].Sessions) != 1 {
+		t.Fatalf("state = %+v, want alpha and its session", got)
+	}
+	if err := svc.SetSessionFolder("s1", "Design system"); err != nil {
+		t.Fatalf("SetSessionFolder: %v", err)
+	}
+	if v := userVersion(t, path); v != len(migrations) {
+		t.Errorf("user_version = %d, want %d", v, len(migrations))
+	}
+}
+
+// 0.53.0 created its databases with the folder column already in place, so the
+// step that adds it for everyone else finds it there and must not refuse the
+// open over the duplicate.
+func TestOpenAcceptsAWorkspaceThatAlreadyHasTheFolderColumn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v0530.db")
+	seedDB(t, path, schema+`
+ALTER TABLE sessions ADD COLUMN effort TEXT NOT NULL DEFAULT '';
+ALTER TABLE sessions ADD COLUMN folder TEXT NOT NULL DEFAULT '';
+INSERT INTO projects (id, name, path) VALUES ('p1', 'alpha', '/src/alpha');
+INSERT INTO sessions (id, project_id, label, folder) VALUES ('s1', 'p1', 'Session 1', 'Design system');
+PRAGMA user_version = 2;`)
+
+	svc, err := open(path)
+	if err != nil {
+		t.Fatalf("open a 0.53.0 workspace: %v", err)
+	}
+	defer svc.Close()
+	got, err := svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if len(got) != 1 || len(got[0].Sessions) != 1 || got[0].Sessions[0].Folder != "Design system" {
+		t.Fatalf("state = %+v, want the session still filed under Design system", got)
 	}
 }

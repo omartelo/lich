@@ -15,12 +15,33 @@ import (
 var migrations = []func(*sql.Tx) error{
 	legacyMigrations,
 	addSessionEffort,
+	addSessionFolder,
 }
 
 // addSessionEffort is version 2: the reasoning effort a session was opened at,
 // beside its model (SetSessionEffort).
 func addSessionEffort(tx *sql.Tx) error {
 	_, err := tx.Exec(`ALTER TABLE sessions ADD COLUMN effort TEXT NOT NULL DEFAULT ''`)
+	return err
+}
+
+// addSessionFolder is version 3: the folder a session is filed under, "" for
+// one the user has not filed (SetSessionFolder). Folders are the sidebar's own
+// grouping, above the one derived from the checkout: a folder gathers cards
+// from any worktree, so the name has to live on the session rather than
+// anywhere a path could be read off. The name is the identity — there is no
+// folder row to point at, so renaming one rewrites every session filed under it
+// (RenameFolder) and a folder nothing is filed under has stopped existing.
+//
+// 0.53.0 shipped this column in legacyMigrations, a step every workspace that
+// already existed had long since run, so it reached none of them and their
+// every session read failed. A database that 0.53.0 created has the column
+// already, and that duplicate is the one this step tolerates.
+func addSessionFolder(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE sessions ADD COLUMN folder TEXT NOT NULL DEFAULT ''`)
+	if err != nil && migrationApplied(err) {
+		return nil
+	}
 	return err
 }
 
@@ -126,7 +147,6 @@ var legacyAlters = []string{
 	`ALTER TABLE sessions ADD COLUMN fork_cost_offset REAL NOT NULL DEFAULT 0`,
 	`ALTER TABLE sessions ADD COLUMN sandbox_links TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sessions ADD COLUMN run INTEGER NOT NULL DEFAULT 0`,
-	`ALTER TABLE sessions ADD COLUMN folder TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE session_costs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
