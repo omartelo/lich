@@ -77,6 +77,8 @@ function workspace(sessionId: string): ProjectsValue {
     setEntrypoint: noop,
     scheduleSession: noop,
     pinSession: noop,
+    fileSession: noop,
+    renameSessionFolder: noop,
     reorderProjects: noop,
     reorderSessions: noop,
   }

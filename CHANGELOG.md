@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Group sessions into folders you name.** A card's menu files it under a
+  folder — "Design system", "Apps" — and the sidebar draws that folder as its
+  own block, above the ones it groups by checkout. A folder gathers cards from
+  any worktree, which is the point: it groups by what you are working on rather
+  than where the files are. Fold it and it says how many sessions it holds, with
+  a dot when one of them is waiting on you or finished a turn you have not read;
+  a checkout's header can send its whole list into a folder at once; renaming or
+  ungrouping one leaves every session open. Filing survives a restart, and a
+  session you close and resume comes back into its folder.
+
+- **A folded block says when something in it needs you.** Any collapsed block —
+  a folder, a worktree, a split — now carries an amber dot while one of its
+  sessions is waiting on you, and an emerald one while a finished turn is
+  unread. Folding a block no longer hides that its cards have news.
+
 - **Open a session at a chosen reasoning effort.** `lich open --effort high`,
   and the `effort` argument of the `open_session` tool, start the new session
   at that level, spelled the way its provider spells it. Claude Code, Codex,

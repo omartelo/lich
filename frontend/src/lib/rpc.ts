@@ -486,6 +486,14 @@ export const Store = {
    * refuses to close until unpinned. */
   SetSessionPinned: (sessionID: string, pinned: boolean) =>
     call<null>("store.SetSessionPinned", [sessionID, pinned]),
+  /** File a session under a folder, or take it out of one with an empty name.
+   * A session is in at most one folder, so this is a write, never an append. */
+  SetSessionFolder: (sessionID: string, folder: string) =>
+    call<null>("store.SetSessionFolder", [sessionID, folder]),
+  /** Rename one project's folder across every session filed under it, parked
+   * ones included; an empty name takes the folder apart. */
+  RenameFolder: (projectID: string, from: string, to: string) =>
+    call<null>("store.RenameFolder", [projectID, from, to]),
   SetActiveSession: (projectID: string, sessionID: string) =>
     call<null>("store.SetActiveSession", [projectID, sessionID]),
   ReorderProjects: (ids: string[]) => call<null>("store.ReorderProjects", [ids]),

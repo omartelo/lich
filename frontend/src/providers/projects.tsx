@@ -18,6 +18,8 @@ import {
   sessionsOf,
   setActiveSession,
   setSessionEntrypoint as recordEntrypoint,
+  renameFolder,
+  setSessionFolder,
   setSessionPinned,
   setSessionSchedule,
   type Session,
@@ -63,6 +65,7 @@ const cardFromStored = (restored: StoredSession): Session => ({
   ...(restored.entrypoint ? { entrypoint: restored.entrypoint } : {}),
   ...(restored.run ? { run: true } : {}),
   ...(restored.sandbox === "on" ? { sandboxed: true } : {}),
+  ...(restored.folder ? { folder: restored.folder } : {}),
   ...(restored.originSessionId
     ? { originSessionId: restored.originSessionId, originLabel: restored.originLabel }
     : {}),
@@ -640,6 +643,31 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     void Store.SetSessionPinned(sessionId, pinned)
   }, [])
 
+  // Filing is a write on the session, exactly like the pin above it: the sidebar
+  // lifts the card into the folder's block at render time, so nothing here has
+  // to touch the order. A name nothing carries yet is a folder that starts
+  // existing with this card in it.
+  const fileSession = useCallback((projectId: string, sessionId: string, folder: string) => {
+    const next = setSessionFolder(sessionsRef.current, projectId, sessionId, folder)
+    if (next === sessionsRef.current) {
+      return
+    }
+    commit(next)
+    void Store.SetSessionFolder(sessionId, folder)
+  }, [])
+
+  // Renaming a folder rewrites every session filed under it, here and in the
+  // store — the name is the folder's identity, so there is nothing else to
+  // update. An empty `to` takes the folder apart.
+  const renameSessionFolder = useCallback((projectId: string, from: string, to: string) => {
+    const next = renameFolder(sessionsRef.current, projectId, from, to)
+    if (next === sessionsRef.current) {
+      return
+    }
+    commit(next)
+    void Store.RenameFolder(projectId, from, to)
+  }, [])
+
   const value = useMemo(
     () => ({
       projects,
@@ -661,6 +689,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       setEntrypoint,
       scheduleSession,
       pinSession,
+      fileSession,
+      renameSessionFolder,
       reorderProjects,
       reorderSessions,
     }),
@@ -684,6 +714,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       setEntrypoint,
       scheduleSession,
       pinSession,
+      fileSession,
+      renameSessionFolder,
       reorderProjects,
       reorderSessions,
     ],

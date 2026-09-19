@@ -338,19 +338,19 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// project_id is read rather than passed: reopening by id knows only the
 		// session, and the row is what says where it belongs.
 		var labelAuto int
-		var projectID, model, effort, entrypoint, sandbox string
+		var projectID, model, effort, entrypoint, sandbox, folder string
 		var run bool
 		var forkOffset float64
 		row := tx.QueryRow(
 			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
-			        model, effort, entrypoint, run, sandbox, pinned, origin_session_id, origin_label,
+			        model, effort, entrypoint, run, sandbox, pinned, folder, origin_session_id, origin_label,
 			        scheduled_at, scheduled_prompt, fork_cost_offset
 			   FROM sessions `+where,
 			args...,
 		)
 		if err := row.Scan(
 			&old.ID, &projectID, &old.Label, &old.Kind, &old.Path, &old.ProviderSessionID,
-			&labelAuto, &model, &effort, &entrypoint, &run, &sandbox, &old.Pinned,
+			&labelAuto, &model, &effort, &entrypoint, &run, &sandbox, &old.Pinned, &folder,
 			&old.OriginSessionID, &old.OriginLabel,
 			&old.ScheduledAt, &old.ScheduledPrompt, &forkOffset,
 		); err != nil {
@@ -382,15 +382,18 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// before it happened.
 		// pinned rides along too: the pin holds "until it is unpinned" (Session),
 		// and a park by `lich close` — the one close the sidebar's withheld
-		// affordance does not stop — is not that.
+		// affordance does not stop — is not that. The folder rides along for the
+		// same reason: where the user filed a session is not something closing it
+		// undoes, and a resume that dropped it would land the card back among the
+		// checkout's own, which is exactly the pile the folder was made to break up.
 		if _, err := tx.Exec(
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
-			    model, effort, entrypoint, run, sandbox, pinned, origin_session_id, origin_label,
+			    model, effort, entrypoint, run, sandbox, pinned, folder, origin_session_id, origin_label,
 			    scheduled_at, scheduled_prompt, fork_cost_offset, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, old.Path, old.ProviderSessionID, labelAuto,
-			model, effort, entrypoint, run, sandbox, old.Pinned, old.OriginSessionID, old.OriginLabel,
+			model, effort, entrypoint, run, sandbox, old.Pinned, folder, old.OriginSessionID, old.OriginLabel,
 			old.ScheduledAt, old.ScheduledPrompt, forkOffset, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
@@ -414,6 +417,7 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 			Run:               run,
 			Sandbox:           sandbox,
 			Pinned:            old.Pinned,
+			Folder:            folder,
 			OriginSessionID:   old.OriginSessionID,
 			OriginLabel:       old.OriginLabel,
 			ScheduledAt:       old.ScheduledAt,
@@ -500,6 +504,49 @@ func (s *Service) SetSessionPinned(sessionID string, pinned bool) error {
 		`UPDATE sessions SET pinned = ? WHERE id = ?`, pinned, sessionID,
 	); err != nil {
 		return fmt.Errorf("set session %q pinned: %w", sessionID, err)
+	}
+	return nil
+}
+
+// SetSessionFolder files a session under a folder, or takes it out of one with
+// an empty name — the sidebar block the user groups by assignment rather than
+// by checkout. A session is in at most one folder, so this is a write, never an
+// append.
+//
+// The name is not looked up anywhere: a folder is the set of sessions carrying
+// its name, so filing the first session under a name is what creates it and
+// taking the last one out is what ends it. Nothing here trims or folds case —
+// the window hands over a name the user picked from its own list of them, and a
+// second name differing by a space is a second folder they can see and rename.
+func (s *Service) SetSessionFolder(sessionID, folder string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET folder = ? WHERE id = ?`, folder, sessionID,
+	); err != nil {
+		return fmt.Errorf("set session %q folder: %w", sessionID, err)
+	}
+	return nil
+}
+
+// RenameFolder renames one project's folder, and takes it apart when `to` is
+// empty — ungrouping every session filed under it in one write.
+//
+// Scoped to a project because the name is the identity: two projects can both
+// hold an "Apps" folder, and renaming one must not reach into the other. Parked
+// sessions are rewritten along with the open ones (no is_open clause): a
+// resumed session comes back into the folder it was filed under, which has to
+// be the folder's name now rather than the one it wore at the close.
+//
+// An empty `from` is refused, or the call would sweep every unfiled session in
+// the project into a folder nobody asked for.
+func (s *Service) RenameFolder(projectID, from, to string) error {
+	if from == "" {
+		return fmt.Errorf("rename folder: no folder named")
+	}
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET folder = ? WHERE project_id = ? AND folder = ?`,
+		to, projectID, from,
+	); err != nil {
+		return fmt.Errorf("rename folder %q in %q: %w", from, projectID, err)
 	}
 	return nil
 }

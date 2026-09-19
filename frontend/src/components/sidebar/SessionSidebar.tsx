@@ -36,7 +36,7 @@ import { queueSetup } from "@/lib/terminal/setup-queue"
 import { writeAtPrompt } from "@/lib/terminal/write-at-prompt"
 import { filterSessions } from "@/lib/session/session-filter"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
-import { activeSessionId, sessionsOf, type Session } from "@/lib/session/sessions"
+import { activeSessionId, foldersOf, sessionsOf, type Session } from "@/lib/session/sessions"
 import {
   dragOrder,
   reorderSubset,
@@ -45,6 +45,7 @@ import {
   type SidebarGroup,
 } from "@/lib/session/sidebar-groups"
 import { useSortableList, verticalAxis, withinList } from "@/lib/use-sortable-list"
+import { NewFolderDialog } from "./NewFolderDialog"
 import { WorktreeCloseDialogs } from "./WorktreeCloseDialogs"
 import { SessionGroup } from "./SessionGroup"
 import { WorktreeDialog } from "./WorktreeDialog"
@@ -84,6 +85,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     reopenWorktreeSession,
     activateSession,
     reorderSessions,
+    fileSession,
+    renameSessionFolder,
   } = useProjects()
   // Match the project subtree ("/*") so the sidebar stays mounted — and keeps
   // resolving its project — while the per-project Settings screen is open.
@@ -112,6 +115,11 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     edge: "right",
   })
   const [worktreeOpen, setWorktreeOpen] = useState(false)
+  // The sessions a new folder will hold once it is named — one card, or a whole
+  // checkout's block. Null while nothing is being named. The dialog is the only
+  // place a folder name is typed from a menu: a field opened inside the menu
+  // would unmount with it on the first click.
+  const [naming, setNaming] = useState<string[] | null>(null)
   // Whether the project ships a run command, which is what puts Run in a
   // checkout's + menu. Re-read when the worktree dialog closes, the one place
   // inside lich that writes the file; edited on disk it goes stale until the
@@ -198,6 +206,10 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // The split's own block is built from the members, not from what is on screen:
   // a parked wall is exactly the case the user could not see before.
   const groups = sidebarGroups(visible, panes.groups)
+  // Read off the project's whole list rather than the filtered one: a filter is
+  // a view, and a folder that vanished from the menu while a query was typed
+  // would be a folder the user could not file into.
+  const folders = foldersOf(sessions, projectId ?? "")
   // One drag list for every block that moves — walls and checkouts together, so
   // a wall can be dragged below a worktree instead of being penned in a list of
   // its own. Both kinds sit where their first card sits in the stored flat list,
@@ -383,8 +395,24 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         sortId={group.key}
         pinned={group.pinned}
         stage={group.stage}
-        onRenameGroup={(name) => group.stage && panes.rename(group.stage.id, name)}
-        onDissolveGroup={() => group.stage && panes.dissolve(group.stage.id)}
+        folder={group.folder}
+        onRenameGroup={(name) => {
+          if (group.stage) {
+            panes.rename(group.stage.id, name)
+          } else if (group.folder) {
+            renameSessionFolder(projectId, group.folder, name)
+          }
+        }}
+        onDissolveGroup={() => {
+          if (group.stage) {
+            panes.dissolve(group.stage.id)
+          } else if (group.folder) {
+            renameSessionFolder(projectId, group.folder, "")
+          }
+        }}
+        folders={folders}
+        onFile={(sessionId, folder) => fileSession(projectId, sessionId, folder)}
+        onNewFolder={setNaming}
         projectId={projectId}
         path={group.path}
         sessions={group.sessions}
@@ -578,6 +606,18 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         forkOf={forking && { label: forking.label, path: forking.path || path }}
       />
       <WorktreeCloseDialogs close={worktreeClose} />
+      <NewFolderDialog
+        open={!!naming}
+        onOpenChange={(open) => !open && setNaming(null)}
+        count={naming?.length ?? 0}
+        existing={folders}
+        onCreate={(name) => {
+          for (const id of naming ?? []) {
+            fileSession(projectId, id, name)
+          }
+          setNaming(null)
+        }}
+      />
       <ConfirmDialog
         open={!!moving}
         onCancel={cancelMove}

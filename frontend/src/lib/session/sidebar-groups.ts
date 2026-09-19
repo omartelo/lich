@@ -6,6 +6,7 @@
 // a session, and every function is pure over the list the reducers hand it.
 
 import type { PaneGroup } from "./panes"
+import type { PendingStatus } from "./session-status-store"
 import { sessionsOf, type Session, type SessionState } from "./sessions"
 
 // The pinned block's stand-in id, for the same reason ROOT_GROUP_KEY exists: it
@@ -13,7 +14,17 @@ import { sessionsOf, type Session, type SessionState } from "./sessions"
 // collide with no worktree — those paths are absolute.
 export const PINNED_GROUP_KEY = "__pinned__"
 
-// One block of the sidebar: a split group, the pinned sessions, or one
+// A folder block's key. Prefixed for the same reason the two stand-ins above
+// exist: a folder gathers cards from every checkout and is named by the user, so
+// a folder called "/home/me/project" must not key the block a real checkout of
+// that path already keys. The name rides in the key rather than being looked up
+// elsewhere, which is what lets the fold pref (group-prefs) and the drag list
+// key a folder without a second lookup.
+export const FOLDER_KEY_PREFIX = "__folder__:"
+
+export const folderKey = (name: string): string => `${FOLDER_KEY_PREFIX}${name}`
+
+// One block of the sidebar: a split group, the pinned sessions, a folder, or one
 // worktree's.
 export interface SidebarGroup {
   key: string
@@ -25,6 +36,11 @@ export interface SidebarGroup {
   // worktree path. A project has as many of these as the user has made, drawn
   // above everything else in the order they arranged.
   stage: PaneGroup | null
+  // The folder this block draws, "" for every other kind. Like a wall it
+  // gathers cards from any checkout — which is the whole point of filing by
+  // subject — so it has no path either, and the name is what the header wears
+  // and what a rename rewrites on every session in it.
+  folder: string
   // The checkout root ("" for the project's own directory), empty for the
   // gathered blocks.
   path: string
@@ -32,24 +48,27 @@ export interface SidebarGroup {
 }
 
 // sidebarGroups splits a project's sessions into the blocks the sidebar draws:
-// the pinned ones first — that is what a pin promises — then the walls and the
-// worktrees interleaved, each block landing where its first card sits in the
-// stored list. Each block keeps that stored (drag) order inside, except a
-// wall's, which keeps the order of the panes it draws.
+// the pinned ones first — that is what a pin promises — then the walls, the
+// folders and the worktrees interleaved, each block landing where its first card
+// sits in the stored list. Each block keeps that stored (drag) order inside,
+// except a wall's, which keeps the order of the panes it draws.
 //
-// One order for both kinds of block, read off the one list, is what lets a drag
-// move a wall past a worktree: block order is nowhere else, so moving a block is
-// moving its cards inside the flat list and nothing has a second opinion.
+// One order for every kind of block, read off the one list, is what lets a drag
+// move a folder past a worktree: block order is nowhere else, so moving a block
+// is moving its cards inside the flat list and nothing has a second opinion.
 //
-// Neither a split nor a pin rewrites that list; both only lift a card into a
-// block, which is what lets a session dropped from either land back among its
-// old neighbours instead of being stranded. The store hands the same order back,
-// so a reload draws what the live change did.
+// Neither a split nor a pin nor a folder rewrites that list; each only lifts a
+// card into a block, which is what lets a session dropped from any of them land
+// back among its old neighbours instead of being stranded. The store hands the
+// same order back, so a reload draws what the live change did.
 //
-// A session both pinned and on a wall is drawn in the wall's block: the pin
-// promises the top of the list rather than one particular header, and the card
-// keeps its own mark either way. A wall whose sessions are all gone draws
-// nothing — resolveGroups has already dropped it from what is stored.
+// Precedence where a session could be in two blocks is wall, then pin, then
+// folder, then its checkout: a session both filed and on a wall is drawn in the
+// wall, and one both filed and pinned is drawn at the top — the pin promises the
+// head of the list rather than one particular header, and the card keeps its own
+// mark either way. A wall or a folder with nothing left in it draws nothing: a
+// folder is the set of sessions carrying its name, so the last card leaving is
+// what ends it.
 export function sidebarGroups(
   sessions: Session[],
   stage: readonly PaneGroup[] = [],
@@ -63,40 +82,125 @@ export function sidebarGroups(
       }
     }
   }
-  const blocks: SidebarGroup[] = []
-  const pinned = sessions.filter((s) => s.pinned && !wallOf.has(s.id))
-  if (pinned.length > 0) {
-    blocks.push({ key: PINNED_GROUP_KEY, pinned: true, stage: null, path: "", sessions: pinned })
+  // What a session is drawn as, once and for all, so the bucketing below and the
+  // walk that orders the blocks can never disagree about where a card went.
+  const gathered = (session: Session): "wall" | "pin" | "folder" | "checkout" => {
+    if (wallOf.has(session.id)) {
+      return "wall"
+    }
+    if (session.pinned) {
+      return "pin"
+    }
+    return session.folder ? "folder" : "checkout"
   }
 
-  const loose = sessions.filter((s) => !s.pinned && !wallOf.has(s.id))
+  const blocks: SidebarGroup[] = []
+  const pinned = sessions.filter((session) => gathered(session) === "pin")
+  if (pinned.length > 0) {
+    blocks.push({
+      key: PINNED_GROUP_KEY,
+      pinned: true,
+      stage: null,
+      folder: "",
+      path: "",
+      sessions: pinned,
+    })
+  }
+
+  const byFolder = new Map<string, Session[]>()
+  for (const session of sessions) {
+    if (gathered(session) === "folder") {
+      const members = byFolder.get(session.folder ?? "")
+      if (members) {
+        members.push(session)
+      } else {
+        byFolder.set(session.folder ?? "", [session])
+      }
+    }
+  }
+  const loose = sessions.filter((session) => gathered(session) === "checkout")
   const byPath = new Map(
     groupByWorktree(loose).map((group) => [groupKey(group.path), group] as const),
   )
   const drawn = new Set<string>()
   for (const session of sessions) {
+    const where = gathered(session)
+    if (where === "pin") {
+      continue
+    }
     const wall = wallOf.get(session.id)
-    const key = wall ? wall.id : session.pinned ? "" : groupKey(session.path ?? "")
-    if (!key || drawn.has(key)) {
+    const folder = session.folder ?? ""
+    const key =
+      where === "wall" && wall
+        ? wall.id
+        : where === "folder"
+          ? folderKey(folder)
+          : groupKey(session.path ?? "")
+    if (drawn.has(key)) {
       continue
     }
     drawn.add(key)
-    if (wall) {
+    if (where === "wall" && wall) {
       blocks.push({
         key,
         pinned: false,
         stage: wall,
+        folder: "",
         path: "",
         sessions: wall.cells.flatMap((id) => byId.get(id) ?? []),
       })
       continue
     }
+    if (where === "folder") {
+      blocks.push({
+        key,
+        pinned: false,
+        stage: null,
+        folder,
+        path: "",
+        sessions: byFolder.get(folder) ?? [],
+      })
+      continue
+    }
     const group = byPath.get(key)
     if (group) {
-      blocks.push({ key, pinned: false, stage: null, path: group.path, sessions: group.sessions })
+      blocks.push({
+        key,
+        pinned: false,
+        stage: null,
+        folder: "",
+        path: group.path,
+        sessions: group.sessions,
+      })
     }
   }
   return blocks
+}
+
+// collapsedMark is what a folded block says about the cards it is hiding: a
+// session waiting on the user, else a finished turn nobody has read, else
+// nothing. Waiting outranks done for the reason it does on the card — the amber
+// state is the one asking for something — and neither says how many, because a
+// block that is folded has already been told to take one line.
+//
+// It reads the notification queue rather than each card's ring: that queue is
+// already "everything worth surfacing", so a status that stops counting as news
+// stops lighting the block with no second rule here.
+export function collapsedMark(
+  pending: readonly PendingStatus[],
+  ids: readonly string[],
+): "wait" | "done" | null {
+  let done = false
+  for (const entry of pending) {
+    if (!ids.includes(entry.id)) {
+      continue
+    }
+    if (entry.status === "waiting") {
+      return "wait"
+    }
+    done = done || entry.status === "done"
+  }
+  return done ? "done" : null
 }
 
 // runCardIn names the Run card of the checkout stored as `path` ("" for the

@@ -65,6 +65,12 @@ export interface ProjectsValue {
   scheduleSession: (sessionId: string, at: number, prompt: string) => void
   /** Pin a session to the head of its project's list, or unpin it. */
   pinSession: (projectId: string, sessionId: string, pinned: boolean) => void
+  /** File a session under a folder, or take it out of one with an empty name.
+   * Filing under a name no session carries yet is what creates that folder. */
+  fileSession: (projectId: string, sessionId: string, folder: string) => void
+  /** Rename a project's folder across every session in it; an empty name takes
+   * the folder apart and drops its cards back into their checkouts' blocks. */
+  renameSessionFolder: (projectId: string, from: string, to: string) => void
   /** Rearrange the project tabs to the given id order. */
   reorderProjects: (ids: string[]) => void
   /** Rearrange a project's session cards to the given id order. */
