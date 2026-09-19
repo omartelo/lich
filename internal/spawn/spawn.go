@@ -312,26 +312,25 @@ func checkOverrides(kind, model, effort string) error {
 // recordOverrides writes the model and effort a session was opened with onto
 // its row, where every later spawn reads them back.
 func (s *Service) recordOverrides(id, label, model, effort string) error {
-	record := []struct {
-		what, value string
-		set         func(string, string) error
-	}{
-		{"model", model, s.sessions.SetSessionModel},
-		{"reasoning effort", effort, s.sessions.SetSessionEffort},
-	}
-	for _, r := range record {
-		if r.value == "" {
-			continue
+	if model != "" {
+		if err := s.sessions.SetSessionModel(id, model); err != nil {
+			return overrideNotRecorded(label, "model", err)
 		}
-		if err := r.set(id, r.value); err != nil {
-			return fmt.Errorf(
-				"session %q is open, but the %s could not be recorded, so it runs on the "+
-					"provider's own default: %w",
-				label, r.what, err,
-			)
+	}
+	if effort != "" {
+		if err := s.sessions.SetSessionEffort(id, effort); err != nil {
+			return overrideNotRecorded(label, "reasoning effort", err)
 		}
 	}
 	return nil
+}
+
+func overrideNotRecorded(label, what string, err error) error {
+	return fmt.Errorf(
+		"session %q is open, but the %s could not be recorded, so it runs on the "+
+			"provider's own default: %w",
+		label, what, err,
+	)
 }
 
 // checkout is the worktree a session is being opened in: where it lives,
