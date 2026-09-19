@@ -66,6 +66,11 @@ export interface Session {
   sandboxSkippedLinks?: string[]
   // Kept at the head of the project's list and refused a close until unpinned.
   pinned?: boolean
+  // The folder this session is filed under, absent for one the user has not
+  // filed. A folder has no record of its own — it is the set of sessions
+  // carrying its name — so this field is both the membership and the folder's
+  // identity, and renaming one rewrites every session in it.
+  folder?: string
   // The session that asked for this one, when it was opened by delegation:
   // absent for every session opened from the window. The id is the live half —
   // it resolves to whatever that session is called now — and the label is the
@@ -448,6 +453,83 @@ export function setSessionPinned(
       sessions: current.sessions.map((s) => (s.id === sessionId ? { ...s, pinned } : s)),
     },
   }
+}
+
+// withFolder returns the session filed under `folder`, or unfiled when it is
+// empty. The key is dropped rather than set to "", so a session that has never
+// been filed and one taken out of a folder are the same shape — which is what
+// both hydration paths produce.
+function withFolder(session: Session, folder: string): Session {
+  const { folder: _was, ...rest } = session
+  return folder ? { ...rest, folder } : rest
+}
+
+// setSessionsFolder files sessions under a folder, or takes them out of one with
+// an empty name. It takes a list because a checkout's whole block is filed in
+// one gesture, and one commit for that gesture is one repaint rather than one
+// per card.
+//
+// Like a pin, it leaves the list order alone — sidebarGroups is what lifts a
+// card into the folder's block at render time, so a session taken out of a
+// folder falls back among the neighbours it always had. An unknown project, or
+// a list naming no session the project holds, is ignored and returns the input
+// state unchanged.
+export function setSessionsFolder(
+  state: SessionState,
+  projectId: string,
+  sessionIds: readonly string[],
+  folder: string,
+): SessionState {
+  const current = state[projectId]
+  const ids = new Set(sessionIds)
+  if (!current || !current.sessions.some((s) => ids.has(s.id))) {
+    return state
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: current.sessions.map((s) => (ids.has(s.id) ? withFolder(s, folder) : s)),
+    },
+  }
+}
+
+// renameFolder renames one project's folder across every session filed under it,
+// and takes the folder apart when `to` is empty. The name is the folder's
+// identity, so this is the whole of a rename: there is no record to update
+// beside the sessions. An empty `from` is refused — it would sweep every unfiled
+// session into a folder nobody asked for — as is a project or name nothing
+// matches, which returns the input state unchanged.
+export function renameFolder(
+  state: SessionState,
+  projectId: string,
+  from: string,
+  to: string,
+): SessionState {
+  const current = state[projectId]
+  if (!from || !current || !current.sessions.some((s) => s.folder === from)) {
+    return state
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: current.sessions.map((s) => (s.folder === from ? withFolder(s, to) : s)),
+    },
+  }
+}
+
+// foldersOf names a project's folders, in the order their first card sits in the
+// stored list — the same order the sidebar draws their blocks in, so the menu
+// that files a card offers them as they appear on screen.
+export function foldersOf(state: SessionState, projectId: string): string[] {
+  const names: string[] = []
+  for (const session of state[projectId]?.sessions ?? []) {
+    if (session.folder && !names.includes(session.folder)) {
+      names.push(session.folder)
+    }
+  }
+  return names
 }
 
 // reorderSessions rearranges a project's sessions to match the given id order,

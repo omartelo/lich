@@ -172,6 +172,8 @@ const workspace: ProjectsValue = {
   setEntrypoint: noop,
   scheduleSession: noop,
   pinSession: noop,
+  fileSessions: noop,
+  renameSessionFolder: noop,
   reorderProjects: noop,
   reorderSessions: noop,
 }
@@ -267,6 +269,18 @@ test("a status event repaints that session's card and nothing else", async () =>
   // s2 is a background card: the sidebar, the two cards beside it and the footer
   // are all absent, which is the invariant.
   expect(budget.take()).toEqual({ "SessionCard#s2": 1, ...CARD_CHROME })
+  await budget.unmount()
+})
+
+// The turn ending is the event that moves the notification queue, which every
+// block subscribes to for the mark it draws while folded. An open block has to
+// answer that queue without repainting: forty cards behind five headers would
+// otherwise all repaint every time any one of them finished. s3 rather than s2,
+// so the status this leaves behind is not one the tests below read.
+test("a finished turn repaints that session's card and no other block", async () => {
+  const budget = await mountSidebar()
+  await budget.act(() => bus.emit(STATUS_EVENT, { id: "s3", state: "done" }))
+  expect(budget.take()).toEqual({ "SessionCard#s3": 1, ...CARD_CHROME })
   await budget.unmount()
 })
 

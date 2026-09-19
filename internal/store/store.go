@@ -131,6 +131,14 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- because a branch moves inside a checkout while the worktree keeps the name
     -- it was created with.
     parked_branch       TEXT NOT NULL DEFAULT '',
+    -- The folder this session was filed under, "" for one the user has not
+    -- filed. Folders are the sidebar's own grouping, above the one derived from
+    -- the checkout: a folder gathers cards from any worktree, so the name has to
+    -- live on the session rather than anywhere a path could be read off. The
+    -- name is the identity — there is no folder row to point at, so renaming one
+    -- rewrites every session filed under it (RenameFolder) and a folder nothing
+    -- is filed under has stopped existing.
+    folder              TEXT NOT NULL DEFAULT '',
     -- What the conversation this session was forked from had already cost when
     -- the fork was spawned, in USD, and 0 for every session that is not one. A
     -- fork's own transcript carries the history it was branched from, so the
@@ -370,8 +378,13 @@ type Session struct {
 	// row nothing has spawned yet. The spawn writes its own verdict here, so the
 	// window can mark a confined card without re-deriving a decision that took
 	// the provider's rung, the checkout and a per-session override to reach.
-	Sandbox         string `json:"sandbox"`
-	Pinned          bool   `json:"pinned"`
+	Sandbox string `json:"sandbox"`
+	Pinned  bool   `json:"pinned"`
+	// Folder is the sidebar block this session was filed under, "" for one the
+	// user has not filed. It rides the row rather than a preference because it
+	// is what the list is organised by — a workspace of forty sessions that
+	// came back ungrouped after a restart would be a workspace nobody files.
+	Folder          string `json:"folder"`
 	OriginSessionID string `json:"originSessionId"`
 	OriginLabel     string `json:"originLabel"`
 	// ScheduledAt is when the prompt below is due, in unix seconds, 0 for a
@@ -664,7 +677,7 @@ func (s *Service) ProjectAt(path string) (string, string) {
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
 		`SELECT id, label, kind, path, provider_session_id, entrypoint, run, sandbox, pinned,
-		        origin_session_id, origin_label, scheduled_at, scheduled_prompt, unread,
+		        folder, origin_session_id, origin_label, scheduled_at, scheduled_prompt, unread,
 		        mcp_servers, sandbox_links,
 		        EXISTS (SELECT 1 FROM session_last_turn WHERE session_id = sessions.id)
 		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
@@ -681,7 +694,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 		var servers, links string
 		if err := rows.Scan(
 			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID,
-			&sess.Entrypoint, &sess.Run, &sess.Sandbox, &sess.Pinned,
+			&sess.Entrypoint, &sess.Run, &sess.Sandbox, &sess.Pinned, &sess.Folder,
 			&sess.OriginSessionID, &sess.OriginLabel,
 			&sess.ScheduledAt, &sess.ScheduledPrompt, &sess.Unread, &servers, &links,
 			&sess.HasLastTurn,

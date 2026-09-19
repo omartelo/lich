@@ -8,6 +8,7 @@ import { checkoutLabel } from "@/lib/git/checkout-label"
 import type { ProviderState } from "@/lib/providers-store"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { readGroupCollapsed, writeGroupCollapsed } from "@/lib/session/group-prefs"
+import { useCollapsedMark } from "@/lib/session/use-session-status"
 import type { PaneGroup } from "@/lib/session/panes"
 import { delegatesOf, type Session, sessionOrigin } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
@@ -30,10 +31,22 @@ interface SessionGroupProps {
   // one. A drag inside it reorders the panes rather than the stored session
   // list, which is the sidebar's half of arranging that wall.
   stage: PaneGroup | null
-  // Rename the wall, and take it apart. Both are the header's, because both are
-  // about the group rather than any session in it.
+  // The folder this block draws, "" for every other kind. Like a wall it gathers
+  // cards from any checkout, so it wears the folder's name rather than a
+  // worktree's and has no directory of its own.
+  folder: string
+  // Rename the wall or the folder, and take it apart. Both are the header's,
+  // because both are about the group rather than any session in it.
   onRenameGroup: (name: string) => void
   onDissolveGroup: () => void
+  // Every folder this project holds, for the two menus that file a card into
+  // one: the card's own, and the checkout header's "Move group to folder".
+  folders: string[]
+  // File sessions under a folder — "" takes them out of the one they are in.
+  onFile: (sessionIds: string[], folder: string) => void
+  // Ask for a name, then file what the caller names with it: one session, or
+  // every session in this block.
+  onNewFolder: (sessionIds: string[]) => void
   // "" for the project's own root or the pinned block, else the worktree
   // checkout path.
   path: string
@@ -98,8 +111,12 @@ export function SessionGroup({
   sortId,
   pinned,
   stage,
+  folder,
   onRenameGroup,
   onDissolveGroup,
+  folders,
+  onFile,
+  onNewFolder,
   path,
   sessions,
   projectPath,
@@ -134,10 +151,21 @@ export function SessionGroup({
   const [collapsed, setCollapsed] = useState(() => readGroupCollapsed(projectId, sortId))
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
-  // Neither of the gathered blocks is a checkout, so neither is dragged among
-  // the others and neither has a worktree's name to wear.
+  // None of the gathered blocks is a checkout, so none wears a worktree's name;
+  // only the pinned one is also kept out of the drag, because it is always
+  // first. A wall and a folder move among the others.
   const fixed = pinned
-  const name = stage ? stage.name : pinned ? "Pinned" : checkoutLabel(path, projectPath, projectId)
+  const name = stage
+    ? stage.name
+    : pinned
+      ? "Pinned"
+      : folder || checkoutLabel(path, projectPath, projectId)
+  // One answer for the whole block rather than one per card — and null while the
+  // block is open, so a turn ending in another block never repaints this one.
+  const mark = useCollapsedMark(ids, collapsed)
+  // Whether this block can be filed as a whole: a checkout's, and only while the
+  // list on screen is the whole list.
+  const filable = sortable && !fixed && !stage && !folder
   const group = useSortable({ id: sortId, disabled: !sortable || !showHeader || fixed })
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature
@@ -180,11 +208,26 @@ export function SessionGroup({
         <SessionGroupHeader
           name={name}
           fixed={fixed}
-          // A wall has nowhere to open a new session — it is not a checkout —
-          // but it does reorder among the other walls, so it keeps its handle.
-          launch={!fixed && !stage}
-          onRename={stage ? onRenameGroup : undefined}
-          onDissolve={stage ? onDissolveGroup : undefined}
+          folder={!!folder}
+          count={sessions.length}
+          mark={mark}
+          // Neither a wall nor a folder has anywhere to open a new session —
+          // neither is a checkout — but both reorder among the other blocks, so
+          // both keep their handle. A folder spans checkouts, so a + on it would
+          // have to guess which one a new session belongs in.
+          launch={!fixed && !stage && !folder}
+          onRename={stage || folder ? onRenameGroup : undefined}
+          onDissolve={stage || folder ? onDissolveGroup : undefined}
+          // Offered on a checkout's block alone: a folder's cards are already
+          // filed, a wall is an arrangement rather than a set to file, and the
+          // pinned block's cards are filed one at a time from the card.
+          //
+          // Withheld under a filter for the reason the drag is (`sortable`): the
+          // cards this block drew are the ones that survived the query, so
+          // "move the group" would move part of it and say nothing.
+          folders={folders}
+          onFileAll={filable ? (target) => onFile(ids, target) : undefined}
+          onNewFolder={filable ? () => onNewFolder(ids) : undefined}
           collapsed={collapsed}
           isDragging={group.isDragging}
           providers={providers}
@@ -250,6 +293,14 @@ export function SessionGroup({
                         setEntrypoint(projectId, session.id, entrypoint)
                       }
                       onPin={(pinned) => pinSession(projectId, session.id, pinned)}
+                      // The folder it is already in is not a place to move it
+                      // to; leaving it is its own item on the card. A card drawn
+                      // in a wall is offered nothing: the wall outranks the
+                      // folder, so filing it would write a folder the card never
+                      // moves into.
+                      folders={folders.filter((name) => name !== session.folder)}
+                      onFile={stage ? undefined : (target) => onFile([session.id], target)}
+                      onNewFolder={stage ? undefined : () => onNewFolder([session.id])}
                       onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
                       onPulls={onPulls}
                       sortable={sortable}

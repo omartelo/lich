@@ -5,6 +5,7 @@ import { STATUS_EVENT, type SessionStatus } from "./session-events"
 import { createSessionStatusStore, type PendingStatus } from "./session-status-store"
 import { formatAge, subscribeAge } from "./session-age"
 import { useKeyedStore } from "@/lib/use-keyed-store"
+import { collapsedMark } from "./sidebar-groups"
 
 // Subscribed at import rather than on first use: that opens the /events socket
 // at page load, so a status reported before any card mounts still lands.
@@ -141,6 +142,20 @@ export function useProjectStatus(sessionIds: readonly string[]): SessionStatus |
 // would be the subscription doing nothing the rest of the time.
 export function runningSessions(sessionIds: readonly string[]): string[] {
   return store.runningOf(sessionIds)
+}
+
+// useCollapsedMark is what a folded block draws for the cards it hides
+// (collapsedMark). An open block answers null without reading the queue, so it
+// never re-renders for a turn ending somewhere else; a folded one re-renders
+// only when its own mark flips, because what it returns is a value React
+// compares rather than the queue's array.
+export function useCollapsedMark(
+  ids: readonly string[],
+  collapsed: boolean,
+): "wait" | "done" | null {
+  return useSyncExternalStore(store.subscribeAll, () =>
+    collapsed ? collapsedMark(store.pendingAll(), ids) : null,
+  )
 }
 
 // usePendingStatuses returns every session needing attention across all

@@ -18,6 +18,7 @@ export function buildSessionState(loaded: StoredProject[]): SessionState {
       ...(session.run ? { run: true } : {}),
       ...(session.sandbox === "on" ? { sandboxed: true } : {}),
       ...(session.pinned ? { pinned: true } : {}),
+      ...(session.folder ? { folder: session.folder } : {}),
       ...(session.originSessionId
         ? { originSessionId: session.originSessionId, originLabel: session.originLabel }
         : {}),

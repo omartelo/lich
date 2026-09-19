@@ -20,6 +20,19 @@ export function readGroupCollapsed(projectId: string, groupKey: string): boolean
   return parseBoolPref(readPref(`${COLLAPSED_PREFIX}${projectId}:${groupKey}`), false)
 }
 
+// moveGroupCollapsed carries a block's fold from one key to another, and drops
+// it when `to` is empty. A folder's key is its name (sidebar-groups), so a
+// rename would otherwise expand the block under the user and strand the old
+// entry in storage forever; a wall keeps one id across its renames and never
+// needs this.
+export function moveGroupCollapsed(projectId: string, from: string, to: string): void {
+  const collapsed = readGroupCollapsed(projectId, from)
+  writeGroupCollapsed(projectId, from, false)
+  if (to) {
+    writeGroupCollapsed(projectId, to, collapsed)
+  }
+}
+
 export function writeGroupCollapsed(projectId: string, groupKey: string, collapsed: boolean): void {
   const key = `${COLLAPSED_PREFIX}${projectId}:${groupKey}`
   // Unfolded is the default, so it is stored by not being stored: what is left

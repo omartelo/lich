@@ -31,6 +31,35 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts. A
   Run card shortens that window rather than closing it — the process it starts is what binds the port, and
   whether the script even mentions the variable is the project's own business.
+- **A folder is a name on a session, so it has no life of its own** (`internal/store/mutations.go`,
+  `frontend/src/lib/session/sidebar-groups.ts`): the folder a card is filed under is a column on the session
+  row, and the name is the whole identity — there is no folder record to point at. What follows is deliberate:
+  a folder exists only while a session carries its name, so the last card leaving ends it and an empty folder
+  cannot be kept on screen waiting for a card; a rename is a write across every session in it, parked rows
+  included (`RenameFolder`); two names differing only by case or a space are two folders, because nothing folds
+  them and the user can see and rename both; and a folder belongs to one project, since the name is scoped by
+  `project_id`. A session is in at most one folder, and where it could be in two blocks the order is wall, then
+  pin, then folder, then its checkout — a pinned card that is also filed is drawn at the top, not in its folder.
+- **A card is filed from a menu, never by dragging it into a folder**
+  (`frontend/src/components/sidebar/SessionGroup.tsx`): a card's drag is confined to its own block — each block
+  owns an isolated `DndContext`, which is what keeps a drag inside a worktree from rewriting the list around it
+  — so dropping a card into another block is a cross-list transfer nothing here implements. The checkout
+  header's "Move group to folder" is what covers the case the menu is slow at, filing a whole block in one go.
+  Two places withhold filing rather than let it half-work: a block whose list is filtered offers no
+  "Move group to folder" (the cards it drew are the ones that survived the query, so filing "the group" would
+  file part of it), and a card drawn on a wall is offered no folder at all, because the wall outranks the
+  folder and the write would land with nothing moving on screen.
+- **Renaming a folder remounts its block** (`frontend/src/lib/session/group-prefs.ts`): the block is keyed by
+  the folder's name, so a rename is a new key to React and to the fold preference — `moveGroupCollapsed`
+  carries the fold across and drops the old entry, and anything else keyed off that block starts again. A
+  wall avoids this by keeping one id across its renames; a folder cannot, because the name *is* the folder.
+  Renaming onto a name the project already holds merges the two folders, silently: they are the same set of
+  sessions afterwards and nothing warns first, where the New folder dialog does say a typed name already
+  exists.
+- **The header of a folded block reports at most one thing** (`collapsedMark`): a waiting session, else an
+  unread finished turn, else nothing. It is a dot rather than a count, so a folder hiding four unread turns and
+  one hiding one read the same, and it speaks only for the cards in that block — a folder whose members are all
+  busy says nothing, exactly like a block whose cards have never reported.
 - **The Run card is never started for you** (`frontend/src/components/sidebar/SessionSidebar.tsx`): a fresh
   worktree's setup script is still installing dependencies in the agent's card when the checkout appears, and
   lich has no "setup finished" signal to hang an automatic start on — `terminal.Ready` answers a different
