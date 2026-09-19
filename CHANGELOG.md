@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-09-19
+
+> [!IMPORTANT]
+> **If your sidebar holds more cards than a screen does, start here.** A card's
+> menu now files it under a folder you name, and the sidebar draws that folder as
+> its own block, gathering cards from every worktree at once.
+
 > [!WARNING]
 > **If you keep an older lich to fall back on, read this one.** This release is
 > the first to upgrade the workspace database, so 0.52.0 and earlier no longer
@@ -95,6 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It now stays waiting to be collected and the note arrives as usual. oh-my-pi
   does not tell lich a tool call was interrupted, so there a result landing in
   the rest of that wait, at most 90 seconds, is still lost.
+
 ## [0.52.0] - 2026-09-17
 
 ### Added
@@ -5065,7 +5073,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.52.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.53.0...HEAD
+[0.53.0]: https://github.com/omartelo/lich/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/omartelo/lich/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/omartelo/lich/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/omartelo/lich/compare/v0.49.0...v0.50.0
