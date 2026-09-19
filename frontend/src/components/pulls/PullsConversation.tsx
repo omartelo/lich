@@ -74,7 +74,10 @@ export function PullsConversation({
         if (item.kind === "review") {
           return (
             <ReviewVerdict
-              key={`r${item.at}${item.review.author}`}
+              // The node id, so the dismiss box a verdict is holding stays with
+              // that verdict: two reviews by one author whose dates GitHub gave
+              // us unparseable both sort to 0 and would share a key by date.
+              key={item.review.id || `r${item.at}${item.review.author}`}
               review={item.review}
               onDismiss={onDismiss}
             />

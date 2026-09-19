@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> [!WARNING]
+> **If you keep an older lich to fall back on, read this one.** This release is
+> the first to upgrade the workspace database, so 0.52.0 and earlier no longer
+> open it: they name both schema versions and ask you to reinstall the newer
+> lich. Nothing in the workspace is lost, and the newer lich opens it as usual.
+
 ### Added
 
 - **Open a session at a chosen reasoning effort.** `lich open --effort high`,
@@ -48,8 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   value for both themes, picked for the dark card: on the light one they
   measured 2.0 to 2.3:1 where small text wants 4.5:1. They are now the
   `tone-pass`, `tone-wait` and `destructive` theme tokens, darker on light and
-  unchanged on dark. A theme file can set the first two; one that does not
-  takes lich's values, as with any token added by a release.
+  unchanged on dark. A theme already installed that sets neither of the first
+  two keeps working and takes lich's values for them. A theme file you import,
+  or a pack lich installs from git, is validated whole and has to carry them:
+  a theme published before this release needs the two tokens added to its file
+  before it will install or update.
 
 ### Fixed
 
