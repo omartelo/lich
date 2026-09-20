@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A session card opens and closes instead of appearing and vanishing.** A new card grows
+  into place, a closed one shrinks out of it, and the cards under it move in the same breath
+  rather than jumping — whichever way the session was opened or closed. The cards a project
+  opens with are drawn straight away, and a machine set to reduce motion gets none of it.
+
 ## [0.53.1] - 2026-09-19
 
 > [!IMPORTANT]

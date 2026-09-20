@@ -27,6 +27,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   reviewing. The statement is true and the tone is factual rather than an alarm, but the line does speak on pull
   requests where nothing is wrong. Narrowing it to *your* pull requests means resolving which account lich runs
   gh as, which `vcs.account` only answers when the project has named one.
+- **A closed card outlives its session by 180ms** (`frontend/src/lib/session/use-closing-sessions.ts`): the card
+  animates out, and nothing can animate an element React has already unmounted, so the closed session is held and
+  drawn for the length of that exit. For those frames the sidebar renders a card for a session the state no longer
+  holds — anything counting or measuring cards sees one card too many, and the card is already `pointer-events-none`
+  and out of the drag order rather than a live one. The hold and the CSS duration are the same constant, and the
+  timer starts on the frame the browser starts the transition on; two clocks that can drift are exactly how the
+  card ends up popping out of its own last frames. The card's box also stops clipping while a card in the block is
+  dragged (`SessionGroup.tsx`), because the drag carries the card out of that box: a drag that begins while another
+  card is still opening will see that one overflow.
 - **`LICH_WORKTREE_PORT` is reserved, never held** (`internal/terminal/worktreeport.go`): the number is a name the
   checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts. A
   Run card shortens that window rather than closing it — the process it starts is what binds the port, and
