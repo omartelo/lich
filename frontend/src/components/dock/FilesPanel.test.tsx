@@ -22,16 +22,22 @@ interface BodyOptions {
   cut?: boolean
   hidden?: string[]
   files?: string[]
+  stats?: Map<string, DiffFile>
 }
 
-function body({ cut = false, hidden = [], files = ["a.txt", "src/main.go"] }: BodyOptions) {
+function body({
+  cut = false,
+  hidden = [],
+  files = ["a.txt", "src/main.go"],
+  stats = NO_STATS,
+}: BodyOptions) {
   return createElement(TreeBody, {
     tree: buildTree(files),
     query: "",
     active: "",
     toggled: new Set<string>(),
     onToggled: () => {},
-    stats: NO_STATS,
+    stats,
     cut,
     hidden,
     loading: false,
@@ -81,6 +87,23 @@ test("an empty tree still admits what it left out", async () => {
   expect(text).toContain("No files here")
   expect(text).toContain("Hidden: build.")
   expect(text).toContain(CUT_LINE)
+  await budget.unmount()
+})
+
+function changed(path: string, added: number, deleted: number): [string, DiffFile] {
+  return [
+    path,
+    { oldPath: path, newPath: path, status: "modified", binary: false, added, deleted, hunks: [] },
+  ]
+}
+
+// The tree opens collapsed, so the folder's own row is the only place the diff
+// beneath it can show.
+test("a collapsed folder shows the sum of the changes beneath it", async () => {
+  const stats = new Map([changed("src/main.go", 3, 1), changed("src/util.go", 2, 4)])
+  const budget = await mountBudget(body({ files: ["a.txt", "src/main.go", "src/util.go"], stats }))
+  const folder = document.querySelector("[aria-expanded]")
+  expect(folder?.textContent).toBe("src+5-5")
   await budget.unmount()
 })
 
