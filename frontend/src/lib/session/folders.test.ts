@@ -9,6 +9,7 @@ import {
   type SessionState,
 } from "./sessions"
 import {
+  checkoutsOf,
   collapsedMark,
   FOLDER_KEY_PREFIX,
   folderKey,
@@ -205,6 +206,18 @@ describe("sidebarGroups with folders", () => {
     expect(folder?.folder).toBe("Design system")
     expect(folder?.path).toBe("")
     expect(folder?.stage).toBeNull()
+  })
+})
+
+// Where a folder's + can open a session: every checkout its cards live in, once,
+// in the order the cards are drawn, the project root being the empty path.
+describe("checkoutsOf", () => {
+  it("names each checkout once, in card order", () => {
+    let state = addSession({}, P, "s1", "claude", "/wt/front")
+    state = addSession(state, P, "s2")
+    state = addSession(state, P, "s3", "claude", "/wt/front")
+    state = addSession(state, P, "s4", "claude", "/wt/back")
+    expect(checkoutsOf(sessionsOf(state, P))).toEqual(["/wt/front", "", "/wt/back"])
   })
 })
 

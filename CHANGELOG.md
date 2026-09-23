@@ -20,6 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an Intel runner; nobody on the project has an Intel Mac, so if the window does not come
   up for you, open an issue — the browser tab still works meanwhile.
 
+- **Open a session straight into a folder.** A folder's header has a + of its own: it
+  opens the session in one of the checkouts the folder's cards live in, asking which when
+  there is more than one, and the new card lands in the folder rather than under its
+  checkout for you to move.
+
+- **Drag a card onto a folder to file it.** Carry a session card to a folder's header and
+  let go, folded or open. Dropping a filed card on its own checkout's header takes it back
+  out, and the headers that cannot take the card dim while you carry it. Filing from the
+  card's menu still works, and is the keyboard's way to do it.
+
 ### Changed
 
 - **A session card opens and closes instead of appearing and vanishing.** A new card grows

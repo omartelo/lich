@@ -21,12 +21,14 @@ export interface ProjectsValue {
   /** Close a project's tab (kept in the store so it can be reopened later). */
   closeProject: (id: string) => void
   /** Open a new session in a project and focus it, returning its id. Kind
-   * defaults to the project's provider choice; path to its own directory. */
+   * defaults to the project's provider choice; path to its own directory. A
+   * folder files the session under it from its first frame. */
   newSession: (
     projectId: string,
     kind?: SessionKind,
     path?: string,
     sandbox?: SandboxAnswer,
+    folder?: string,
   ) => string
   /** Open a project-default session rooted at a git worktree, labeled after it,
    * returning its id. sandbox is the dialog's confinement answer ("on"/"off"),

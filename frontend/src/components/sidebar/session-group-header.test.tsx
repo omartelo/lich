@@ -18,6 +18,8 @@ const base = {
   folder: false,
   count: 3,
   mark: null,
+  drop: "idle" as const,
+  dropFolder: "",
   collapsed: false,
   isDragging: false,
   providers: [],
@@ -99,4 +101,70 @@ test("a folded block draws the mark it was given, an open one draws none", async
   const open = await mountBudget(header({ collapsed: false, mark: "wait" }))
   expect(document.body.textContent).not.toContain("waiting on you")
   await open.unmount()
+})
+
+const plus = () =>
+  [...document.querySelectorAll("button")].find((element) =>
+    (element.getAttribute("aria-label") ?? "").startsWith("New session in"),
+  )
+
+// A folder has no directory, so its + asks among the checkouts its cards live
+// in, one submenu each, and never guesses.
+test("a folder spread over two checkouts asks which one its + opens in", async () => {
+  const mounted = await mountBudget(
+    header({
+      name: "Frontend",
+      folder: true,
+      checkouts: [
+        { path: "", label: "elan-app" },
+        { path: "/wt/epic-front", label: "epic-front" },
+      ],
+    }),
+  )
+
+  plus()?.click()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(document.body.textContent).toContain("New session in Frontend")
+  expect(items()).toEqual(["elan-app", "epic-front"])
+  await mounted.unmount()
+})
+
+test("a folder in one checkout opens there, and says where", async () => {
+  const opened: unknown[][] = []
+  const mounted = await mountBudget(
+    header({
+      name: "Apps",
+      folder: true,
+      checkouts: [{ path: "/wt/epic-front", label: "epic-front" }],
+      onNewSession: (...args: unknown[]) => opened.push(args),
+    }),
+  )
+
+  plus()?.click()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(document.body.textContent).toContain("New session in Apps, on epic-front")
+  const terminal = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (element) => element.textContent?.includes("New Terminal"),
+  )
+  terminal?.click()
+  expect(opened).toEqual([["shell", "", "/wt/epic-front"]])
+  await mounted.unmount()
+})
+
+// The drag finds its targets by this attribute alone, so a header that does
+// not take the card must not wear it: a dimmed header that still filed would
+// file into a block the user was told was closed to it.
+test("only a header that takes the dragged card is a drop target", async () => {
+  const target = () => document.querySelector("[data-file-target]")
+
+  for (const drop of ["accepts", "over"] as const) {
+    const taking = await mountBudget(header({ drop, dropFolder: "Apps" }))
+    expect(target()?.getAttribute("data-file-target")).toBe("Apps")
+    await taking.unmount()
+  }
+  for (const drop of ["idle", "refuses"] as const) {
+    const closed = await mountBudget(header({ drop, dropFolder: "Apps" }))
+    expect(target()).toBeNull()
+    await closed.unmount()
+  }
 })
