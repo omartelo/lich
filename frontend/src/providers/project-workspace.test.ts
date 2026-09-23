@@ -1,8 +1,19 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import type { StoredProject, StoredSession } from "@/lib/api-types"
 import { toOpenedProject } from "@/lib/session/session-events"
 import { adoptSession } from "@/lib/session/sessions"
-import { buildSessionState, toProject } from "./project-workspace"
+import { buildSessionState, fileAfterInsert, toProject } from "./project-workspace"
+
+const filed = vi.hoisted(() => [] as [string, string][])
+
+vi.mock("@/lib/rpc", () => ({
+  Store: {
+    SetSessionFolder: (sessionId: string, folder: string) => {
+      filed.push([sessionId, folder])
+      return Promise.resolve(null)
+    },
+  },
+}))
 
 const storedSession = (overrides: Partial<StoredSession> = {}): StoredSession => ({
   id: "s1",
@@ -273,5 +284,38 @@ describe("a project opened outside the window", () => {
       activeId: "",
       nextSeq: 1,
     })
+  })
+})
+
+// Filing is an UPDATE: sent before the row exists it matches nothing, and the
+// session comes back unfiled on the next load.
+describe("fileAfterInsert", () => {
+  it("files the session only once its row is in", async () => {
+    filed.length = 0
+    let insert = () => {}
+    const inserted = new Promise<void>((resolve) => {
+      insert = resolve
+    })
+    const done = fileAfterInsert(inserted, "s1", "Apps")
+    await Promise.resolve()
+    expect(filed).toEqual([])
+
+    insert()
+    await done
+    expect(filed).toEqual([["s1", "Apps"]])
+  })
+
+  it("files nothing for a session opened outside a folder", async () => {
+    filed.length = 0
+    await fileAfterInsert(Promise.resolve(), "s1", "")
+    expect(filed).toEqual([])
+  })
+
+  it("files nothing when the insert fails", async () => {
+    filed.length = 0
+    await expect(fileAfterInsert(Promise.reject(new Error("gone")), "s1", "Apps")).rejects.toThrow(
+      "gone",
+    )
+    expect(filed).toEqual([])
   })
 })

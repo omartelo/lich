@@ -45,7 +45,7 @@ import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { neighborProjectId } from "@/lib/project-order"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { useSettings } from "./settings"
-import { buildSessionState, toProject } from "./project-workspace"
+import { buildSessionState, fileAfterInsert, toProject } from "./project-workspace"
 import { ProjectsContext } from "./projects-context"
 import { useSessionEvents } from "./project-events"
 
@@ -286,7 +286,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]
       commit(next)
-      const persisted = Store.AddSession(
+      const inserted = Store.AddSession(
         projectId,
         sessionId,
         created.label,
@@ -295,10 +295,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         project.nextSeq,
         sandbox,
       )
-      // Chained, not sent beside it: filing is an UPDATE, and one that reaches
-      // the store before the row does matches nothing, so the session would
-      // come back unfiled on the next load.
-      void (folder ? persisted.then(() => Store.SetSessionFolder(sessionId, folder)) : persisted)
+      void fileAfterInsert(inserted, sessionId, folder)
       return sessionId
     },
     [],
