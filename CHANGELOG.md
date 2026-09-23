@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-09-23
+
 ### Added
 
 - **A folder in the Files tab says what changed inside it.** A folder now carries the
@@ -18,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Chromium the Apple Silicon bundle does, so lich opens in its own window with its own
   Dock icon instead of as a tab in the default browser. It is built and run end to end on
   an Intel runner; nobody on the project has an Intel Mac, so if the window does not come
-  up for you, open an issue — the browser tab still works meanwhile.
+  up for you, open an issue; the browser tab still works meanwhile.
 
 - **Open a session straight into a folder.** A folder's header has a + of its own: it
   opens the session in one of the checkouts the folder's cards live in, asking which when
@@ -34,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A session card opens and closes instead of appearing and vanishing.** A new card grows
   into place, a closed one shrinks out of it, and the cards under it move in the same breath
-  rather than jumping — whichever way the session was opened or closed. The cards a project
+  rather than jumping, whichever way the session was opened or closed. The cards a project
   opens with are drawn straight away, and a machine set to reduce motion gets none of it.
 
 ## [0.53.1] - 2026-09-19
@@ -5119,7 +5121,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.53.1...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.54.0...HEAD
+[0.54.0]: https://github.com/omartelo/lich/compare/v0.53.1...v0.54.0
 [0.53.1]: https://github.com/omartelo/lich/compare/v0.53.0...v0.53.1
 [0.53.0]: https://github.com/omartelo/lich/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/omartelo/lich/compare/v0.51.0...v0.52.0
