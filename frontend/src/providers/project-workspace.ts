@@ -1,4 +1,5 @@
 import type { Project, StoredProject } from "@/lib/api-types"
+import { Store } from "@/lib/rpc"
 import { isSessionKind, type SessionState } from "@/lib/session/sessions"
 
 export function toProject(project: StoredProject): Project {
@@ -38,4 +39,18 @@ export function buildSessionState(loaded: StoredProject[]): SessionState {
     }
   }
   return state
+}
+
+// fileAfterInsert files a new session once `inserted`, its row's insert, has
+// landed. Filing is an UPDATE, and one that reaches the store before the row does
+// matches nothing, so the session would come back unfiled on the next load.
+export async function fileAfterInsert(
+  inserted: Promise<unknown>,
+  sessionId: string,
+  folder: string,
+): Promise<void> {
+  await inserted
+  if (folder) {
+    await Store.SetSessionFolder(sessionId, folder)
+  }
 }

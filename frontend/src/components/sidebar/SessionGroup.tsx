@@ -7,21 +7,17 @@ import { cn } from "@/lib/utils"
 import { checkoutLabel } from "@/lib/git/checkout-label"
 import type { ProviderState } from "@/lib/providers-store"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
-import {
-  currentFileDrag,
-  endFileDrag,
-  fileAwareCollision,
-  hangBelowTarget,
-  startFileDrag,
-} from "@/lib/session/file-drag-store"
+import { fileAwareCollision, hangBelowTarget } from "@/lib/session/file-drag-store"
 import { readGroupCollapsed, writeGroupCollapsed } from "@/lib/session/group-prefs"
 import { checkoutsOf } from "@/lib/session/sidebar-groups"
 import { useFileDrop } from "@/lib/session/use-file-drop"
 import { useCollapsedMark } from "@/lib/session/use-session-status"
 import type { PaneGroup } from "@/lib/session/panes"
 import { delegatesOf, type Session, sessionOrigin } from "@/lib/session/sessions"
-import { EXIT_MS, useClosingSessions } from "@/lib/session/use-closing-sessions"
+import { useCardDrag } from "@/lib/session/use-card-drag"
+import { useClosingSessions } from "@/lib/session/use-closing-sessions"
 import { useProjects } from "@/providers/projects"
+import { CardTransition } from "./CardTransition"
 import { SessionCard } from "./SessionCard"
 import { PullRequestCard } from "./PullRequestCard"
 import { isPullsOpen, subscribePullsCard } from "@/lib/pulls-card-store"
@@ -170,11 +166,6 @@ export function SessionGroup({
   useEffect(() => {
     settled.current = true
   }, [])
-  // The card in this block being dragged. Its drag suspends the clipping the
-  // open and close animations need, and lifts its box over the blocks it is
-  // carried across.
-  const [draggingId, setDraggingId] = useState<string | null>(null)
-  const dragging = draggingId !== null
   // None of the gathered blocks is a checkout, so none wears a worktree's name;
   // only the pinned one is also kept out of the drag, because it is always
   // first. A wall and a folder move among the others.
@@ -196,25 +187,21 @@ export function SessionGroup({
   // the folder, so a drop into or out of them would move nothing on screen.
   const filesByDrag = !fixed && !stage
   const drop = useFileDrop(filesByDrag ? { folder, path } : null)
+  // The card in this block being dragged. Its drag suspends the clipping the
+  // open and close animations need, and lifts its box over the blocks it is
+  // carried across.
+  const { draggingId, handlers: dragHandlers } = useCardDrag(
+    sessions,
+    onDragEnd,
+    filesByDrag ? (sessionId, into) => onFile([sessionId], into) : undefined,
+  )
+  const dragging = draggingId !== null
   const group = useSortable({ id: sortId, disabled: !sortable || !showHeader || fixed })
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature
   // branch parks its card too, not only worktrees.
   const checkout = path || projectPath
   const pullsOpen = useSyncExternalStore(subscribePullsCard, () => isPullsOpen(checkout))
-
-  const startDrag = (id: string) => {
-    setDraggingId(id)
-    const session = sessions.find((candidate) => candidate.id === id)
-    if (filesByDrag && session) {
-      startFileDrag(session.folder ?? "", session.path ?? "")
-    }
-  }
-
-  const stopDrag = () => {
-    setDraggingId(null)
-    endFileDrag()
-  }
 
   // Written from the handler rather than from the state updater: React may
   // discard and replay an updater, and a pref written in one is a pref written
@@ -313,102 +300,71 @@ export function SessionGroup({
             // Not held inside the list: a card is carried out of it to the
             // header of the block it is filed into.
             modifiers={[verticalAxis, hangBelowTarget]}
-            onDragStart={({ active }) => startDrag(String(active.id))}
-            onDragCancel={stopDrag}
-            onDragEnd={(event) => {
-              const into = currentFileDrag()?.over ?? null
-              stopDrag()
-              if (into !== null) {
-                onFile([String(event.active.id)], into)
-                return
-              }
-              onDragEnd(event)
-            }}
+            {...dragHandlers}
           >
             <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-              {/* The gap between cards lives inside each card's box below, so
-                  that a card collapsing takes its gap with it; the list cancels
-                  the one the last card trails. */}
+              {/* The gap between cards lives inside each CardTransition; the
+                  list cancels the one the last card trails. */}
               <div className={cn("flex flex-col", shown.length > 0 && "-mb-1.5")}>
                 {shown.map((session) => {
                   const delegates = delegatesOf(workspace, projectId, session.id)
                   const leaving = closing.has(session.id)
                   return (
-                    <div
+                    <CardTransition
                       key={session.id}
-                      // The exit is timed from JS — the card outlives its session
-                      // by exactly EXIT_MS — so the transition reads its duration
-                      // from the same constant rather than a class of its own.
-                      style={leaving ? { transitionDuration: `${EXIT_MS}ms` } : undefined}
-                      className={cn(
-                        "grid origin-top transition-[grid-template-rows,opacity,scale] duration-[160ms] ease-out motion-reduce:transition-none",
-                        leaving
-                          ? "pointer-events-none grid-rows-[0fr] scale-[0.6] opacity-0 ease-in"
-                          : "grid-rows-[1fr] scale-100 opacity-100",
-                        // The scale makes each box a stacking context, so the
-                        // card's own z-index stops at it: the box is what has
-                        // to rise over the cards the drag passes.
-                        draggingId === session.id && "relative z-10",
-                        // Only a card that arrives after the block is on screen
-                        // grows in: the ones the block was built with are not
-                        // news, and a project switch would animate all of them.
-                        settled.current &&
-                          "starting:grid-rows-[0fr] starting:scale-[0.6] starting:opacity-0",
-                      )}
+                      leaving={leaving}
+                      growIn={settled.current}
+                      lifted={draggingId === session.id}
+                      dragging={dragging}
                     >
-                      {/* What the collapse hides. Never while a card is being
-                          dragged: the drag carries it out of this box, and a
-                          clipped card is a card that vanishes mid-drag. */}
-                      <div className={cn("min-h-0 pb-1.5", !dragging && "overflow-hidden")}>
-                        <SessionCard
-                          // Redundant for React, which has the wrapper's key —
-                          // kept because the render budgets name a card by it.
-                          key={session.id}
-                          session={session}
-                          path={projectPath}
-                          projectId={projectId}
-                          // Resolved here rather than in the card: the parent can be a
-                          // session in another project, which only the workspace-wide
-                          // state knows about.
-                          origin={sessionOrigin(workspace, session)}
-                          active={session.id === activeId}
-                          // Membership is the block itself; what the card still has to
-                          // answer is whether that member is on screen this moment.
-                          showing={stageIds.includes(session.id)}
-                          onStageToggle={() => onStageToggle(session.id)}
-                          delegateCount={delegates.length}
-                          onFork={() => onFork(session)}
-                          onGroupDelegates={() =>
-                            onGroupDelegates(
-                              session.id,
-                              delegates.map((delegate) => delegate.id),
-                            )
-                          }
-                          onSelect={() => select(session.id)}
-                          onClose={() => onClose(session)}
-                          onRename={(label) => renameSession(projectId, session.id, label)}
-                          onSetEntrypoint={(entrypoint) =>
-                            setEntrypoint(projectId, session.id, entrypoint)
-                          }
-                          onPin={(pinned) => pinSession(projectId, session.id, pinned)}
-                          // The folder it is already in is not a place to move it
-                          // to; leaving it is its own item on the card. A card drawn
-                          // in a wall is offered nothing: the wall outranks the
-                          // folder, so filing it would write a folder the card never
-                          // moves into.
-                          folders={folders.filter((name) => name !== session.folder)}
-                          onFile={stage ? undefined : (target) => onFile([session.id], target)}
-                          onNewFolder={stage ? undefined : () => onNewFolder([session.id])}
-                          onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
-                          onPulls={onPulls}
-                          // A card on its way out is no longer part of the order the
-                          // drag reads, so it cannot be picked up for the last frames
-                          // it is on screen.
-                          sortable={sortable && !leaving}
-                          delegateGroups={delegateGroups}
-                        />
-                      </div>
-                    </div>
+                      <SessionCard
+                        // Redundant for React, which has the wrapper's key —
+                        // kept because the render budgets name a card by it.
+                        key={session.id}
+                        session={session}
+                        path={projectPath}
+                        projectId={projectId}
+                        // Resolved here rather than in the card: the parent can be a
+                        // session in another project, which only the workspace-wide
+                        // state knows about.
+                        origin={sessionOrigin(workspace, session)}
+                        active={session.id === activeId}
+                        // Membership is the block itself; what the card still has to
+                        // answer is whether that member is on screen this moment.
+                        showing={stageIds.includes(session.id)}
+                        onStageToggle={() => onStageToggle(session.id)}
+                        delegateCount={delegates.length}
+                        onFork={() => onFork(session)}
+                        onGroupDelegates={() =>
+                          onGroupDelegates(
+                            session.id,
+                            delegates.map((delegate) => delegate.id),
+                          )
+                        }
+                        onSelect={() => select(session.id)}
+                        onClose={() => onClose(session)}
+                        onRename={(label) => renameSession(projectId, session.id, label)}
+                        onSetEntrypoint={(entrypoint) =>
+                          setEntrypoint(projectId, session.id, entrypoint)
+                        }
+                        onPin={(pinned) => pinSession(projectId, session.id, pinned)}
+                        // The folder it is already in is not a place to move it
+                        // to; leaving it is its own item on the card. A card drawn
+                        // in a wall is offered nothing: the wall outranks the
+                        // folder, so filing it would write a folder the card never
+                        // moves into.
+                        folders={folders.filter((name) => name !== session.folder)}
+                        onFile={stage ? undefined : (target) => onFile([session.id], target)}
+                        onNewFolder={stage ? undefined : () => onNewFolder([session.id])}
+                        onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
+                        onPulls={onPulls}
+                        // A card on its way out is no longer part of the order the
+                        // drag reads, so it cannot be picked up for the last frames
+                        // it is on screen.
+                        sortable={sortable && !leaving}
+                        delegateGroups={delegateGroups}
+                      />
+                    </CardTransition>
                   )
                 })}
               </div>

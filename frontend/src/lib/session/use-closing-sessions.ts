@@ -29,6 +29,24 @@ export function withClosing(live: Session[], closing: Closing[]): Session[] {
   return shown
 }
 
+/** `held` plus the sessions that left between `previous` and `live`, or `held`
+ * itself when none did. Each slot is read off the list as it was drawn, held
+ * cards included: read off `previous` alone, a card closing while another is
+ * still on its way out is put back in front of it. */
+export function holdDeparted(held: Closing[], previous: Session[], live: Session[]): Closing[] {
+  const wasLive = (id: string) => previous.some((session) => session.id === id)
+  const drawn = withClosing(
+    previous,
+    held.filter(({ session }) => !wasLive(session.id)),
+  )
+  const gone = departed(drawn, live).filter(({ session }) => wasLive(session.id))
+  if (gone.length === 0) {
+    return held
+  }
+  const again = new Set(gone.map(({ session }) => session.id))
+  return [...held.filter(({ session }) => !again.has(session.id)), ...gone]
+}
+
 // useClosingSessions keeps a session on screen for the length of its exit
 // animation after it has left the list. Closing a session drops it from state
 // in the same frame its card would animate, and no CSS can animate an element
@@ -51,10 +69,10 @@ export function useClosingSessions(sessions: Session[]): {
 
   const ids = idsOf(sessions)
   if (tracked.ids !== ids) {
-    const gone = departed(tracked.list, sessions)
+    const next = holdDeparted(held, tracked.list, sessions)
     setTracked({ ids, list: sessions })
-    if (gone.length > 0) {
-      setHeld((current) => [...current, ...gone])
+    if (next !== held) {
+      setHeld(next)
     }
   }
 
