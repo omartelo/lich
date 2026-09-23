@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildTree, treeFootnote, type TreeNode } from "./file-tree"
+import { buildTree, treeFootnote, withDirStats, type TreeNode } from "./file-tree"
 
 // names flattens a node list to "type:path" strings in order, so a test reads
 // the whole shape and ordering in one assertion.
@@ -87,5 +87,55 @@ describe("treeFootnote", () => {
     expect(treeFootnote(true, ["vendor"])).toBe(
       "Hidden: vendor. This folder has more files than the tree can list.",
     )
+  })
+})
+
+describe("withDirStats", () => {
+  it("sums every changed file beneath a folder, at every level", () => {
+    const tree = buildTree(["src/a.ts", "src/lib/b.ts", "src/lib/c.ts", "README.md"])
+    const stats = withDirStats(
+      tree,
+      new Map([
+        ["src/a.ts", { added: 3, deleted: 1 }],
+        ["src/lib/b.ts", { added: 2, deleted: 0 }],
+      ]),
+    )
+    expect(stats.get("src")).toEqual({ added: 5, deleted: 1 })
+    expect(stats.get("src/lib")).toEqual({ added: 2, deleted: 0 })
+    expect(stats.get("src/a.ts")).toEqual({ added: 3, deleted: 1 })
+  })
+
+  it("leaves a folder with no changed file out", () => {
+    const tree = buildTree(["docs/guide.md", "src/a.ts"])
+    const stats = withDirStats(tree, new Map([["src/a.ts", { added: 1, deleted: 0 }]]))
+    expect(stats.has("docs")).toBe(false)
+  })
+
+  // The merged row is keyed by its deepest path, the id the row renders under.
+  it("keys a collapsed chain by the row it renders as", () => {
+    const tree = buildTree(["vc/src/main/A.jsp", "vc/src/main/B.jsp", "vc/build.gradle"])
+    const stats = withDirStats(
+      tree,
+      new Map([
+        ["vc/src/main/A.jsp", { added: 10, deleted: 0 }],
+        ["vc/src/main/B.jsp", { added: 5, deleted: 2 }],
+      ]),
+    )
+    expect(stats.get("vc/src/main")).toEqual({ added: 15, deleted: 2 })
+    expect(stats.get("vc")).toEqual({ added: 15, deleted: 2 })
+  })
+
+  // A filtered tree sums what it shows: a changed file the filter hid does not
+  // count toward the folder it would have sat in.
+  it("counts only the files the tree holds", () => {
+    const tree = buildTree(["src/a.ts"])
+    const stats = withDirStats(
+      tree,
+      new Map([
+        ["src/a.ts", { added: 1, deleted: 1 }],
+        ["src/hidden.ts", { added: 50, deleted: 0 }],
+      ]),
+    )
+    expect(stats.get("src")).toEqual({ added: 1, deleted: 1 })
   })
 })

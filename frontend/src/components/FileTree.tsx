@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react"
-import type { TreeNode } from "@/lib/git/file-tree"
+import { withDirStats, type LineDelta, type TreeNode } from "@/lib/git/file-tree"
 import type { DiffFile } from "@/lib/git/diff"
 import { FileIcon } from "./FileIcon"
 import { DiffStat } from "./DiffStat"
@@ -30,7 +30,8 @@ interface FileTreeProps {
    * holds them itself and they go when it does. */
   toggled?: ReadonlySet<string>
   onToggled?: (toggled: ReadonlySet<string>) => void
-  /** Per-file diff counts keyed by path; a row with an entry shows its +/-. */
+  /** Per-file diff counts keyed by path; a row with an entry shows its +/-, and
+   * a folder shows the sum of the changed files beneath it. */
   stats?: Map<string, DiffFile>
   /** Right-click → Open in editor. Absent = no file context menu, which is the
    * pull request's tree: what it lists is the PR's diff, not what sits on disk. */
@@ -61,6 +62,7 @@ export function FileTree({
   const toggled = lifted ?? own
   const publish = onLifted ?? setOwn
   const isOpen = (path: string) => expandAll || toggled.has(path) !== defaultOpen
+  const rowStats = useMemo(() => stats && withDirStats(tree, stats), [tree, stats])
 
   const toggle = (path: string) => {
     const next = new Set(toggled)
@@ -102,7 +104,7 @@ export function FileTree({
             node={node}
             depth={0}
             active={active}
-            stats={stats}
+            stats={rowStats}
             isOpen={isOpen}
             onToggle={toggle}
             onSubtree={setSubtree}
@@ -119,7 +121,7 @@ interface TreeRowProps {
   node: TreeNode
   depth: number
   active: string | null
-  stats: Map<string, DiffFile> | undefined
+  stats: ReadonlyMap<string, LineDelta> | undefined
   isOpen: (path: string) => boolean
   onToggle: (path: string) => void
   onSubtree: (node: TreeNode, expand: boolean) => void
@@ -140,8 +142,13 @@ function TreeRow({
 }: TreeRowProps) {
   // The 0.5rem base keeps even top-level rows off the edge.
   const indent = { paddingLeft: `${depth * 0.75 + 0.5}rem` }
+  const stat = stats?.get(node.path)
+  const badge = stat && (
+    <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2 tabular-nums">
+      <DiffStat added={stat.added} deleted={stat.deleted} />
+    </span>
+  )
   if (node.type === "file") {
-    const stat = stats?.get(node.path)
     // A chevron-width spacer keeps file names aligned under their folder's name;
     // FileIcon draws the language's real logo (devicon).
     const row = (
@@ -149,11 +156,7 @@ function TreeRow({
         <span className="size-3.5 shrink-0" aria-hidden />
         <FileIcon path={node.path} />
         <span className="whitespace-nowrap">{node.name}</span>
-        {stat && (
-          <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2 tabular-nums">
-            <DiffStat added={stat.added} deleted={stat.deleted} />
-          </span>
-        )}
+        {badge}
       </>
     )
     const className = cn(
@@ -214,6 +217,7 @@ function TreeRow({
           <Chevron className="size-3.5 shrink-0 text-muted-foreground" />
           <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="whitespace-nowrap">{node.name}</span>
+          {badge}
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem onClick={() => onSubtree(node, true)}>Expand all</ContextMenuItem>

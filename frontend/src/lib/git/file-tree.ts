@@ -58,6 +58,42 @@ function collapseChains(nodes: TreeNode[]): TreeNode[] {
   })
 }
 
+export interface LineDelta {
+  added: number
+  deleted: number
+}
+
+// withDirStats adds a summed entry for every folder that holds a changed file,
+// so a collapsed folder says where the diff is without being opened. It sums
+// the tree it is handed, so a filtered tree counts only what the filter left.
+export function withDirStats(
+  tree: TreeNode[],
+  files: ReadonlyMap<string, LineDelta>,
+): Map<string, LineDelta> {
+  const out = new Map<string, LineDelta>(files)
+  const walk = (node: TreeNode): LineDelta | undefined => {
+    if (node.type === "file") {
+      return files.get(node.path)
+    }
+    let sum: LineDelta | undefined
+    for (const child of node.children) {
+      const delta = walk(child)
+      if (delta) {
+        sum = {
+          added: (sum?.added ?? 0) + delta.added,
+          deleted: (sum?.deleted ?? 0) + delta.deleted,
+        }
+      }
+    }
+    if (sum) {
+      out.set(node.path, sum)
+    }
+    return sum
+  }
+  tree.forEach(walk)
+  return out
+}
+
 function sortTree(nodes: TreeNode[]): void {
   nodes.sort((a, b) =>
     a.type !== b.type

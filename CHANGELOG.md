@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A folder in the Files tab says what changed inside it.** A folder now carries the
+  `+/-` sum of every changed file beneath it, open or closed, so the tree shows where the
+  diff is without opening folder after folder. A file deleted from disk is not in the tree,
+  so its removed lines count in the Review tab but not in any folder.
+
 ### Changed
 
 - **A session card opens and closes instead of appearing and vanishing.** A new card grows
