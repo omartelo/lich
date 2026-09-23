@@ -59,18 +59,20 @@ runs:
       run: echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=${VCToolsInstallDir}bin\\HostX64\\x64\\link.exe" >> "$GITHUB_ENV"
 
     # cef-rs downloads the CEF distribution (~200 MB) into CEF_PATH, which the
-    # calling job points at .cef. One distribution per OS.
+    # calling job points at .cef. One distribution per OS and architecture:
+    # the two macOS runners are one runner.os and read two distributions.
     - name: Cache CEF
       uses: actions/cache@v4
       with:
         path: .cef
-        key: cef-${{ runner.os }}-${{ hashFiles('shell/Cargo.lock') }}
+        key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('shell/Cargo.lock') }}
 
     # shared-key: a release runs on a tag, and a tag can only read caches made
     # on its own ref or on main — ci.yml's shell job on main is what makes
     # them. The default key is per job, and the release job would never see
     # it. With the CEF wrapper already built, cargo only compiles the crate
-    # itself: seconds, not the minutes a cold build costs.
+    # itself: seconds, not the minutes a cold build costs. No architecture in
+    # the key: rust-cache hashes `rustc -vV`, host triple included.
     - uses: Swatinem/rust-cache@v2
       with:
         workspaces: shell

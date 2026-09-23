@@ -423,8 +423,8 @@ func runChromium(term *terminal.Service, configDir string, extra []string, coord
 }
 
 // openWithoutWindow is macOS's last rung (chromium.TabFallback), the one that
-// keeps a product on a Mac with no window of its own — an Intel bundle, or a
-// window that died at startup: lich hands its URL to the default browser and
+// keeps a product on a Mac whose window is missing or died at startup: lich
+// hands its URL to the default browser and
 // goes on serving it. The window is lost, lich is not.
 //
 // It returns when the process is signalled, so the caller's defers still run.

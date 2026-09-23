@@ -27,12 +27,11 @@ package it came in, does not start: `lich doctor` says so, and `--shell` or `LIC
 points lich at a window build of your own
 ([docs/chromium-shell.md](docs/chromium-shell.md)).
 
-On macOS, `Lich.app` on Apple Silicon carries the same window. An Intel Mac
-gets none: lich serves itself, opens a plain tab in your default browser, tells
-you so in a desktop notification, and goes on running until you stop it —
-closing the tab leaves it running, so stop it with Ctrl-C or by signalling the
-process. The folder picker is native either way. The same tab is what an Apple
-Silicon install falls back to when its own window fails to open.
+On macOS, `Lich.app` carries the same window on Apple Silicon and Intel. When
+that window fails to open, lich serves itself anyway: it opens a plain tab in
+your default browser, tells you so in a desktop notification, and goes on
+running until you stop it — closing the tab leaves it running, so stop it with
+Ctrl-C or by signalling the process. The folder picker is native either way.
 
 **git and the GitHub CLI** — every version control surface shells out to
 `git`, and lich does not bundle it: without `git` on your `PATH`, branches,
@@ -133,13 +132,11 @@ the Finder list it under its own icon — and symlinks the same binary onto
 --cask omartelo/tap/lich` tracks new versions, and lich's own update button
 steps aside on a Homebrew install.
 
-On Apple Silicon the app carries its own window, the same embedded Chromium
-the Linux packages ship, and the Dock shows the lich icon while it runs. On
-Intel lich is a tab in your default browser, and the Dock, while lich runs,
-shows that browser's icon: the tab belongs to it, and macOS has no equivalent
-of the window class Linux matches against the lich launcher. There the lich
-icon is the one you launch from, not the one
-you switch to.
+The app carries its own window on Apple Silicon and Intel alike, the same
+embedded Chromium the Linux packages ship, and the Dock shows the lich icon
+while it runs. The Intel build is exercised on a CI runner only — nobody on the
+project has an Intel Mac — so if its window does not come up, say so in an
+issue; lich still opens as a tab in your default browser meanwhile.
 
 **Upgrading from the old formula** — releases up to v0.32.0 shipped a bare CLI
 as `Formula/lich.rb`. Homebrew refuses to install the cask over it (both want

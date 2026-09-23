@@ -340,7 +340,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   sees them either: that is how Ctrl+Shift+T came to reopen a closed tab in a window with no tabs. What the page
   consumes is now gone from the browser, and a focused session consumes a lot, since xterm.js claims every
   Ctrl+letter: while you type in a session, Ctrl+W no longer closes the window and Ctrl+T no longer opens a tab.
-  It also holds in the bundled window alone. Opened as a tab (an Intel Mac), the browser keeps its accelerators
+  It also holds in the bundled window alone. Opened as a tab (a Mac whose window died), the browser keeps its accelerators
   and a chord it reserves never reaches lich at all.
 - **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides
   (`frontend/src/lib/terminal/replay-buffer.ts` page-side, `internal/terminal/replay.go` backend-side — the latter
@@ -653,28 +653,30 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   by the browser that opened it, and nothing copies between profiles. Pin a different browser, or fall back to
   a system one when the bundled window dies, and lich comes up factory-fresh; the settings are still under the
   other key. A browser pinned at a path carrying its own version (an AppImage) is a new browser on every update.
-- **On Linux, Windows and Apple Silicon the window is lich's own; on an Intel Mac it is the system
-  browser's** (`internal/chromium/shell.go`, `shell/`): the Linux packages, the Windows installer and the
-  arm64 `Lich.app` ship an embedded Chromium (CEF through kurogane) beside the binary, and the ladder takes
-  it above the desktop's default and every scan. The Intel bundle ships none: the release runner is arm64,
-  cross-building the window means cross-building CEF's C++ wrapper, and nobody here could run the result.
-  The trap: the four are one launch path, so a window-side change (a flag in `Args`, a prefs write, the
-  restart signal) lands on lich's own Chromium on three and on a system browser on the fourth, and the Go
-  side cannot tell which it got. Windows and macOS have one more: both were built and smoke-tested on a CI
-  runner only (`release.yml` opens the window and reads a page over CDP), never on a desk, so the taskbar
-  icon and AppUserModelID grouping on Windows, the Dock tile, Cmd-Tab and menu bar name on macOS, and the
-  graceful close on restart on both are designed, not seen; what the macOS runner did measure is that the
-  subprocesses hold no Dock tile of their own and the page renders (`release.yml`, the `mac` job). A page
-  read over CDP is not a pixel either: a window that renders every frame and presents none reads as green, and
-  that is exactly what an Intel UHD driver did on Windows until `shell/src/main.rs` turned DirectComposition
-  off there. No runner here can look at its own screen, so presentation is only ever proven on a desk.
+- **Every package ships lich's own window, and only macOS falls back to a system browser**
+  (`internal/chromium/shell.go`, `shell/`): the Linux packages, the Windows installer and both `Lich.app`
+  bundles ship an embedded Chromium (CEF through kurogane) beside the binary, and the ladder takes it above
+  the desktop's default and every scan. The trap: the four launch paths are one, so a window-side change (a
+  flag in `Args`, a prefs write, the restart signal) lands on lich's own Chromium everywhere but on a Mac
+  whose window died, where it lands on a system browser, and the Go side cannot tell which it got. Windows
+  and macOS have one more: both were built and smoke-tested on a CI runner only (`release.yml` opens the
+  window and reads a page over CDP), never on a desk, so the taskbar icon and AppUserModelID grouping on
+  Windows, the Dock tile, Cmd-Tab and menu bar name on macOS, and the graceful close on restart on both are
+  designed, not seen; what the macOS runners did measure is that the subprocesses hold no Dock tile of
+  their own and the page renders (`release.yml`, the `mac` job, once per architecture). The Intel bundle is
+  the least seen of all: it is built and run on GitHub's `macos-15-intel` runner, nobody here has an Intel
+  Mac, and that runner is the last of its kind GitHub hosts, so the day it goes the Intel window goes back
+  to being a cross-build nobody can run. A page read over CDP is not a pixel either: a window that renders
+  every frame and presents none reads as green, and that is exactly what an Intel UHD driver did on Windows
+  until `shell/src/main.rs` turned DirectComposition off there. No runner here can look at its own screen,
+  so presentation is only ever proven on a desk.
 - **A Linux or Windows install whose window is missing or dies is a lich that shows nothing but a dialog**
   (`internal/chromium.Run`): `go run` with no `LICH_SHELL` pin, a binary copied out of the package it shipped in, a
   package missing `lib/lich/shell`, a window that exits on a missing system library or a glibc older than 2.34
   (Debian 11, RHEL 8, which `lich-shell` will not load on) — each ends in the error dialog with the log path,
-  never in a browser on the machine; the dialog names the release page. Only macOS keeps a fallback, and only to a plain tab: an Intel bundle has
-  no window, and an Apple Silicon window that exits with an error inside `startupGrace` (30 s, because a
-  segfault is reported only after its core dump is written) hands the URL to the default browser instead.
+  never in a browser on the machine; the dialog names the release page. Only macOS keeps a fallback, and only to a plain tab: a window that exits
+  with an error inside `startupGrace` (30 s, because a segfault is reported only after its core dump is
+  written) hands the URL to the default browser instead.
   `lich doctor` names the window a launch would open.
 - **Every release asset is a complete package, and an update is run by the release being left**
   (`internal/appupdate`, `TestUpgradeMatrix`): the matrix pins the route today's lich takes from each package,

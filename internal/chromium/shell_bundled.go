@@ -1,4 +1,4 @@
-//go:build linux || windows || (darwin && arm64)
+//go:build linux || windows || darwin
 
 package chromium
 

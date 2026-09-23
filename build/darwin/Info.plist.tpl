@@ -6,8 +6,8 @@
   starts, which never touches AppKit, and lich-shell, the window, which does.
   macOS reads a process's bundle off its executable's path, so the window in
   Contents/MacOS is Lich.app to the Dock, to Cmd-Tab and to the menu bar: its
-  icon is CFBundleIconFile and its name CFBundleName. The Intel build ships no
-  window and opens as a browser tab, so its Dock tile is the browser's;
+  icon is CFBundleIconFile and its name CFBundleName. A bundle whose window
+  fails opens as a browser tab, and its Dock tile is the browser's;
   LSUIElement made no measured difference to that on a Mac and is not here.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

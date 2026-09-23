@@ -10,9 +10,8 @@
   <p>
     打开你的项目，在真实终端里运行 Claude Code、Codex、opencode 这样的智能体，
     并把 git —— worktree、diff 和 Pull Request —— 一并留在视野里，无需离开窗口。
-    单个静态 Go 二进制文件，没有 Electron：在 Linux、Windows 和 Apple Silicon 上，
-    界面在 lich 自带的内嵌 Chromium 里打开；在 Intel Mac 上，则在你系统的
-    Chromium 系浏览器中打开。
+    单个静态 Go 二进制文件，没有 Electron：在 Linux、Windows 和 macOS 上，
+    界面都在 lich 自带的内嵌 Chromium 里打开。
   </p>
   <p>
     <a href="https://github.com/omartelo/lich/releases"><img alt="Release" src="https://img.shields.io/github/v/release/omartelo/lich?color=4285F4&label=release" /></a>
@@ -116,15 +115,14 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 | 平台 | 安装方式 | 运行时依赖 |
 | --- | --- | --- |
 | **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `zenity` —— 窗口随软件包一起附带 |
-| **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | Apple Silicon 上无需任何东西 —— 窗口随应用一起附带；Intel 上 lich 会作为标签页开在你的默认浏览器里 |
+| **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | 无需任何东西 —— Apple Silicon 和 Intel 上窗口都随应用一起附带 |
 | **Windows** | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序或便携版 zip，或使用 Scoop：`scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json` | 无需任何东西，每种方式都自带窗口 |
 
 手动的分发版软件包、Linux 压缩包和 Windows 便携版 zip 见 [INSTALL.md](INSTALL.md)。macOS 和 Windows 的
 二进制文件未签名 —— 在公证/签名做好之前，Gatekeeper 和 SmartScreen 会发出警告。用
 Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的二进制文件则需要手动
 清除隔离标记。在 macOS 上，cask 会把 `Lich.app` 装进 `/Applications`，lich 因此有了
-自己的图标；在 Apple Silicon 上，运行期间 Dock 里显示的也是它；在 Intel 上，Dock 里
-显示的是持有那个窗口的浏览器。从旧的 formula 升级需要先 `brew uninstall lich`，
+自己的图标，运行期间 Dock 里显示的也是它。从旧的 formula 升级需要先 `brew uninstall lich`，
 [INSTALL.md](INSTALL.md) 里写了这一点。
 
 ## 快速上手

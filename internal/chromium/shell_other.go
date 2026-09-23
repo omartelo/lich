@@ -1,8 +1,8 @@
-//go:build !linux && !windows && !(darwin && arm64)
+//go:build !linux && !windows && !darwin
 
 package chromium
 
-// An Intel Mac ships no window: it is built on the Apple Silicon runner alone
-// (docs/ceilings.md). It answers as if none were bundled, and lich opens as a
-// tab instead (TabFallback).
+// No package ships a window here (docs/ceilings.md): the install answers as if
+// none were bundled, and lich reports the missing window as any bundled
+// install would.
 func bundledShell() string { return "" }

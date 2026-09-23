@@ -9,9 +9,8 @@
   <p>
     Open your projects, run agents like Claude Code, Codex and opencode in real
     terminals, and keep git — worktrees, diffs and pull requests — in view
-    without leaving the window. One static Go binary, no Electron: on Linux,
-    Windows and Apple Silicon the UI opens in lich's own embedded Chromium; on
-    an Intel Mac as a tab in your default browser.
+    without leaving the window. One static Go binary, no Electron: the UI
+    opens in lich's own embedded Chromium on Linux, Windows and macOS.
   </p>
   <p><a href="https://omartelo.github.io/lich/"><strong>omartelo.github.io/lich</strong></a></p>
   <p>
@@ -134,7 +133,7 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 | Platform | Get it | Needs at runtime |
 | --- | --- | --- |
 | **Linux** | `install.sh` above, or AUR [`lich-bin`](https://aur.archlinux.org/packages/lich-bin) (`yay -S lich-bin`) | `zenity`, plus glibc 2.34 or newer for the window that ships in the package (Debian 12, Ubuntu 22.04, RHEL 9 and up) |
-| **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | nothing on Apple Silicon — the window ships in the app; Intel opens lich as a tab in your default browser |
+| **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | nothing, the window ships in the app on Apple Silicon and Intel alike |
 | **Windows** | installer or portable zip from [Releases](https://github.com/omartelo/lich/releases), or Scoop: `scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json` | nothing, the window ships with each |
 
 Manual per-distro packages, the Linux tarball and the Windows portable zip: [INSTALL.md](INSTALL.md). The
@@ -142,8 +141,7 @@ macOS and Windows binaries are unsigned — Gatekeeper and SmartScreen warn unti
 notarization/signing ship. Homebrew installs sidestep the Gatekeeper prompt;
 a download from the Releases page needs its quarantine flag cleared by hand.
 On macOS the cask installs `Lich.app`, so lich has its own icon in
-`/Applications` and, on Apple Silicon, in the Dock while it runs; on Intel the
-Dock shows the browser that owns the window. Upgrading from the old formula
+`/Applications` and in the Dock while it runs. Upgrading from the old formula
 needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
 
 ## Getting started
