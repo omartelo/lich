@@ -4,8 +4,8 @@
 on 2026-09-05, then on Windows and Apple Silicon: lich bundles its own
 Chromium (CEF, through kurogane) and no browser is required — see the section
 at the end. The system-browser ladder option 1 built was removed once the
-window shipped everywhere it could: an Intel Mac, the one build with no
-window, opens lich as a plain tab in the default browser.**
+window shipped everywhere; only a Mac whose window dies at startup still
+opens lich as a plain tab in the default browser.**
 
 ## Why
 
@@ -210,11 +210,11 @@ setuid helper root-owned 4755 beside `libcef.so` for the desktops that deny
 unprivileged user namespaces (`docs/ceilings.md`). Built and smoke-tested on
 the CI runner only.
 
-macOS ships the same window inside `Lich.app`, Apple Silicon only: the
-release runner is arm64 and builds the window for itself, and the Intel
-bundle opens lich as a plain tab in the default browser instead
-(`main.go`, `openWithoutWindow`) — the same tab an Apple Silicon window that
-dies at startup falls back to. `lich-shell` sits beside `lich` in
+macOS ships the same window inside `Lich.app`, one bundle per architecture,
+each built and run end to end on a release runner of that architecture
+(`macos-latest` for Apple Silicon, `macos-15-intel` for Intel); a window
+that dies at startup falls back to a plain tab in the default browser
+(`main.go`, `openWithoutWindow`). `lich-shell` sits beside `lich` in
 `Contents/MacOS`, because macOS reads a process's bundle off its executable's
 path and only a process inside the bundle is `Lich.app` to the Dock, to
 Cmd-Tab and to the menu bar; the framework goes to `Contents/Frameworks`,

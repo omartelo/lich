@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   diff is without opening folder after folder. A file deleted from disk is not in the tree,
   so its removed lines count in the Review tab but not in any folder.
 
+- **Intel Macs get lich's own window.** `Lich.app` for Intel now ships the same embedded
+  Chromium the Apple Silicon bundle does, so lich opens in its own window with its own
+  Dock icon instead of as a tab in the default browser. It is built and run end to end on
+  an Intel runner; nobody on the project has an Intel Mac, so if the window does not come
+  up for you, open an issue — the browser tab still works meanwhile.
+
 ### Changed
 
 - **A session card opens and closes instead of appearing and vanishing.** A new card grows

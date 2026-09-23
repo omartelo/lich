@@ -30,11 +30,10 @@ cask "lich" do
   end
 
   caveats <<~EOS
-    On Apple Silicon the app brings its own window. On Intel it has none:
-    lich opens as a tab in your default browser and keeps running after the
-    tab is closed, so stop it from the terminal or by signalling the process.
-    The Dock shows the browser's icon while lich is running; the lich icon is
-    the one in /Applications.
+    The app brings its own window on Apple Silicon and Intel. Should the
+    window fail to open, lich opens as a tab in your default browser instead
+    and keeps running after the tab is closed, so stop it from the terminal
+    or by signalling the process.
 
     macOS support is experimental — see the project README.
   EOS
