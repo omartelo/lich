@@ -272,14 +272,21 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // which hands the session to the rung's own answer at spawn time
   // (store.SandboxDefault).
   const newSession = useCallback(
-    (projectId: string, kind?: SessionKind, path = "", sandbox: SandboxAnswer = "") => {
+    (
+      projectId: string,
+      kind?: SessionKind,
+      path = "",
+      sandbox: SandboxAnswer = "",
+      folder = "",
+    ) => {
       const sessionId = newSessionId()
       const resolvedKind = resolveNewSessionKind(kind, projectNewSessionKind(projectId))
-      const next = addSession(sessionsRef.current, projectId, sessionId, resolvedKind, path)
+      const added = addSession(sessionsRef.current, projectId, sessionId, resolvedKind, path)
+      const next = folder ? setSessionsFolder(added, projectId, [sessionId], folder) : added
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]
       commit(next)
-      void Store.AddSession(
+      const persisted = Store.AddSession(
         projectId,
         sessionId,
         created.label,
@@ -288,6 +295,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         project.nextSeq,
         sandbox,
       )
+      // Chained, not sent beside it: filing is an UPDATE, and one that reaches
+      // the store before the row does matches nothing, so the session would
+      // come back unfiled on the next load.
+      void (folder ? persisted.then(() => Store.SetSessionFolder(sessionId, folder)) : persisted)
       return sessionId
     },
     [],

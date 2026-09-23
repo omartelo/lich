@@ -1,13 +1,22 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { useNavigate } from "react-router-dom"
-import { DndContext, closestCenter } from "@dnd-kit/core"
+import { DndContext } from "@dnd-kit/core"
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { dragStyle, useSortableList, verticalAxis, withinList } from "@/lib/use-sortable-list"
+import { dragStyle, useSortableList, verticalAxis } from "@/lib/use-sortable-list"
 import { cn } from "@/lib/utils"
 import { checkoutLabel } from "@/lib/git/checkout-label"
 import type { ProviderState } from "@/lib/providers-store"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
+import {
+  currentFileDrag,
+  endFileDrag,
+  fileAwareCollision,
+  hangBelowTarget,
+  startFileDrag,
+} from "@/lib/session/file-drag-store"
 import { readGroupCollapsed, writeGroupCollapsed } from "@/lib/session/group-prefs"
+import { checkoutsOf } from "@/lib/session/sidebar-groups"
+import { useFileDrop } from "@/lib/session/use-file-drop"
 import { useCollapsedMark } from "@/lib/session/use-session-status"
 import type { PaneGroup } from "@/lib/session/panes"
 import { delegatesOf, type Session, sessionOrigin } from "@/lib/session/sessions"
@@ -100,9 +109,10 @@ interface SessionGroupProps {
 // with the worktree's name; the branch stays on each card. Both the title and
 // the bucketing read the group's own checkout path, never a session's live cwd,
 // so a `cd` deeper into the tree never re-buckets the group or renames it. The
-// isolated DndContext is what confines a card drag to reordering within the
-// group; the group itself is a sortable of the sidebar's outer context, dragged
-// by its header alone so the two never contend for the same pointer.
+// isolated DndContext is what confines a card's reorder to the group; a card
+// carried onto another block's header is filed there instead (file-drag-store).
+// The group itself is a sortable of the sidebar's outer context, dragged by its
+// header alone so the two never contend for the same pointer.
 //
 // The card actions needing nothing but a session id — select, rename, open a
 // terminal beside it — are wired here rather than threaded down from the
@@ -160,9 +170,11 @@ export function SessionGroup({
   useEffect(() => {
     settled.current = true
   }, [])
-  // Whether a card in this block is being dragged, which suspends the clipping
-  // the open and close animations need.
-  const [dragging, setDragging] = useState(false)
+  // The card in this block being dragged. Its drag suspends the clipping the
+  // open and close animations need, and lifts its box over the blocks it is
+  // carried across.
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const dragging = draggingId !== null
   // None of the gathered blocks is a checkout, so none wears a worktree's name;
   // only the pinned one is also kept out of the drag, because it is always
   // first. A wall and a folder move among the others.
@@ -178,12 +190,31 @@ export function SessionGroup({
   // Whether this block can be filed as a whole: a checkout's, and only while the
   // list on screen is the whole list.
   const filable = sortable && !fixed && !stage && !folder
+  // Whether a card dropped on this block's header is filed by it, and a card
+  // dragged out of it can be filed elsewhere: a folder, or a checkout taking one
+  // of its own cards back out of a folder. The pinned block and a wall outrank
+  // the folder, so a drop into or out of them would move nothing on screen.
+  const filesByDrag = !fixed && !stage
+  const drop = useFileDrop(filesByDrag ? { folder, path } : null)
   const group = useSortable({ id: sortId, disabled: !sortable || !showHeader || fixed })
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature
   // branch parks its card too, not only worktrees.
   const checkout = path || projectPath
   const pullsOpen = useSyncExternalStore(subscribePullsCard, () => isPullsOpen(checkout))
+
+  const startDrag = (id: string) => {
+    setDraggingId(id)
+    const session = sessions.find((candidate) => candidate.id === id)
+    if (filesByDrag && session) {
+      startFileDrag(session.folder ?? "", session.path ?? "")
+    }
+  }
+
+  const stopDrag = () => {
+    setDraggingId(null)
+    endFileDrag()
+  }
 
   // Written from the handler rather than from the state updater: React may
   // discard and replay an updater, and a pref written in one is a pref written
@@ -223,11 +254,20 @@ export function SessionGroup({
           folder={!!folder}
           count={sessions.length}
           mark={mark}
-          // Neither a wall nor a folder has anywhere to open a new session —
-          // neither is a checkout — but both reorder among the other blocks, so
-          // both keep their handle. A folder spans checkouts, so a + on it would
-          // have to guess which one a new session belongs in.
-          launch={!fixed && !stage && !folder}
+          drop={drop}
+          dropFolder={folder}
+          // A wall has nowhere to open a new session, not being a checkout. A
+          // folder spans checkouts, so its + asks which of its cards' checkouts
+          // to open in, and files what it opens.
+          launch={!fixed && !stage}
+          checkouts={
+            folder
+              ? checkoutsOf(sessions).map((at) => ({
+                  path: at,
+                  label: checkoutLabel(at, projectPath, projectId),
+                }))
+              : undefined
+          }
           onRename={stage || folder ? onRenameGroup : undefined}
           onDissolve={stage || folder ? onDissolveGroup : undefined}
           // Offered on a checkout's block alone: a folder's cards are already
@@ -250,7 +290,9 @@ export function SessionGroup({
           // which would announce a working collapse button as a dead handle.
           activatorProps={fixed ? {} : { ...group.attributes, ...group.listeners }}
           onToggle={toggle}
-          onNewSession={(kind, sandbox) => newSession(projectId, kind, path, sandbox)}
+          onNewSession={(kind, sandbox, at = path) =>
+            newSession(projectId, kind, at, sandbox, folder)
+          }
           run={run}
         />
       )}
@@ -264,15 +306,22 @@ export function SessionGroup({
             : "grid-rows-[1fr] opacity-100",
         )}
       >
-        <div className="flex min-h-0 flex-col gap-1.5 overflow-hidden">
+        <div className={cn("flex min-h-0 flex-col gap-1.5", !dragging && "overflow-hidden")}>
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
-            modifiers={[verticalAxis, withinList]}
-            onDragStart={() => setDragging(true)}
-            onDragCancel={() => setDragging(false)}
+            collisionDetection={fileAwareCollision}
+            // Not held inside the list: a card is carried out of it to the
+            // header of the block it is filed into.
+            modifiers={[verticalAxis, hangBelowTarget]}
+            onDragStart={({ active }) => startDrag(String(active.id))}
+            onDragCancel={stopDrag}
             onDragEnd={(event) => {
-              setDragging(false)
+              const into = currentFileDrag()?.over ?? null
+              stopDrag()
+              if (into !== null) {
+                onFile([String(event.active.id)], into)
+                return
+              }
               onDragEnd(event)
             }}
           >
@@ -296,6 +345,10 @@ export function SessionGroup({
                         leaving
                           ? "pointer-events-none grid-rows-[0fr] scale-[0.6] opacity-0 ease-in"
                           : "grid-rows-[1fr] scale-100 opacity-100",
+                        // The scale makes each box a stacking context, so the
+                        // card's own z-index stops at it: the box is what has
+                        // to rise over the cards the drag passes.
+                        draggingId === session.id && "relative z-10",
                         // Only a card that arrives after the block is on screen
                         // grows in: the ones the block was built with are not
                         // news, and a project switch would animate all of them.

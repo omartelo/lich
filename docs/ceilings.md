@@ -49,15 +49,26 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   them and the user can see and rename both; and a folder belongs to one project, since the name is scoped by
   `project_id`. A session is in at most one folder, and where it could be in two blocks the order is wall, then
   pin, then folder, then its checkout — a pinned card that is also filed is drawn at the top, not in its folder.
-- **A card is filed from a menu, never by dragging it into a folder**
-  (`frontend/src/components/sidebar/SessionGroup.tsx`): a card's drag is confined to its own block — each block
-  owns an isolated `DndContext`, which is what keeps a drag inside a worktree from rewriting the list around it
-  — so dropping a card into another block is a cross-list transfer nothing here implements. The checkout
-  header's "Move group to folder" is what covers the case the menu is slow at, filing a whole block in one go.
-  Two places withhold filing rather than let it half-work: a block whose list is filtered offers no
-  "Move group to folder" (the cards it drew are the ones that survived the query, so filing "the group" would
-  file part of it), and a card drawn on a wall is offered no folder at all, because the wall outranks the
-  folder and the write would land with nothing moving on screen.
+- **A card is filed by dropping it on a block's header, never between another block's cards**
+  (`frontend/src/lib/session/file-drag-store.ts`): each block still owns an isolated `DndContext`, which is what
+  keeps a reorder inside a worktree from rewriting the list around it, so no droppable of another block exists
+  for the card to land between. The drag finds the headers by hit-testing the pointer instead, and a card
+  dropped on one lands where the stored order puts it, exactly as filing it from its menu does. A folder's
+  header takes any card not already in it; a checkout's header takes back only a filed card of its own
+  checkout, since filing never moves a session between checkouts. So a checkout whose every session is filed
+  has no header left to drag a card back to, and the card's menu is the way out. A keyboard drag moves no
+  pointer and never reaches a header either: the menu is its path too. A card on a wall or in the pinned block
+  starts no filing drag, because both outrank the folder and the drop would land with nothing moving on
+  screen; for the same reason a card drawn on a wall is offered no folder in its menu. A filtered block
+  offers no "Move group to folder", because the cards it drew are the ones that survived the query and filing
+  "the group" would file part of it.
+- **A folder's + opens only where its cards already live**
+  (`frontend/src/components/sidebar/FolderLaunchMenuItems.tsx`): a folder has no directory of its own, so its
+  + lists the checkouts of the cards it holds and opens the session in the one picked. A worktree none of its
+  cards is in is not offered: open the session there and drag it in. Under a filter the list is read off the
+  cards the query left, so it can name fewer checkouts than the folder holds. The folder is written by a
+  second call chained after the session's insert (`newSession`), so a lich that dies between the two brings
+  the session back unfiled.
 - **Renaming a folder remounts its block** (`frontend/src/lib/session/group-prefs.ts`): the block is keyed by
   the folder's name, so a rename is a new key to React and to the fold preference — `moveGroupCollapsed`
   carries the fold across and drops the old entry, and anything else keyed off that block starts again. A

@@ -219,6 +219,13 @@ export function collapsedMark(
   return done ? "done" : null
 }
 
+// checkoutsOf names the checkouts a block's cards belong to ("" for the project
+// root), once each, in the order their first card sits: where a folder's + can
+// open a session, since a folder has no directory of its own.
+export function checkoutsOf(sessions: Session[]): string[] {
+  return [...new Set(sessions.map((session) => session.path ?? ""))]
+}
+
 // runCardIn names the Run card of the checkout stored as `path` ("" for the
 // project's own directory), or undefined when it has none, which is what puts
 // the launch menu's item on "Run" rather than "Go to Run card".

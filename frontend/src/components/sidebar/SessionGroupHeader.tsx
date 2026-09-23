@@ -13,9 +13,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { ProviderState } from "@/lib/providers-store"
+import { type DropState, FILE_TARGET_ATTRIBUTE } from "@/lib/session/file-drag-store"
 import type { ProviderKind } from "@/lib/session/sessions"
 import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { cn } from "@/lib/utils"
+import { FolderLaunchMenuItems, type LaunchCheckout } from "./FolderLaunchMenuItems"
 import { type RunMenuAction, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 
 interface SessionGroupHeaderProps {
@@ -23,9 +25,12 @@ interface SessionGroupHeaderProps {
   // A block that never moves among the others: the pinned sessions. It has no
   // drag handle, so its title is a plain button.
   fixed: boolean
-  // Whether the block can open a new session in itself — true for a checkout,
-  // false for the gathered blocks, which have no directory to open one in.
+  // Whether the block can open a new session in itself: true for a checkout
+  // and a folder, false for the pinned block and a wall.
   launch: boolean
+  // Present on a folder's header: the checkouts its + opens a session in, since
+  // a folder has no directory of its own.
+  checkouts?: LaunchCheckout[]
   // Present on a wall's and a folder's header: renaming happens in place, and
   // taking the group apart leaves every session in it open.
   onRename?: (name: string) => void
@@ -46,6 +51,10 @@ interface SessionGroupHeaderProps {
   onNewFolder?: () => void
   // What a folded block says about the cards it hides (collapsedMark).
   mark: "wait" | "done" | null
+  // How the header answers a card being dragged (file-drag-store), and what it
+  // files one dropped on it into: a folder's name, "" for a checkout.
+  drop: DropState
+  dropFolder: string
   collapsed: boolean
   isDragging: boolean
   providers: ProviderState[]
@@ -55,7 +64,8 @@ interface SessionGroupHeaderProps {
   activatorRef: (element: HTMLElement | null) => void
   activatorProps: ComponentPropsWithoutRef<"button">
   onToggle: () => void
-  onNewSession: (kind: ProviderKind | "shell", sandbox: SandboxAnswer) => void
+  // path is the checkout a folder's + chose; a checkout's + opens in itself.
+  onNewSession: (kind: ProviderKind | "shell", sandbox: SandboxAnswer, path?: string) => void
   // The checkout's Run entry: open its Run card, or go to the one it has.
   // Absent when the project ships no run script.
   run?: RunMenuAction
@@ -71,6 +81,8 @@ interface SessionGroupTitleButtonProps {
   // block hides its cards' rings, and news the user folded away is still news.
   mark: "wait" | "done" | null
   collapsed: boolean
+  // The dragged card is over this header, which files it on release.
+  dropOver: boolean
   activatorRef: (element: HTMLElement | null) => void
   activatorProps: ComponentPropsWithoutRef<"button">
   onClick: () => void
@@ -83,6 +95,7 @@ function SessionGroupTitleButton({
   count,
   mark,
   collapsed,
+  dropOver,
   activatorRef,
   activatorProps,
   onClick,
@@ -98,6 +111,7 @@ function SessionGroupTitleButton({
       className={cn(
         "group/collapse -ml-1 flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-accent/50",
         fixed ? "cursor-pointer" : "cursor-grab",
+        dropOver && "bg-tone-pass/15 hover:bg-tone-pass/15",
       )}
     >
       <ChevronRight
@@ -138,6 +152,7 @@ export function SessionGroupHeader({
   name,
   fixed,
   launch,
+  checkouts,
   onRename,
   onDissolve,
   folder,
@@ -146,6 +161,8 @@ export function SessionGroupHeader({
   onFileAll,
   onNewFolder,
   mark,
+  drop,
+  dropFolder,
   collapsed,
   isDragging,
   providers,
@@ -175,8 +192,18 @@ export function SessionGroupHeader({
     }
   }
 
+  // Only a header that takes the card is found by the drag's hit test.
+  const target =
+    drop === "accepts" || drop === "over" ? { [FILE_TARGET_ATTRIBUTE]: dropFolder } : {}
+
   return (
-    <div className="flex items-center gap-1 px-1 pb-0.5 pt-1.5">
+    <div
+      {...target}
+      className={cn(
+        "flex items-center gap-1 px-1 pb-0.5 pt-1.5 transition-opacity",
+        drop === "refuses" && "opacity-45",
+      )}
+    >
       {/* Only the title swaps for the field. Replacing the whole header would
           unmount the menu the rename was chosen from, and the menu restores
           focus to a trigger that is no longer there — which lands on the fresh
@@ -201,6 +228,7 @@ export function SessionGroupHeader({
           count={count}
           mark={mark}
           collapsed={collapsed}
+          dropOver={drop === "over"}
           activatorRef={activatorRef}
           activatorProps={activatorProps}
           onClick={() => !isDragging && onToggle()}
@@ -216,13 +244,23 @@ export function SessionGroupHeader({
             <Plus />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="max-w-56">
-            <SessionLaunchMenuItems
-              providers={providers}
-              terminalLabel="New Terminal"
-              projectId={projectId}
-              onNewSession={onNewSession}
-              run={run}
-            />
+            {checkouts ? (
+              <FolderLaunchMenuItems
+                folder={name}
+                checkouts={checkouts}
+                providers={providers}
+                projectId={projectId}
+                onNewSession={onNewSession}
+              />
+            ) : (
+              <SessionLaunchMenuItems
+                providers={providers}
+                terminalLabel="New Terminal"
+                projectId={projectId}
+                onNewSession={onNewSession}
+                run={run}
+              />
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}
