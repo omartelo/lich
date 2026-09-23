@@ -240,7 +240,9 @@ jobs:
   # One job per architecture, each on a runner of that architecture: the
   # window is CEF, built natively, and the bundle is run end to end on the
   # machine it is for before it ships. macos-latest is Apple Silicon;
-  # macos-15-intel is the last Intel runner GitHub hosts.
+  # macos-15-intel is the last Intel runner GitHub hosts. Intel builds the CEF
+  # wrapper cold every release (~25 min): a tag reads only caches main saved,
+  # and an Intel job on every PR costs more than that once a release.
   mac:
     strategy:
       fail-fast: false
