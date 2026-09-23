@@ -237,8 +237,20 @@ jobs:
           name: lich-windows
           path: bin/lich-*
 
+  # One job per architecture, each on a runner of that architecture: the
+  # window is CEF, built natively, and the bundle is run end to end on the
+  # machine it is for before it ships. macos-latest is Apple Silicon;
+  # macos-15-intel is the last Intel runner GitHub hosts.
   mac:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-latest
+          - arch: amd64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
     env:
       CEF_PATH: ${{ github.workspace }}/.cef
     steps:
@@ -275,8 +287,8 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       # dist must exist before the backend suite (go:embed). macOS is Unix, so
-      # this runs the real PTY tests on Apple Silicon; frontend tests already
-      # gate the linux job.
+      # this runs the real PTY tests on both architectures; frontend tests
+      # already gate the linux job.
       - name: Frontend install + build
         working-directory: frontend
         run: |
@@ -286,47 +298,46 @@ jobs:
       - name: Backend tests (macos)
         run: bash .github/scripts/go-test-summary.sh macos
 
+      # Pure Go: both architectures cross-compile in seconds, and only this
+      # job's own is bundled below.
       - name: Build macOS binaries
         run: task build:mac
 
-      # The window, for the runner's own architecture: Apple Silicon. The
-      # Intel bundle ships without one and opens a system browser.
-      - name: Build the window (arm64)
+      - name: Build the window (${{ matrix.arch }})
         run: task build:shell
 
-      # One asset per arch, the .app the cask installs. The binaries it is
-      # built from are removed so the upload below cannot pick them up.
+      # The .app the cask installs. The binaries it is built from are removed
+      # so the upload below cannot pick them up.
       - name: Assemble macOS assets
+        env:
+          ARCH: ${{ matrix.arch }}
         run: |
           cd bin
           tag="${GITHUB_REF_NAME//\//-}"
-          ../build/darwin/bundle.sh lich-darwin-arm64 "${tag#v}" stage-arm64 shell
-          ../build/darwin/bundle.sh lich-darwin-amd64 "${tag#v}" stage-amd64
-          for arch in arm64 amd64; do
-            # ditto, not zip: it is the archiver that keeps a bundle's symlinks,
-            # permissions and signature intact for Homebrew Cask to unpack.
-            ditto -c -k --keepParent "stage-${arch}/Lich.app" "lich-${tag}-darwin-${arch}.zip"
-            rm "lich-darwin-${arch}"
-          done
+          ../build/darwin/bundle.sh "lich-darwin-${ARCH}" "${tag#v}" stage shell
+          # ditto, not zip: it is the archiver that keeps a bundle's symlinks,
+          # permissions and signature intact for Homebrew Cask to unpack.
+          ditto -c -k --keepParent stage/Lich.app "lich-${tag}-darwin-${ARCH}.zip"
+          rm lich-darwin-arm64 lich-darwin-amd64
           ls -la lich-${tag}-*
 
       # End to end on the runner before the assets ship; the script says what
       # it proves.
       - name: Run Lich.app end to end
-        run: bash .github/scripts/mac-e2e.sh bin/stage-arm64/Lich.app
+        run: bash .github/scripts/mac-e2e.sh bin/stage/Lich.app
 
       - name: Upload end-to-end diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: lich-macos-e2e
+          name: lich-macos-e2e-${{ matrix.arch }}
           path: ${{ runner.temp }}/diag
           if-no-files-found: ignore
 
       - name: Upload macOS assets
         uses: actions/upload-artifact@v7
         with:
-          name: lich-macos
+          name: lich-macos-${{ matrix.arch }}
           path: bin/lich-*
 
   release:

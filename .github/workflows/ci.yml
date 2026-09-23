@@ -87,7 +87,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Both macOS runners: a release tag reads only the caches main saved,
+        # so the Intel CEF wrapper is built here or cold on every release.
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-15-intel]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
