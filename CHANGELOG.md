@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Agents can file sessions into folders.** The sidebar's folders were something only
+  you could arrange; now an agent can too. `lich open --folder Auth` opens a session
+  straight into a folder, `lich file auth-fix Auth` moves one there (`''` takes it out),
+  `lich folders` lists them and `lich rename-folder Auth Login` renames one or, with an
+  empty name, takes it apart. The same moves are MCP tools (`open_session` with `folder`,
+  `file_session`, `list_folders`, `rename_folder`), so an agent fanning work out can keep
+  its workers together under one folder on your screen, and the cards move live.
+
 ## [0.54.0] - 2026-09-23
 
 ### Added

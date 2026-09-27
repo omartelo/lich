@@ -369,10 +369,10 @@ func property(kind, description string) map[string]any {
 	return map[string]any{"type": kind, "description": description}
 }
 
-// mcpTools is the whole tool surface. Adding one is an entry here — the reason
-// registering MCP once buys every tool lich grows later, on every provider,
-// with no further per-provider work.
-var mcpTools = []mcpTool{
+// mcpTools is the whole tool surface. Adding one is an entry here, or in
+// folderTools. That is why registering MCP once buys every tool lich grows
+// later, on every provider, with no further per-provider work.
+var mcpTools = append([]mcpTool{
 	{
 		Name: "list_sessions",
 		Description: "List the other lich sessions that are live right now and can be given work. " +
@@ -512,6 +512,11 @@ var mcpTools = []mcpTool{
 					"takes it (low, medium, high, and whatever else it lists). Omit to leave the "+
 					"provider on its default. opencode, Crush, Cursor and shell sessions cannot be "+
 					"given one; on Cursor the effort is part of the model name."),
+			"folder": property("string",
+				"Sidebar folder to file the new session under from its first frame, which is how "+
+					"a set of workers opened for one piece of work stays together on the user's "+
+					"screen. Names are matched exactly: list_folders shows the ones there are, "+
+					"and a name none of them has starts a new folder."),
 			"prompt": property("string",
 				"Task to hand the new session as soon as its agent is up. Omit to open it idle "+
 					"and send later. Capped at 8 KB, like send_to_session: name what to read, "+
@@ -522,7 +527,7 @@ var mcpTools = []mcpTool{
 			call := []any{
 				c.sessionID(), args.text("project"), args.text("kind"),
 				args.text("worktree"), args.text("base"), args.text("model"),
-				args.text("effort"),
+				args.text("effort"), args.text("folder"),
 			}
 			if err := c.call(ctx, "spawn.Open", call, openCall, &opened); err != nil {
 				return "", err
@@ -640,7 +645,7 @@ var mcpTools = []mcpTool{
 			return "Answer sent.", nil
 		},
 	},
-}
+}, folderTools...)
 
 // handOver gives a just-opened session its first task, wording the outcome the
 // way send_to_session words it — the caller should not have to learn two

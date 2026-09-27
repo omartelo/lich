@@ -55,14 +55,15 @@ var commands = []command{
 	{
 		name: "open",
 		args: "[--project <name-or-path>] [--kind <provider>] [--worktree <branch>]\n" +
-			"            [--base <branch>] [--model <model>] [--effort <level>] [--prompt <task>]\n" +
-			"            [--json]",
+			"            [--base <branch>] [--model <model>] [--effort <level>] [--folder <name>]\n" +
+			"            [--prompt <task>] [--json]",
 		about: "Open a new session and start it. --project takes a project already open,\n" +
 			"by name, or the absolute path of a directory, which is opened as a\n" +
 			"project first — one lich closed comes back with the sessions it was\n" +
 			"closed with. --worktree creates a git worktree of that branch name first\n" +
 			"and roots the session in it. --model runs the provider on that model, and\n" +
 			"--effort at that reasoning effort, both in the provider's own spelling.\n" +
+			"--folder files it under that sidebar folder from its first frame.\n" +
 			"--prompt hands the new session that task as soon as its agent is up, so\n" +
 			"opening a worker for a task is one command rather than two. Prints the\n" +
 			"name the new session is addressed by.",
@@ -86,6 +87,28 @@ var commands = []command{
 		args: "[--project <name-or-path>] [--json]",
 		about: "List a project's git worktrees: what is uncommitted in each and which\n" +
 			"sessions are open in it.",
+	},
+	{
+		name: "folders",
+		args: "[--project <name-or-path>] [--json]",
+		about: "List a project's sidebar folders and the sessions filed under each, in\n" +
+			"the order the sidebar draws them.",
+	},
+	{
+		name: "file",
+		args: "[--project <name-or-path>] [--json] [<session>] <folder>",
+		about: "Move a session into a sidebar folder. With <session> it files that one,\n" +
+			"with only a folder it files the session the command runs in. A folder no\n" +
+			"session carries yet starts existing with this one in it; an empty folder\n" +
+			"('') takes the session out of the one it is in. Names are matched\n" +
+			"exactly, so run folders first to reuse one.",
+	},
+	{
+		name: "rename-folder",
+		args: "[--project <name-or-path>] [--json] <folder> <new-name>",
+		about: "Rename a sidebar folder across every session filed under it. An empty\n" +
+			"new name ('') takes the folder apart, and a name the project already has\n" +
+			"merges the two. Prints every session that moved.",
 	},
 	{
 		name: "cost",

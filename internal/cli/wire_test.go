@@ -165,6 +165,10 @@ type spawnStore struct {
 	effort string
 	// renamed is the session id and label the last rename wrote.
 	renamed [2]string
+	// filed is the session id and folder the last filing wrote, and refolded
+	// the project, old name and new name of the last folder rename.
+	filed    [2]string
+	refolded [3]string
 	// confines is what the sandbox rung answers a caller with nobody to ask.
 	confines bool
 }
@@ -172,7 +176,7 @@ type spawnStore struct {
 func (*spawnStore) LoadState() ([]store.Project, error) {
 	return []store.Project{{ID: "p1", Name: "lich", Path: "/src/lich", NextSeq: 4, Sessions: []store.Session{
 		{ID: "s1", Label: "sender", Kind: "claude"},
-		{ID: "s2", Label: "auth-fix", Kind: "claude", Path: "/wt/auth-fix"},
+		{ID: "s2", Label: "auth-fix", Kind: "claude", Path: "/wt/auth-fix", Folder: "Apps"},
 	}}}, nil
 }
 
@@ -216,6 +220,20 @@ func (s *spawnStore) RenameSession(sessionID, label string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.renamed = [2]string{sessionID, label}
+	return nil
+}
+
+func (s *spawnStore) SetSessionFolder(sessionID, folder string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.filed = [2]string{sessionID, folder}
+	return nil
+}
+
+func (s *spawnStore) RenameFolder(projectID, from, to string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.refolded = [3]string{projectID, from, to}
 	return nil
 }
 
@@ -299,14 +317,14 @@ func wiredSpawn(t *testing.T, git *spawnGit) (func(string) string, *spawnStore, 
 	return sessionEnv(port), rows, term
 }
 
-// TestOpenOverTheRealDispatcher proves the seven arguments `lich open` posts land
+// TestOpenOverTheRealDispatcher proves the eight arguments `lich open` posts land
 // on spawn.Open in the order it declares them — a positional mismatch here would
 // otherwise open a session in a project named after a provider.
 func TestOpenOverTheRealDispatcher(t *testing.T) {
 	env, rows, term := wiredSpawn(t, &spawnGit{})
 
 	var stdout, stderr bytes.Buffer
-	args := []string{"open", "--kind", "codex", "--model", "gpt-5.2", "--effort", "high"}
+	args := []string{"open", "--kind", "codex", "--model", "gpt-5.2", "--effort", "high", "--folder", "Apps"}
 	if code := Run(args, "test", env, &stdout, &stderr); code != 0 {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
 	}
@@ -324,6 +342,9 @@ func TestOpenOverTheRealDispatcher(t *testing.T) {
 	}
 	if rows.effort != "high" {
 		t.Errorf("row effort = %q, want the one the flag named", rows.effort)
+	}
+	if rows.filed[1] != "Apps" {
+		t.Errorf("filed = %v, want the new session under the folder the flag named", rows.filed)
 	}
 }
 
@@ -400,5 +421,72 @@ func TestWorktreesOverTheRealDispatcher(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "auth-fix\tuncommitted\tauth-fix") {
 		t.Errorf("stdout = %q, want the checkout, its state and the session in it", stdout.String())
+	}
+}
+
+// TestFileOverTheRealDispatcher proves the four arguments `lich file` posts land
+// on spawn.File in the order it declares them. Target and folder are two strings
+// side by side, and swapped the command files the wrong session under the name
+// of the right one.
+func TestFileOverTheRealDispatcher(t *testing.T) {
+	env, rows, _ := wiredSpawn(t, &spawnGit{})
+
+	var stdout, stderr bytes.Buffer
+	args := []string{"file", "--project", "lich", "auth-fix", "Infra"}
+	if code := Run(args, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if rows.filed != [2]string{"s2", "Infra"} {
+		t.Errorf("filed = %v, want the target session under the folder", rows.filed)
+	}
+	if !strings.Contains(stdout.String(), `"auth-fix" under "Infra"`) {
+		t.Errorf("stdout = %q, want where the session is now", stdout.String())
+	}
+}
+
+// TestFileWithoutATargetFilesTheCallersOwnSession proves the one-argument form
+// reads the folder rather than a session, as rename's does.
+func TestFileWithoutATargetFilesTheCallersOwnSession(t *testing.T) {
+	env, rows, _ := wiredSpawn(t, &spawnGit{})
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"file", "Planning"}, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if rows.filed != [2]string{"s1", "Planning"} {
+		t.Errorf("filed = %v, want the calling session under the folder", rows.filed)
+	}
+}
+
+// TestFoldersOverTheRealDispatcher proves `lich folders` posts the caller's
+// session before the project name, as `lich worktrees` does.
+func TestFoldersOverTheRealDispatcher(t *testing.T) {
+	env, _, _ := wiredSpawn(t, &spawnGit{})
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"folders", "--project", "lich"}, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Apps\tauth-fix") {
+		t.Errorf("stdout = %q, want the folder and the session in it", stdout.String())
+	}
+}
+
+// TestRenameFolderOverTheRealDispatcher proves the four arguments
+// `lich rename-folder` posts land on spawn.RenameFolder in the order it declares
+// them: the old name and the new one swapped would match no folder.
+func TestRenameFolderOverTheRealDispatcher(t *testing.T) {
+	env, rows, _ := wiredSpawn(t, &spawnGit{})
+
+	var stdout, stderr bytes.Buffer
+	args := []string{"rename-folder", "--project", "lich", "Apps", "Applications"}
+	if code := Run(args, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if rows.refolded != [3]string{"p1", "Apps", "Applications"} {
+		t.Errorf("refolded = %v, want the project's folder under the new name", rows.refolded)
+	}
+	if !strings.Contains(stdout.String(), `"auth-fix" from folder "Apps" to "Applications"`) {
+		t.Errorf("stdout = %q, want every session that moved", stdout.String())
 	}
 }

@@ -55,7 +55,7 @@ func (s *Service) Rename(fromID, target, projectName, label string) (Renamed, er
 	if err != nil {
 		return Renamed{}, fmt.Errorf("read the workspace: %w", err)
 	}
-	found, err := renameTarget(projects, s.term.AgentName, fromID, target, projectName)
+	found, err := targetOrOwn(projects, s.term.AgentName, fromID, target, projectName, "rename")
 	if err != nil {
 		return Renamed{}, err
 	}
@@ -81,19 +81,20 @@ func (s *Service) Rename(fromID, target, projectName, label string) (Renamed, er
 	}, nil
 }
 
-// renameTarget resolves the session a rename names: the one findSession finds,
-// or the caller's own when the rename named none. A command line run outside a
-// session has no own to fall back on, and is told so rather than handed the
-// resolver's "no session named """.
-func renameTarget(
-	projects []store.Project, nameOf func(id string) string, fromID, target, projectName string,
+// targetOrOwn resolves the session a rename or a filing names: the one
+// findSession finds, or the caller's own when the call named none. A command
+// line run outside a session has no own to fall back on, and is told so rather
+// than handed the resolver's "no session named """. verb is what the call does,
+// for that message.
+func targetOrOwn(
+	projects []store.Project, nameOf func(id string) string, fromID, target, projectName, verb string,
 ) (located, error) {
 	if strings.TrimSpace(target) != "" {
 		return findSession(projects, nameOf, target, projectName)
 	}
 	if fromID == "" {
-		return located{}, errors.New(
-			"no session was named to rename, and this is not running in one — name the session",
+		return located{}, fmt.Errorf(
+			"no session was named to %s, and this is not running in one — name the session", verb,
 		)
 	}
 	for _, p := range projects {

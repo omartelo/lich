@@ -128,6 +128,12 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.rename, args[1:])
 	case "worktrees":
 		return c.run(c.worktrees, args[1:])
+	case "folders":
+		return c.run(c.folders, args[1:])
+	case "file":
+		return c.run(c.file, args[1:])
+	case "rename-folder":
+		return c.run(c.renameFolder, args[1:])
 	case "cost":
 		return c.run(c.cost, args[1:])
 	case "mcp":
@@ -438,6 +444,7 @@ func (c *client) open(args []string) error {
 	base := flags.String("base", "", "branch a new worktree starts from; defaults to the project's current branch, ignored when the branch exists")
 	model := flags.String("model", "", "model the provider runs, in the provider's own spelling")
 	effort := flags.String("effort", "", "reasoning effort the provider runs at, in the provider's own spelling")
+	folder := flags.String("folder", "", "sidebar folder to file the session under")
 	prompt := flags.String("prompt", "", "task to hand the new session as soon as its agent is up")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := c.parse(flags, args); err != nil {
@@ -448,7 +455,7 @@ func (c *client) open(args []string) error {
 	}
 
 	var opened spawn.Session
-	call := []any{c.sessionID(), *project, *kind, *worktree, *base, *model, *effort}
+	call := []any{c.sessionID(), *project, *kind, *worktree, *base, *model, *effort, *folder}
 	if err := c.call(context.Background(), "spawn.Open", call, openCall, &opened); err != nil {
 		return err
 	}

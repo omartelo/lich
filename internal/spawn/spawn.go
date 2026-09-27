@@ -22,6 +22,7 @@ package spawn
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -88,6 +89,8 @@ type Sessions interface {
 	SetSessionEffort(sessionID, effort string) error
 	SetRunEntrypoint(sessionID, entrypoint string) error
 	RenameSession(sessionID, label string) error
+	SetSessionFolder(sessionID, folder string) error
+	RenameFolder(projectID, from, to string) error
 	DeleteSession(projectID, sessionID, activeID string) error
 	CloseSession(projectID, sessionID, activeID string) error
 	PurgeWorktreeSessions(projectID, path string) error
@@ -137,7 +140,8 @@ type Events interface {
 // Confined is whether the session opened inside the sandbox. Nobody is at this
 // end to be asked, so it is the rung's own answer (store.SandboxDefault), and
 // saying it is what keeps a caller from discovering the empty home and the
-// read-only machine by running into them.
+// read-only machine by running into them. Folder is the folder it was filed
+// under, "" for none.
 type Session struct {
 	ID              string `json:"id"`
 	ProjectID       string `json:"projectId"`
@@ -150,6 +154,7 @@ type Session struct {
 	OriginSessionID string `json:"originSessionId"`
 	OriginLabel     string `json:"originLabel"`
 	Confined        bool   `json:"confined"`
+	Folder          string `json:"folder"`
 	// Run marks a checkout's Run card, so the window can find it again and send
 	// the menu item to it rather than opening a second one (Run). Only Run sets
 	// it; every session opened any other way is a card of its own.
@@ -196,7 +201,10 @@ func New(sessions Sessions, worktrees Worktrees, term Terminal, events Events) *
 // model, when given, is the model the provider is spawned on, in that provider's
 // own spelling. It is recorded on the row so every later spawn repeats it.
 // effort, when given, is the reasoning effort, passed and recorded the same way.
-func (s *Service) Open(fromID, projectName, kind, worktree, base, model, effort string) (Session, error) {
+//
+// folder, when given, is the folder the session is filed under from its first
+// frame (see fileOpened).
+func (s *Service) Open(fromID, projectName, kind, worktree, base, model, effort, folder string) (Session, error) {
 	if base != "" && worktree == "" {
 		return Session{}, fmt.Errorf(
 			"a base is the branch a new worktree starts from, and no worktree was asked "+
@@ -223,7 +231,7 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model, effort 
 	if err != nil {
 		return Session{}, err
 	}
-	model, effort = strings.TrimSpace(model), strings.TrimSpace(effort)
+	model, effort, folder = strings.TrimSpace(model), strings.TrimSpace(effort), strings.TrimSpace(folder)
 	if err := checkOverrides(kind, model, effort); err != nil {
 		return Session{}, err
 	}
@@ -268,6 +276,7 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model, effort 
 	); err != nil {
 		return Session{}, err
 	}
+	folderErr := s.fileOpened(&opened, folder)
 	// Announced before the spawn, and regardless of how it goes: the row exists
 	// either way, so the card has to exist either way too — a session only the
 	// database knows about is one the user cannot reach to see what went wrong.
@@ -285,10 +294,28 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model, effort 
 	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, false, setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)
 	}
-	if overrideErr != nil {
-		return Session{}, overrideErr
+	if err := errors.Join(folderErr, overrideErr); err != nil {
+		return Session{}, err
 	}
 	return opened, nil
+}
+
+// fileOpened files a just-inserted session under the folder it was opened into,
+// before the window is told about it, so the card arrives in the folder's block
+// rather than among its checkout's cards and then jumps. A write that fails
+// leaves the card unfiled, as the row is, and is reported once the session is
+// running, for the reason recordOverrides gives.
+func (s *Service) fileOpened(opened *Session, folder string) error {
+	if folder == "" {
+		return nil
+	}
+	if err := s.sessions.SetSessionFolder(opened.ID, folder); err != nil {
+		return fmt.Errorf(
+			"session %q is open, but it could not be filed under %q: %w", opened.Label, folder, err,
+		)
+	}
+	opened.Folder = folder
+	return nil
 }
 
 // checkOverrides refuses a model or effort the provider would silently drop,
