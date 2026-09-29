@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.55.0] - 2026-09-29
+
 ### Added
 
 - **Agents can file sessions into folders.** The sidebar's folders were something only
@@ -5140,7 +5142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.54.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.55.0...HEAD
+[0.55.0]: https://github.com/omartelo/lich/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/omartelo/lich/compare/v0.53.1...v0.54.0
 [0.53.1]: https://github.com/omartelo/lich/compare/v0.53.0...v0.53.1
 [0.53.0]: https://github.com/omartelo/lich/compare/v0.52.0...v0.53.0
