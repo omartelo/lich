@@ -142,7 +142,10 @@ func TestCreateWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
 	}
-	if want := canonicalPath(filepath.Join(data, "lich", "worktrees", "pid", "feat/x")); wt.Path != want {
+	// One directory per worktree, however many slashes the branch has: nested
+	// under "feat/", a worktree was a folder inside a folder that belonged to no
+	// branch, which is not where anyone looking for "feat/x" looks.
+	if want := canonicalPath(filepath.Join(data, "lich", "worktrees", "pid", "feat-x")); wt.Path != want {
 		t.Errorf("Path = %q, want %q", wt.Path, want)
 	}
 	if got := svc.Branch(wt.Path); got != "feat/x" {
@@ -632,7 +635,7 @@ func TestCreateWorktreeFromPR(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		want := canonicalPath(filepath.Join(data, "lich", "worktrees", "proj", "fix/poll"))
+		want := canonicalPath(filepath.Join(data, "lich", "worktrees", "proj", "fix-poll"))
 		if wt.Path != want || wt.Name != "fix/poll" {
 			t.Errorf("worktree = %+v, want name fix/poll at %s", wt, want)
 		}
@@ -735,7 +738,7 @@ func TestCreateWorktreeFromPR(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "already checked out") {
 			t.Fatalf("want gh's own refusal, got %v", err)
 		}
-		wtPath := filepath.Join(data, "lich", "worktrees", "proj", "fix/poll")
+		wtPath := filepath.Join(data, "lich", "worktrees", "proj", "fix-poll")
 		if _, statErr := os.Stat(wtPath); statErr == nil {
 			t.Error("the failed checkout left its directory behind")
 		}
@@ -782,7 +785,7 @@ func TestCreateWorktreeFromPR(t *testing.T) {
 		data := t.TempDir()
 		t.Setenv("XDG_DATA_HOME", data)
 		repo, _ := initRepo(t)
-		wtPath := filepath.Join(data, "lich", "worktrees", "proj", "fix/poll")
+		wtPath := filepath.Join(data, "lich", "worktrees", "proj", "fix-poll")
 		if err := os.MkdirAll(wtPath, 0o755); err != nil {
 			t.Fatal(err)
 		}

@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `file_session`, `list_folders`, `rename_folder`), so an agent fanning work out can keep
   its workers together under one folder on your screen, and the cards move live.
 
+### Fixed
+
+- **A worktree named like a branch gets one folder, not a folder per slash.** A worktree
+  called `epic/front` was created as `front` inside a folder `epic` under
+  `~/.local/share/lich/worktrees/<project>/`, and a leftover there refused a new
+  `epic/front` with "a worktree named epic/front already exists" while the picker had no
+  such worktree to reopen. New worktrees now live in one folder, `epic-front`, and a path
+  that is in the way is named in the refusal. Worktrees created before keep their paths.
+
 ## [0.54.0] - 2026-09-23
 
 ### Added
