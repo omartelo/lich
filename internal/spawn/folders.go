@@ -3,8 +3,10 @@ package spawn
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/store"
 )
 
@@ -130,7 +132,10 @@ func (s *Service) File(fromID, target, projectName, folder string) (Filed, error
 // success, and a caller told its rename landed would go on to address a folder
 // that is not there. Renaming onto a name the project already holds merges the
 // two, as it does in the window (docs/ceilings.md), which is why the answer
-// names every session that moved.
+// names every session that moved. What moved is what the store's write reports,
+// not this call's own read: a card filed under the old name in between is
+// rewritten too. Parked sessions move with the rest but have no card, so the
+// answer names the open ones.
 func (s *Service) RenameFolder(fromID, projectName, from, to string) (Refiled, error) {
 	from, to = strings.TrimSpace(from), strings.TrimSpace(to)
 	if from == "" {
@@ -145,22 +150,22 @@ func (s *Service) RenameFolder(fromID, projectName, from, to string) (Refiled, e
 	if err != nil {
 		return Refiled{}, err
 	}
-	var ids, labels []string
-	for _, sess := range target.Sessions {
-		if sess.Folder == from {
-			ids = append(ids, sess.ID)
-			labels = append(labels, sess.Label)
-		}
-	}
-	if len(ids) == 0 {
+	if !slices.ContainsFunc(target.Sessions, func(sess store.Session) bool { return sess.Folder == from }) {
 		return Refiled{}, fmt.Errorf("no folder named %q in %s. %s", from, target.Name, knownFolders(target))
 	}
 
-	if err := s.sessions.RenameFolder(target.ID, from, to); err != nil {
+	moved, err := s.sessions.RenameFolder(target.ID, from, to)
+	if err != nil {
 		return Refiled{}, err
 	}
 	if s.events != nil {
-		s.events.Emit(FiledEventName, FiledEvent{ProjectID: target.ID, IDs: ids, Folder: to})
+		s.events.Emit(FiledEventName, FiledEvent{ProjectID: target.ID, IDs: moved, Folder: to})
+	}
+	labels := []string{}
+	for _, sess := range target.Sessions {
+		if slices.Contains(moved, sess.ID) {
+			labels = append(labels, sess.Label)
+		}
 	}
 	return Refiled{Project: target.Name, From: from, To: to, Sessions: labels}, nil
 }
@@ -172,7 +177,7 @@ func knownFolders(p store.Project) string {
 	}
 	names := make([]string, 0, len(folders))
 	for _, f := range folders {
-		names = append(names, fmt.Sprintf("%q", f.Name))
+		names = append(names, f.Name)
 	}
-	return "Its folders: " + strings.Join(names, ", ") + "."
+	return "Its folders: " + relay.QuotedList(names) + "."
 }

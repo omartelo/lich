@@ -117,9 +117,9 @@ func pickTicketNudge(count int, errands string) string {
 // count and targets cover everything waiting, not only what this nudge is the
 // first to mention — the reader acts on the total.
 func nudgeNotice(count int, targets []string, hasTools bool) string {
-	what := fmt.Sprintf("Results from %d tasks you sent are ready (%s)", count, quotedList(targets))
+	what := fmt.Sprintf("Results from %d tasks you sent are ready (%s)", count, QuotedList(targets))
 	if count == 1 {
-		what = fmt.Sprintf("The task you sent %s has its result ready", quotedList(targets))
+		what = fmt.Sprintf("The task you sent %s has its result ready", QuotedList(targets))
 	}
 	route := "run:\n  \"$LICH_BIN\" wait"
 	if hasTools {
@@ -130,11 +130,13 @@ func nudgeNotice(count int, targets []string, hasTools bool) string {
 	return fmt.Sprintf("[lich] %s. To collect everything at once, %s", what, route)
 }
 
-// quotedList words a list of session labels for a message.
-func quotedList(labels []string) string {
-	quoted := make([]string, 0, len(labels))
-	for _, label := range labels {
-		quoted = append(quoted, fmt.Sprintf("%q", label))
+// QuotedList words a list of names (session labels, folders) for a message:
+// each one quoted, so a name with a comma or a trailing space still reads as
+// one.
+func QuotedList(names []string) string {
+	quoted := make([]string, 0, len(names))
+	for _, name := range names {
+		quoted = append(quoted, fmt.Sprintf("%q", name))
 	}
 	return strings.Join(quoted, ", ")
 }

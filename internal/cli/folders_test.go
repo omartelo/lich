@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -181,5 +182,107 @@ func TestRefiledTextTakingAFolderApartSaysItIsGone(t *testing.T) {
 	got := refiledText(spawn.Refiled{From: "Apps", Sessions: []string{"a", "b"}})
 	if !strings.Contains(got, `Took folder "Apps" apart, taking out "a", "b".`) {
 		t.Errorf("refiledText = %q", got)
+	}
+}
+
+func TestFoldersWithNoneSaysSo(t *testing.T) {
+	f := newFakeLich(t, `[]`)
+
+	code, stdout, stderr := run(t, f, "folders")
+	if code != 0 || strings.TrimSpace(stdout) != "No folders." {
+		t.Errorf("exit = %d, stdout = %q, stderr = %q, want the plain answer", code, stdout, stderr)
+	}
+}
+
+func TestFoldersTakesNoArguments(t *testing.T) {
+	f := newFakeLich(t, `[]`)
+
+	code, _, stderr := run(t, f, "folders", "Apps")
+	if code == 0 || !strings.Contains(stderr, "usage: lich folders") {
+		t.Errorf("exit = %d, stderr = %q, want the usage line", code, stderr)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("calls = %+v, want nothing sent to lich", f.calls)
+	}
+}
+
+// --json hands a script the whole answer, not the sentence the text form prints.
+func TestFileAndRenameFolderPrintJSON(t *testing.T) {
+	cases := map[string]struct {
+		body string
+		args []string
+		into any
+	}{
+		"file": {
+			`{"id":"s2","project":"lich","label":"auth-fix","folder":"Apps","previous":"Infra"}`,
+			[]string{"file", "--json", "auth-fix", "Apps"}, &spawn.Filed{},
+		},
+		"rename-folder": {
+			`{"project":"lich","from":"Apps","to":"Applications","sessions":["auth-fix"]}`,
+			[]string{"rename-folder", "--json", "Apps", "Applications"}, &spawn.Refiled{},
+		},
+	}
+	want := map[string]any{
+		"file":          &spawn.Filed{ID: "s2", Project: "lich", Label: "auth-fix", Folder: "Apps", Previous: "Infra"},
+		"rename-folder": &spawn.Refiled{Project: "lich", From: "Apps", To: "Applications", Sessions: []string{"auth-fix"}},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := newFakeLich(t, tc.body)
+
+			code, stdout, stderr := run(t, f, tc.args...)
+			if code != 0 {
+				t.Fatalf("exit = %d, stderr = %q", code, stderr)
+			}
+			if err := json.Unmarshal([]byte(stdout), tc.into); err != nil {
+				t.Fatalf("stdout = %q is not JSON: %v", stdout, err)
+			}
+			if !reflect.DeepEqual(tc.into, want[name]) {
+				t.Errorf("printed %+v, want %+v", tc.into, want[name])
+			}
+		})
+	}
+}
+
+// A refusal from lich reaches the caller as a failed exit with lich's own words,
+// on every folder command.
+func TestFolderCommandsReportWhatLichRefused(t *testing.T) {
+	for _, args := range [][]string{
+		{"folders"},
+		{"file", "Apps"},
+		{"rename-folder", "Apps", "Applications"},
+	} {
+		t.Run(args[0], func(t *testing.T) {
+			f := newFakeLich(t, `{"error":"no folder named \"Apps\" in lich"}`)
+			f.status = 500
+
+			code, _, stderr := run(t, f, args...)
+			if code == 0 || !strings.Contains(stderr, `no folder named "Apps"`) {
+				t.Errorf("exit = %d, stderr = %q, want lich's refusal", code, stderr)
+			}
+		})
+	}
+}
+
+// The same refusal, reaching an agent through the MCP tools, is a failed tool
+// result carrying lich's words rather than a result that reads as success.
+func TestMCPFolderToolsReportWhatLichRefused(t *testing.T) {
+	for name, arguments := range map[string]string{
+		"list_folders":  `{}`,
+		"file_session":  `{"folder":"Apps"}`,
+		"rename_folder": `{"folder":"Apps","to":"Applications"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFakeLich(t, `{"error":"no folder named \"Apps\" in lich"}`)
+			f.status = 500
+
+			replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+				{"name":"`+name+`","arguments":`+arguments+`}}`)
+
+			text, failed := textOf(t, replies[0])
+			if !failed || !strings.Contains(text, `no folder named "Apps"`) {
+				t.Errorf("result = %q (failed %v), want lich's refusal", text, failed)
+			}
+		})
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/spawn"
 )
 
@@ -123,16 +124,11 @@ func filedText(filed spawn.Filed) string {
 // refiledText names every session that moved: a rename onto a folder the
 // project already had is a merge, and the list is the only thing that says so.
 func refiledText(refiled spawn.Refiled) string {
-	moved := make([]string, 0, len(refiled.Sessions))
-	for _, label := range refiled.Sessions {
-		moved = append(moved, fmt.Sprintf("%q", label))
-	}
+	moved := relay.QuotedList(refiled.Sessions)
 	if refiled.To == "" {
-		return fmt.Sprintf("Took folder %q apart, taking out %s.\n", refiled.From, strings.Join(moved, ", "))
+		return fmt.Sprintf("Took folder %q apart, taking out %s.\n", refiled.From, moved)
 	}
-	return fmt.Sprintf(
-		"Moved %s from folder %q to %q.\n", strings.Join(moved, ", "), refiled.From, refiled.To,
-	)
+	return fmt.Sprintf("Moved %s from folder %q to %q.\n", moved, refiled.From, refiled.To)
 }
 
 // folderTools are the folder commands as MCP tools, appended to mcpTools.

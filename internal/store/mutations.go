@@ -538,17 +538,35 @@ func (s *Service) SetSessionFolder(sessionID, folder string) error {
 //
 // An empty `from` is refused, or the call would sweep every unfiled session in
 // the project into a folder nobody asked for.
-func (s *Service) RenameFolder(projectID, from, to string) error {
+//
+// It returns the ids of every row it rewrote, parked ones included. They come
+// from the write itself rather than a read before it: a session filed under
+// `from` in between is moved too, and a caller announcing the move from its own
+// earlier read would leave that card behind.
+func (s *Service) RenameFolder(projectID, from, to string) ([]string, error) {
 	if from == "" {
-		return fmt.Errorf("rename folder: no folder named")
+		return nil, fmt.Errorf("rename folder: no folder named")
 	}
-	if _, err := s.db.Exec(
-		`UPDATE sessions SET folder = ? WHERE project_id = ? AND folder = ?`,
+	rows, err := s.db.Query(
+		`UPDATE sessions SET folder = ? WHERE project_id = ? AND folder = ? RETURNING id`,
 		to, projectID, from,
-	); err != nil {
-		return fmt.Errorf("rename folder %q in %q: %w", from, projectID, err)
+	)
+	if err != nil {
+		return nil, fmt.Errorf("rename folder %q in %q: %w", from, projectID, err)
 	}
-	return nil
+	defer rows.Close()
+	moved := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("rename folder %q in %q: %w", from, projectID, err)
+		}
+		moved = append(moved, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rename folder %q in %q: %w", from, projectID, err)
+	}
+	return moved, nil
 }
 
 // SetSessionUnread records whether a session's last finished turn is still
