@@ -1,6 +1,9 @@
 package store
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 // folderOf reads one session's folder straight off the row, so a test asserting
 // where a session was filed never depends on how the sidebar groups them.
@@ -74,7 +77,7 @@ func TestRenameFolderRewritesItsSessionsOnly(t *testing.T) {
 	_ = svc.SetSessionFolder("s2", "Infra")
 	_ = svc.SetSessionFolder("o1", "Apps")
 
-	if err := svc.RenameFolder("p1", "Apps", "Applications"); err != nil {
+	if _, err := svc.RenameFolder("p1", "Apps", "Applications"); err != nil {
 		t.Fatalf("RenameFolder: %v", err)
 	}
 	if got := folderOf(t, svc, "p1", "s1"); got != "Applications" {
@@ -98,7 +101,7 @@ func TestRenameFolderToNothingUngroups(t *testing.T) {
 	_ = svc.SetSessionFolder("s1", "Apps")
 	_ = svc.SetSessionFolder("s2", "Apps")
 
-	if err := svc.RenameFolder("p1", "Apps", ""); err != nil {
+	if _, err := svc.RenameFolder("p1", "Apps", ""); err != nil {
 		t.Fatalf("RenameFolder: %v", err)
 	}
 	for _, id := range []string{"s1", "s2"} {
@@ -115,7 +118,7 @@ func TestRenameFolderRefusesTheEmptyName(t *testing.T) {
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
 	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
 
-	if err := svc.RenameFolder("p1", "", "Apps"); err == nil {
+	if _, err := svc.RenameFolder("p1", "", "Apps"); err == nil {
 		t.Fatal("RenameFolder with no source folder = nil, want an error")
 	}
 	if got := folderOf(t, svc, "p1", "s1"); got != "" {
@@ -160,7 +163,7 @@ func TestRenameFolderReachesParkedSessions(t *testing.T) {
 	_ = svc.SetSessionFolder("s1", "Apps")
 	_ = svc.CloseSession("p1", "s1", "")
 
-	if err := svc.RenameFolder("p1", "Apps", "Applications"); err != nil {
+	if _, err := svc.RenameFolder("p1", "Apps", "Applications"); err != nil {
 		t.Fatalf("RenameFolder: %v", err)
 	}
 	restored, err := svc.ReopenSession("s1", "s1-new")
@@ -172,5 +175,44 @@ func TestRenameFolderReachesParkedSessions(t *testing.T) {
 	}
 	if restored.Folder != "Applications" {
 		t.Errorf("resumed folder = %q, want %q", restored.Folder, "Applications")
+	}
+}
+
+// TestRenameFolderReturnsEveryRowItMoved: the ids come from the write, parked
+// rows included, so a caller announcing the move names exactly what it rewrote
+// and never a card it read as filed a moment earlier.
+func TestRenameFolderReturnsEveryRowItMoved(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3, "")
+	_ = svc.AddSession("p1", "s3", "Session 3", "", "", 4, "")
+	_ = svc.SetSessionFolder("s1", "Apps")
+	_ = svc.SetSessionFolder("s2", "Apps")
+	_ = svc.SetSessionFolder("s3", "Infra")
+	_ = svc.CloseSession("p1", "s2", "")
+
+	moved, err := svc.RenameFolder("p1", "Apps", "Applications")
+	if err != nil {
+		t.Fatalf("RenameFolder: %v", err)
+	}
+	slices.Sort(moved)
+	if !slices.Equal(moved, []string{"s1", "s2"}) {
+		t.Errorf("moved = %v, want the open and the parked session", moved)
+	}
+}
+
+// TestRenameFolderOfNothingMovesNothing: a name no row carries matches nothing,
+// and the answer is an empty list rather than an error.
+func TestRenameFolderOfNothingMovesNothing(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+
+	moved, err := svc.RenameFolder("p1", "Apps", "Applications")
+	if err != nil {
+		t.Fatalf("RenameFolder: %v", err)
+	}
+	if moved == nil || len(moved) != 0 {
+		t.Errorf("moved = %#v, want an empty list", moved)
 	}
 }

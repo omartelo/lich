@@ -712,13 +712,9 @@ func collectedText(collected relay.Collected) string {
 		}
 	}
 	if len(collected.Open) > 0 {
-		quoted := make([]string, 0, len(collected.Open))
-		for _, label := range collected.Open {
-			quoted = append(quoted, fmt.Sprintf("%q", label))
-		}
 		parts = append(parts, fmt.Sprintf(
 			"Still working: %s. Their results will announce themselves at your prompt.",
-			strings.Join(quoted, ", ")))
+			relay.QuotedList(collected.Open)))
 	}
 	return strings.Join(parts, "\n\n")
 }

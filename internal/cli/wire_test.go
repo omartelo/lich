@@ -230,11 +230,11 @@ func (s *spawnStore) SetSessionFolder(sessionID, folder string) error {
 	return nil
 }
 
-func (s *spawnStore) RenameFolder(projectID, from, to string) error {
+func (s *spawnStore) RenameFolder(projectID, from, to string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.refolded = [3]string{projectID, from, to}
-	return nil
+	return []string{"s2"}, nil
 }
 
 func (*spawnStore) CloseSession(_, _, _ string) error { return nil }

@@ -491,9 +491,10 @@ export const Store = {
   SetSessionFolder: (sessionID: string, folder: string) =>
     call<null>("store.SetSessionFolder", [sessionID, folder]),
   /** Rename one project's folder across every session filed under it, parked
-   * ones included; an empty name takes the folder apart. */
+   * ones included; an empty name takes the folder apart. Resolves to the ids
+   * of every session the write moved. */
   RenameFolder: (projectID: string, from: string, to: string) =>
-    call<null>("store.RenameFolder", [projectID, from, to]),
+    call<string[]>("store.RenameFolder", [projectID, from, to]),
   SetActiveSession: (projectID: string, sessionID: string) =>
     call<null>("store.SetActiveSession", [projectID, sessionID]),
   ReorderProjects: (ids: string[]) => call<null>("store.ReorderProjects", [ids]),

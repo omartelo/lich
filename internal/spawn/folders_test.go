@@ -216,6 +216,26 @@ func TestRenameFolderMovesEverySessionInIt(t *testing.T) {
 	}
 }
 
+// A card the window filed under the old name after this call read the
+// workspace is still rewritten by the store, which matches by name. The event
+// and the answer name what the write moved, or that card stays drawn in a
+// folder that no longer exists until the window reloads.
+func TestRenameFolderAnnouncesWhatTheWriteMoved(t *testing.T) {
+	svc, sessions, events := filer(t)
+	sessions.moved = []string{"s2", "s3", "s4"}
+
+	refiled, err := svc.RenameFolder("s1", "", "Apps", "Applications")
+	if err != nil {
+		t.Fatalf("RenameFolder: %v", err)
+	}
+	if got := filedEvent(t, events); !slices.Equal(got.IDs, []string{"s2", "s3", "s4"}) {
+		t.Errorf("event ids = %v, want every row the store rewrote", got.IDs)
+	}
+	if !slices.Equal(refiled.Sessions, []string{"shared-a", "shared-b", "alone"}) {
+		t.Errorf("refiled = %v, want the card filed in between named too", refiled.Sessions)
+	}
+}
+
 // An empty new name is the window's Ungroup: every card goes back to its
 // checkout's block.
 func TestRenameFolderToNothingTakesItApart(t *testing.T) {
@@ -275,5 +295,60 @@ func TestRenameFolderThatCannotBeWrittenAnnouncesNothing(t *testing.T) {
 	}
 	if len(events.events) != 0 {
 		t.Errorf("events = %+v, want none for a rename that was not written", events.events)
+	}
+}
+
+// A project with no folders at all gets the refusal that says so, rather than an
+// empty list of names to pick from.
+func TestRenameFolderInAProjectWithNoFoldersSaysSo(t *testing.T) {
+	svc, sessions, _ := filer(t)
+	sessions.projects[0].Sessions = closable()[0].Sessions
+
+	_, err := svc.RenameFolder("s1", "", "Apps", "Applications")
+	if err == nil || !strings.Contains(err.Error(), "It has no folders.") {
+		t.Fatalf("err = %v, want the refusal to say the project has no folders", err)
+	}
+	if len(sessions.refolded) != 0 {
+		t.Error("wrote a rename in a project with no folders")
+	}
+}
+
+// A project no one has open is refused by every folder call before anything is
+// read off it or written to it.
+func TestFolderCallsRefuseAnUnknownProject(t *testing.T) {
+	svc, sessions, events := filer(t)
+
+	if _, err := svc.Folders("s1", "nowhere"); err == nil {
+		t.Error("Folders listed a project that is not open")
+	}
+	if _, err := svc.RenameFolder("s1", "nowhere", "Apps", "Applications"); err == nil {
+		t.Error("RenameFolder renamed in a project that is not open")
+	}
+	if len(sessions.refolded) != 0 || len(events.events) != 0 {
+		t.Error("wrote something for a project that is not open")
+	}
+}
+
+// A workspace that cannot be read leaves every folder call with nothing to act
+// on, and the error says it was the read that failed.
+func TestFolderCallsReportAWorkspaceThatCannotBeRead(t *testing.T) {
+	svc, sessions, events := filer(t)
+	sessions.loadErr = errors.New("database is locked")
+
+	calls := map[string]func() error{
+		"Folders": func() error { _, err := svc.Folders("s1", ""); return err },
+		"File":    func() error { _, err := svc.File("s1", "alone", "", "Infra"); return err },
+		"RenameFolder": func() error {
+			_, err := svc.RenameFolder("s1", "", "Apps", "Applications")
+			return err
+		},
+	}
+	for name, call := range calls {
+		if err := call(); err == nil || !strings.Contains(err.Error(), "read the workspace") {
+			t.Errorf("%s err = %v, want the failed read named", name, err)
+		}
+	}
+	if len(sessions.folders) != 0 || len(sessions.refolded) != 0 || len(events.events) != 0 {
+		t.Error("wrote something without having read the workspace")
 	}
 }

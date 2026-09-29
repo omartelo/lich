@@ -90,7 +90,7 @@ type Sessions interface {
 	SetRunEntrypoint(sessionID, entrypoint string) error
 	RenameSession(sessionID, label string) error
 	SetSessionFolder(sessionID, folder string) error
-	RenameFolder(projectID, from, to string) error
+	RenameFolder(projectID, from, to string) ([]string, error)
 	DeleteSession(projectID, sessionID, activeID string) error
 	CloseSession(projectID, sessionID, activeID string) error
 	PurgeWorktreeSessions(projectID, path string) error
@@ -236,22 +236,11 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model, effort,
 		return Session{}, err
 	}
 
-	// cwd is where the PTY starts; stored is what the row records, which is
-	// empty for a session in the project's own directory (the store's spelling,
-	// and what the window's grouping reads).
-	cwd, stored := target.Path, ""
-	label := fmt.Sprintf("Session %d", target.NextSeq)
-	setup := false
-	if worktree != "" {
-		found, err := s.resolveCheckout(target, worktree, base)
-		if err != nil {
-			return Session{}, err
-		}
-		cwd, stored, setup = found.path, found.path, found.fresh
-		if found.label != "" {
-			label = found.label
-		}
+	at, err := s.place(target, worktree, base)
+	if err != nil {
+		return Session{}, err
 	}
+	cwd, stored, label := at.cwd, at.stored, at.label
 
 	id, err := newSessionID()
 	if err != nil {
@@ -291,7 +280,7 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model, effort,
 	// the model back from the row, so the session starts on the provider's own
 	// default and the failure is reported once it is running.
 	overrideErr := s.recordOverrides(id, label, model, effort)
-	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, false, setup, startCols, startRows); err != nil {
+	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, false, at.setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)
 	}
 	if err := errors.Join(folderErr, overrideErr); err != nil {
@@ -364,6 +353,34 @@ func overrideNotRecorded(label, what string, err error) error {
 // whether it was just created, and what the card should be called — empty when
 // the branch's name is already taken and the caller should fall back to the
 // project's own counter.
+// placement is where an opened session lives. cwd is where the PTY starts;
+// stored is what the row records, which is empty for a session in the
+// project's own directory (the store's spelling, and what the window's grouping
+// reads). setup is whether the checkout is fresh and runs the project's setup
+// script first.
+type placement struct {
+	cwd, stored, label string
+	setup              bool
+}
+
+// place settles where Open roots a session: the project's own directory under
+// the project's next default label, or the worktree asked for (resolveCheckout).
+func (s *Service) place(target store.Project, worktree, base string) (placement, error) {
+	at := placement{cwd: target.Path, label: fmt.Sprintf("Session %d", target.NextSeq)}
+	if worktree == "" {
+		return at, nil
+	}
+	found, err := s.resolveCheckout(target, worktree, base)
+	if err != nil {
+		return placement{}, err
+	}
+	at.cwd, at.stored, at.setup = found.path, found.path, found.fresh
+	if found.label != "" {
+		at.label = found.label
+	}
+	return at, nil
+}
+
 type checkout struct {
 	path  string
 	fresh bool

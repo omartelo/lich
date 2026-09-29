@@ -60,10 +60,13 @@ type fakeSessions struct {
 	sandboxAsked [][3]string
 	// folders records the folder each filing wrote, keyed by session id, and
 	// folderErr is the write refusing. refolded records each folder rename as
-	// (project, from, to).
+	// (project, from, to); moved is the rows the store says the rename rewrote,
+	// which the real one reads off the write itself and so can differ from any
+	// earlier LoadState. Nil moves the rows projects has under the name.
 	folders   map[string]string
 	folderErr error
 	refolded  [][3]string
+	moved     []string
 }
 
 // closedRow is one session the store was asked to take out of the workspace.
@@ -105,12 +108,23 @@ func (f *fakeSessions) SetSessionFolder(sessionID, folder string) error {
 	return nil
 }
 
-func (f *fakeSessions) RenameFolder(projectID, from, to string) error {
+func (f *fakeSessions) RenameFolder(projectID, from, to string) ([]string, error) {
 	if f.folderErr != nil {
-		return f.folderErr
+		return nil, f.folderErr
 	}
 	f.refolded = append(f.refolded, [3]string{projectID, from, to})
-	return nil
+	if f.moved != nil {
+		return f.moved, nil
+	}
+	moved := []string{}
+	for _, p := range f.projects {
+		for _, sess := range p.Sessions {
+			if p.ID == projectID && sess.Folder == from {
+				moved = append(moved, sess.ID)
+			}
+		}
+	}
+	return moved, nil
 }
 
 func (f *fakeSessions) PurgeWorktreeSessions(_, path string) error {
