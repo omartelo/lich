@@ -193,18 +193,29 @@ func reserveWorktreePath(projectPath, projectID, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	wtPath := filepath.Join(root, projectID, name)
+	wtPath := filepath.Join(root, projectID, worktreeDirName(name))
 	if _, err := runGit(projectPath, "worktree", "prune"); err != nil {
 		return "", err
 	}
+	// The path, not the branch: a directory git has no worktree registered for
+	// is in the way too, and "a worktree named X exists" sends the reader to a
+	// picker that, reading git, has no X to show.
 	if _, err := os.Stat(wtPath); err == nil {
-		return "", fmt.Errorf("A worktree named %q already exists.", name)
+		return "", fmt.Errorf("The worktree for %q goes in %s, which already exists.", name, wtPath)
 	}
 	if err := os.MkdirAll(filepath.Dir(wtPath), 0o755); err != nil {
 		slog.Warn("create worktrees dir", "path", filepath.Dir(wtPath), "err", err)
 		return "", errors.New("The worktree directory could not be created.")
 	}
 	return wtPath, nil
+}
+
+// worktreeDirName flattens a branch name into the one directory its worktree
+// gets. Joined as-is, "epic/front" became a folder "front" inside a folder
+// "epic" that is no worktree at all. A branch that differs only by "-" for "/"
+// lands on the same directory, which reserveWorktreePath refuses as occupied.
+func worktreeDirName(branch string) string {
+	return strings.ReplaceAll(branch, "/", "-")
 }
 
 // baseFetchBudget caps the fetch that precedes a worktree on a remote base.
