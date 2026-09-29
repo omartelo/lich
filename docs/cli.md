@@ -129,7 +129,8 @@ guess at the one it resembles, and exit 1 — a typo does not open a window.
 Arguments the app itself takes still do: bare `lich`, and `lich --` with the
 Chromium flags behind it.
 
-`--json` on `sessions`, `send`, `wait`, `open`, `close`, `worktrees`, `cost` and `version`
+`--json` on `sessions`, `send`, `wait`, `open`, `close`, `worktrees`, `folders`, `file`,
+`rename-folder`, `cost` and `version`
 replaces the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
 `null` — a script should not have to tell those apart. One line is the contract:
@@ -300,7 +301,7 @@ lich: 2 requests are open against this session, and an answer that names no tick
 Outside a session, or with nothing open, it is an error rather than a guess, and
 the ticket is still the way to name a specific errand.
 
-### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--prompt <task>]`
+### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--folder <name>] [--prompt <task>]`
 
 Opens a new session, starts it, and prints the two names it is addressed by:
 
@@ -325,7 +326,8 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   leading `~` is expanded, because an MCP tool call reaches lich through no
   shell at all. A bare word with no separator in it is always read as a project
   name, never as a path.
-  Every other `--project` — `close`, `rename`, `worktrees` — takes a path in the
+  Every other `--project` — `close`, `rename`, `worktrees`, `folders`, `file`,
+  `rename-folder` — takes a path in the
   same spelling, but only narrows with it: opening a project is something only
   `open` does.
 - `--kind` is what the session runs: any provider id (`claude`, `codex`,
@@ -387,6 +389,11 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   and no flag to raise it: the worker was created a moment ago and its task is
   minutes of work, so a ticket is the expected outcome and the caller carries
   on. Waiting for the answer is `lich wait`'s job, and it takes the timeout.
+- `--folder` files the new session under that sidebar folder, written before the
+  window hears of the session, so the card arrives in the folder's block instead
+  of under its checkout. The name is matched exactly, as everywhere folders are
+  (see `lich file`). A filing that cannot be written leaves the session open and
+  running, unfiled, and exits 1 saying so.
 - A session without a worktree is labelled from the project's own counter
   (`Session 4`), continuing the numbering the window uses.
 
@@ -502,6 +509,61 @@ one whose fate that session's close decides, and a checkout with none is one
 nobody is working in. The project's own directory is not listed — it is the
 checkout every project has and the one that cannot be removed.
 
+### `lich folders [--project <name>] [--json]`
+
+Lists a project's sidebar folders and the sessions filed under each, in the
+order the sidebar draws the folders:
+
+```
+folder	sessions
+Auth	auth-fix, login-tests
+Docs	changelog
+```
+
+A folder is a name on a session and nothing else, so a folder with no session
+in it does not exist and is never listed. `--json` prints
+`[{"name":"Auth","sessions":["auth-fix","login-tests"]}]`.
+
+### `lich file [--project <name>] [--json] [<session>] <folder>`
+
+Moves a session into a sidebar folder: the window's "Move to folder", from
+outside the window.
+
+```
+$ lich file auth-fix Auth
+Filed "auth-fix" under "Auth".
+```
+
+- **One argument is the folder for the session the command runs in**; two are
+  the target and the folder, as with `rename`.
+- **A name no session carries yet starts a folder** with this session in it.
+  Names are matched exactly, case and spaces included, as the window matches
+  them: `auth` beside `Auth` is a second folder. Run `lich folders` first to
+  reuse one.
+- **An empty folder (`''`) takes the session out** of the one it is in. A
+  session is in at most one folder, so filing it anywhere else moves it.
+- `--json` prints `{"id","project","label","folder","previous"}`, `previous`
+  being the folder it left (`""` for none).
+
+### `lich rename-folder [--project <name>] [--json] <folder> <new-name>`
+
+Renames a folder across every session filed under it: the window's "Rename
+folder". An empty new name (`''`) takes the folder apart, the window's
+"Ungroup", and every session in it goes back under its checkout.
+
+```
+$ lich rename-folder Auth Login
+Moved "auth-fix", "login-tests" from folder "Auth" to "Login".
+```
+
+- **The old name has to be one a session carries.** The store would match no
+  row and report success, so a name nothing carries is refused with the
+  project's folders listed.
+- **Renaming onto a name the project already has merges the two**, as in the
+  window. The output names every session that moved, which is how you see it.
+- Parked sessions follow the rename, so a resumed one comes back into the
+  folder under its new name.
+
 ### `lich cost [--project <name>] [--provider <provider>] [--since <window>] [--json|--csv]`
 
 What the sessions lich still remembers have cost, at API prices, one row per
@@ -608,10 +670,13 @@ at lich.
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
 | `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
 | `reply_to_session` | `answer`, optional `ticket` — what a relayed message asks for; without a ticket, the one request open against the calling session, and a refusal naming each open ticket when there are two. |
-| `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
+| `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model`, `folder` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |
+| `list_folders` | optional `project`: the folders and the sessions in each, as JSON. `lich folders`. |
+| `file_session` | `folder` (`""` takes the session out), optional `session` (omitted files the caller's own) and `project`. `lich file`. |
+| `rename_folder` | `folder`, `to` (`""` takes the folder apart), optional `project`. `lich rename-folder`. |
 
 A tool that fails answers with `isError` and the reason as text, not a JSON-RPC
 error: the agent should read what went wrong and act on it, not lose the turn.
@@ -619,9 +684,14 @@ error: the agent should read what went wrong and act on it, not lose the turn.
 `initialize` also carries `instructions` — the server's own briefing, which
 clients inject into the agent's system prompt. It is the one place the whole
 journey (fan out into worktree sessions, carry on, collect) is told as one;
-the tool descriptions each only explain their own door. `list_sessions` and
-`list_worktrees` are annotated `readOnlyHint`, so a client may auto-allow
-them.
+the tool descriptions each only explain their own door. `list_sessions`,
+`list_worktrees` and `list_folders` are annotated `readOnlyHint`, so a client
+may auto-allow them.
+
+`file_session` and `rename_folder` refuse a call that leaves out `folder` or
+`to`, rather than reading the missing field as empty: an empty name takes a
+session out of its folder, or a folder apart, and a model that forgot the field
+did not ask for that.
 
 ### `lich rage [--output <path>]`
 

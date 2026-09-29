@@ -126,6 +126,14 @@ export const PROJECT_OPENED_EVENT = "project-opened"
 // and which card is active now, decided by the row that is already written.
 export const CLOSED_EVENT = "session-closed"
 
+// Global event the backend emits when sessions were filed under a folder, or
+// taken out of one, outside the window: an agent running `lich file` or
+// `lich rename-folder`, or their MCP tools (see spawn.FiledEventName). Payload:
+// { projectId, ids, folder }, folder "" for cards that are in no folder now. One
+// event for a card filed and a folder renamed, because the answer to both is to
+// set these cards' folder.
+export const FILED_EVENT = "sessions-filed"
+
 // Global event the backend emits when a request's target ended its turn without
 // answering through lich (see relay.StalledEventName). Payload:
 // { id, targetId, target } — who asked ("" when it was the command line rather
@@ -392,6 +400,9 @@ export interface OpenedSession {
   // Both "" when the opener was not a session — `lich open` from a plain shell.
   originSessionId: string
   originLabel: string
+  // The folder it was opened into, "" for none. It rides the event so the card
+  // lands in the folder's block rather than among its checkout's cards first.
+  folder: string
 }
 
 // toOpenedSession narrows a session-opened payload, or null when it names
@@ -403,16 +414,18 @@ export function toOpenedSession(data: unknown): OpenedSession | null {
   if (!isIdEvent(data)) {
     return null
   }
-  const { projectId, label, kind, path, nextSeq, run, originSessionId, originLabel } = data as {
-    projectId?: unknown
-    label?: unknown
-    kind?: unknown
-    path?: unknown
-    nextSeq?: unknown
-    run?: unknown
-    originSessionId?: unknown
-    originLabel?: unknown
-  }
+  const { projectId, label, kind, path, nextSeq, run, originSessionId, originLabel, folder } =
+    data as {
+      projectId?: unknown
+      label?: unknown
+      kind?: unknown
+      path?: unknown
+      nextSeq?: unknown
+      run?: unknown
+      originSessionId?: unknown
+      originLabel?: unknown
+      folder?: unknown
+    }
   if (typeof projectId !== "string" || projectId === "" || typeof label !== "string") {
     return null
   }
@@ -429,6 +442,7 @@ export function toOpenedSession(data: unknown): OpenedSession | null {
     run: run === true,
     originSessionId: typeof originSessionId === "string" ? originSessionId : "",
     originLabel: typeof originLabel === "string" ? originLabel : "",
+    folder: typeof folder === "string" ? folder : "",
   }
 }
 
@@ -485,6 +499,34 @@ export function toClosedSession(data: unknown): ClosedSession | null {
     return null
   }
   return { id: data.id, projectId, activeId: typeof activeId === "string" ? activeId : "" }
+}
+
+// Sessions filed under a folder outside the window, or taken out of one.
+export interface FiledSessions {
+  projectId: string
+  ids: string[]
+  folder: string
+}
+
+// toFiledSessions narrows a sessions-filed payload, or null when it names no
+// project or no folder to set. Ids that are not strings are dropped rather than
+// failing the rest: each one is a card on its own.
+export function toFiledSessions(data: unknown): FiledSessions | null {
+  if (typeof data !== "object" || data === null) {
+    return null
+  }
+  const { projectId, ids, folder } = data as {
+    projectId?: unknown
+    ids?: unknown
+    folder?: unknown
+  }
+  if (typeof projectId !== "string" || projectId === "" || typeof folder !== "string") {
+    return null
+  }
+  if (!Array.isArray(ids)) {
+    return null
+  }
+  return { projectId, ids: ids.filter((id): id is string => typeof id === "string"), folder }
 }
 
 export function isTitleEvent(data: unknown): data is { id: string; label: string } {

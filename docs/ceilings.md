@@ -76,6 +76,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Renaming onto a name the project already holds merges the two folders, silently: they are the same set of
   sessions afterwards and nothing warns first, where the New folder dialog does say a typed name already
   exists.
+- **An agent files by the name as written, like the window** (`internal/spawn/folders.go`): `lich file`,
+  `lich rename-folder` and their MCP tools match a folder exactly, so an agent that types `auth` beside `Auth`
+  starts a second folder; the tool descriptions send it to `list_folders` first instead of folding case behind
+  the user's back. A rename from there refuses a name no session carries, because the store would report
+  success over nothing, and answers with every session that moved, which is how a merge shows. `lich open
+  --folder` files the session with a second write after the insert, as the folder's + does, so a lich that dies
+  between the two brings it back unfiled.
 - **The header of a folded block reports at most one thing** (`collapsedMark`): a waiting session, else an
   unread finished turn, else nothing. It is a dot rather than a count, so a folder hiding four unread turns and
   one hiding one read the same, and it speaks only for the cards in that block — a folder whose members are all

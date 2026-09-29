@@ -226,10 +226,13 @@ func TestMCPListsEveryTool(t *testing.T) {
 		"send_to_session":  {"session", "prompt"},
 		"wait_for_answer":  {},
 		"reply_to_session": {"answer"},
+		"list_folders":     {},
+		"file_session":     {"folder"},
+		"rename_folder":    {"folder", "to"},
 	}
 	// The read-only ones, which a client may auto-allow. wait_for_answer is
 	// not among them: collecting drains the inbox.
-	readOnly := map[string]bool{"list_sessions": true, "list_worktrees": true}
+	readOnly := map[string]bool{"list_sessions": true, "list_worktrees": true, "list_folders": true}
 	if len(result.Tools) != len(want) {
 		t.Fatalf("got %d tools, want %d", len(result.Tools), len(want))
 	}
@@ -553,7 +556,7 @@ func TestMCPOpenSessionReturnsTheNamesItIsAddressedBy(t *testing.T) {
 
 	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
 		{"name":"open_session","arguments":{"worktree":"auth-fix","base":"main","kind":"codex",
-		"model":"gpt-5.2","effort":"high"}}}`)
+		"model":"gpt-5.2","effort":"high","folder":"Apps"}}}`)
 
 	text, failed := textOf(t, replies[0])
 	if failed {
@@ -563,7 +566,7 @@ func TestMCPOpenSessionReturnsTheNamesItIsAddressedBy(t *testing.T) {
 	if call.method != "spawn.Open" {
 		t.Errorf("method = %q", call.method)
 	}
-	want := []any{"s1", "", "codex", "auth-fix", "main", "gpt-5.2", "high"}
+	want := []any{"s1", "", "codex", "auth-fix", "main", "gpt-5.2", "high", "Apps"}
 	if len(call.args) != len(want) {
 		t.Fatalf("args = %v, want %v", call.args, want)
 	}

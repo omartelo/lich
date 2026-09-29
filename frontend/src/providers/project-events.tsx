@@ -19,11 +19,13 @@ import {
   setSessionMCPServers,
   setSessionSandboxed,
   setSessionSchedule,
+  setSessionsFolder,
   type Session,
   type SessionState,
 } from "@/lib/session/sessions"
 import {
   CLOSED_EVENT,
+  FILED_EVENT,
   OPENED_EVENT,
   PROJECT_OPENED_EVENT,
   RELAY_STALLED_EVENT,
@@ -46,6 +48,7 @@ import {
   shouldToastAttention,
   statusReason,
   toClosedSession,
+  toFiledSessions,
   toOpenedProject,
   toOpenedSession,
   toSessionStatus,
@@ -243,6 +246,7 @@ export function useSessionEvents({
         ...(path ? { path } : {}),
         ...(opened.run ? { run: true } : {}),
         ...(originSessionId ? { originSessionId, originLabel } : {}),
+        ...(opened.folder ? { folder: opened.folder } : {}),
       }
       const next = adoptSession(sessionsRef.current, projectId, session, nextSeq)
       if (next !== sessionsRef.current) {
@@ -266,6 +270,23 @@ export function useSessionEvents({
         closed.id,
         closed.activeId,
       )
+      if (next !== sessionsRef.current) {
+        commit(next)
+      }
+    })
+    return () => off()
+  }, [])
+
+  // Sessions an agent filed or took out of a folder, or whose folder it
+  // renamed, through the CLI or its MCP tools: the rows are already written, so
+  // this only moves the cards and never writes back.
+  useEffect(() => {
+    const off = onAppEvent(FILED_EVENT, (data) => {
+      const filed = toFiledSessions(data)
+      if (!filed) {
+        return
+      }
+      const next = setSessionsFolder(sessionsRef.current, filed.projectId, filed.ids, filed.folder)
       if (next !== sessionsRef.current) {
         commit(next)
       }

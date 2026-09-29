@@ -15,6 +15,7 @@ import {
   shouldToastAttention,
   statusReason,
   toClosedSession,
+  toFiledSessions,
   toOpenedSession,
   toSessionStatus,
 } from "./session-events"
@@ -390,7 +391,15 @@ describe("toOpenedSession", () => {
       run: false,
       originSessionId: "s1",
       originLabel: "planner",
+      folder: "",
     })
+  })
+
+  // A session opened into a folder lands in that folder's block, so the name
+  // has to survive the narrowing (internal/spawn.Open).
+  it("keeps the folder it was opened into", () => {
+    expect(toOpenedSession({ ...payload, folder: "Apps" })?.folder).toBe("Apps")
+    expect(toOpenedSession({ ...payload, folder: 4 })?.folder).toBe("")
   })
 
   // The mark is what sends the next Run to this card instead of opening a second
@@ -449,5 +458,34 @@ describe("toClosedSession", () => {
     expect(toClosedSession({ projectId: "p1" })).toBeNull()
     expect(toClosedSession({ id: "s2", projectId: "" })).toBeNull()
     expect(toClosedSession(null)).toBeNull()
+  })
+})
+
+describe("toFiledSessions", () => {
+  it("narrows sessions filed outside the window", () => {
+    expect(toFiledSessions({ projectId: "p1", ids: ["s1", "s2"], folder: "Apps" })).toEqual({
+      projectId: "p1",
+      ids: ["s1", "s2"],
+      folder: "Apps",
+    })
+  })
+
+  // An empty folder is cards taken out of one, not a missing field.
+  it("keeps an empty folder", () => {
+    expect(toFiledSessions({ projectId: "p1", ids: ["s1"], folder: "" })?.folder).toBe("")
+  })
+
+  it("drops the ids that are not strings and keeps the rest", () => {
+    expect(toFiledSessions({ projectId: "p1", ids: ["s1", 2, null], folder: "Apps" })?.ids).toEqual(
+      ["s1"],
+    )
+  })
+
+  it("rejects a payload with no project, no ids or no folder", () => {
+    expect(toFiledSessions({ ids: ["s1"], folder: "Apps" })).toBeNull()
+    expect(toFiledSessions({ projectId: "", ids: ["s1"], folder: "Apps" })).toBeNull()
+    expect(toFiledSessions({ projectId: "p1", folder: "Apps" })).toBeNull()
+    expect(toFiledSessions({ projectId: "p1", ids: ["s1"] })).toBeNull()
+    expect(toFiledSessions(null)).toBeNull()
   })
 })
