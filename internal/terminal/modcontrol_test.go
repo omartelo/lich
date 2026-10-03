@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -31,6 +32,39 @@ func newModService(t *testing.T, hub *events.Hub, wait time.Duration) *Service {
 	svc.ws.mods.wait = wait
 	svc.ws.mods.mu.Unlock()
 	return svc
+}
+
+// modPTY stands in for the Claude Code process a mod runs in. onClose runs
+// while Close kills it: the last moment its mod can still poll.
+type modPTY struct{ onClose func() }
+
+func (p *modPTY) Write(b []byte) (int, error) { return len(b), nil }
+func (p *modPTY) Read([]byte) (int, error)    { return 0, io.EOF }
+func (p *modPTY) Resize(int, int) error       { return nil }
+func (p *modPTY) Pid() int                    { return 0 }
+func (p *modPTY) Wait() (int, error)          { return 0, nil }
+func (p *modPTY) Close() error {
+	if p.onClose != nil {
+		p.onClose()
+	}
+	return nil
+}
+
+// runModSession registers a running session for id, the only kind
+// EnqueueModCommand queues for.
+func runModSession(svc *Service, id string) *modPTY {
+	p := &modPTY{}
+	svc.mu.Lock()
+	svc.sessions[id] = &session{pty: p, done: make(chan struct{})}
+	svc.mu.Unlock()
+	return p
+}
+
+// attachedMods is how many sessions the queue counts a mod as attached for.
+func attachedMods(tr *transport) int {
+	tr.mods.mu.Lock()
+	defer tr.mods.mu.Unlock()
+	return len(tr.mods.lastSeen) + len(tr.mods.pending)
 }
 
 func modCommandsURL(tr *transport, session string) string {
@@ -152,6 +186,7 @@ func TestModCommandsRefusesBadRequests(t *testing.T) {
 // is handed out exactly once.
 func TestModCommandIsDeliveredOnce(t *testing.T) {
 	svc := newModService(t, events.New(), 10*time.Millisecond)
+	runModSession(svc, "s1")
 	if got := pollMod(t, svc.ws, "s1"); len(got) != 0 {
 		t.Fatalf("first poll = %v, want []", got)
 	}
@@ -172,6 +207,7 @@ func TestModCommandIsDeliveredOnce(t *testing.T) {
 // each gets an id of its own.
 func TestModCommandsArriveInOrder(t *testing.T) {
 	svc := newModService(t, events.New(), 10*time.Millisecond)
+	runModSession(svc, "s1")
 	pollMod(t, svc.ws, "s1")
 	first, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModPrompt, Text: "go"})
 	if err != nil {
@@ -195,6 +231,7 @@ func TestModCommandsArriveInOrder(t *testing.T) {
 // out.
 func TestModParkedPollWakesOnEnqueue(t *testing.T) {
 	svc := newModService(t, events.New(), time.Minute)
+	runModSession(svc, "s1")
 	got := pollInBackground(t, svc.ws, "s1")
 
 	id, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort})
@@ -215,6 +252,7 @@ func TestModParkedPollWakesOnEnqueue(t *testing.T) {
 // handed waits for the next poll.
 func TestModCancelledPollLeavesTheQueue(t *testing.T) {
 	svc := newModService(t, events.New(), time.Minute)
+	runModSession(svc, "s1")
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -241,6 +279,7 @@ func TestModCancelledPollLeavesTheQueue(t *testing.T) {
 // Closing the session releases its parked poll empty-handed and detaches it.
 func TestModCloseReleasesTheParkedPoll(t *testing.T) {
 	svc := newModService(t, events.New(), time.Minute)
+	runModSession(svc, "s1")
 	got := pollInBackground(t, svc.ws, "s1")
 
 	if err := svc.Close("s1"); err != nil {
@@ -261,6 +300,7 @@ func TestModCloseReleasesTheParkedPoll(t *testing.T) {
 
 func TestEnqueueModCommandRefuses(t *testing.T) {
 	svc := newModService(t, events.New(), 10*time.Millisecond)
+	runModSession(svc, "attached")
 	pollMod(t, svc.ws, "attached")
 	tests := []struct {
 		name    string
@@ -271,6 +311,11 @@ func TestEnqueueModCommandRefuses(t *testing.T) {
 		{"a session that never polled", "never", ModCommand{Kind: ModAbort}, true},
 		{"an unknown kind", "attached", ModCommand{Kind: "type"}, false},
 		{"an empty prompt", "attached", ModCommand{Kind: ModPrompt, Text: "  "}, false},
+		{"text on an abort", "attached", ModCommand{Kind: ModAbort, Text: "x"}, false},
+		{"a model on a prompt", "attached", ModCommand{Kind: ModPrompt, Text: "go", Model: "m"}, false},
+		{"an effort on a model", "attached", ModCommand{Kind: ModModel, Effort: "high"}, false},
+		{"instructions on an effort", "attached", ModCommand{Kind: ModEffort, Instructions: "x"}, false},
+		{"text on a compact", "attached", ModCommand{Kind: ModCompact, Text: "x"}, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -289,6 +334,7 @@ func TestEnqueueModCommandRefuses(t *testing.T) {
 // lich hearing) is detached once its re-poll grace has run out.
 func TestEnqueueModCommandRefusesAStaleMod(t *testing.T) {
 	svc := newModService(t, events.New(), 10*time.Millisecond)
+	runModSession(svc, "s1")
 	pollMod(t, svc.ws, "s1")
 	later := time.Now().Add(time.Minute)
 	svc.ws.mods.mu.Lock()
@@ -296,6 +342,79 @@ func TestEnqueueModCommandRefusesAStaleMod(t *testing.T) {
 	svc.ws.mods.mu.Unlock()
 	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModDetached) {
 		t.Fatalf("err = %v, want errModDetached", err)
+	}
+}
+
+// A command the mod never collected before it went quiet is not handed to the
+// mod that polls again later: by then it would land on an unrelated turn.
+func TestModCommandOutlivingTheAttachWindowIsDropped(t *testing.T) {
+	svc := newModService(t, events.New(), 10*time.Millisecond)
+	runModSession(svc, "s1")
+	pollMod(t, svc.ws, "s1")
+	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModPrompt, Text: "go"}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	later := time.Now().Add(time.Hour)
+	svc.ws.mods.mu.Lock()
+	svc.ws.mods.now = func() time.Time { return later }
+	svc.ws.mods.mu.Unlock()
+	if got := pollMod(t, svc.ws, "s1"); len(got) != 0 {
+		t.Fatalf("a poll an hour later = %v, want []", got)
+	}
+}
+
+// A poll whose client is already gone when it reaches the queue drains nothing:
+// the command stays for the next poll instead of vanishing unwritten.
+func TestModPollFromAGoneClientDrainsNothing(t *testing.T) {
+	svc := newModService(t, events.New(), 10*time.Millisecond)
+	runModSession(svc, "s1")
+	pollMod(t, svc.ws, "s1")
+	id, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, modCommandsURL(svc.ws, "s1"), nil)
+	svc.ws.modCommands(httptest.NewRecorder(), req)
+
+	want := []ModCommand{{ID: id, Kind: ModAbort}}
+	if got := pollMod(t, svc.ws, "s1"); !reflect.DeepEqual(got, want) {
+		t.Fatalf("poll = %v, want %v", got, want)
+	}
+}
+
+// The mod lives until Close kills its process, and the contract has it re-poll
+// at once. That last poll must not leave the closed session attached.
+func TestModPollWhileClosingDoesNotReattach(t *testing.T) {
+	svc := newModService(t, events.New(), 10*time.Millisecond)
+	p := runModSession(svc, "s1")
+	pollMod(t, svc.ws, "s1")
+	p.onClose = func() { pollMod(t, svc.ws, "s1") }
+
+	if err := svc.Close("s1"); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModDetached) {
+		t.Fatalf("enqueue after close: err = %v, want errModDetached", err)
+	}
+	if n := attachedMods(svc.ws); n != 0 {
+		t.Fatalf("the closed session left %d queue entries behind", n)
+	}
+}
+
+// A poll already on the wire when the session closed still lands. It must not
+// make the closed session take commands nobody will collect.
+func TestModPollLandingAfterCloseTakesNoCommands(t *testing.T) {
+	svc := newModService(t, events.New(), 10*time.Millisecond)
+	runModSession(svc, "s1")
+	pollMod(t, svc.ws, "s1")
+	if err := svc.Close("s1"); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	pollMod(t, svc.ws, "s1")
+	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModDetached) {
+		t.Fatalf("enqueue after close: err = %v, want errModDetached", err)
 	}
 }
 

@@ -45,7 +45,11 @@ A poll is also what attaches the mod. lich refuses to queue a command for a
 session whose mod has not polled within the last 30 seconds (the 25 second wait
 plus a 5 second grace for the next poll to arrive), so a session without the mod
 is told so when the command is issued, not left waiting for a command that
-nobody will collect.
+nobody will collect. A session whose process has exited or been closed is
+refused the same way, whatever polled last. A command still queued 30 seconds
+after it was issued (its mod stopped polling) is dropped at the next poll
+rather than handed to a mod that comes back later, when it would land on an
+unrelated turn.
 
 ### Commands
 
@@ -71,7 +75,8 @@ nobody will collect.
 - `instructions`: `compact` only and optional, passed to the compaction as its
   instructions.
 
-A field that does not belong to the kind is absent. lich does not validate
+A field that does not belong to the kind is absent: lich refuses to queue a
+command that carries one. lich does not validate
 model names or effort levels; the mod passes them on and acks what Claude Code
 made of them.
 
@@ -138,24 +143,32 @@ A failed ack, or an abort while lich has no turn open, changes nothing.
   the session.
 - Apply commands in the order they arrive, ack each one, and never block or
   fail a turn on lich: an ack that cannot be sent is dropped.
+- Wait for the answer to an `abort`'s ack, or for that ack to fail, before
+  applying the next command. lich ends whatever turn it has open when the ack
+  lands, so an ack that arrives after the next `prompt` opened a turn would end
+  that turn instead.
 
 ## lich server side
 
 - **Fetch** (`internal/terminal/modcontrol.go`, `transport.modCommands`):
   validates the method, token and `session_id`, records the plugin release, then
   waits on the session's queue (`modQueue.take`) and answers with what it
-  drained. A poll whose client went away drains nothing.
+  drained, minus any command older than the attach window. A poll whose client
+  is gone by the time it reaches the queue drains nothing; one whose client
+  leaves after the drain loses what it drained (see At most once).
 - **Ack** (`transport.modAck`): validates the token and body (`parseModAck`).
   A failed command is logged; an `ok: true` `abort` calls
   `Service.noteInterrupt`, which emits `session-status` with the state
   `interrupted` and closes the turn's snapshot window, exactly as for an
   interrupt typed at the PTY.
 - **Queue** (`Service.EnqueueModCommand`): the one producer. It refuses an
-  unknown kind, an empty prompt, and a session whose mod is not polling
-  (`errModDetached`), and otherwise returns the id the ack will carry. Nothing
+  unknown kind, a field of another kind, an empty prompt, and a session with
+  no running process or no mod polling (`errModDetached`), and otherwise
+  returns the id the ack will carry. Nothing
   calls it yet; the card's controls and any RPC or MCP surface come later.
-- **Teardown**: a session's queue is dropped when it is closed and when its
-  process exits, which releases a parked poll with `[]`.
+- **Teardown**: a session's queue is dropped when its process exits, and when
+  it is closed once the process is gone (a live mod re-polls at once and would
+  attach again). Either releases a parked poll with `[]`.
 
 ## Known ceilings
 

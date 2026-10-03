@@ -59,7 +59,7 @@ func knownModKind(kind string) bool {
 // them. mu is a leaf lock: the reap calls forget while holding Service.mu.
 type modQueue struct {
 	mu      sync.Mutex
-	pending map[string][]ModCommand
+	pending map[string][]queuedModCommand
 	waiters map[string][]chan struct{}
 	// lastSeen is when each session's mod last polled, which is what tells an
 	// attached mod from a session that has none.
@@ -69,13 +69,21 @@ type modQueue struct {
 	now      func() time.Time
 }
 
+type queuedModCommand struct {
+	ModCommand
+	queued time.Time
+}
+
 // take returns the session's queued commands, waiting up to q.wait for one when
 // none is queued. A poll whose ctx ended drains nothing, so a client that went
 // away does not take commands with it.
 func (q *modQueue) take(ctx context.Context, id string) []ModCommand {
+	if ctx.Err() != nil {
+		return nil
+	}
 	q.mu.Lock()
 	if q.lastSeen == nil {
-		q.pending = map[string][]ModCommand{}
+		q.pending = map[string][]queuedModCommand{}
 		q.waiters = map[string][]chan struct{}{}
 		q.lastSeen = map[string]time.Time{}
 	}
@@ -106,10 +114,27 @@ func (q *modQueue) take(ctx context.Context, id string) []ModCommand {
 	return q.drainLocked(id)
 }
 
+// drainLocked empties the session's queue. A command older than the attach
+// window was queued for a mod that then stopped polling, and the one polling
+// now may be hours later: a stale prompt or abort would land on whatever turn
+// is running by then.
 func (q *modQueue) drainLocked(id string) []ModCommand {
-	cmds := q.pending[id]
+	var cmds []ModCommand
+	for _, c := range q.pending[id] {
+		if q.now().Sub(c.queued) > q.attachWindow() {
+			slog.Warn("mod: dropped a command its mod never collected", "session", id, "id", c.ID, "kind", c.Kind)
+			continue
+		}
+		cmds = append(cmds, c.ModCommand)
+	}
 	delete(q.pending, id)
 	return cmds
+}
+
+// attachWindow is how long a mod counts as attached after its last poll: one
+// wait plus the re-poll grace.
+func (q *modQueue) attachWindow() time.Duration {
+	return q.wait + modRepollGrace
 }
 
 func (q *modQueue) unparkLocked(id string, wake chan struct{}) {
@@ -127,18 +152,19 @@ func (q *modQueue) unparkLocked(id string, wake chan struct{}) {
 }
 
 // enqueue queues cmd for the session's mod and returns the id its ack will
-// carry. A session whose mod has not polled within one wait plus the re-poll
-// grace has no mod to collect it, so it is refused rather than left to rot.
+// carry. A session whose mod has not polled within the attach window has no
+// mod to collect it, so it is refused rather than left to rot.
 func (q *modQueue) enqueue(id string, cmd ModCommand) (string, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	seen, ok := q.lastSeen[id]
-	if !ok || q.now().Sub(seen) > q.wait+modRepollGrace {
+	now := q.now()
+	if !ok || now.Sub(seen) > q.attachWindow() {
 		return "", errModDetached
 	}
 	q.next++
 	cmd.ID = "m" + strconv.FormatUint(q.next, 10)
-	q.pending[id] = append(q.pending[id], cmd)
+	q.pending[id] = append(q.pending[id], queuedModCommand{ModCommand: cmd, queued: now})
 	wakeLocked(q.waiters[id])
 	return cmd.ID, nil
 }
@@ -187,9 +213,6 @@ func (t *transport) modCommands(w http.ResponseWriter, r *http.Request) {
 	}
 	t.plugins.note(session, r.Header.Get(pluginVersionHeader))
 	cmds := t.mods.take(r.Context(), session)
-	if r.Context().Err() != nil {
-		return
-	}
 	if cmds == nil {
 		cmds = []ModCommand{}
 	}
@@ -254,9 +277,10 @@ func parseModAck(body []byte) (modAckRequest, error) {
 // EnqueueModCommand queues cmd for session id's Claude Code mod and returns the
 // id the mod's ack will carry (docs/hooks/mod-control.md). Delivery is at most
 // once and the ack is the only receipt. It fails when the transport is down,
-// when cmd is not a command the contract defines, and with errModDetached when
-// the session has no mod polling, which is every session but a Claude Code one
-// running the lich-plugin mod.
+// when cmd is not a command the contract defines or carries a field of another
+// kind, and with errModDetached when the session has no process or no mod
+// polling, which is every session but a running Claude Code one with the
+// lich-plugin mod.
 func (s *Service) EnqueueModCommand(id string, cmd ModCommand) (string, error) {
 	if s.ws == nil {
 		return "", fmt.Errorf("control channel unavailable, the transport did not start: %w", s.wsErr)
@@ -264,8 +288,32 @@ func (s *Service) EnqueueModCommand(id string, cmd ModCommand) (string, error) {
 	if !knownModKind(cmd.Kind) {
 		return "", fmt.Errorf("unknown mod command kind %q", cmd.Kind)
 	}
+	if ownModFields(cmd) != cmd {
+		return "", fmt.Errorf("%s command carries a field that belongs to another kind", cmd.Kind)
+	}
 	if cmd.Kind == ModPrompt && strings.TrimSpace(cmd.Text) == "" {
 		return "", errors.New("prompt command has no text")
 	}
+	// A poll from a process that is already gone can still land after Close
+	// and look like an attached mod for the length of the attach window.
+	if !s.Live(id) {
+		return "", errModDetached
+	}
 	return s.ws.mods.enqueue(id, cmd)
+}
+
+// ownModFields is cmd with only the fields its kind carries.
+func ownModFields(cmd ModCommand) ModCommand {
+	own := ModCommand{ID: cmd.ID, Kind: cmd.Kind}
+	switch cmd.Kind {
+	case ModPrompt:
+		own.Text = cmd.Text
+	case ModModel:
+		own.Model = cmd.Model
+	case ModEffort:
+		own.Effort = cmd.Effort
+	case ModCompact:
+		own.Instructions = cmd.Instructions
+	}
+	return own
 }
