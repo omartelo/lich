@@ -31,6 +31,7 @@ func (r hookRequest) session() string    { return r.SessionID }
 func (r startRequest) session() string   { return r.SessionID }
 func (r titleRequest) session() string   { return r.SessionID }
 func (r touchedRequest) session() string { return r.SessionID }
+func (r modAckRequest) session() string  { return r.SessionID }
 
 // pluginVersions remembers the plugin release each session's hooks last named,
 // so a mismatch is warned about once per session and release rather than once

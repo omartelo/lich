@@ -68,6 +68,9 @@ var hookContracts = []hookContract{
 	{"session-touched.jsonl", "/session-touched", func(b []byte) (any, error) {
 		return parseSessionTouched(b)
 	}},
+	{"mod-control.jsonl", "/mod/acks", func(b []byte) (any, error) {
+		return parseModAck(b)
+	}},
 }
 
 // loadHookFixtures reads one fixture file, skipping blank lines.

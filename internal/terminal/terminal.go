@@ -416,6 +416,7 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		ws.plugins.setOnIncompatible(func(id, version string) {
 			s.hub.Emit(pluginEventName, pluginEvent{ID: id, Version: version})
 		})
+		ws.setModAborted(s.noteInterrupt)
 	}
 	return s
 }
@@ -757,6 +758,7 @@ func (s *Service) Close(id string) error {
 	s.hands.forget(id)
 	if s.ws != nil {
 		s.ws.plugins.forget(id)
+		s.ws.mods.forget(id)
 	}
 	if !ok {
 		return nil
