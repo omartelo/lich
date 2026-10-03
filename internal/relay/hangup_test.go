@@ -27,7 +27,7 @@ func awaitHolding(t *testing.T, svc *Service, fromID string, n int) {
 	t.Fatalf("never saw %d collectors holding the line for %s", n, fromID)
 }
 
-// awaitAttended blocks until a ticket has n callers blocked on it.
+// awaitAttended blocks until a ticket has n callers attending it.
 func awaitAttended(t *testing.T, svc *Service, id string, n int) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
@@ -86,7 +86,7 @@ func TestACollectWhoseCallerHungUpLeavesTheNextResultToTheNudge(t *testing.T) {
 	assertStashedAndNudged(t, svc, term, "all green")
 }
 
-// The wake and the hang-up can cross: stash wakes the collector and skips the
+// The wake and the hang-up can cross: stashLocked wakes the collector and skips the
 // nudge, and the collector then finds its caller gone. The result must not be
 // drained, and something still has to say it is there.
 func TestAResultTheHungUpCollectorWasWokenForIsStillNudged(t *testing.T) {

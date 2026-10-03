@@ -24,6 +24,12 @@ func (s *Service) Wait(ctx context.Context, ticketID string, waitSeconds int) (R
 		return Result{Ticket: e.ticket, Target: e.target, Status: e.status, Answer: e.answer}, nil
 	}
 	t, ok := s.tickets[ticketID]
+	// Attending is claimed under the lock that found the ticket, so an answer
+	// landing before await runs is carried out by this caller rather than filed
+	// for a sender that is no longer away.
+	if ok {
+		t.attended++
+	}
 	s.mu.Unlock()
 	s.clearAll(expired)
 	s.announceInboxAll(senders)
@@ -78,11 +84,14 @@ func (s *Service) Reply(replierID, ticketID, answer string) error {
 	// mark on both cards has to go with the ticket rather than with the waiter.
 	delete(s.tickets, ticketID)
 	unattended := t.attended == 0
+	if unattended {
+		s.stashLocked(ticketID, t, StatusAnswered, answer)
+	}
 	s.mu.Unlock()
 
 	s.clear(t)
 	if unattended {
-		s.stash(ticketID, t, StatusAnswered, answer)
+		s.announceInbox(t.fromID)
 	}
 	return nil
 }
@@ -179,13 +188,11 @@ func askedExcerpt(prompt string) string {
 // reads: the ticket is dropped by whoever closes it (Reply, or sweep), because
 // a wait that expired leaves an errand that is still open and still has to be
 // waitable, and an answer has to reach a caller who stopped waiting for it too.
+// The caller has already counted itself as attending, under the lock it found
+// or created the ticket under (Wait, Send).
 func (s *Service) await(ctx context.Context, id string, t *ticket, wait time.Duration) Result {
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
-
-	s.mu.Lock()
-	t.attended++
-	s.mu.Unlock()
 
 	// An answer that is already in outranks everything: a target may reply and
 	// end its turn in the same breath, and a select over two ready channels
@@ -222,8 +229,15 @@ func (s *Service) await(ctx context.Context, id string, t *ticket, wait time.Dur
 // that caller would have been told, so giveUp's news goes to the inbox instead,
 // the way it reaches any sender that stopped waiting.
 func (s *Service) abandon(id string, t *ticket) {
-	if status := s.giveUp(id, t); status != StatusPending {
-		s.stash(id, t, status, "")
+	s.mu.Lock()
+	status, filed := s.giveUpLocked(id, t)
+	if status != StatusPending {
+		s.stashLocked(id, t, status, "")
+		filed = true
+	}
+	s.mu.Unlock()
+	if filed {
+		s.announceInbox(t.fromID)
 	}
 }
 
@@ -248,6 +262,17 @@ func (s *Service) leave(t *ticket) {
 // ticket already out of the map.
 func (s *Service) giveUp(id string, t *ticket) string {
 	s.mu.Lock()
+	status, filed := s.giveUpLocked(id, t)
+	s.mu.Unlock()
+	if filed {
+		s.announceInbox(t.fromID)
+	}
+	return status
+}
+
+// giveUpLocked is giveUp under s.mu, reporting whether it filed an orphaned
+// answer so the caller announces the inbox once it lets go.
+func (s *Service) giveUpLocked(id string, t *ticket) (string, bool) {
 	t.attended--
 	last := t.attended == 0
 	orphaned := t.answered && last
@@ -269,18 +294,17 @@ func (s *Service) giveUp(id string, t *ticket) string {
 		default:
 		}
 	}
-	s.mu.Unlock()
 	if orphaned {
-		s.stash(id, t, StatusAnswered, t.answer)
+		s.stashLocked(id, t, StatusAnswered, t.answer)
 	}
 	if unread {
-		return StatusUnread
+		return StatusUnread, orphaned
 	}
 	if stalled {
-		return StatusUnanswered
+		return StatusUnanswered, orphaned
 	}
 	if undelivered {
-		return StatusUndelivered
+		return StatusUndelivered, orphaned
 	}
-	return StatusPending
+	return StatusPending, orphaned
 }

@@ -480,6 +480,9 @@ func (s *Service) Send(ctx context.Context, fromID, target, project, prompt stri
 	}
 	s.mu.Lock()
 	expired, senders := s.sweep()
+	// The caller attends from the moment the ticket exists: it always goes on
+	// to await, and an answer landing before then is its to carry out.
+	t.attended = 1
 	s.tickets[id] = t
 	s.mu.Unlock()
 	s.clearAll(expired)
@@ -588,11 +591,14 @@ func (s *Service) failDelivery(id string, t *ticket, cause error) {
 	delete(s.tickets, id)
 	close(t.undelivered)
 	unattended := t.attended == 0
+	if unattended {
+		s.stashLocked(id, t, StatusUndelivered, "")
+	}
 	s.mu.Unlock()
 
 	s.clear(t)
 	if unattended {
-		s.stash(id, t, StatusUndelivered, "")
+		s.announceInbox(t.fromID)
 	}
 }
 

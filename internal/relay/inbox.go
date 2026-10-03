@@ -176,14 +176,18 @@ func (s *Service) unregister(fromID string, wake chan struct{}) {
 	}
 }
 
-// stash puts one finished errand's outcome in the inbox and decides how the
+// stashLocked puts one finished errand's outcome in the inbox and decides how the
 // sender hears about it: a Collect already holding the line is woken, a busy
 // sender is left alone until its turn ends (Observe flushes then), and an idle
 // one gets a nudge after the debounce. A sender that is not a session — the
 // `lich` command from a script — is never nudged; its entry waits to be asked
 // for with `lich wait <ticket>`.
-func (s *Service) stash(id string, t *ticket, status, answer string) {
-	s.mu.Lock()
+//
+// Called under s.mu by whoever takes the ticket out of the map, in that same
+// critical section: a Wait that ran between the two would find the errand in
+// neither place and report it unknown. The caller announces the inbox once it
+// lets go of the lock.
+func (s *Service) stashLocked(id string, t *ticket, status, answer string) {
 	s.ready[id] = &inboxEntry{
 		ticket: id, fromID: t.fromID, target: t.target,
 		status: status, answer: answer, ready: s.now(),
@@ -197,8 +201,6 @@ func (s *Service) stash(id string, t *ticket, status, answer string) {
 	if len(s.collectors[t.fromID]) == 0 {
 		s.armNudgeLocked(t.fromID)
 	}
-	s.mu.Unlock()
-	s.announceInbox(t.fromID)
 }
 
 // armNudgeLocked starts the debounce for fromID's nudge unless the sender
@@ -212,7 +214,7 @@ func (s *Service) armNudgeLocked(fromID string) {
 }
 
 // renudge arms the nudge for results a collector left behind when its caller
-// hung up. stash skips the nudge for a result it woke a collector with, so
+// hung up. stashLocked skips the nudge for a result it woke a collector with, so
 // without this a result that landed as the caller went away would sit in the
 // inbox with nothing ever saying so.
 func (s *Service) renudge(fromID string) {

@@ -187,10 +187,13 @@ func (s *Service) watchReceipt(id string, t *ticket, kind, message string) {
 	delete(s.tickets, id)
 	close(t.unread)
 	unattended := t.attended == 0
+	if unattended {
+		s.stashLocked(id, t, StatusUnread, "")
+	}
 	s.mu.Unlock()
 
 	s.clear(t)
 	if unattended {
-		s.stash(id, t, StatusUnread, "")
+		s.announceInbox(t.fromID)
 	}
 }
