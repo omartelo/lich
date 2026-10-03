@@ -351,8 +351,21 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   no confirmation on the way. It is not a new privilege — the agent already runs as you, in a shell that can read
   the same disk — but it is new visibility, and a card it opens there is a card with a PTY in it.
 
+- **lich's own window refuses what a page did not ask its host for** (`shell/src/main.rs`, kurogane's
+  hooks): the window answers a web permission (reading the clipboard, a camera, notifications) with no and no
+  prompt, opens a `window.open` or a `target=_blank` to another site in the system browser instead of a window
+  of its own, keeps a navigation to another origin out of the window, asks where to save a download, and draws
+  a right-click menu of its own: editing items in a text field, nothing outside one, and no Inspect
+  (Ctrl+Shift+I still opens DevTools). The frontend uses none of the refused ones today. The trap is the
+  next feature that does: `navigator.clipboard.readText()`, a blob download or a popup works in a browser tab
+  (`--no-window`, an Intel Mac whose window died) and fails silently in the bundled window until
+  `shell/src/main.rs` answers the matching hook (`on_permission`, `on_download`, `on_new_window`,
+  `on_navigation`). A second one: kurogane reports through `tracing` and the window installs no subscriber, so
+  a window CEF could not create after startup says nothing on the stderr lich reads; a failure to start still
+  does.
+
 - **lich's own window offers the page every primary-modifier chord before Chromium runs it**
-  (`shell/src/main.rs`): a CEF keyboard handler marks each Ctrl chord (Cmd on macOS) a keyboard shortcut, which
+  (`shell/src/main.rs`): kurogane's key hook answers page-first for each Ctrl chord (Cmd on macOS), which
   is the only way a page can claim one of Chromium's *reserved* accelerators. Ctrl+T, Ctrl+W, Ctrl+Shift+T and
   the tab selectors otherwise run in the browser before the renderer is given the key, and no command handler
   sees them either: that is how Ctrl+Shift+T came to reopen a closed tab in a window with no tabs. What the page

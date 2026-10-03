@@ -9,38 +9,32 @@ lich that opened it — so nothing about it reaches the pure-Go build.
 ## The kurogane fork
 
 kurogane could not yet name the window it creates (WM_CLASS / Wayland app_id,
-and a title) or place its Chromium profile where lich keeps one. Three builder
-methods fix that — `App::window_class`, `App::window_title`, `App::cache_dir` —
-submitted upstream as
-[0x48piraj/kurogane#11](https://github.com/0x48piraj/kurogane/pull/11), with
-the client handlers a browser delegate supplies (the keyboard handler that
-hands the page Chromium's reserved chords) as
-[0x48piraj/kurogane#12](https://github.com/0x48piraj/kurogane/pull/12), the
-`NSApplication` kept to the browser process as
-[0x48piraj/kurogane#14](https://github.com/0x48piraj/kurogane/pull/14), and
-the macOS bundle layout (the framework resolved from `Contents/Frameworks`,
-the subprocesses run as the bundle's helper app), which upstream ships on
-master since
-[53d51ba](https://github.com/0x48piraj/kurogane/commit/53d51ba7d234161f8709109dcb8d6395f38c7bb4);
-lich's own PRs for that layout, #13 and #15, were closed as covered. One more
-fix is the fork's alone so far: a second launch on the profile makes CEF
-ask the running browser what to do with it, and kurogane answered nothing,
-so CEF opened a Chrome-style browser no window of ours owned and the app
-outlived its last window (lich#470); the fork raises the window it already
-has. And kurogane disabled the sandbox on every platform, which put Chrome's
-"unsupported command-line flag" bar on every window; the fork leaves it on
-for Linux, where Chromium needs nothing of the binary to confine its
-subprocesses, and `shell/src/main.rs` passes `--no-sandbox` on the machines
-that cannot (Ubuntu's AppArmor policy, root). Last, the main window opened at
-CEF's default size every launch: the fork asks the browser delegate for its
-initial geometry and tells it the bounds the window closed with
+a title, an icon) or place its Chromium profile where lich keeps one. Four
+builder methods fix that — `App::window_class`, `App::window_title`,
+`App::window_icon`, `App::cache_dir` — submitted upstream as
+[0x48piraj/kurogane#11](https://github.com/0x48piraj/kurogane/pull/11). The
+main window opened at CEF's default size every launch: the fork asks the
+browser delegate for its initial geometry and tells it the bounds the window
+closed with
 ([0x48piraj/kurogane#19](https://github.com/0x48piraj/kurogane/pull/19)), and
-`shell/src/geometry.rs` remembers them. On macOS kurogane installed no main
-menu, and AppKit delivers Cmd+C, Cmd+V and the other Command shortcuts through
-one, so none of them worked; the fork installs the application and Edit menus.
-All of it is carried meanwhile
-on the fork `shell/Cargo.toml` pins:
-`omartelo/kurogane`, branch `lich-next`, on top of upstream `fda6cb6`.
+`shell/src/geometry.rs` remembers them. And the key hook could let a key go on
+or take it, never hand it to the page ahead of Chromium's reserved
+accelerators, which is the one thing this window asks of it:
+`KeyDecision::PageFirst`
+([0x48piraj/kurogane#21](https://github.com/0x48piraj/kurogane/pull/21)).
+
+The rest of what the fork once carried is upstream's now, in upstream's own
+shape: the decision hooks that grew out of
+[#12](https://github.com/0x48piraj/kurogane/pull/12), a second launch on the
+profile raising the window it already has (lich#470), the sandbox as a mode
+the host picks, which `shell/src/main.rs` sets to Chromium's on a Linux
+machine that can confine its subprocesses and leaves off elsewhere, the macOS
+application and Edit menus, the `NSApplication` kept to the browser process
+(#14) and the macOS bundle layout.
+
+All of it is pinned on the fork: `omartelo/kurogane`, branch `lich-hooks`, on
+top of upstream's `native-tongue/capabilities` at `ba69cfd`, the branch the
+hooks live on until it reaches master.
 One wrinkle the patch works around: cef-rs hands CEF a *borrowed* string when
 it writes an out-parameter struct back, so a `wm_class_class` built from `&str`
 arrives empty — the fork allocates those through CEF's own

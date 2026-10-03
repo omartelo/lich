@@ -9,16 +9,10 @@
 // CTRL_CLOSE_EVENT to the group and killed the window with 0xc000013a inside the
 // startup grace, which lich reads as a window that could not open.
 #![windows_subsystem = "windows"]
-use cef::rc::Rc as _;
-use cef::sys::cef_event_flags_t;
-use cef::{
-    Browser, ImplDisplay, ImplKeyboardHandler, KeyEvent, KeyboardHandler, WrapKeyboardHandler,
-    wrap_keyboard_handler,
-};
 use geometry::Geometry;
-use kurogane::{App, BrowserBounds, ClientAppBrowserDelegate, WindowState};
+use kurogane::cef::{self, ImplDisplay};
+use kurogane::{App, BrowserBounds, ClientAppBrowserDelegate, KeyDecision, WindowState};
 use std::io::{ErrorKind, Read};
-use std::os::raw::c_int;
 use std::path::PathBuf;
 
 mod geometry;
@@ -53,7 +47,12 @@ impl Launch {
     /// each with a --type of its own; the browser process has none.
     #[cfg(target_os = "linux")]
     fn is_subprocess(&self) -> bool {
-        self.switches.iter().any(|(name, _)| name == "type")
+        self.has_switch("type")
+    }
+
+    #[cfg(target_os = "linux")]
+    fn has_switch(&self, switch: &str) -> bool {
+        self.switches.iter().any(|(name, _)| name == switch)
     }
 }
 
@@ -99,71 +98,31 @@ fn display_switch(wayland_display: Option<&str>) -> Option<(&'static str, &'stat
         .map(|_| ("ozone-platform", "wayland"))
 }
 
-/// CEF's native event for a key press, never read: what the window decides, it
-/// decides from the CefKeyEvent. Its type is the platform's own, so the
-/// signature CEF asks for differs on each.
-#[cfg(target_os = "linux")]
-type OsEvent<'a> = Option<&'a mut cef::sys::XEvent>;
-#[cfg(target_os = "windows")]
-type OsEvent<'a> = Option<&'a mut cef::sys::MSG>;
-#[cfg(target_os = "macos")]
-type OsEvent<'a> = *mut u8;
-
-/// Whether the page is given first refusal on a chord: every one carrying the
-/// primary modifier: Ctrl on Linux and Windows, Cmd on macOS.
-// The cast is required on Windows, where the flag's C int is signed, and
-// redundant on Linux and macOS, where it is not: the lint has to go, because
-// neither spelling alone builds on all three.
-#[allow(clippy::unnecessary_cast)]
-fn page_first(modifiers: u32) -> bool {
-    const PRIMARY: u32 = cef_event_flags_t::EVENTFLAG_CONTROL_DOWN.0 as u32
-        | cef_event_flags_t::EVENTFLAG_COMMAND_DOWN.0 as u32;
-    modifiers & PRIMARY != 0
-}
-
-// Chromium reserves its tab accelerators: Ctrl+T, Ctrl+W, Ctrl+Shift+T and the
-// rest run in the browser *before* the key is sent to the renderer, so a page
-// binding one never sees it: lich's Ctrl+Shift+T reopened a closed tab rather
-// than starting a session, in a window that has no tabs to reopen into. Marking a
-// chord a keyboard shortcut is how CEF inverts that order: the renderer gets the
-// key first, and Chromium runs the accelerator only if the page let it through
-// (measured on CEF 150; a vetoed CefCommandHandler command cannot do it, the
-// reserved ones never reach it).
-wrap_keyboard_handler! {
-    struct PageFirstKeys;
-
-    impl KeyboardHandler {
-        fn on_pre_key_event(
-            &self,
-            _browser: Option<&mut Browser>,
-            event: Option<&KeyEvent>,
-            _os_event: OsEvent<'_>,
-            is_keyboard_shortcut: Option<&mut c_int>,
-        ) -> c_int {
-            if let (Some(event), Some(shortcut)) = (event, is_keyboard_shortcut)
-                && page_first(event.modifiers)
-            {
-                *shortcut = 1;
-            }
-            0
-        }
+/// What the window answers kurogane about a key press: the page is given
+/// first refusal on every chord carrying Ctrl or Cmd, and the rest goes on.
+///
+/// Chromium reserves its tab accelerators: Ctrl+T, Ctrl+W, Ctrl+Shift+T and the
+/// rest run in the browser *before* the key is sent to the renderer, so a page
+/// binding one never sees it: lich's Ctrl+Shift+T reopened a closed tab rather
+/// than starting a session, in a window that has no tabs to reopen into.
+/// PageFirst inverts that order: the renderer gets the key first, and Chromium
+/// runs the accelerator only if the page let it through (measured on CEF 150;
+/// refusing the command cannot do it, the reserved ones never reach that hook).
+fn key_decision(ctrl: bool, cmd: bool) -> KeyDecision {
+    if ctrl || cmd {
+        KeyDecision::PageFirst
+    } else {
+        KeyDecision::Default
     }
 }
 
-/// CEF asks for a handler on every key event, so the window holds one and hands
-/// out clones rather than building it in the getter.
 struct Window {
-    keys: KeyboardHandler,
     /// Where the geometry is remembered; None, a shell launched by hand
     /// without a profile, opens at CEF's default every time.
     geometry: Option<PathBuf>,
 }
 
 impl ClientAppBrowserDelegate for Window {
-    fn keyboard_handler(&self) -> Option<KeyboardHandler> {
-        Some(self.keys.clone())
-    }
-
     fn initial_window_geometry(&self) -> Option<(BrowserBounds, WindowState)> {
         let saved = read_geometry(self.geometry.as_deref()?)?;
         Some(saved.restore(work_area(BrowserBounds {
@@ -246,9 +205,15 @@ fn main() {
         claim_taskbar_identity(class);
     }
     // Only the browser process decides; CEF's subprocesses carry --type and
-    // inherit the switch from it.
+    // are told through the --no-sandbox it passes down.
     #[cfg(target_os = "linux")]
-    let unsandboxed = !launch.is_subprocess() && !sandbox_available();
+    let subprocess = launch.is_subprocess();
+    #[cfg(target_os = "linux")]
+    let sandboxed = if subprocess {
+        !launch.has_switch("no-sandbox")
+    } else {
+        sandbox_available()
+    };
     let mut app = App::url(launch.url.unwrap_or_else(|| "about:blank".into()))
         // Only reached without --user-data-dir, which lich always passes: a
         // shell launched by hand gets a profile under its own name rather than
@@ -260,8 +225,8 @@ fn main() {
         // system-wide (plasma-browser-integration on KDE). A window that is
         // not a browser has no use for them.
         .chromium_flag("disable-extensions")
+        .on_key(|key, _| key_decision(key.modifiers().ctrl(), key.modifiers().meta()))
         .delegate(Window {
-            keys: PageFirstKeys::new(),
             geometry: launch.profile_dir.as_deref().map(geometry::file),
         });
     // Chromium keeps the key for its cookie store in the Keychain, granted to
@@ -297,12 +262,16 @@ fn main() {
     if let Some((name, value)) = display_switch(wayland.as_deref()) {
         app = app.chromium_flag_with_value(name, value);
     }
+    // kurogane runs Chromium unsandboxed unless told otherwise; Windows and
+    // macOS stay there, where the sandbox needs CEF's bootstrap executable
+    // and seatbelt helpers this window does not ship.
     #[cfg(target_os = "linux")]
-    if unsandboxed {
+    if sandboxed {
+        app = app.sandbox_mode(kurogane::SandboxMode::Chromium);
+    } else if !subprocess {
         eprintln!(
             "lich-shell: this machine cannot confine Chromium's subprocesses; opening the window unsandboxed"
         );
-        app = app.chromium_flag("no-sandbox");
     }
     // The user's switches go through kurogane rather than staying in argv, so
     // they land after its own policy and win: --ozone-platform=x11 beats the
@@ -496,20 +465,16 @@ mod tests {
 
     #[test]
     fn hands_the_page_every_primary_modifier_chord() {
-        // Flag values are CEF's own (cef_event_flags_t): shift 2, control 4,
-        // alt 8, command 128.
-        assert!(page_first(4), "Ctrl");
-        assert!(page_first(4 | 2), "Ctrl+Shift");
-        assert!(page_first(128), "Cmd");
-        assert!(page_first(128 | 2), "Cmd+Shift");
+        // kurogane decodes CEF's flag word now; Shift and Alt are no input
+        // here, so a chord is Ctrl, Cmd or both, whatever else is held.
+        assert_eq!(key_decision(true, false), KeyDecision::PageFirst, "Ctrl");
+        assert_eq!(key_decision(false, true), KeyDecision::PageFirst, "Cmd");
+        assert_eq!(key_decision(true, true), KeyDecision::PageFirst, "Ctrl+Cmd");
     }
 
     #[test]
     fn leaves_the_rest_to_chromium() {
-        assert!(!page_first(0), "no modifier");
-        assert!(!page_first(2), "Shift");
-        assert!(!page_first(8), "Alt");
-        assert!(!page_first(2 | 8), "Shift+Alt");
+        assert_eq!(key_decision(false, false), KeyDecision::Default);
     }
 
     #[test]
@@ -614,6 +579,8 @@ mod tests {
     fn tells_the_browser_process_from_its_subprocesses() {
         assert!(!parse(args(&["--url=http://h/", "--class=lich"])).is_subprocess());
         assert!(parse(args(&["--type=zygote", "--no-zygote-sandbox"])).is_subprocess());
+        assert!(parse(args(&["--type=gpu-process", "--no-sandbox"])).has_switch("no-sandbox"));
+        assert!(!parse(args(&["--type=gpu-process"])).has_switch("no-sandbox"));
     }
 
     #[cfg(target_os = "linux")]
