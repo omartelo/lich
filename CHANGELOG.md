@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Right-clicking in lich's own window opens a menu that fits the app.** A
+  text field offers Undo, Redo, Cut, Copy, Paste, Paste as plain text and
+  Select all, and outside one no menu opens: the browser's own menu, with its
+  Back, Reload, Save as and Inspect, is gone. Ctrl+Shift+I still opens
+  DevTools.
+
 ## [0.56.0] - 2026-10-03
 
 ### Added
