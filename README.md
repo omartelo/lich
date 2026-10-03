@@ -108,6 +108,7 @@ reads what each CLI writes down and no two of them write down the same things.
 | Fork a conversation into a new worktree | yes | yes | no | yes | no | no | no | no |
 | Open a session at a chosen reasoning effort | yes | yes | yes | no | yes | no | in the model name | yes |
 | Open a session with ultracode on | yes | no | no | no | no | no | no | no |
+| Delegate privately from a subagent or workflow step | yes | yes | yes | through `lich send --private` | yes | yes | yes | yes |
 | A resumed session keeps the model and effort it was on | model only | yes | no | model | yes | no | model | model; effort untested |
 | A result still waits for you after you interrupt a wait for it | yes | yes | yes | yes | no | yes | yes | yes |
 

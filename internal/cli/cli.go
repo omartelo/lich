@@ -70,6 +70,12 @@ const callSlack = 30 * time.Second
 // shortCall bounds the commands that do not wait on another session.
 const shortCall = 10 * time.Second
 
+// privateFlagUsage describes --private on the two commands that hand a session a
+// task.
+const privateFlagUsage = "keep the result to this ticket: no note at the sending session's " +
+	"prompt, and a wait without a ticket never returns it — for a subagent or workflow " +
+	"step running inside the session"
+
 // openCall bounds opening a session. It is not a wait on anyone — it is git:
 // a worktree off a remote branch fetches first, and a cold fetch of a large
 // repository is not a ten-second operation. It stays under the 90 seconds an
@@ -285,6 +291,7 @@ func (c *client) send(args []string) error {
 		"narrow the target to one project, by name or by directory path, when the label is ambiguous",
 	)
 	timeout := flags.Int("timeout", 0, "seconds to wait for an answer before handing back a ticket")
+	private := flags.Bool("private", false, privateFlagUsage)
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := c.parse(flags, args); err != nil {
 		return err
@@ -293,9 +300,13 @@ func (c *client) send(args []string) error {
 		return usageError("send")
 	}
 
+	method := "relay.Send"
+	if *private {
+		method = "relay.SendPrivate"
+	}
 	var result relay.Result
 	call := []any{c.sessionID(), flags.Arg(0), *project, flags.Arg(1), *timeout}
-	if err := c.call(context.Background(), "relay.Send", call, waitBudget(*timeout), &result); err != nil {
+	if err := c.call(context.Background(), method, call, waitBudget(*timeout), &result); err != nil {
 		return err
 	}
 	if err := c.report(result, *asJSON); err != nil {
@@ -447,6 +458,7 @@ func (c *client) open(args []string) error {
 	folder := flags.String("folder", "", "sidebar folder to file the session under")
 	ultracode := flags.Bool("ultracode", false, "turn Claude Code's ultracode on, at whatever effort the session runs")
 	prompt := flags.String("prompt", "", "task to hand the new session as soon as its agent is up")
+	private := flags.Bool("private", false, privateFlagUsage+"; needs --prompt")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := c.parse(flags, args); err != nil {
 		return err
@@ -454,13 +466,22 @@ func (c *client) open(args []string) error {
 	if flags.NArg() != 0 {
 		return usageError("open")
 	}
+	// Refused before anything is opened: a session left behind by a call that
+	// failed is one the caller does not know it has.
+	if *private && *prompt == "" {
+		return fmt.Errorf("--private applies to the task handed over with --prompt: add a prompt, or drop --private")
+	}
+	method := "relay.Send"
+	if *private {
+		method = "relay.SendPrivate"
+	}
 
 	var opened spawn.Session
 	call := []any{c.sessionID(), *project, *kind, *worktree, *base, *model, *effort, *folder, *ultracode}
 	if err := c.call(context.Background(), "spawn.Open", call, openCall, &opened); err != nil {
 		return err
 	}
-	delivered, failure := c.handOff(opened, *prompt)
+	delivered, failure := c.handOff(opened, *prompt, method)
 	if *asJSON {
 		if err := c.emit(opening{Session: opened, Delivery: delivered}); err != nil {
 			return err
@@ -494,16 +515,20 @@ type opening struct {
 // handOff gives a just-opened session its first task, and nothing at all when
 // no task came with it. The failure it returns names the session, because the
 // session outlives it: what went wrong is one send, not the open.
-func (c *client) handOff(opened spawn.Session, prompt string) (*relay.Result, error) {
+func (c *client) handOff(opened spawn.Session, prompt, method string) (*relay.Result, error) {
 	if prompt == "" {
 		return nil, nil
 	}
-	result, err := c.deliver(context.Background(), opened, prompt)
+	result, err := c.deliver(context.Background(), opened, prompt, method)
 	if err != nil {
+		send := "lich send"
+		if method == "relay.SendPrivate" {
+			send = "lich send --private"
+		}
 		return nil, fmt.Errorf(
 			"the session is open, but the task did not reach it: %w — hand it the task with "+
-				"`lich send %q '<task>'` once whatever that says is dealt with",
-			err, opened.Label,
+				"`%s %q '<task>'` once whatever that says is dealt with",
+			err, send, opened.Label,
 		)
 	}
 	return &result, nil
@@ -511,11 +536,12 @@ func (c *client) handOff(opened spawn.Session, prompt string) (*relay.Result, er
 
 // deliver hands a just-opened session its first task, on both surfaces: the
 // command line's --prompt and the open_session tool's, which differ in how they
-// word the outcome and in nothing else.
-func (c *client) deliver(ctx context.Context, opened spawn.Session, prompt string) (relay.Result, error) {
+// word the outcome and in nothing else. method is relay.Send or
+// relay.SendPrivate, as the caller asked.
+func (c *client) deliver(ctx context.Context, opened spawn.Session, prompt, method string) (relay.Result, error) {
 	var result relay.Result
 	call := []any{c.sessionID(), opened.Label, opened.Project, prompt, deliverWait}
-	err := c.call(ctx, "relay.Send", call, waitBudget(deliverWait), &result)
+	err := c.call(ctx, method, call, waitBudget(deliverWait), &result)
 	return result, err
 }
 
@@ -802,6 +828,15 @@ func (c *client) report(result relay.Result, asJSON bool) error {
 	}
 	if result.Status == relay.StatusUndelivered {
 		fmt.Fprintln(c.stdout, undeliveredText(result.Target))
+		return nil
+	}
+	if result.Private {
+		fmt.Fprintf(c.stdout,
+			"%s is still working. The errand is private: no note will be typed at the sending "+
+				"session's prompt, and `lich wait` without a ticket will not return it. "+
+				"Hold the line for it with:\n  lich wait %s\n",
+			result.Target, result.Ticket,
+		)
 		return nil
 	}
 	fmt.Fprintf(c.stdout,

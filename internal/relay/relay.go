@@ -241,6 +241,9 @@ type Result struct {
 	Target string `json:"target"`
 	Status string `json:"status"`
 	Answer string `json:"answer"`
+	// Private is set on the outcome of a ticket sent with SendPrivate, which
+	// only that ticket collects: no note will announce it.
+	Private bool `json:"private,omitempty"`
 }
 
 // ticket is one outstanding errand. answer is written once, before done is
@@ -283,6 +286,11 @@ type ticket struct {
 	// it is typed at the sender's prompt instead — the same way the request
 	// reached the target.
 	attended int
+	// private is a ticket sent by a caller the sender session's prompt does not
+	// speak for: a subagent or workflow step inside it, which lich cannot tell
+	// apart from the session itself. Its outcome is held for the ticket alone,
+	// never drained by a no-ticket collect, counted or nudged (SendPrivate).
+	private bool
 	// answered records that the answer is in, for the waiter that gave up in the
 	// same instant it arrived: it leaves last and has to notice it was the one
 	// holding the ticket.
@@ -336,6 +344,10 @@ type Service struct {
 	// ready is the inbox: finished errands waiting to be collected, keyed by
 	// ticket so a Wait on the original ticket still finds its outcome.
 	ready map[string]*inboxEntry
+	// held is where the outcomes of private tickets wait, apart from ready, so
+	// nothing that reads the inbox for a sender can reach them: only a Wait on
+	// their ticket does.
+	held map[string]*inboxEntry
 	// collectors is who is blocked in Collect right now, per sender. A result
 	// stashed while one is registered wakes it instead of arming a nudge.
 	collectors map[string][]chan struct{}
@@ -398,6 +410,7 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 		state:         make(map[string]string),
 		reported:      make(map[string]string),
 		ready:         make(map[string]*inboxEntry),
+		held:          make(map[string]*inboxEntry),
 		collectors:    make(map[string][]chan struct{}),
 		nudgeTimer:    make(map[string]*time.Timer),
 		nudging:       make(map[string]*sync.Mutex),
@@ -447,6 +460,23 @@ func (s *Service) Peers(fromID string) ([]Peer, error) {
 // (see queueDelivery). ctx is the caller's: one that hangs up mid-wait hears
 // nothing, and the errand's outcome goes to its inbox as if its wait had run out.
 func (s *Service) Send(ctx context.Context, fromID, target, project, prompt string, waitSeconds int) (Result, error) {
+	return s.send(ctx, fromID, target, project, prompt, waitSeconds, false)
+}
+
+// SendPrivate is Send for a caller that runs inside the sender session without
+// being its agent: a subagent or a workflow step. Every call from that session
+// reaches lich as the session, so this is how the caller keeps its errand to
+// itself — the outcome is collected by its ticket alone, and nothing is typed at
+// the session's prompt or counted on its card about it.
+func (s *Service) SendPrivate(
+	ctx context.Context, fromID, target, project, prompt string, waitSeconds int,
+) (Result, error) {
+	return s.send(ctx, fromID, target, project, prompt, waitSeconds, true)
+}
+
+func (s *Service) send(
+	ctx context.Context, fromID, target, project, prompt string, waitSeconds int, private bool,
+) (Result, error) {
 	prompt = sanitize(prompt)
 	if strings.TrimSpace(prompt) == "" {
 		return Result{}, fmt.Errorf("nothing to send: the prompt is empty")
@@ -473,6 +503,7 @@ func (s *Service) Send(ctx context.Context, fromID, target, project, prompt stri
 		target:      dest.Peer.Label,
 		created:     s.now(),
 		asked:       askedExcerpt(prompt),
+		private:     private,
 		done:        make(chan struct{}),
 		stalled:     make(chan struct{}),
 		unread:      make(chan struct{}),
@@ -506,7 +537,9 @@ func (s *Service) Send(ctx context.Context, fromID, target, project, prompt stri
 	// outlives it either way, and blocking past what was asked would run past
 	// the HTTP client's own budget (internal/cli, waitBudget) and report a
 	// timeout on an errand that is running perfectly well.
-	return s.await(ctx, id, t, waitFor(waitSeconds)), nil
+	result := s.await(ctx, id, t, waitFor(waitSeconds))
+	result.Private = private
+	return result, nil
 }
 
 // handOff puts a composed message in the target's PTY and starts everything
@@ -647,6 +680,13 @@ func (s *Service) sweep() ([]*ticket, []string) {
 			if e.fromID != "" {
 				touched[e.fromID] = true
 			}
+		}
+	}
+	// A held outcome expires on the same clock, and silently: nobody was ever
+	// told it was there.
+	for id, e := range s.held {
+		if e.ready.Before(cutoff) {
+			delete(s.held, id)
 		}
 	}
 	senders := make([]string, 0, len(touched))

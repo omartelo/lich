@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `open_session` with `ultracode` open a session with ultracode on at whatever
   effort it runs. It stays on when the session restarts or resumes, which Claude Code
   on its own forgets.
+- **Subagents and workflow steps can delegate privately.** Everything an agent's
+  subagents send reaches lich as the session itself, so one step could take another's
+  result and every result was announced at the session's prompt. `private` on
+  `send_to_session` and `open_session`, or `--private` on `lich send` and `lich open`,
+  keeps a result to its ticket: no note at the prompt, no count on the card, and only a
+  wait on that ticket returns it.
 
 ### Fixed
 

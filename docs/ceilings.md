@@ -409,6 +409,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the cancellation arrives, delivery is not acknowledged: a result drained in the instant before the hang-up
   reaches the backend, or already written back when the client withdraws the call, is lost with the reply. The
   window is the round-trip of one message, not the length of the wait.
+- **A private errand is opt-in, because lich cannot tell a subagent from its session** (`internal/relay`,
+  `SendPrivate`): a subagent or workflow step reaches lich through the session's own `lich mcp` and
+  `LICH_SESSION_ID`, and an MCP call carries nothing that names its caller (Claude Code 2.1.288 sends only
+  `claudecode/toolUseId` and `progressToken`). One that sends without `private` is the session to lich: a sibling's
+  no-ticket collect can take its result and the note lands at the session's prompt, both measured on 2026-10-03.
+  A private result is announced nowhere, so only its ticket recovers it and it expires silently with the ticket's
+  hour. It covers tickets, not ownership: the sessions and worktrees a step opens still come from the session, their
+  marks and stalled toasts land on its card, and closing them is the workflow's own job. opencode's plugin tools
+  take no `private` until lich-plugin passes it through; its agents reach it with `lich send --private` meanwhile.
 - **A relayed Enter is timed against silence, not against the target** (`internal/relay`, `awaitSettled`): lich
   presses Enter once the target's PTY has been quiet for `defaultSubmitDelay`, because nothing here can read a TUI's
   screen to know it has taken the paste in. The window that opens on the target's own keyboard is closed rather
@@ -761,7 +770,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   replaces the binary without restarting the backend it is serving. `spawn.Open` grows an argument with each
   option `lich open` gains (`--effort`, `--folder`, `--ultracode`), so the new CLI, and the `lich mcp` of every session opened
   after the upgrade, is refused with "want 8 arguments, got 9" until lich is restarted. Every other call whose
-  argument list changes breaks the same way; one that only grows a result field does not.
+  argument list changes breaks the same way; one that only grows a result field does not, and a new method
+  breaks only itself: a `lich` newer than the backend has `relay.SendPrivate` refused, so `--private` sends fail
+  and every other send works.
 - **A reasoning effort reaches five providers, and Cursor only through its model name**
   (`internal/terminal/command.go`, `effortFlags`): `lich open --effort` and `open_session`'s `effort` are refused
   for opencode, whose `--variant` lives on `run` only (1.18.31), and for Crush, which has no such option
