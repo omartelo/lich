@@ -123,6 +123,11 @@ type transport struct {
 	fallback func(id string, data []byte)
 	// plugins is the plugin release each session's hooks report from.
 	plugins pluginVersions
+	// mods is each session's queue of commands for its Claude Code mod, and
+	// modAborted is told about a turn the mod aborted (modcontrol.go). Guarded
+	// by mu and wired by setModAborted, like restart.
+	mods       modQueue
+	modAborted func(id string)
 }
 
 // newTransport starts the listener on a random loopback port. input receives
@@ -166,6 +171,7 @@ func newTransport(
 		linkSession: linkSession,
 		setTitle:    setTitle,
 		touched:     touched,
+		mods:        modQueue{wait: modPollWait, now: time.Now},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", t.handle)
@@ -176,6 +182,8 @@ func newTransport(
 	mux.HandleFunc("/session-title", t.sessionTitle)
 	mux.HandleFunc("/session-touched", t.sessionTouched)
 	mux.HandleFunc("/restart", t.restartApp)
+	mux.HandleFunc("/mod/commands", t.modCommands)
+	mux.HandleFunc("/mod/acks", t.modAck)
 	t.mux = mux
 	// Server and listener live for the process lifetime, like the PTY sessions
 	// they serve; add Shutdown if the app ever needs teardown. Serve returning

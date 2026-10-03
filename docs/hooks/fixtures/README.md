@@ -19,6 +19,12 @@ whichever side moved first.
 | `session-start.jsonl`  | [session-start.md](../session-start.md)      | `/session-start`   |
 | `session-title.jsonl`  | [session-title.md](../session-title.md)      | `/session-title`   |
 | `session-touched.jsonl`| [session-touched.md](../session-touched.md)  | `/session-touched` |
+| `mod-control.jsonl`    | [mod-control.md](../mod-control.md)          | `/mod/acks`        |
+| `mod-commands.json`    | [mod-control.md](../mod-control.md)          | `/mod/commands`    |
+
+`mod-commands.json` is the one file that is not cases: it is the response body
+lich sends to `GET /mod/commands`, one command of every shape, which lich
+asserts its encoding against and the mod asserts it can read.
 
 The file is named after the contract, not the endpoint — `/hook` predates the
 naming and keeps its path for the plugin releases already pointing at it.

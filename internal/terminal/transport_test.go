@@ -681,6 +681,7 @@ var hookEndpoints = []struct {
 	{"/session-start", `{"session_id":"s","provider_session_id":"u"}`},
 	{"/session-title", `{"session_id":"s","title":"t"}`},
 	{"/session-touched", `{"session_id":"s"}`},
+	{"/mod/acks", `{"session_id":"s","id":"m1","kind":"abort","ok":true}`},
 }
 
 // newNilTransport starts a transport with every hook callback unset, the state

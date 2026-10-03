@@ -416,6 +416,7 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		ws.plugins.setOnIncompatible(func(id, version string) {
 			s.hub.Emit(pluginEventName, pluginEvent{ID: id, Version: version})
 		})
+		ws.setModAborted(s.noteInterrupt)
 	}
 	return s
 }
@@ -755,13 +756,18 @@ func (s *Service) Close(id string) error {
 	// this is the last chance a closed card gets to keep what it was worked.
 	s.FlushHandsOn()
 	s.hands.forget(id)
+	var err error
+	if ok {
+		err = sess.pty.Close()
+	}
+	// After the process is gone: until then its mod is alive, and the contract
+	// has it re-poll at once after the [] that forget releases it with, which
+	// would attach the closed session again.
 	if s.ws != nil {
 		s.ws.plugins.forget(id)
+		s.ws.mods.forget(id)
 	}
-	if !ok {
-		return nil
-	}
-	return sess.pty.Close()
+	return err
 }
 
 // HandsOn is how long session id has been worked on, in whole seconds: the time

@@ -1,0 +1,10 @@
+[
+  {"id": "m1", "kind": "prompt", "text": "run the tests"},
+  {"id": "m2", "kind": "abort"},
+  {"id": "m3", "kind": "model", "model": "claude-opus-4-1"},
+  {"id": "m4", "kind": "model"},
+  {"id": "m5", "kind": "effort", "effort": "high"},
+  {"id": "m6", "kind": "effort"},
+  {"id": "m7", "kind": "compact", "instructions": "keep the test plan"},
+  {"id": "m8", "kind": "compact"}
+]

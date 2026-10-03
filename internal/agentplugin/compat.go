@@ -14,8 +14,8 @@ const (
 	// install says which release a report comes from.
 	PluginVersionFloor = "0.13.0"
 	// PluginVersionCeiling is the first release past the newest contract this
-	// lich implements (0.13), and the first one it cannot vouch for.
-	PluginVersionCeiling = "0.14.0"
+	// lich implements (0.14), and the first one it cannot vouch for.
+	PluginVersionCeiling = "0.15.0"
 )
 
 // Compatible reports whether a plugin release speaks the contract this lich
