@@ -144,11 +144,12 @@ func (s *Service) drainLocked(fromID string) []Result {
 }
 
 // openLocked is the labels still owing fromID an answer, deduplicated and
-// sorted. Called under s.mu.
+// sorted, leaving out private errands a collect could never drain. Called
+// under s.mu.
 func (s *Service) openLocked(fromID string) []string {
 	seen := map[string]bool{}
 	for _, t := range s.tickets {
-		if t.fromID == fromID {
+		if t.fromID == fromID && !t.private {
 			seen[t.target] = true
 		}
 	}
@@ -188,10 +189,15 @@ func (s *Service) unregister(fromID string, wake chan struct{}) {
 // neither place and report it unknown. The caller announces the inbox once it
 // lets go of the lock.
 func (s *Service) stashLocked(id string, t *ticket, status, answer string) {
-	s.ready[id] = &inboxEntry{
+	entry := &inboxEntry{
 		ticket: id, fromID: t.fromID, target: t.target,
 		status: status, answer: answer, ready: s.now(),
 	}
+	if t.private {
+		s.held[id] = entry
+		return
+	}
+	s.ready[id] = entry
 	for _, wake := range s.collectors[t.fromID] {
 		select {
 		case wake <- struct{}{}:

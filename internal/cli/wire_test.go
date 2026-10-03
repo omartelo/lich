@@ -142,6 +142,46 @@ func TestSendAndReplyOverTheRealDispatcher(t *testing.T) {
 	}
 }
 
+// TestSendPrivateOverTheRealDispatcher is the whole journey of a private
+// errand: the send runs out and leaves a ticket, the answer lands with nobody
+// waiting, a no-ticket wait from the same session finds nothing, and the ticket
+// still collects it.
+func TestSendPrivateOverTheRealDispatcher(t *testing.T) {
+	env, term := wiredLich(t)
+
+	var stdout, stderr bytes.Buffer
+	done := make(chan int, 1)
+	go func() {
+		done <- Run([]string{"send", "--private", "--timeout", "1", "docs", "run the tests"}, "test", env, &stdout, &stderr)
+	}()
+	ticketID := ticketFrom(term)
+	if ticketID == "" {
+		t.Fatal("the message never reached the target's terminal")
+	}
+	if code := <-done; code != ExitPending {
+		t.Fatalf("send exit = %d, want pending; stderr = %q", code, stderr.String())
+	}
+
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"reply", ticketID, "3 failures"}, "test", env, &out, &errOut); code != 0 {
+		t.Fatalf("reply exit = %d, stderr = %q", code, errOut.String())
+	}
+	out.Reset()
+	if code := Run([]string{"wait", "--json"}, "test", env, &out, &errOut); code != 0 {
+		t.Fatalf("collect exit = %d, stderr = %q", code, errOut.String())
+	}
+	if strings.Contains(out.String(), "3 failures") {
+		t.Errorf("a no-ticket wait took the private answer: %s", out.String())
+	}
+	out.Reset()
+	if code := Run([]string{"wait", ticketID}, "test", env, &out, &errOut); code != 0 {
+		t.Fatalf("wait exit = %d, stderr = %q", code, errOut.String())
+	}
+	if strings.TrimSpace(out.String()) != "3 failures" {
+		t.Errorf("wait printed %q, want the private answer", out.String())
+	}
+}
+
 // ticketFrom pulls the ticket out of the message the relay typed at the target,
 // which is the only place the receiving agent ever learns it.
 func ticketFrom(term *wiredTerminal) string {

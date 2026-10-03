@@ -23,6 +23,13 @@ func (s *Service) Wait(ctx context.Context, ticketID string, waitSeconds int) (R
 		s.announceInbox(e.fromID)
 		return Result{Ticket: e.ticket, Target: e.target, Status: e.status, Answer: e.answer}, nil
 	}
+	if e, ok := s.held[ticketID]; ok {
+		delete(s.held, ticketID)
+		s.mu.Unlock()
+		s.clearAll(expired)
+		s.announceInboxAll(senders)
+		return Result{Ticket: e.ticket, Target: e.target, Status: e.status, Answer: e.answer, Private: true}, nil
+	}
 	t, ok := s.tickets[ticketID]
 	// Attending is claimed under the lock that found the ticket, so an answer
 	// landing before await runs is carried out by this caller rather than filed
@@ -36,7 +43,9 @@ func (s *Service) Wait(ctx context.Context, ticketID string, waitSeconds int) (R
 	if !ok {
 		return Result{}, fmt.Errorf("unknown ticket %q — it was answered long ago, or expired", ticketID)
 	}
-	return s.await(ctx, ticketID, t, waitFor(waitSeconds)), nil
+	result := s.await(ctx, ticketID, t, waitFor(waitSeconds))
+	result.Private = t.private
+	return result, nil
 }
 
 // Reply hands an answer back to whoever is waiting on ticketID. It is what the

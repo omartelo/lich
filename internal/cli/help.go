@@ -30,10 +30,12 @@ var commands = []command{
 	},
 	{
 		name: "send",
-		args: "[--project <name>] [--timeout <seconds>] [--json] <session> <prompt>",
+		args: "[--project <name>] [--timeout <seconds>] [--private] [--json] <session> <prompt>",
 		about: "Put <prompt> at <session>'s prompt and wait for its agent to answer.\n" +
 			"Prints the answer. If the wait runs out first it prints a ticket to\n" +
-			"pick the answer up with.",
+			"pick the answer up with. --private keeps the result to that ticket: no\n" +
+			"note at the sending session's prompt, and `lich wait` without a ticket\n" +
+			"never returns it — for a subagent or workflow step inside a session.",
 	},
 	{
 		name: "wait",
@@ -56,7 +58,7 @@ var commands = []command{
 		name: "open",
 		args: "[--project <name-or-path>] [--kind <provider>] [--worktree <branch>]\n" +
 			"            [--base <branch>] [--model <model>] [--effort <level>] [--ultracode]\n" +
-			"            [--folder <name>] [--prompt <task>] [--json]",
+			"            [--folder <name>] [--prompt <task> [--private]] [--json]",
 		about: "Open a new session and start it. --project takes a project already open,\n" +
 			"by name, or the absolute path of a directory, which is opened as a\n" +
 			"project first — one lich closed comes back with the sessions it was\n" +
@@ -66,7 +68,8 @@ var commands = []command{
 			"--ultracode turns Claude Code's ultracode on, at whatever effort it runs.\n" +
 			"--folder files it under that sidebar folder from its first frame.\n" +
 			"--prompt hands the new session that task as soon as its agent is up, so\n" +
-			"opening a worker for a task is one command rather than two. Prints the\n" +
+			"opening a worker for a task is one command rather than two, and\n" +
+			"--private hands it over the way `send --private` does. Prints the\n" +
 			"name the new session is addressed by.",
 	},
 	{

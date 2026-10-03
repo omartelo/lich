@@ -169,7 +169,7 @@ hook (`docs/hooks/session-state.md`), and it is the same thing its card shows:
   Claude Code, and a session that has not had a turn yet has said nothing
   either), so an empty state says nothing about whether that session is free.
 
-### `lich send [--project <name>] [--timeout <seconds>] <session> <prompt>`
+### `lich send [--project <name>] [--timeout <seconds>] [--private] <session> <prompt>`
 
 Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
 
@@ -191,6 +191,10 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
 - `--timeout` bounds the wait in seconds. Default 100 — under the 120s an
   agent's shell tool typically allows a command, so the wait ends in an answer
   this side controls rather than a killed process. Capped at 30 minutes.
+- `--private` keeps the result to its ticket: no note is typed at the sending
+  session's prompt, the card does not count it, and `lich wait` without a ticket
+  never returns it. It is for a subagent or a workflow step running inside a
+  session, which reaches lich as that session (see below).
 - Answered: prints the answer alone, exit 0.
 - Not answered in time: the message was still delivered, so it says so and hands
   back a ticket, exit 2. **The answer is not lost by giving up on it** — see
@@ -301,7 +305,7 @@ lich: 2 requests are open against this session, and an answer that names no tick
 Outside a session, or with nothing open, it is an error rather than a guess, and
 the ticket is still the way to name a specific errand.
 
-### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--ultracode] [--folder <name>] [--prompt <task>]`
+### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--ultracode] [--folder <name>] [--prompt <task> [--private]]`
 
 Opens a new session, starts it, and prints the two names it is addressed by:
 
@@ -395,6 +399,8 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   and no flag to raise it: the worker was created a moment ago and its task is
   minutes of work, so a ticket is the expected outcome and the caller carries
   on. Waiting for the answer is `lich wait`'s job, and it takes the timeout.
+  `--private` hands it over the way `lich send --private` does, and is refused
+  without `--prompt`, before anything is opened.
 - `--folder` files the new session under that sidebar folder, written before the
   window hears of the session, so the card arrives in the folder's block instead
   of under its checkout. The name is matched exactly, as everywhere folders are
@@ -673,10 +679,10 @@ at lich.
 | Tool | What it does |
 |------|--------------|
 | `list_sessions` | The live sessions that can be given work, as JSON — each with the state it last reported, `waiting` among them. |
-| `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
+| `send_to_session` | `session`, `prompt`, optional `project`, `timeout_seconds` and `private` (`lich send --private`). |
 | `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
 | `reply_to_session` | `answer`, optional `ticket` — what a relayed message asks for; without a ticket, the one request open against the calling session, and a refusal naming each open ticket when there are two. |
-| `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model`, `effort`, `ultracode`, `folder` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
+| `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model`, `effort`, `ultracode`, `folder` — `lich open` — plus optional `prompt` and `private` — `lich open --prompt [--private]`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |
@@ -857,6 +863,34 @@ typed — delivering both would deliver twice.
 
 A sender that is not a session — the `lich` command from a script — is never
 nudged: its result waits in the inbox for `lich wait <ticket>`, or expires.
+
+### Private errands, for subagents and workflow steps
+
+Everything above is keyed by the sending **session**, and a subagent or a
+workflow step running inside a session reaches lich as that session: they share
+its `lich mcp` and its `LICH_SESSION_ID`, and nothing in an MCP call says which
+of them made it (Claude Code sends only `claudecode/toolUseId` and
+`progressToken`, measured on 2.1.288). So a step that sends an ordinary task
+has its result drained by any no-ticket collect from the session — a sibling
+step's, or the session agent's own — and announced at the session's prompt,
+waking an agent that did not send it.
+
+`private` (`--private` on the command line) is how such a caller keeps the
+errand to itself. Its result is held for the ticket alone: no note, no count on
+the card, never returned by a no-ticket collect, which also stops listing it as
+open. `wait_for_answer` with the ticket collects it, and holding the line on
+your own ticket is not polling. It expires with the ticket's TTL, silently.
+
+A workflow that fans work out to lich sessions therefore:
+
+1. Tells each step to open its worker with `open_session` (`worktree`,
+   `folder` set to the run's name so its cards stay together, `prompt`,
+   `private`), or to `send_to_session` with `private`.
+2. Has the step wait on its own ticket, in calls of up to 90 seconds, and
+   return the worker's report.
+3. Returns the tickets and the folder in its final output, so the session can
+   still collect a result with `wait_for_answer {ticket}` and close the workers
+   with `close_session` if the workflow dies mid-run.
 
 ## The message a target receives
 

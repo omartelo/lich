@@ -85,6 +85,13 @@ type mcpTool struct {
 	Run         func(ctx context.Context, c *client, args mcpArgs) (string, error)
 }
 
+// privateToolUsage describes the private argument of the two tools that hand a
+// session a task.
+const privateToolUsage = "Set this when you are a subagent or workflow step running inside " +
+	"a session rather than the session's own agent. The result is then yours alone: no " +
+	"[lich] note announces it, and wait_for_answer without a ticket never returns it — " +
+	"wait on this ticket to get it."
+
 // mcpInstructions is the server's own briefing, injected into the client's
 // system prompt at initialize. The tool descriptions each explain one door;
 // this is the only place the whole journey — fan out, carry on, collect — is
@@ -95,6 +102,8 @@ const mcpInstructions = `lich runs coding-agent sessions side by side in one win
 Delegate in parallel: for work that can run beside yours, open a worker session in its own git worktree (open_session with worktree) so it gets its own checkout, then hand it the task with send_to_session. Check list_worktrees first — a branch already checked out is opened, not created. Workers are full sessions on the user's screen: visible, steerable, and yours to close (close_session) when the work is done. That is the difference from the subagents your own harness runs, and it is what the user is asking for when they say to fan work out across branches or worktrees: a subagent has no checkout of its own and no card they can open, read or take over mid-task. Reach for one of those to read something and throw it away, not to run the implementation somebody asked to see.
 
 Never poll for results. A send that outlives its wait hands back a ticket and you carry on with your own work; when results are ready, one short [lich] note arrives at your prompt — collect everything at once with wait_for_answer (no ticket). That note only lands between your turns, so while a long turn of your own is running, look in with wait_for_answer and no_wait at the points where a result would change what you do next (before delegating more, after a long validation, before the final synthesis): it returns what is ready and who still owes one without waiting. One look per decision point: if nothing is ready, carry on. Calling it again in a loop is polling, and it burns the tokens this design exists to save.
+
+A subagent or workflow step running inside this session is not its agent, and lich cannot tell them apart: it sends and opens with private, then waits on its own tickets. The [lich] note and the no-ticket wait_for_answer belong to the session's own agent.
 
 When a [lich] message carrying a ticket arrives at YOUR prompt, you are the worker: do the task, then answer with ` + relay.ToolReply + ` — a concise report (what was done, where, what remains), never a transcript.`
 
@@ -424,12 +433,17 @@ var mcpTools = append([]mcpTool{
 				"Seconds to hold the line for a quick answer, at most 90 — longer is capped, "+
 					"because a call running past 120s is detached by the client and stops being a "+
 					"wait at all. Running out costs nothing: the answer arrives at your prompt."),
+			"private": property("boolean", privateToolUsage),
 		}, "session", "prompt"),
 		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
+			method := "relay.Send"
+			if args.flag("private") {
+				method = "relay.SendPrivate"
+			}
 			var result relay.Result
 			timeout := args.seconds("timeout_seconds")
 			call := []any{c.sessionID(), args.text("session"), args.text("project"), args.text("prompt"), timeout}
-			if err := c.call(ctx, "relay.Send", call, waitBudget(timeout), &result); err != nil {
+			if err := c.call(ctx, method, call, waitBudget(timeout), &result); err != nil {
 				return "", err
 			}
 			return mcpOutcome(result), nil
@@ -445,7 +459,8 @@ var mcpTools = append([]mcpTool{
 			"at the points where an answer would change your next step: before delegating " +
 			"more, after a long validation, before the final synthesis. Once per such point; " +
 			"if nothing is ready, carry on, never call it again in a loop. With a ticket it " +
-			"waits on that one errand.",
+			"waits on that one errand, and a ticket sent private is collected that way only: " +
+			"holding the line on it is not polling.",
 		Schema: schema(map[string]any{
 			"ticket": property("string",
 				"A ticket send_to_session returned. Omit to collect everything that is ready."),
@@ -525,8 +540,18 @@ var mcpTools = append([]mcpTool{
 				"Task to hand the new session as soon as its agent is up. Omit to open it idle "+
 					"and send later. Capped at 8 KB, like send_to_session: name what to read, "+
 					"do not paste it."),
+			"private": property("boolean", privateToolUsage+" Applies to the task handed over with prompt."),
 		}),
 		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
+			prompt := args.text("prompt")
+			// Refused before anything is opened, as `lich open --private` is.
+			if args.flag("private") && prompt == "" {
+				return "", fmt.Errorf("private applies to the task handed over with prompt: add a prompt, or drop private")
+			}
+			method := "relay.Send"
+			if args.flag("private") {
+				method = "relay.SendPrivate"
+			}
 			var opened spawn.Session
 			call := []any{
 				c.sessionID(), args.text("project"), args.text("kind"),
@@ -536,11 +561,10 @@ var mcpTools = append([]mcpTool{
 			if err := c.call(ctx, "spawn.Open", call, openCall, &opened); err != nil {
 				return "", err
 			}
-			prompt := args.text("prompt")
 			if prompt == "" {
 				return openedText(opened), nil
 			}
-			return openedText(opened) + "\n" + c.handOver(ctx, opened, prompt), nil
+			return openedText(opened) + "\n" + c.handOver(ctx, opened, prompt, method), nil
 		},
 	},
 	{
@@ -659,13 +683,17 @@ var mcpTools = append([]mcpTool{
 // failed call. The session exists either way, and a failed call would read as if
 // nothing had happened — leaving an agent that opens three workers convinced it
 // has none.
-func (c *client) handOver(ctx context.Context, opened spawn.Session, prompt string) string {
-	result, err := c.deliver(ctx, opened, prompt)
+func (c *client) handOver(ctx context.Context, opened spawn.Session, prompt, method string) string {
+	result, err := c.deliver(ctx, opened, prompt, method)
 	if err != nil {
+		send := "send_to_session"
+		if method == "relay.SendPrivate" {
+			send = "send_to_session with private"
+		}
 		return fmt.Sprintf(
 			"The task did not reach it: %v. The session is open, so hand it the task with "+
-				"send_to_session once whatever that says is dealt with.",
-			err,
+				"%s once whatever that says is dealt with.",
+			err, send,
 		)
 	}
 	return mcpOutcome(result)
@@ -684,6 +712,14 @@ func mcpOutcome(result relay.Result) string {
 		return unreadText(result.Target)
 	case relay.StatusUndelivered:
 		return undeliveredText(result.Target)
+	}
+	if result.Private {
+		return fmt.Sprintf(
+			"%s is still working. The errand is private: no note will announce its result and "+
+				"wait_for_answer without a ticket never returns it. Call wait_for_answer with "+
+				"ticket %q to hold the line for it — waiting on your own ticket is not polling.",
+			result.Target, result.Ticket,
+		)
 	}
 	return fmt.Sprintf(
 		"%s is still working. The errand is open — if that session was not at a prompt yet, "+
