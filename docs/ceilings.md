@@ -416,8 +416,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   no-ticket collect can take its result and the note lands at the session's prompt, both measured on 2026-10-03.
   A private result is announced nowhere, so only its ticket recovers it and it expires silently with the ticket's
   hour. It covers tickets, not ownership: the sessions and worktrees a step opens still come from the session, their
-  marks and stalled toasts land on its card, and closing them is the workflow's own job. opencode's plugin tools
-  take no `private` until lich-plugin passes it through; its agents reach it with `lich send --private` meanwhile.
+  marks and stalled toasts land on its card, and closing them is the workflow's own job. opencode's
+  `send_to_session` takes `private` from lich-plugin 0.13.2; its `open_session` takes no task at all, so a private
+  hand-off at open is `lich open --prompt --private` there.
 - **A relayed Enter is timed against silence, not against the target** (`internal/relay`, `awaitSettled`): lich
   presses Enter once the target's PTY has been quiet for `defaultSubmitDelay`, because nothing here can read a TUI's
   screen to know it has taken the paste in. The window that opens on the target's own keyboard is closed rather
