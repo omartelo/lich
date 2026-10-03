@@ -70,6 +70,20 @@ const callSlack = 30 * time.Second
 // shortCall bounds the commands that do not wait on another session.
 const shortCall = 10 * time.Second
 
+// The two RPC methods that hand a session a task: an ordinary send, and one
+// whose result is kept to its ticket (relay.SendPrivate).
+const (
+	relaySend        = "relay.Send"
+	relaySendPrivate = "relay.SendPrivate"
+)
+
+func sendMethod(private bool) string {
+	if private {
+		return relaySendPrivate
+	}
+	return relaySend
+}
+
 // privateFlagUsage describes --private on the two commands that hand a session a
 // task.
 const privateFlagUsage = "keep the result to this ticket: no note at the sending session's " +
@@ -300,10 +314,7 @@ func (c *client) send(args []string) error {
 		return usageError("send")
 	}
 
-	method := "relay.Send"
-	if *private {
-		method = "relay.SendPrivate"
-	}
+	method := sendMethod(*private)
 	var result relay.Result
 	call := []any{c.sessionID(), flags.Arg(0), *project, flags.Arg(1), *timeout}
 	if err := c.call(context.Background(), method, call, waitBudget(*timeout), &result); err != nil {
@@ -471,10 +482,7 @@ func (c *client) open(args []string) error {
 	if *private && *prompt == "" {
 		return fmt.Errorf("--private applies to the task handed over with --prompt: add a prompt, or drop --private")
 	}
-	method := "relay.Send"
-	if *private {
-		method = "relay.SendPrivate"
-	}
+	method := sendMethod(*private)
 
 	var opened spawn.Session
 	call := []any{c.sessionID(), *project, *kind, *worktree, *base, *model, *effort, *folder, *ultracode}
@@ -522,7 +530,7 @@ func (c *client) handOff(opened spawn.Session, prompt, method string) (*relay.Re
 	result, err := c.deliver(context.Background(), opened, prompt, method)
 	if err != nil {
 		send := "lich send"
-		if method == "relay.SendPrivate" {
+		if method == relaySendPrivate {
 			send = "lich send --private"
 		}
 		return nil, fmt.Errorf(

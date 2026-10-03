@@ -436,10 +436,7 @@ var mcpTools = append([]mcpTool{
 			"private": property("boolean", privateToolUsage),
 		}, "session", "prompt"),
 		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
-			method := "relay.Send"
-			if args.flag("private") {
-				method = "relay.SendPrivate"
-			}
+			method := sendMethod(args.flag("private"))
 			var result relay.Result
 			timeout := args.seconds("timeout_seconds")
 			call := []any{c.sessionID(), args.text("session"), args.text("project"), args.text("prompt"), timeout}
@@ -548,10 +545,7 @@ var mcpTools = append([]mcpTool{
 			if args.flag("private") && prompt == "" {
 				return "", fmt.Errorf("private applies to the task handed over with prompt: add a prompt, or drop private")
 			}
-			method := "relay.Send"
-			if args.flag("private") {
-				method = "relay.SendPrivate"
-			}
+			method := sendMethod(args.flag("private"))
 			var opened spawn.Session
 			call := []any{
 				c.sessionID(), args.text("project"), args.text("kind"),
@@ -687,7 +681,7 @@ func (c *client) handOver(ctx context.Context, opened spawn.Session, prompt, met
 	result, err := c.deliver(ctx, opened, prompt, method)
 	if err != nil {
 		send := "send_to_session"
-		if method == "relay.SendPrivate" {
+		if method == relaySendPrivate {
 			send = "send_to_session with private"
 		}
 		return fmt.Sprintf(
