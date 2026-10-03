@@ -63,6 +63,7 @@ func (s *Service) Start(
 	}
 	if fork {
 		s.recordForkCost(id, kind, resume)
+		s.inheritUltracode(id, resume)
 	}
 	// Resolved before the lock, because it reads a file: the conversation this
 	// spawn replaces is still on the row until its successor reports, so a name
@@ -125,6 +126,7 @@ func (s *Service) spawnSession(
 		mcpBin = lichBin()
 	}
 	skipPermissions := s.store.SkipPermissions(kind, projectID, cwd)
+	ultracode := s.store.Ultracode(kind) || s.store.SessionUltracode(id)
 	// The model and effort are read from the row rather than passed in, so every
 	// spawn that starts a conversation of its own gets them: the window's first
 	// view and a restart. A resume leaves them to the provider (modelArgs).
@@ -132,7 +134,7 @@ func (s *Service) spawnSession(
 		bin: resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
 		args: providerArgs(
 			kind, name, resume, s.store.SessionModel(id), s.store.SessionEffort(id), mcpBin,
-			kiroPluginAgent(kind), fork, skipPermissions,
+			kiroPluginAgent(kind), fork, skipPermissions, ultracode,
 		),
 		dir:  cwd,
 		env:  s.sessionEnv(id, projectID, cwd),

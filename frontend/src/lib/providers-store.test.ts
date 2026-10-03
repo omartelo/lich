@@ -23,6 +23,8 @@ import {
   skipLevelPair,
   skipPermissionFlags,
   skipPermissionsKey,
+  supportsUltracode,
+  ultracodeKey,
   SANDBOX_RISK_ORDER,
   SKIP_RISK_ORDER,
   type ProviderState,
@@ -53,6 +55,27 @@ describe("provider setting keys", () => {
   it("keys the skip-permissions flag per provider and checkout scope", () => {
     expect(skipPermissionsKey("claude", false)).toBe("provider.claude.skip-permissions")
     expect(skipPermissionsKey("claude", true)).toBe("provider.claude.skip-permissions.worktree")
+  })
+
+  // The Go spawn reads this exact string (store.ultracodeKey).
+  it("keys the ultracode flag per provider", () => {
+    expect(ultracodeKey("claude")).toBe("provider.claude.ultracode")
+  })
+
+  it("offers ultracode on Claude Code alone, as terminal.SupportsUltracode does", () => {
+    expect(supportsUltracode("claude")).toBe(true)
+    for (const id of [
+      "codex",
+      "antigravity",
+      "opencode",
+      "omp",
+      "crush",
+      "cursor",
+      "kiro",
+      "shell",
+    ]) {
+      expect(supportsUltracode(id)).toBe(false)
+    }
   })
 
   // Pinned literals, not a read-back of the map: this string is printed to the

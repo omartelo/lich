@@ -48,9 +48,18 @@ type stubBins struct {
 	ghToken         bool
 	ghAccount       string
 	skipPerms       bool
-	costOn          bool
-	ledgers         map[string]stubLedger
-	ports           map[string]int
+	ultracode       bool
+	// sessionUltracode is the per-session flag a session opened with ultracode
+	// carries on its row, apart from the provider-wide ultracode above.
+	sessionUltracode bool
+	// ultracodeParents are the conversations whose session runs ultracode, the
+	// rows store.InheritUltracode looks a fork's parent up in.
+	ultracodeParents map[string]bool
+	// inherited records the forks InheritUltracode turned ultracode on for.
+	inherited map[string]bool
+	costOn    bool
+	ledgers   map[string]stubLedger
+	ports     map[string]int
 	// Whole seconds per session, the shape store.AddHandsOn accumulates into.
 	// Nil until a test cares: the flush only ever writes for a session the
 	// accumulator actually counted something for.
@@ -113,6 +122,17 @@ func (s stubBins) SkipPermissions(_, _, _ string) bool { return s.skipPerms }
 func (s stubBins) ProjectPath(_ string) string         { return s.projectPath }
 func (s stubBins) SessionModel(_ string) string        { return s.model }
 func (s stubBins) SessionEffort(_ string) string       { return s.effort }
+func (s stubBins) Ultracode(_ string) bool             { return s.ultracode }
+func (s stubBins) SessionUltracode(id string) bool {
+	return s.sessionUltracode || s.inherited[id]
+}
+
+func (s stubBins) InheritUltracode(sessionID, forkedFrom string) error {
+	if s.ultracodeParents[forkedFrom] {
+		s.inherited[sessionID] = true
+	}
+	return nil
+}
 func (s stubBins) SessionEntrypoint(_ string) string   { return s.entrypoint }
 func (s stubBins) SessionSandbox(_ string) string      { return s.sandbox }
 func (s stubBins) SetSessionSandbox(_, _ string) error { return nil }
@@ -1268,7 +1288,7 @@ func spawnPins(t *testing.T, got []string, want ...string) {
 func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 	const bin = "/usr/bin/lich"
 
-	claude := providerArgs(providers.Claude, "", "", "", "", bin, "", false, false)
+	claude := providerArgs(providers.Claude, "", "", "", "", bin, "", false, false, false)
 	at := slices.Index(claude, "--mcp-config")
 	if at < 0 || at+1 >= len(claude) {
 		t.Fatalf("claude args = %v", claude)
@@ -1293,7 +1313,7 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 		t.Errorf("a secret reached the argv, which /proc exposes: %q", claude[at+1])
 	}
 
-	codex := providerArgs(providers.Codex, "", "", "", "", bin, "", false, false)
+	codex := providerArgs(providers.Codex, "", "", "", "", bin, "", false, false, false)
 	want := []string{
 		"-c", `mcp_servers.lich.command="/usr/bin/lich"`,
 		"-c", `mcp_servers.lich.args=["mcp"]`,
@@ -1308,7 +1328,7 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 // follows it, and Codex reads resume as a subcommand that every global option
 // must precede.
 func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
-	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "", "", "/usr/bin/lich", "", false, true)
+	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "", "", "/usr/bin/lich", "", false, true, false)
 	if claude[len(claude)-2] != "--mcp-config" {
 		t.Errorf("--mcp-config is not last, so it eats what follows: %v", claude)
 	}
@@ -1320,7 +1340,7 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 
 	// A resuming session is not named (nameArgs), so --name is pinned on the
 	// spawn that carries it: a session being born.
-	born := providerArgs(providers.Claude, "lich-4f2a", "", "", "", "/usr/bin/lich", "", false, true)
+	born := providerArgs(providers.Claude, "lich-4f2a", "", "", "", "/usr/bin/lich", "", false, true, false)
 	if born[len(born)-2] != "--mcp-config" {
 		t.Errorf("--mcp-config is not last, so it eats what follows: %v", born)
 	}
@@ -1328,7 +1348,7 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 		t.Errorf("claude args lost --name: %v", born)
 	}
 
-	codex := providerArgs(providers.Codex, "", "conv-1", "", "", "/usr/bin/lich", "", false, false)
+	codex := providerArgs(providers.Codex, "", "conv-1", "", "", "/usr/bin/lich", "", false, false, false)
 	resume := slices.Index(codex, "resume")
 	if resume < 0 {
 		t.Fatalf("codex args lost the resume subcommand: %v", codex)
@@ -1367,7 +1387,7 @@ func TestModelAndEffortAreBirthValues(t *testing.T) {
 			t.Errorf("%s at birth = %v, want %v", tc.kind, born, tc.born)
 		}
 		for _, fork := range []bool{false, true} {
-			args := providerArgs(tc.kind, "", "conv-1", tc.model, tc.effort, "", "", fork, false)
+			args := providerArgs(tc.kind, "", "conv-1", tc.model, tc.effort, "", "", fork, false, false)
 			for _, flag := range tc.born {
 				if slices.Contains(args, flag) {
 					t.Errorf("%s resume (fork=%v) = %v, carries birth value %q", tc.kind, fork, args, flag)
@@ -1399,7 +1419,7 @@ func TestProviderArgsWithoutARegistration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := providerArgs(tt.kind, "", "", "", "", tt.bin, "", false, false)
+			args := providerArgs(tt.kind, "", "", "", "", tt.bin, "", false, false, false)
 			if tt.bare && len(args) != 0 {
 				t.Errorf("args = %v, want none", args)
 			}
@@ -1424,7 +1444,7 @@ func TestTheBriefingGoesToTheProvidersThatTakeOne(t *testing.T) {
 	}
 	for kind, want := range briefed {
 		t.Run(kind, func(t *testing.T) {
-			args := providerArgs(kind, "", "", "", "", "/usr/bin/lich", "", false, false)
+			args := providerArgs(kind, "", "", "", "", "/usr/bin/lich", "", false, false, false)
 			flag := slices.Index(args, "--append-system-prompt")
 			if flag < 0 || flag+1 >= len(args) {
 				t.Fatalf("args = %v, want a briefing", args)
@@ -1437,7 +1457,7 @@ func TestTheBriefingGoesToTheProvidersThatTakeOne(t *testing.T) {
 
 	for _, kind := range []string{providers.Codex, providers.OpenCode, providers.Crush, KindShell} {
 		t.Run(kind+" takes none", func(t *testing.T) {
-			args := providerArgs(kind, "", "", "", "", "/usr/bin/lich", "", false, false)
+			args := providerArgs(kind, "", "", "", "", "/usr/bin/lich", "", false, false, false)
 			if slices.Contains(args, "--append-system-prompt") {
 				t.Errorf("args = %v, want no briefing: %s has no flag that appends one", args, kind)
 			}

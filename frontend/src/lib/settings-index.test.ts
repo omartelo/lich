@@ -111,6 +111,14 @@ describe("the blocks that exist once per provider", () => {
     expect(titles).toContain("Default provider")
   })
 
+  // Ultracode lives on Claude Code's screen only, so no other provider gets a
+  // result that opens a screen without it.
+  it("narrows a block that one provider has to that provider", () => {
+    const hits = expandEntries(PROVIDERS).filter((hit) => hit.title === "Ultracode")
+
+    expect(hits.map((hit) => hit.providerId)).toEqual(["claude"])
+  })
+
   it("leaves every other entry alone", () => {
     expect(expandEntries(PROVIDERS).filter((hit) => hit.title === "Zoom")).toHaveLength(1)
   })

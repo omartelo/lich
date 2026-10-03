@@ -159,10 +159,11 @@ func ticketFrom(term *wiredTerminal) string {
 
 // spawnStore is the workspace `lich open` writes into, over the real dispatcher.
 type spawnStore struct {
-	mu     sync.Mutex
-	rows   int
-	model  string
-	effort string
+	mu        sync.Mutex
+	rows      int
+	model     string
+	effort    string
+	ultracode bool
 	// renamed is the session id and label the last rename wrote.
 	renamed [2]string
 	// filed is the session id and folder the last filing wrote, and refolded
@@ -198,6 +199,13 @@ func (s *spawnStore) SetSessionEffort(_, effort string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.effort = effort
+	return nil
+}
+
+func (s *spawnStore) SetSessionUltracode(_ string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ultracode = true
 	return nil
 }
 
@@ -317,7 +325,7 @@ func wiredSpawn(t *testing.T, git *spawnGit) (func(string) string, *spawnStore, 
 	return sessionEnv(port), rows, term
 }
 
-// TestOpenOverTheRealDispatcher proves the eight arguments `lich open` posts land
+// TestOpenOverTheRealDispatcher proves the nine arguments `lich open` posts land
 // on spawn.Open in the order it declares them — a positional mismatch here would
 // otherwise open a session in a project named after a provider.
 func TestOpenOverTheRealDispatcher(t *testing.T) {
@@ -345,6 +353,27 @@ func TestOpenOverTheRealDispatcher(t *testing.T) {
 	}
 	if rows.filed[1] != "Apps" {
 		t.Errorf("filed = %v, want the new session under the folder the flag named", rows.filed)
+	}
+}
+
+// TestOpenUltracodeOverTheRealDispatcher proves the trailing boolean lands on
+// spawn.Open's ultracode, the one argument the codex case above cannot carry.
+func TestOpenUltracodeOverTheRealDispatcher(t *testing.T) {
+	env, rows, term := wiredSpawn(t, &spawnGit{})
+
+	var stdout, stderr bytes.Buffer
+	args := []string{"open", "--kind", "claude", "--effort", "medium", "--ultracode"}
+	if code := Run(args, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if term.kind != "claude" {
+		t.Errorf("started %q, want claude", term.kind)
+	}
+	if !rows.ultracode {
+		t.Error("row ultracode = false, want the flag recorded")
+	}
+	if rows.effort != "medium" {
+		t.Errorf("row effort = %q, want medium beside ultracode", rows.effort)
 	}
 }
 

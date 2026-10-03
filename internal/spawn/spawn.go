@@ -87,6 +87,7 @@ type Sessions interface {
 	SandboxDefault(providerID, projectID, cwd string) bool
 	SetSessionModel(sessionID, model string) error
 	SetSessionEffort(sessionID, effort string) error
+	SetSessionUltracode(sessionID string) error
 	SetRunEntrypoint(sessionID, entrypoint string) error
 	RenameSession(sessionID, label string) error
 	SetSessionFolder(sessionID, folder string) error
@@ -201,10 +202,14 @@ func New(sessions Sessions, worktrees Worktrees, term Terminal, events Events) *
 // model, when given, is the model the provider is spawned on, in that provider's
 // own spelling. It is recorded on the row so every later spawn repeats it.
 // effort, when given, is the reasoning effort, passed and recorded the same way.
+// ultracode turns Claude Code's ultracode on, at whatever effort the session
+// runs; it is recorded the same way, and refused for every other provider.
 //
 // folder, when given, is the folder the session is filed under from its first
 // frame (see fileOpened).
-func (s *Service) Open(fromID, projectName, kind, worktree, base, model, effort, folder string) (Session, error) {
+func (s *Service) Open(
+	fromID, projectName, kind, worktree, base, model, effort, folder string, ultracode bool,
+) (Session, error) {
 	if base != "" && worktree == "" {
 		return Session{}, fmt.Errorf(
 			"a base is the branch a new worktree starts from, and no worktree was asked "+
@@ -232,7 +237,7 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model, effort,
 		return Session{}, err
 	}
 	model, effort, folder = strings.TrimSpace(model), strings.TrimSpace(effort), strings.TrimSpace(folder)
-	if err := checkOverrides(kind, model, effort); err != nil {
+	if err := checkOverrides(kind, model, effort, ultracode); err != nil {
 		return Session{}, err
 	}
 
@@ -279,7 +284,7 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model, effort,
 	// which is the state this package exists to prevent; the spawn below reads
 	// the model back from the row, so the session starts on the provider's own
 	// default and the failure is reported once it is running.
-	overrideErr := s.recordOverrides(id, label, model, effort)
+	overrideErr := s.recordOverrides(id, label, model, effort, ultracode)
 	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, false, at.setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)
 	}
@@ -307,9 +312,10 @@ func (s *Service) fileOpened(opened *Session, folder string) error {
 	return nil
 }
 
-// checkOverrides refuses a model or effort the provider would silently drop,
-// so the caller hears about it instead of getting a session on its defaults.
-func checkOverrides(kind, model, effort string) error {
+// checkOverrides refuses a model, effort or ultracode the provider would
+// silently drop, so the caller hears about it instead of getting a session on
+// its defaults.
+func checkOverrides(kind, model, effort string, ultracode bool) error {
 	if model != "" && !terminal.SupportsModel(kind) {
 		return fmt.Errorf(
 			"%s cannot be told which model to run when lich starts it — open the session without a model and pick one inside it",
@@ -322,12 +328,18 @@ func checkOverrides(kind, model, effort string) error {
 			kindName(kind),
 		)
 	}
+	if ultracode && !terminal.SupportsUltracode(kind) {
+		return fmt.Errorf(
+			"%s has no ultracode: only Claude Code sessions can be opened with it",
+			kindName(kind),
+		)
+	}
 	return nil
 }
 
-// recordOverrides writes the model and effort a session was opened with onto
-// its row, where every later spawn reads them back.
-func (s *Service) recordOverrides(id, label, model, effort string) error {
+// recordOverrides writes the model, effort and ultracode a session was opened
+// with onto its row, where every later spawn reads them back.
+func (s *Service) recordOverrides(id, label, model, effort string, ultracode bool) error {
 	if model != "" {
 		if err := s.sessions.SetSessionModel(id, model); err != nil {
 			return overrideNotRecorded(label, "model", err)
@@ -336,6 +348,11 @@ func (s *Service) recordOverrides(id, label, model, effort string) error {
 	if effort != "" {
 		if err := s.sessions.SetSessionEffort(id, effort); err != nil {
 			return overrideNotRecorded(label, "reasoning effort", err)
+		}
+	}
+	if ultracode {
+		if err := s.sessions.SetSessionUltracode(id); err != nil {
+			return overrideNotRecorded(label, "ultracode", err)
 		}
 	}
 	return nil

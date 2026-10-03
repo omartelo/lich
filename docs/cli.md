@@ -301,7 +301,7 @@ lich: 2 requests are open against this session, and an answer that names no tick
 Outside a session, or with nothing open, it is an error rather than a guess, and
 the ticket is still the way to name a specific errand.
 
-### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--folder <name>] [--prompt <task>]`
+### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--ultracode] [--folder <name>] [--prompt <task>]`
 
 Opens a new session, starts it, and prints the two names it is addressed by:
 
@@ -382,6 +382,12 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   `shell` are refused**: opencode and Crush have no such flag on the TUI lich
   spawns, and Cursor names the effort inside the model id
   (`claude-opus-4-8-high`), so pass that as `--model` instead.
+- `--ultracode` turns Claude Code's ultracode on, at whatever effort the session
+  runs, by passing `--settings '{"ultracode":true}'`. Unlike the model and
+  effort it is passed on every spawn, a resume included, because Claude Code
+  drops ultracode on `--resume`. **Every other kind is refused**: ultracode is
+  Claude Code's alone. To turn it on for every Claude session, use Settings ›
+  Providers › Claude Code instead.
 - `--prompt` hands the new session that task as soon as its agent is up, so
   opening a worker *for* a task is one command rather than `open` then `send`.
   It is the same delivery `lich send` makes — a worker still running its setup
@@ -670,7 +676,7 @@ at lich.
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
 | `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
 | `reply_to_session` | `answer`, optional `ticket` — what a relayed message asks for; without a ticket, the one request open against the calling session, and a refusal naming each open ticket when there are two. |
-| `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model`, `folder` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
+| `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model`, `effort`, `ultracode`, `folder` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |

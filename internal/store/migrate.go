@@ -16,6 +16,7 @@ var migrations = []func(*sql.Tx) error{
 	legacyMigrations,
 	addSessionEffort,
 	addSessionFolder,
+	addSessionUltracode,
 }
 
 // addSessionEffort is version 2: the reasoning effort a session was opened at,
@@ -42,6 +43,14 @@ func addSessionFolder(tx *sql.Tx) error {
 	if err != nil && migrationApplied(err) {
 		return nil
 	}
+	return err
+}
+
+// addSessionUltracode is version 4: whether a session was opened with Claude
+// Code's ultracode on (SetSessionUltracode). A flag rather than a birth value
+// like the model, because Claude Code forgets it on --resume.
+func addSessionUltracode(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE sessions ADD COLUMN ultracode INTEGER NOT NULL DEFAULT 0`)
 	return err
 }
 

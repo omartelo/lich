@@ -512,6 +512,10 @@ var mcpTools = append([]mcpTool{
 					"takes it (low, medium, high, and whatever else it lists). Omit to leave the "+
 					"provider on its default. opencode, Crush, Cursor and shell sessions cannot be "+
 					"given one; on Cursor the effort is part of the model name."),
+			"ultracode": property("boolean",
+				"Turn Claude Code's ultracode on for the new session: standing multi-agent "+
+					"workflow orchestration, at whatever effort it runs. It stays on across "+
+					"the session's restarts. Claude sessions only; omit to leave it off."),
 			"folder": property("string",
 				"Sidebar folder to file the new session under from its first frame, which is how "+
 					"a set of workers opened for one piece of work stays together on the user's "+
@@ -527,7 +531,7 @@ var mcpTools = append([]mcpTool{
 			call := []any{
 				c.sessionID(), args.text("project"), args.text("kind"),
 				args.text("worktree"), args.text("base"), args.text("model"),
-				args.text("effort"), args.text("folder"),
+				args.text("effort"), args.text("folder"), args.flag("ultracode"),
 			}
 			if err := c.call(ctx, "spawn.Open", call, openCall, &opened); err != nil {
 				return "", err

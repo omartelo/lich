@@ -158,6 +158,23 @@ func SupportsEffort(kind string) bool {
 	return ok || kind == providers.Codex
 }
 
+// claudeSettingsFlag hands Claude Code a settings document for this run only,
+// and claudeUltracodeSettings is the one that turns ultracode on at whatever
+// effort the session runs. `--effort ultracode` would do it too, but pins the
+// effort to xhigh. The `ultracode` key is documented in the settings schema
+// 2.1.288 ships ("typically provided via --settings"), and Claude Code drops it
+// on --resume (measured on 2.1.288), so lich passes it on every spawn.
+const (
+	claudeSettingsFlag      = "--settings"
+	claudeUltracodeSettings = `{"ultracode":true}`
+)
+
+// SupportsUltracode reports whether a provider has an ultracode to turn on.
+// Claude Code is the only one.
+func SupportsUltracode(kind string) bool {
+	return kind == providers.Claude
+}
+
 // briefingFlags is how each provider spells "append this to your system
 // prompt", for the two that spell it at all: Claude Code and oh-my-pi share
 // --append-system-prompt (read off both `--help`, like every other table here).
@@ -292,7 +309,7 @@ func flagValue(value string) (string, bool) {
 // come last. Kiro's subcommand opens the session rather than a conversation, so
 // it comes before every flag.
 func providerArgs(
-	kind, name, resume, model, effort, lichBin, agent string, fork, skipPermissions bool,
+	kind, name, resume, model, effort, lichBin, agent string, fork, skipPermissions, ultracode bool,
 ) []string {
 	mcp := mcpArgs(kind, lichBin)
 	args := append([]string{}, subcommandArgs(kind)...)
@@ -302,6 +319,7 @@ func providerArgs(
 	args = append(args, skipPermissionArgs(kind, skipPermissions)...)
 	args = append(args, modelArgs(kind, model, resume)...)
 	args = append(args, effortArgs(kind, effort, resume)...)
+	args = append(args, ultracodeArgs(kind, ultracode)...)
 	args = append(args, briefingArgs(kind)...)
 	if kind == providers.Codex {
 		return append(mcp, args...)
@@ -379,6 +397,16 @@ func effortArgs(kind, effort, resume string) []string {
 		return nil
 	}
 	return []string{flag, effort}
+}
+
+// ultracodeArgs returns the arguments that turn ultracode on, or nil when it is
+// off or the provider has none. Unlike the model and effort it is passed on a
+// resume too: Claude Code forgets it there, so leaving it out would drop it.
+func ultracodeArgs(kind string, on bool) []string {
+	if !on || !SupportsUltracode(kind) {
+		return nil
+	}
+	return []string{claudeSettingsFlag, claudeUltracodeSettings}
 }
 
 // briefingArgs returns the arguments that append lich's own briefing to a

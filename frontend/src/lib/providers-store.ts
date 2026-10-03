@@ -64,6 +64,19 @@ export const skipPermissionFlags: Record<string, string> = {
   kiro: "--trust-all-tools",
 }
 
+// ultracodeKey holds the flag that spawns every session of a provider with
+// ultracode on (mirrors store.ultracodeKey in Go, which is what the spawn
+// reads). Global only, like skipPermissionsKey.
+export function ultracodeKey(id: string): string {
+  return `provider.${id}.ultracode`
+}
+
+// supportsUltracode mirrors terminal.SupportsUltracode in Go: Claude Code is the
+// only provider with an ultracode, so Settings offers the switch there alone.
+export function supportsUltracode(id: string): boolean {
+  return id === "claude"
+}
+
 // How far a provider runs without asking, as one ladder ordered by risk. The
 // two settings keys stay exactly as they are — this is the shape the user
 // chooses in, not the shape lich stores.

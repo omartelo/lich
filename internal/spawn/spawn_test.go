@@ -39,6 +39,9 @@ type fakeSessions struct {
 	// efforts records the reasoning effort written on each session row.
 	efforts   map[string]string
 	effortErr error
+	// ultracodes records each session row ultracode was turned on for.
+	ultracodes   map[string]bool
+	ultracodeErr error
 	// entrypoints records the run command written on each session row, keyed by
 	// session id. Only a Run card gets one from this service, so a row in here is
 	// also a row marked as one.
@@ -218,6 +221,17 @@ func (f *fakeSessions) SetSessionEffort(sessionID, effort string) error {
 	return nil
 }
 
+func (f *fakeSessions) SetSessionUltracode(sessionID string) error {
+	if f.ultracodeErr != nil {
+		return f.ultracodeErr
+	}
+	if f.ultracodes == nil {
+		f.ultracodes = map[string]bool{}
+	}
+	f.ultracodes[sessionID] = true
+	return nil
+}
+
 func (f *fakeSessions) SetRunEntrypoint(sessionID, entrypoint string) error {
 	if f.entrypointErr != nil {
 		return f.entrypointErr
@@ -361,7 +375,7 @@ func newService(t *testing.T) (*Service, *fakeSessions, *fakeWorktrees, *fakeTer
 func TestOpenLandsInTheCallersProject(t *testing.T) {
 	svc, sessions, _, term, events := newService(t)
 
-	opened, err := svc.Open("s1", "", "", "", "", "", "", "")
+	opened, err := svc.Open("s1", "", "", "", "", "", "", "", false)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -415,7 +429,7 @@ func TestOpenLandsInTheCallersProject(t *testing.T) {
 func TestOpenInheritsTheCallersKind(t *testing.T) {
 	svc, _, _, term, _ := newService(t)
 
-	if _, err := svc.Open("s1", "", "", "", "", "", "", ""); err != nil {
+	if _, err := svc.Open("s1", "", "", "", "", "", "", "", false); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if got := term.spawns[0].kind; got != "codex" {
@@ -426,7 +440,7 @@ func TestOpenInheritsTheCallersKind(t *testing.T) {
 func TestOpenTakesANamedProjectAndKind(t *testing.T) {
 	svc, sessions, _, term, _ := newService(t)
 
-	opened, err := svc.Open("s1", "revu", "shell", "", "", "", "", "")
+	opened, err := svc.Open("s1", "revu", "shell", "", "", "", "", "", false)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -447,7 +461,7 @@ func TestOpenTakesANamedProjectAndKind(t *testing.T) {
 func TestOpenWithoutASessionOrAProjectSaysWhatToDo(t *testing.T) {
 	svc, _, _, term, _ := newService(t)
 
-	_, err := svc.Open("", "", "", "", "", "", "", "")
+	_, err := svc.Open("", "", "", "", "", "", "", "", false)
 	if err == nil {
 		t.Fatal("opened a session with nothing to open it in")
 	}
@@ -464,7 +478,7 @@ func TestOpenWithoutASessionOrAProjectSaysWhatToDo(t *testing.T) {
 func TestOpenRefusesAnUnknownProject(t *testing.T) {
 	svc, sessions, _, _, _ := newService(t)
 
-	if _, err := svc.Open("s1", "nope", "", "", "", "", "", ""); err == nil {
+	if _, err := svc.Open("s1", "nope", "", "", "", "", "", "", false); err == nil {
 		t.Fatal("opened a session in a project that is not open")
 	}
 	if len(sessions.rows) != 0 {
@@ -475,7 +489,7 @@ func TestOpenRefusesAnUnknownProject(t *testing.T) {
 func TestOpenRefusesAnUnknownKind(t *testing.T) {
 	svc, sessions, _, _, _ := newService(t)
 
-	_, err := svc.Open("s1", "", "gemini", "", "", "", "", "")
+	_, err := svc.Open("s1", "", "gemini", "", "", "", "", "", false)
 	if err == nil {
 		t.Fatal("opened a session running a provider lich does not know")
 	}
@@ -493,7 +507,7 @@ func TestOpenRefusesAnUnknownKind(t *testing.T) {
 func TestOpenRecordsTheModelOnTheRow(t *testing.T) {
 	svc, sessions, _, _, _ := newService(t)
 
-	opened, err := svc.Open("s1", "", "claude", "", "", "opus", "", "")
+	opened, err := svc.Open("s1", "", "claude", "", "", "opus", "", "", false)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -512,7 +526,7 @@ func TestOpenAnnouncesTheCardEvenWhenTheModelCannotBeRecorded(t *testing.T) {
 	svc, sessions, _, term, events := newService(t)
 	sessions.modelErr = errors.New("database is locked")
 
-	if _, err := svc.Open("s1", "", "claude", "", "", "opus", "", ""); err == nil {
+	if _, err := svc.Open("s1", "", "claude", "", "", "opus", "", "", false); err == nil {
 		t.Fatal("Open: want the write error reported, got nil")
 	}
 	if len(sessions.rows) != 1 {
@@ -536,7 +550,7 @@ func TestOpenAnnouncesTheCardEvenWhenTheModelCannotBeRecorded(t *testing.T) {
 func TestOpenWithoutAModelWritesNone(t *testing.T) {
 	svc, sessions, _, _, _ := newService(t)
 
-	if _, err := svc.Open("s1", "", "claude", "", "", "", "", ""); err != nil {
+	if _, err := svc.Open("s1", "", "claude", "", "", "", "", "", false); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if len(sessions.models) != 0 {
@@ -550,7 +564,7 @@ func TestOpenWithoutAModelWritesNone(t *testing.T) {
 func TestOpenRecordsTheCallerAsTheOrigin(t *testing.T) {
 	svc, sessions, _, _, events := newService(t)
 
-	opened, err := svc.Open("s1", "revu", "shell", "", "", "", "", "")
+	opened, err := svc.Open("s1", "revu", "shell", "", "", "", "", "", false)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -578,7 +592,7 @@ func TestOpenWithoutACallerRecordsNoOrigin(t *testing.T) {
 		t.Run("from="+from, func(t *testing.T) {
 			svc, sessions, _, _, _ := newService(t)
 
-			opened, err := svc.Open(from, "lich", "", "", "", "", "", "")
+			opened, err := svc.Open(from, "lich", "", "", "", "", "", "", false)
 			if err != nil {
 				t.Fatalf("Open: %v", err)
 			}
@@ -601,7 +615,7 @@ func TestOpenRefusesAModelTheProviderCannotBeTold(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			svc, sessions, _, term, _ := newService(t)
 
-			_, err := svc.Open("s1", "", kind, "", "", "opus", "", "")
+			_, err := svc.Open("s1", "", kind, "", "", "opus", "", "", false)
 			if err == nil {
 				t.Fatal("opened a session on a model its provider never sees")
 			}
@@ -620,7 +634,7 @@ func TestOpenRefusesAModelTheProviderCannotBeTold(t *testing.T) {
 func TestOpenRecordsTheEffortOnTheRow(t *testing.T) {
 	svc, sessions, _, _, _ := newService(t)
 
-	opened, err := svc.Open("s1", "", "codex", "", "", "gpt-5.2", " high ", "")
+	opened, err := svc.Open("s1", "", "codex", "", "", "gpt-5.2", " high ", "", false)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -635,7 +649,7 @@ func TestOpenRecordsTheEffortOnTheRow(t *testing.T) {
 func TestOpenWithoutAnEffortWritesNone(t *testing.T) {
 	svc, sessions, _, _, _ := newService(t)
 
-	if _, err := svc.Open("s1", "", "claude", "", "", "opus", "", ""); err != nil {
+	if _, err := svc.Open("s1", "", "claude", "", "", "opus", "", "", false); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if len(sessions.efforts) != 0 {
@@ -649,7 +663,7 @@ func TestOpenStartsTheSessionEvenWhenTheEffortCannotBeRecorded(t *testing.T) {
 	svc, sessions, _, term, _ := newService(t)
 	sessions.effortErr = errors.New("database is locked")
 
-	_, err := svc.Open("s1", "", "claude", "", "", "", "high", "")
+	_, err := svc.Open("s1", "", "claude", "", "", "", "high", "", false)
 	if err == nil || !strings.Contains(err.Error(), "reasoning effort") {
 		t.Fatalf("Open = %v, want the effort write reported", err)
 	}
@@ -667,7 +681,7 @@ func TestOpenRefusesAnEffortTheProviderCannotBeTold(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			svc, sessions, _, term, _ := newService(t)
 
-			_, err := svc.Open("s1", "", kind, "", "", "", "high", "")
+			_, err := svc.Open("s1", "", kind, "", "", "", "high", "", false)
 			if err == nil {
 				t.Fatal("opened a session at an effort its provider never sees")
 			}
@@ -681,10 +695,73 @@ func TestOpenRefusesAnEffortTheProviderCannotBeTold(t *testing.T) {
 	}
 }
 
+// Ultracode is written on the row like the effort, because Claude Code forgets
+// it on --resume and the terminal service has to ask for it again every spawn.
+func TestOpenRecordsUltracodeOnTheRow(t *testing.T) {
+	svc, sessions, _, _, _ := newService(t)
+
+	opened, err := svc.Open("s1", "", "claude", "", "", "", "medium", "", true)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if !sessions.ultracodes[opened.ID] {
+		t.Errorf("row ultracode = false, want it recorded")
+	}
+	if got := sessions.efforts[opened.ID]; got != "medium" {
+		t.Errorf("row effort = %q, want medium beside ultracode", got)
+	}
+}
+
+func TestOpenWithoutUltracodeWritesNone(t *testing.T) {
+	svc, sessions, _, _, _ := newService(t)
+
+	if _, err := svc.Open("s1", "", "claude", "", "", "", "", "", false); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(sessions.ultracodes) != 0 {
+		t.Errorf("wrote %v, want the ultracode column left alone", sessions.ultracodes)
+	}
+}
+
+func TestOpenStartsTheSessionEvenWhenUltracodeCannotBeRecorded(t *testing.T) {
+	svc, sessions, _, term, _ := newService(t)
+	sessions.ultracodeErr = errors.New("database is locked")
+
+	_, err := svc.Open("s1", "", "claude", "", "", "", "", "", true)
+	if err == nil || !strings.Contains(err.Error(), "ultracode") {
+		t.Fatalf("Open = %v, want the ultracode write reported", err)
+	}
+	if len(sessions.rows) != 1 || len(term.spawns) != 1 {
+		t.Errorf("rows = %d, spawns = %d, want the session written and started",
+			len(sessions.rows), len(term.spawns))
+	}
+}
+
+// Ultracode is Claude Code's alone: every other kind is refused rather than
+// handed back without it.
+func TestOpenRefusesUltracodeForEveryOtherKind(t *testing.T) {
+	for _, kind := range []string{"codex", "antigravity", "opencode", "omp", "crush", "cursor", "kiro", "shell"} {
+		t.Run(kind, func(t *testing.T) {
+			svc, sessions, _, term, _ := newService(t)
+
+			_, err := svc.Open("s1", "", kind, "", "", "", "", "", true)
+			if err == nil {
+				t.Fatal("opened a session with an ultracode its provider does not have")
+			}
+			if !strings.Contains(err.Error(), "ultracode") {
+				t.Errorf("error = %q, want it to name ultracode", err)
+			}
+			if len(sessions.rows) != 0 || len(term.spawns) != 0 {
+				t.Error("the refusal still created something")
+			}
+		})
+	}
+}
+
 func TestOpenOnAWorktreeBranchesOffTheCurrentBranch(t *testing.T) {
 	svc, sessions, worktrees, term, _ := newService(t)
 
-	opened, err := svc.Open("s1", "", "", "auth-fix", "", "", "", "")
+	opened, err := svc.Open("s1", "", "", "auth-fix", "", "", "", "", false)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -719,7 +796,7 @@ func TestOpenTracksARemoteBase(t *testing.T) {
 		Remote: []string{"origin/release"},
 	}
 
-	if _, err := svc.Open("s1", "", "", "hotfix", "origin/release", "", "", ""); err != nil {
+	if _, err := svc.Open("s1", "", "", "hotfix", "origin/release", "", "", "", false); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if got := worktrees.created[0]; !got.remote || got.base != "origin/release" {
@@ -736,7 +813,7 @@ func TestOpenBranchesOffABranchAnotherWorktreeHolds(t *testing.T) {
 		Worktrees: []project.Worktree{{Name: "amber-otter", Path: "/wt/amber-otter"}},
 	}
 
-	if _, err := svc.Open("s1", "", "", "follow-up", "amber-otter", "", "", ""); err != nil {
+	if _, err := svc.Open("s1", "", "", "follow-up", "amber-otter", "", "", "", false); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if got := worktrees.created[0]; got.base != "amber-otter" || got.remote {
@@ -750,7 +827,7 @@ func TestOpenRefusesABaseThatIsNoBranch(t *testing.T) {
 
 	// git would branch off any revision this happened to resolve to, leaving a
 	// checkout nobody asked for; a name that is not a branch is a typo.
-	_, err := svc.Open("s1", "", "", "hotfix", "mian", "", "", "")
+	_, err := svc.Open("s1", "", "", "hotfix", "mian", "", "", "", false)
 	if err == nil {
 		t.Fatal("created a worktree off a base that is not a branch")
 	}
@@ -763,7 +840,7 @@ func TestOpenLeavesNoSessionWhenTheWorktreeFails(t *testing.T) {
 	svc, sessions, worktrees, term, events := newService(t)
 	worktrees.createErr = errors.New("branch already exists")
 
-	if _, err := svc.Open("s1", "", "", "auth-fix", "", "", "", ""); err == nil {
+	if _, err := svc.Open("s1", "", "", "auth-fix", "", "", "", "", false); err == nil {
 		t.Fatal("opened a session on a worktree that was never created")
 	}
 	if len(sessions.rows) != 0 || len(term.spawns) != 0 || len(events.events) != 0 {
@@ -777,7 +854,7 @@ func TestOpenKeepsTheCardWhenTheTerminalFails(t *testing.T) {
 	svc, sessions, _, term, events := newService(t)
 	term.err = errors.New("claude: not found")
 
-	_, err := svc.Open("s1", "", "", "", "", "", "", "")
+	_, err := svc.Open("s1", "", "", "", "", "", "", "", false)
 	if err == nil {
 		t.Fatal("reported success for a terminal that never started")
 	}
@@ -796,7 +873,7 @@ func TestOpenWithoutAnEventsSinkStillOpens(t *testing.T) {
 	sessions := &fakeSessions{projects: workspace()}
 	svc := New(sessions, &fakeWorktrees{branch: "main"}, &fakeTerminal{}, nil)
 
-	if _, err := svc.Open("s1", "", "", "", "", "", "", ""); err != nil {
+	if _, err := svc.Open("s1", "", "", "", "", "", "", "", false); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if len(sessions.rows) != 1 {
@@ -808,7 +885,7 @@ func TestOpenRefusesADetachedHeadWithoutABase(t *testing.T) {
 	svc, _, worktrees, _, _ := newService(t)
 	worktrees.branch = ""
 
-	_, err := svc.Open("s1", "", "", "auth-fix", "", "", "", "")
+	_, err := svc.Open("s1", "", "", "auth-fix", "", "", "", "", false)
 	if err == nil {
 		t.Fatal("created a worktree off nothing")
 	}
@@ -824,7 +901,7 @@ func TestOpenReusesACheckoutWhoseNameIsSpeltInAnotherCase(t *testing.T) {
 	svc, sessions, worktrees, term, _ := newService(t)
 	worktrees.checkouts = []project.Worktree{{Name: "auth-fix", Path: "/wt/auth-fix"}}
 
-	opened, err := svc.Open("s1", "", "", "Auth-Fix", "", "", "", "")
+	opened, err := svc.Open("s1", "", "", "Auth-Fix", "", "", "", "", false)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -845,7 +922,7 @@ func TestOpenReusesACheckoutWhoseNameIsSpeltInAnotherCase(t *testing.T) {
 func TestOpenRefusesABaseWithoutAWorktree(t *testing.T) {
 	svc, sessions, worktrees, term, _ := newService(t)
 
-	_, err := svc.Open("s1", "", "", "", "main", "", "", "")
+	_, err := svc.Open("s1", "", "", "", "main", "", "", "", false)
 	if err == nil {
 		t.Fatal("accepted a base with no worktree to start")
 	}
@@ -866,7 +943,7 @@ func TestConcurrentOpensDoNotShareALabel(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 2 {
 		wg.Go(func() {
-			if _, err := svc.Open("s1", "", "", "", "", "", "", ""); err != nil {
+			if _, err := svc.Open("s1", "", "", "", "", "", "", "", false); err != nil {
 				t.Errorf("Open: %v", err)
 			}
 		})
@@ -885,7 +962,7 @@ func TestOpenReportsAnUnreadableWorkspace(t *testing.T) {
 	svc, sessions, _, term, _ := newService(t)
 	sessions.loadErr = errors.New("database is locked")
 
-	_, err := svc.Open("s1", "", "", "", "", "", "", "")
+	_, err := svc.Open("s1", "", "", "", "", "", "", "", false)
 	if err == nil {
 		t.Fatal("opened a session against a workspace it could not read")
 	}
@@ -903,7 +980,7 @@ func TestOpenStartsNothingWhenTheRowIsRefused(t *testing.T) {
 	svc, sessions, _, term, events := newService(t)
 	sessions.addErr = errors.New("disk full")
 
-	if _, err := svc.Open("s1", "", "", "", "", "", "", ""); err == nil {
+	if _, err := svc.Open("s1", "", "", "", "", "", "", "", false); err == nil {
 		t.Fatal("opened a session whose row was never written")
 	}
 	if len(term.spawns) != 0 || len(events.events) != 0 {
@@ -915,7 +992,7 @@ func TestOpenReportsAnUnreadableBranchList(t *testing.T) {
 	svc, sessions, worktrees, _, _ := newService(t)
 	worktrees.listErr = errors.New("not a git repository")
 
-	_, err := svc.Open("s1", "", "", "hotfix", "main", "", "", "")
+	_, err := svc.Open("s1", "", "", "hotfix", "main", "", "", "", false)
 	if err == nil {
 		t.Fatal("created a worktree off a base it could not check")
 	}
@@ -937,7 +1014,7 @@ func TestOpenRefusesAProjectNameThatNamesTwo(t *testing.T) {
 	}}
 	svc := New(sessions, &fakeWorktrees{branch: "main"}, &fakeTerminal{}, &fakeEvents{})
 
-	_, err := svc.Open("", "lich", "", "", "", "", "", "")
+	_, err := svc.Open("", "lich", "", "", "", "", "", "", false)
 	if err == nil {
 		t.Fatal("opened a session in one of two projects that answer to the same name")
 	}
@@ -971,7 +1048,7 @@ func TestSessionIDsDoNotRepeat(t *testing.T) {
 	svc, sessions, _, _, _ := newService(t)
 
 	for range 2 {
-		if _, err := svc.Open("s1", "", "", "", "", "", "", ""); err != nil {
+		if _, err := svc.Open("s1", "", "", "", "", "", "", "", false); err != nil {
 			t.Fatalf("Open: %v", err)
 		}
 	}
@@ -988,7 +1065,7 @@ func TestOpenReportsTheConfinementTheRungResolvedTo(t *testing.T) {
 	svc, sessions, _, _, events := newService(t)
 	sessions.confines = true
 
-	opened, err := svc.Open("s1", "", "", "auth-fix", "", "", "", "")
+	opened, err := svc.Open("s1", "", "", "auth-fix", "", "", "", "", false)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -1013,7 +1090,7 @@ func TestOpenReportsNoConfinementWhenTheRungLeavesTheSessionOut(t *testing.T) {
 	svc, sessions, _, _, _ := newService(t)
 	sessions.confines = false
 
-	opened, err := svc.Open("s1", "", "", "", "", "", "", "")
+	opened, err := svc.Open("s1", "", "", "", "", "", "", "", false)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

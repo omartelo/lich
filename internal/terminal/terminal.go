@@ -206,15 +206,16 @@ type session struct {
 
 // Store is the persistence the terminal service depends on: the binary to spawn
 // for a provider in a project (empty return spawns the provider's default),
-// whether that spawn drops the provider's permission prompts and whether it runs
-// confined, that project's own directory, the dev-server port reserved for each
-// checkout, where to record the provider session id a PTY reports through its
+// whether that spawn drops the provider's permission prompts, turns ultracode on
+// and runs confined, that project's own directory, the dev-server port reserved
+// for each checkout, where to record the provider session id a PTY reports through its
 // session-start hook, where to record a finished turn nobody has read yet, and
 // the running cost accounting behind the footer readout (CostReadout gates it —
 // off, none of the rest is called). The store implements them all.
 type Store interface {
 	ProviderBin(providerID, projectID string) string
 	SkipPermissions(providerID, projectID, cwd string) bool
+	Ultracode(providerID string) bool
 	ProjectPath(projectID string) string
 	WorktreePorts() map[string]int
 	SetWorktreePort(path string, port int) error
@@ -222,6 +223,8 @@ type Store interface {
 	ProviderSession(sessionID string) (string, error)
 	SessionModel(sessionID string) string
 	SessionEffort(sessionID string) string
+	SessionUltracode(sessionID string) bool
+	InheritUltracode(sessionID, forkedFrom string) error
 	SessionEntrypoint(sessionID string) string
 	SessionSandbox(sessionID string) string
 	SetSessionSandbox(sessionID, sandbox string) error

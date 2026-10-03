@@ -302,7 +302,7 @@ func (s *Service) ReopenSession(sessionID, newSessionID string) (*Session, error
 // reopen is the resume behind both doors: it finds one parked session with the
 // given WHERE clause and re-adds it to the workspace under a fresh id
 // (newSessionID), carrying over the old label, kind, path, provider session id,
-// label_auto flag, model, effort, entrypoint, sandbox, pin, origin and scheduled prompt.
+// label_auto flag, model, effort, ultracode, entrypoint, sandbox, pin, origin and scheduled prompt.
 // The fresh id is deliberate: it makes the frontend treat the card as
 // never-spawned, so its resume prompt fires and the provider conversation
 // continues instead of starting cold.
@@ -314,7 +314,7 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// cycle — reinserting without it would reset to 1 and let the ai-title
 		// stomp the chosen name, breaking SetSessionTitle's contract.
 		//
-		// model, effort and entrypoint ride along for the same reason, one rung lower:
+		// model, effort, ultracode and entrypoint ride along for the same reason, one rung lower:
 		// they are what the session was born with, and a resumed card that the
 		// user restarts as a new conversation starts on them again; a reinsert
 		// that dropped the entrypoint would put the terminal back on a bare shell
@@ -339,18 +339,18 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// session, and the row is what says where it belongs.
 		var labelAuto int
 		var projectID, model, effort, entrypoint, sandbox, folder string
-		var run bool
+		var run, ultracode bool
 		var forkOffset float64
 		row := tx.QueryRow(
 			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
-			        model, effort, entrypoint, run, sandbox, pinned, folder, origin_session_id, origin_label,
+			        model, effort, ultracode, entrypoint, run, sandbox, pinned, folder, origin_session_id, origin_label,
 			        scheduled_at, scheduled_prompt, fork_cost_offset
 			   FROM sessions `+where,
 			args...,
 		)
 		if err := row.Scan(
 			&old.ID, &projectID, &old.Label, &old.Kind, &old.Path, &old.ProviderSessionID,
-			&labelAuto, &model, &effort, &entrypoint, &run, &sandbox, &old.Pinned, &folder,
+			&labelAuto, &model, &effort, &ultracode, &entrypoint, &run, &sandbox, &old.Pinned, &folder,
 			&old.OriginSessionID, &old.OriginLabel,
 			&old.ScheduledAt, &old.ScheduledPrompt, &forkOffset,
 		); err != nil {
@@ -389,11 +389,11 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		if _, err := tx.Exec(
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
-			    model, effort, entrypoint, run, sandbox, pinned, folder, origin_session_id, origin_label,
+			    model, effort, ultracode, entrypoint, run, sandbox, pinned, folder, origin_session_id, origin_label,
 			    scheduled_at, scheduled_prompt, fork_cost_offset, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, old.Path, old.ProviderSessionID, labelAuto,
-			model, effort, entrypoint, run, sandbox, old.Pinned, folder, old.OriginSessionID, old.OriginLabel,
+			model, effort, ultracode, entrypoint, run, sandbox, old.Pinned, folder, old.OriginSessionID, old.OriginLabel,
 			old.ScheduledAt, old.ScheduledPrompt, forkOffset, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
@@ -663,6 +663,44 @@ func (s *Service) SessionEffort(sessionID string) string {
 		return ""
 	}
 	return effort
+}
+
+// SetSessionUltracode records that a session was opened with ultracode on, so
+// every later spawn of it asks for ultracode again.
+func (s *Service) SetSessionUltracode(sessionID string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET ultracode = 1 WHERE id = ?`, sessionID,
+	); err != nil {
+		return fmt.Errorf("set ultracode on %q: %w", sessionID, err)
+	}
+	return nil
+}
+
+// SessionUltracode reports whether a session was opened with ultracode on. A
+// read failure answers false, the provider's own default, as SessionModel does.
+func (s *Service) SessionUltracode(sessionID string) bool {
+	var on bool
+	if err := s.db.QueryRow(
+		`SELECT ultracode FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&on); err != nil {
+		return false
+	}
+	return on
+}
+
+// InheritUltracode turns ultracode on for a fork when the session that ran the
+// conversation it branches, forkedFrom, has it on. The fork's row is a fresh
+// insert that knows nothing of its parent, and Claude Code drops ultracode on
+// --resume, fork included, so without this the copy would run without it.
+func (s *Service) InheritUltracode(sessionID, forkedFrom string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET ultracode = 1 WHERE id = ? AND EXISTS
+		   (SELECT 1 FROM sessions WHERE provider_session_id = ? AND ultracode = 1)`,
+		sessionID, forkedFrom,
+	); err != nil {
+		return fmt.Errorf("inherit ultracode on %q: %w", sessionID, err)
+	}
+	return nil
 }
 
 // SetSessionEntrypoint records the command a terminal session opens into, so
