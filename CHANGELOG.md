@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Claude Code sessions can start in ultracode.** Turn it on for every Claude Code
+  session in Settings › Providers › Claude Code, or for one: `lich open --ultracode`
+  and `open_session` with `ultracode` open a session with ultracode on at whatever
+  effort it runs. It stays on when the session restarts or resumes, which Claude Code
+  on its own forgets.
+
 ## [0.55.0] - 2026-09-29
 
 ### Added

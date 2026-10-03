@@ -132,6 +132,19 @@ func (s *Service) SkipPermissions(providerID, projectID, cwd string) bool {
 	return value == "true"
 }
 
+// ultracodeKey is the settings key that spawns every session of a provider with
+// ultracode on. Global only, and on only for the literal "true".
+func ultracodeKey(providerID string) string {
+	return "provider." + providerID + ".ultracode"
+}
+
+// Ultracode reports whether every session of this provider spawns with
+// ultracode on.
+func (s *Service) Ultracode(providerID string) bool {
+	value, err := s.GetSetting(ultracodeKey(providerID), globalScope)
+	return err == nil && value == "true"
+}
+
 // Sandbox rungs, ordered by how much of the machine a session can reach. They
 // are the stored spelling of the control in Settings › Providers, and anything
 // this list does not name reads as SandboxOff — an unknown value must never be

@@ -55,14 +55,15 @@ var commands = []command{
 	{
 		name: "open",
 		args: "[--project <name-or-path>] [--kind <provider>] [--worktree <branch>]\n" +
-			"            [--base <branch>] [--model <model>] [--effort <level>] [--folder <name>]\n" +
-			"            [--prompt <task>] [--json]",
+			"            [--base <branch>] [--model <model>] [--effort <level>] [--ultracode]\n" +
+			"            [--folder <name>] [--prompt <task>] [--json]",
 		about: "Open a new session and start it. --project takes a project already open,\n" +
 			"by name, or the absolute path of a directory, which is opened as a\n" +
 			"project first — one lich closed comes back with the sessions it was\n" +
 			"closed with. --worktree creates a git worktree of that branch name first\n" +
 			"and roots the session in it. --model runs the provider on that model, and\n" +
 			"--effort at that reasoning effort, both in the provider's own spelling.\n" +
+			"--ultracode turns Claude Code's ultracode on, at whatever effort it runs.\n" +
 			"--folder files it under that sidebar folder from its first frame.\n" +
 			"--prompt hands the new session that task as soon as its agent is up, so\n" +
 			"opening a worker for a task is one command rather than two. Prints the\n" +

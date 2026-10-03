@@ -759,8 +759,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **A `lich` upgraded under a running lich cannot open sessions until the window restarts**
   (`internal/rpc/rpc.go`, `spawn.Open`): the RPC matches arguments by position and count, and a package manager
   replaces the binary without restarting the backend it is serving. `spawn.Open` grows an argument with each
-  option `lich open` gains (`--effort`, `--folder`), so the new CLI, and the `lich mcp` of every session opened
-  after the upgrade, is refused with "want 7 arguments, got 8" until lich is restarted. Every other call whose
+  option `lich open` gains (`--effort`, `--folder`, `--ultracode`), so the new CLI, and the `lich mcp` of every session opened
+  after the upgrade, is refused with "want 8 arguments, got 9" until lich is restarted. Every other call whose
   argument list changes breaks the same way; one that only grows a result field does not.
 - **A reasoning effort reaches five providers, and Cursor only through its model name**
   (`internal/terminal/command.go`, `effortFlags`): `lich open --effort` and `open_session`'s `effort` are refused
@@ -771,6 +771,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   so a caller who wants it passes that id as `--model`. The level is never validated, so a misspelled one
   is each provider's to handle: Claude Code warns and runs at its default, and Codex, Antigravity, oh-my-pi and
   Kiro start without a word (measured on the versions above).
+- **Ultracode reaches Claude Code only** (`internal/terminal/command.go`, `ultracodeArgs`): it is a Claude Code
+  mode, standing multi-agent workflow orchestration, and no other provider has one, so `lich open --ultracode` and
+  `open_session`'s `ultracode` are refused for every other kind and Settings offers the switch on Claude Code
+  alone. lich passes it as `--settings '{"ultracode":true}'` rather than `--effort ultracode`, which pins the
+  effort to xhigh. Claude Code drops it on `--resume` (measured on 2.1.288), so unlike the model and effort it is
+  passed on every spawn, and a fork inherits it from the session whose conversation it branches. The cost is that
+  an ultracode turned off inside the session comes back on the next restart, and nothing turns it off for one
+  session while the provider-wide switch is on.
 - **A model or effort is a birth value, and two providers forget it on resume** (`internal/terminal/command.go`,
   `modelArgs`, `effortArgs`): lich passes neither when it resumes or forks a conversation, because a `/model` or
   `/effort` typed inside the session is the user's decision and re-sending the birth value would undo it. What a

@@ -16,6 +16,7 @@ import { PlanUsageSetting } from "./PlanUsageSetting"
 import { ProviderBinary } from "./ProviderBinary"
 import { RestoreSetting } from "./RestoreSetting"
 import { SettingBlock } from "./SettingBlock"
+import { UltracodeSetting } from "./UltracodeSetting"
 
 const GLOBAL_SCOPE = ""
 
@@ -40,8 +41,8 @@ const SKIP_LEVELS: { level: SkipLevel; label: string; consequence: string }[] = 
 
 // ProviderBinSettings is the config section a provider gets when enabled: what
 // its plan has left, which binary its sessions spawn, how far it runs without
-// asking, and what its restored cards do on first open. Footer visibility is
-// configured globally in Appearance.
+// asking, whether it starts in ultracode, and what its restored cards do on
+// first open. Footer visibility is configured globally in Appearance.
 export function ProviderBinSettings({
   providerId,
   providerName,
@@ -149,6 +150,8 @@ export function ProviderBinSettings({
           </ConfirmDialog>
         </SettingBlock>
       )}
+
+      <UltracodeSetting providerId={providerId} providerName={providerName} />
 
       <RestoreSetting providerId={providerId} providerName={providerName} />
     </>

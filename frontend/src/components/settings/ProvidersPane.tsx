@@ -15,6 +15,8 @@ import {
   setProviderEnabled,
   skipLevel,
   skipPermissionsKey,
+  supportsUltracode,
+  ultracodeKey,
   useDefaultProvider,
   useProviders,
   useStoredProjectDefaultProvider,
@@ -228,6 +230,7 @@ function ProviderRow({
   const [skipInWorktrees] = useStoredFlag(skipPermissionsKey(provider.id, true), GLOBAL_SCOPE)
   const projectDefault = useStoredProjectDefaultProvider(projectId ?? "")
   const level = skipLevel(skipHere, skipInWorktrees)
+  const [ultracode] = useStoredFlag(ultracodeKey(provider.id), GLOBAL_SCOPE)
   const [globalBin] = useStoredSetting(binKey(provider.id), GLOBAL_SCOPE)
   const [projectBin] = useStoredSetting(binKey(provider.id), projectId)
   const [globalBinOff] = useStoredFlag(binOffKey(provider.id), GLOBAL_SCOPE)
@@ -268,6 +271,9 @@ function ProviderRow({
           <span className="whitespace-nowrap">
             {level === "worktrees" ? "worktrees" : "no prompts"}
           </span>
+        )}
+        {ultracode && supportsUltracode(provider.id) && (
+          <span className="whitespace-nowrap">ultracode</span>
         )}
       </span>
       <Switch

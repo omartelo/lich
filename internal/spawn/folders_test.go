@@ -45,7 +45,7 @@ func filedEvent(t *testing.T, events *fakeEvents) FiledEvent {
 func TestOpenFilesTheSessionBeforeTheCardIsAnnounced(t *testing.T) {
 	svc, sessions, _, _, events := newService(t)
 
-	opened, err := svc.Open("s1", "", "", "", "", "", "", " Apps ")
+	opened, err := svc.Open("s1", "", "", "", "", "", "", " Apps ", false)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestOpenFilesTheSessionBeforeTheCardIsAnnounced(t *testing.T) {
 func TestOpenWithoutAFolderFilesNothing(t *testing.T) {
 	svc, sessions, _, _, _ := newService(t)
 
-	if _, err := svc.Open("s1", "", "", "", "", "", "", ""); err != nil {
+	if _, err := svc.Open("s1", "", "", "", "", "", "", "", false); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if len(sessions.folders) != 0 {
@@ -75,7 +75,7 @@ func TestOpenStartsTheSessionEvenWhenItCannotBeFiled(t *testing.T) {
 	svc, sessions, _, term, events := newService(t)
 	sessions.folderErr = errors.New("database is locked")
 
-	_, err := svc.Open("s1", "", "", "", "", "", "", "Apps")
+	_, err := svc.Open("s1", "", "", "", "", "", "", "Apps", false)
 	if err == nil || !strings.Contains(err.Error(), `"Apps"`) {
 		t.Fatalf("Open = %v, want the lost folder named", err)
 	}

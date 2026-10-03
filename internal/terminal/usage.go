@@ -304,6 +304,15 @@ func (s *Service) recordForkCost(id, kind, forkedFrom string) {
 	}
 }
 
+// inheritUltracode carries the parent's ultracode onto a fork before it spawns
+// (store.InheritUltracode). A failure is logged and dropped for recordForkCost's
+// reason: the fork still starts, without ultracode.
+func (s *Service) inheritUltracode(id, forkedFrom string) {
+	if err := s.store.InheritUltracode(id, forkedFrom); err != nil {
+		slog.Warn("terminal: inherit ultracode", "session", id, "err", err)
+	}
+}
+
 // wholeCost prices one conversation whole, for the providers that report a
 // running total rather than per-turn deltas: each reads its own store, and
 // the two database providers say only that the row could not be read.

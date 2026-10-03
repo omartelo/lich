@@ -23,6 +23,8 @@ export interface SettingEntry {
   /** Lives on a provider's own screen, so it exists once per enabled provider
    * and reaching it is two steps rather than one. */
   perProvider?: boolean
+  /** Narrows a per-provider block to the one provider whose screen has it. */
+  onlyFor?: string
 }
 
 // Every SettingBlock in the app, in the order its pane renders it.
@@ -48,6 +50,13 @@ export const SETTING_ENTRIES: readonly SettingEntry[] = [
     title: "Skip permission prompts",
     also: "yolo dangerous approvals",
     perProvider: true,
+  },
+  {
+    section: "providers",
+    title: "Ultracode",
+    also: "workflow orchestration multi-agent effort",
+    perProvider: true,
+    onlyFor: "claude",
   },
   {
     section: "providers",
@@ -162,6 +171,9 @@ export function expandEntries(
       continue
     }
     for (const provider of providers) {
+      if (entry.onlyFor && entry.onlyFor !== provider.id) {
+        continue
+      }
       hits.push({ ...entry, group: provider.name, providerId: provider.id })
     }
   }
