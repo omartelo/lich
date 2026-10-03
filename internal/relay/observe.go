@@ -29,6 +29,7 @@ func (s *Service) Observe(sessionID, state string) {
 	var quiet []endedErrand
 	for _, e := range ended {
 		if e.t.attended == 0 {
+			s.stashLocked(e.id, e.t, StatusUnanswered, "")
 			quiet = append(quiet, e)
 		}
 	}
@@ -43,7 +44,7 @@ func (s *Service) Observe(sessionID, state string) {
 		}
 	}
 	for _, e := range quiet {
-		s.stash(e.id, e.t, StatusUnanswered, "")
+		s.announceInbox(e.t.fromID)
 	}
 	if notice != "" {
 		if err := s.deliver(sessionID, notice); err != nil {

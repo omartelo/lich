@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   effort it runs. It stays on when the session restarts or resumes, which Claude Code
   on its own forgets.
 
+### Fixed
+
+- **A result is never lost or delivered twice when it lands mid-wait.** Waiting on a
+  ticket at the moment its answer arrived could report `unknown ticket` for an errand
+  that had just been answered, or hand the answer over and still announce it as
+  waiting in the inbox. Both now hand the answer over exactly once.
+
 ## [0.55.0] - 2026-09-29
 
 ### Added
