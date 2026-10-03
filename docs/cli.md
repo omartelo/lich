@@ -229,7 +229,9 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
   name its ticket. **A late answer still lands**: a worker that handed its work
   to the background ends its turn before the work is done, so for an hour after
   the turn ended `lich reply <ticket>` on that errand still files the answer in
-  the sender's inbox, announced like any other result. It is taken once.
+  the sender's inbox, announced like any other result (a private errand's waits
+  for its ticket, as ever). It is taken once, and a `lich wait` on that ticket
+  before it lands answers with how the errand ended rather than as unknown.
 
 ```
 docs is still working. The errand is open — a message that session was not ready
