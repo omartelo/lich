@@ -47,7 +47,7 @@ components, which are PascalCase after their export. Tests sit next to what they
 
 ## Commands
 
-`pnpm` only — `npm i` errors out (see root memory). From `frontend/`:
+`pnpm` only — `package.json` pins it in `packageManager`, and `npm i` errors out. From `frontend/`:
 
 ```bash
 pnpm build        # tsc typecheck + vite build (the real gate)
@@ -105,7 +105,7 @@ event, a usage report, a project switch. Every session's card and every session'
 once, so one background session waking the whole window is a real regression, and one nobody feels for months.
 
 - The harness is `src/test/render-budget.ts`: React's own DevTools hook, the `PerformedWork` flag, and a
-  count per component. It is ~120 lines and stays that way — a test utility, not a profiler.
+  count per component. It stays a test utility, not a profiler.
 - **Assert the whole map with `toEqual`, and exact counts.** `toBeLessThanOrEqual(1)` also passes when a
   renamed component measures nothing at all, and half of each budget is the names that must be *absent*.
 - Keep anything jsdom cannot measure honestly out of it: it reports every element at zero height, so
@@ -115,7 +115,7 @@ once, so one background session waking the whole window is a real regression, an
 
 ## Adapting a shadcn component to lich
 
-Never hand-write a `ui/` primitive — add it with the CLI (the `shadcn` skill), then **adapt it to `DESIGN.md`
+Never hand-write a `ui/` primitive — add it with the shadcn CLI (`pnpm dlx shadcn@latest add <name>`), then **adapt it to `DESIGN.md`
 before use**. What the CLI drops is stock shadcn: bordered boxes, `bg-card`, `rounded-lg`, filled pill badges.
 Bring it into the idiom:
 
