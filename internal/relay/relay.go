@@ -36,9 +36,11 @@ const (
 	// MaxWait bounds an explicit timeout. Past this the caller should be
 	// polling with Wait, not holding a socket.
 	MaxWait = 30 * time.Minute
-	// ticketTTL is how long an unanswered ticket stays waitable. A target that
-	// never replies would otherwise leak one entry per attempt for the life of
-	// the process.
+	// ticketTTL is how long an unanswered ticket stays waitable after anyone
+	// last wanted it — its creation, or a caller that stopped waiting on it —
+	// and how long an errand that ended without an answer still takes a late
+	// one. A target that never replies would otherwise leak one entry per
+	// attempt for the life of the process.
 	ticketTTL = time.Hour
 	// defaultReceiptWindow is how long a task has to be picked up by the agent it
 	// was typed at. A provider that read it reports UserPromptSubmit within a
@@ -306,6 +308,20 @@ type ticket struct {
 	// redelivered is whether the task was already typed in a second time, which
 	// is what bounds watchReceipt's retry at one.
 	redelivered bool
+	// submitted is whether the Enter that sends the message went in. delivered
+	// is stamped before the paste, for turn accounting; until the Enter the
+	// agent has not seen the message, so an answer that names no ticket cannot
+	// be about it (errandOfLocked).
+	submitted bool
+	// waited is when a caller last stopped waiting on this ticket without an
+	// outcome. The ticket's hour runs from there as well as from its creation:
+	// that caller was just told the errand is still open.
+	waited time.Time
+	// lapsed is when the errand ended without an answer. Its ticket stays
+	// answerable for ticketTTL after that, in Service.lapsed.
+	lapsed time.Time
+	// lapsedAs is the status the errand ended with: unanswered or unread.
+	lapsedAs string
 	// undelivered closes when the message never got into the target's PTY at
 	// all. See queueDelivery.
 	undelivered chan struct{}
@@ -348,6 +364,11 @@ type Service struct {
 	// nothing that reads the inbox for a sender can reach them: only a Wait on
 	// their ticket does.
 	held map[string]*inboxEntry
+	// lapsed is the errands that ended without an answer — a turn over with no
+	// reply, or a task nobody read — kept answerable by their ticket. A worker
+	// that hands its work to the background ends its turn before the work is
+	// done, and its answer arrives later on the same ticket.
+	lapsed map[string]*ticket
 	// collectors is who is blocked in Collect right now, per sender. A result
 	// stashed while one is registered wakes it instead of arming a nudge.
 	collectors map[string][]chan struct{}
@@ -411,6 +432,7 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 		reported:      make(map[string]string),
 		ready:         make(map[string]*inboxEntry),
 		held:          make(map[string]*inboxEntry),
+		lapsed:        make(map[string]*ticket),
 		collectors:    make(map[string][]chan struct{}),
 		nudgeTimer:    make(map[string]*time.Timer),
 		nudging:       make(map[string]*sync.Mutex),
@@ -570,6 +592,9 @@ func (s *Service) handOff(id string, t *ticket, kind, message string) error {
 	if err := s.deliver(t.targetID, message); err != nil {
 		return fmt.Errorf("deliver to %q: %w", t.target, err)
 	}
+	s.mu.Lock()
+	t.submitted = true
+	s.mu.Unlock()
 	// Announced only once the message is actually in the PTY: a mark raised
 	// before the write would survive a delivery that never happened.
 	s.announce(t.targetID, t.sender, DirectionIn, id)
@@ -658,17 +683,28 @@ func waitFor(seconds int) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
+// lastActive is the latest moment a ticket was known to be wanted: when it was
+// created, or when a caller last stopped waiting on it.
+func lastActive(t *ticket) time.Time {
+	if t.waited.After(t.created) {
+		return t.waited
+	}
+	return t.created
+}
+
 // sweep drops tickets nobody answered in time and returns them, so the caller
 // can take their marks down after releasing s.mu. Inbox entries nobody
 // collected age out on the same TTL — a sender that never drains would
 // otherwise grow the inbox by one entry per errand for the life of the
 // process. Called under the lock on the paths that already hold it, which is
-// often enough for a map that grows one entry per errand.
+// often enough for a map that grows one entry per errand. A ticket a caller is
+// blocked on is never dropped: that caller would be told the errand is still
+// open on a ticket that is already gone.
 func (s *Service) sweep() ([]*ticket, []string) {
 	var expired []*ticket
 	cutoff := s.now().Add(-ticketTTL)
 	for id, t := range s.tickets {
-		if t.created.Before(cutoff) {
+		if t.attended == 0 && lastActive(t).Before(cutoff) {
 			delete(s.tickets, id)
 			expired = append(expired, t)
 		}
@@ -680,6 +716,11 @@ func (s *Service) sweep() ([]*ticket, []string) {
 			if e.fromID != "" {
 				touched[e.fromID] = true
 			}
+		}
+	}
+	for id, t := range s.lapsed {
+		if t.lapsed.Before(cutoff) {
+			delete(s.lapsed, id)
 		}
 	}
 	// A held outcome expires on the same clock, and silently: nobody was ever

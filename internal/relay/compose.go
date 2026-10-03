@@ -103,8 +103,9 @@ func pickTicketNudge(count int, errands string) string {
 	return fmt.Sprintf(
 		"[lich] Your turn ended with no answer sent, so %d requests went back to their senders "+
 			"unanswered:\n%s\nNothing outside this session can say which of them that turn was, "+
-			"which is why none of them could be answered for you. The next request you answer has "+
-			"to name its ticket: lich reply <ticket> \"<answer>\".",
+			"which is why none of them could be answered for you. One you are still working on "+
+			"still takes its answer, and every answer from here on has to name its ticket: "+
+			"lich reply <ticket> \"<answer>\".",
 		count, errands,
 	)
 }

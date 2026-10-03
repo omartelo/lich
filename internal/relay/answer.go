@@ -11,7 +11,8 @@ import (
 // Wait blocks on an already-delivered ticket for another round, so a caller
 // whose first wait ran out can come back without sending the message twice.
 // An outcome already sitting in the inbox is handed over on the spot. ctx is
-// the caller's, as in Collect.
+// the caller's, as in Collect. An errand that ended without an answer and has
+// not had a late one yet answers with how it ended: its ticket is still alive.
 func (s *Service) Wait(ctx context.Context, ticketID string, waitSeconds int) (Result, error) {
 	s.mu.Lock()
 	expired, senders := s.sweep()
@@ -29,6 +30,12 @@ func (s *Service) Wait(ctx context.Context, ticketID string, waitSeconds int) (R
 		s.clearAll(expired)
 		s.announceInboxAll(senders)
 		return Result{Ticket: e.ticket, Target: e.target, Status: e.status, Answer: e.answer, Private: true}, nil
+	}
+	if late, lapsed := s.lapsed[ticketID]; lapsed {
+		s.mu.Unlock()
+		s.clearAll(expired)
+		s.announceInboxAll(senders)
+		return Result{Ticket: ticketID, Target: late.target, Status: late.lapsedAs, Private: late.private}, nil
 	}
 	t, ok := s.tickets[ticketID]
 	// Attending is claimed under the lock that found the ticket, so an answer
@@ -76,6 +83,17 @@ func (s *Service) Reply(replierID, ticketID, answer string) error {
 	}
 	t, ok := s.tickets[ticketID]
 	if !ok {
+		if late, lapsed := s.lapsed[ticketID]; lapsed {
+			delete(s.lapsed, ticketID)
+			// Marked answered so a waiter still leaving this ticket files the
+			// answer rather than the stall over it (giveUpLocked).
+			late.answer = answer
+			late.answered = true
+			s.stashLocked(ticketID, late, StatusAnswered, answer)
+			s.mu.Unlock()
+			s.announceInbox(late.fromID)
+			return nil
+		}
 		s.mu.Unlock()
 		return fmt.Errorf("unknown ticket %q — it was answered already, or expired", ticketID)
 	}
@@ -125,7 +143,7 @@ func (s *Service) errandOfLocked(replierID string) (string, error) {
 	}
 	open := make([]string, 0, len(s.tickets))
 	for id, t := range s.tickets {
-		if t.targetID != replierID || t.delivered.IsZero() {
+		if t.targetID != replierID || !t.submitted {
 			continue
 		}
 		open = append(open, id)
@@ -157,8 +175,8 @@ func openErrands(tickets map[string]*ticket, ids []string) string {
 
 // namedErrands lists the same errands as history rather than as somewhere to
 // reply: the ticket and what it asked, no command. It is what a session is
-// shown about errands that are already over — an invitation to answer one of
-// those is an invitation to run something that fails.
+// shown about errands whose turn is already over; one it is still working on
+// takes a late answer by its ticket (Service.lapsed).
 func namedErrands(tickets map[string]*ticket, ids []string) string {
 	return errandLines(tickets, ids, "  ", "")
 }
@@ -283,6 +301,7 @@ func (s *Service) giveUp(id string, t *ticket) string {
 // answer so the caller announces the inbox once it lets go.
 func (s *Service) giveUpLocked(id string, t *ticket) (string, bool) {
 	t.attended--
+	t.waited = s.now()
 	last := t.attended == 0
 	orphaned := t.answered && last
 	unread, stalled, undelivered := false, false, false

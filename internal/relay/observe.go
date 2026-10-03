@@ -156,6 +156,7 @@ func (s *Service) endedErrands(sessionID, state string) ([]endedErrand, string) 
 			t := s.tickets[id]
 			delete(s.tickets, id)
 			close(t.stalled)
+			s.lapseLocked(id, t, StatusUnanswered)
 			ended = append(ended, endedErrand{id, t})
 		}
 	}

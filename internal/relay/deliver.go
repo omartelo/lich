@@ -186,6 +186,7 @@ func (s *Service) watchReceipt(id string, t *ticket, kind, message string) {
 	}
 	delete(s.tickets, id)
 	close(t.unread)
+	s.lapseLocked(id, t, StatusUnread)
 	unattended := t.attended == 0
 	if unattended {
 		s.stashLocked(id, t, StatusUnread, "")

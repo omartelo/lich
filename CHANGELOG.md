@@ -27,6 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ticket at the moment its answer arrived could report `unknown ticket` for an errand
   that had just been answered, or hand the answer over and still announce it as
   waiting in the inbox. Both now hand the answer over exactly once.
+- **An answer sent after the worker's turn ended still arrives.** A worker that runs its
+  task in the background ends its turn before the work is done, and the errand was
+  closed as unanswered right then, so its answer was refused as an unknown ticket and
+  lost. For an hour after, the answer is now filed and announced like any other result.
+- **A ticket you are waiting on no longer expires under you.** A wait that outlasted the
+  ticket's hour was told the errand was still open while the ticket was already gone,
+  and the next wait on it failed. The hour now runs from the last time anyone waited.
+- **An answer that names no ticket is no longer pinned on a message still being typed
+  in.** A reply sent while another task was mid-paste, its Enter not sent yet, was taken
+  as the answer to that task.
 
 ## [0.55.0] - 2026-09-29
 
