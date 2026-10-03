@@ -209,6 +209,15 @@ func (s *Service) stashLocked(id string, t *ticket, status, answer string) {
 	}
 }
 
+// lapseLocked keeps an errand that ended without an answer answerable by its
+// ticket (Service.lapsed), remembering how it ended for a Wait that comes back
+// before the answer does. Called under s.mu by whoever closed it.
+func (s *Service) lapseLocked(id string, t *ticket, status string) {
+	t.lapsed = s.now()
+	t.lapsedAs = status
+	s.lapsed[id] = t
+}
+
 // armNudgeLocked starts the debounce for fromID's nudge unless the sender
 // cannot be typed at now: no session, or mid-turn, where Observe flushes at the
 // turn's end instead. Called under s.mu.

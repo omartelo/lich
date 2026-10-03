@@ -225,8 +225,13 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
   senders are told it, which is what each would have been told alone. Which of
   the two that turn actually was is the part nothing outside that session can
   say, so it is not decided: a note at the worker's own prompt names the
-  requests that went home unanswered, and says the next one it answers has to
-  name its ticket.
+  requests that went home unanswered, and says every answer from here on has to
+  name its ticket. **A late answer still lands**: a worker that handed its work
+  to the background ends its turn before the work is done, so for an hour after
+  the turn ended `lich reply <ticket>` on that errand still files the answer in
+  the sender's inbox, announced like any other result (a private errand's waits
+  for its ticket, as ever). It is taken once, and a `lich wait` on that ticket
+  before it lands answers with how the errand ended rather than as unknown.
 
 ```
 docs is still working. The errand is open — a message that session was not ready
@@ -255,8 +260,9 @@ are the same across the `exec`, so nothing else can.
 With a ticket: waits again on that errand. Same output and exit codes as `send`. A result that
 already came back unattended is handed over on the spot — it sits in the
 sender's inbox (see below) until collected or expired. A ticket that was
-collected already, or that nobody answered within an hour, is gone and waiting
-on it is an error.
+collected already, or that nobody answered or waited on within an hour, is gone
+and waiting on it is an error. A ticket somebody is waiting on never expires
+under them: the hour runs from the last time a wait on it let go.
 
 Without a ticket: **collects**. Every result waiting for this session is
 printed at once, oldest first, each in the same words a single wait uses;
@@ -289,7 +295,8 @@ calling session: a message actually delivered there and still unanswered. The
 ticket is written down in one place only — the message typed at the target's
 prompt — so an agent whose context was compacted past that message would
 otherwise be holding an answer with no route home. A task still queued for a
-prompt that has not received it is never picked.
+prompt that has not received it is never picked, and neither is one still
+being typed in, its Enter not sent yet: an answer then is about something else.
 
 With two or more open it is refused, because nothing in an answer says which
 request it belongs to and closing the wrong one sends both senders a confident

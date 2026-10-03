@@ -1030,8 +1030,13 @@ func TestAQueuedRequestIgnoresTheTurnAlreadyRunning(t *testing.T) {
 	if got := <-done; got.Status != StatusUnanswered {
 		t.Fatalf("status = %q, want %q", got.Status, StatusUnanswered)
 	}
-	if err := svc.Reply("", ticketID, "late"); err == nil {
-		t.Error("the ticket outlived the turn that closed it")
+	if left := openTickets(svc); len(left) != 0 {
+		t.Errorf("open tickets = %v, want the ticket closed by the turn that ended", left)
+	}
+	// Contract change: an errand closed this way still takes a late answer on
+	// its ticket (Service.lapsed), for a worker whose work outlived its turn.
+	if err := svc.Reply("", ticketID, "late"); err != nil {
+		t.Errorf("a late answer = %v, want it filed for the sender", err)
 	}
 }
 
@@ -1109,15 +1114,14 @@ func TestADoneWithTwoErrandsOpenStallsBothAndAsksForTheTicket(t *testing.T) {
 	notice := strings.Join(term.writesTo("s2")[delivery:], "")
 	for _, want := range []string{
 		"[lich]", "run the tests and report the failures", "build the docs",
-		"went back to their senders unanswered", "The next request you answer has to name its ticket",
+		"went back to their senders unanswered", "every answer from here on has to name its ticket",
 	} {
 		if !strings.Contains(notice, want) {
 			t.Errorf("the notice is missing %q:\n%s", want, notice)
 		}
 	}
-	// The tickets are named as what happened, never as somewhere to reply: the
-	// stall closed them, so a worker that ran a reply command out of this note
-	// would be told the ticket is unknown.
+	// The tickets are named as what happened, never as a command to run: the
+	// stall closed them, and only a worker still working one should answer it.
 	for _, id := range tickets {
 		if !strings.Contains(notice, id) {
 			t.Errorf("the notice does not name ticket %q:\n%s", id, notice)

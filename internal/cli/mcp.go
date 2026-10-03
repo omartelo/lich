@@ -799,7 +799,9 @@ func undeliveredText(target string) string {
 func unansweredText(target string) string {
 	return fmt.Sprintf(
 		"The %q session finished its turn without answering through lich. "+
-			"Whatever it produced is in that session — tell the user to open the %q card to read it.",
+			"Whatever it produced is in that session — tell the user to open the %q card to read it. "+
+			"If it is still working in the background, its answer can still arrive on this ticket "+
+			"for an hour.",
 		target, target,
 	)
 }
