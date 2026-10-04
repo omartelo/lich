@@ -107,7 +107,7 @@ whole figures. Measured on Claude Code 2.1.289.
   runs anything that measures itself; the rest keep the readouts lich derives.
 - **Mods only run where Claude Code turns them on**, from 2.1.280, behind a
   rollout flag and the folder-trust prompt: see mod-control's ceilings. The
-  module ships in lich-plugin 0.16.0. A session whose mod is off, or whose
+  module ships in lich-plugin 0.15.0. A session whose mod is off, or whose
   plugin is older, reports nothing and reads as before.
 - **Nothing fires mid-turn or on a compaction.** The tokens stay the
   transcript's for that reason; a cost is the one at the last turn's end until

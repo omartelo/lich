@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one guessed from its name, and a session logged in with a long-lived token
   (`claude setup-token`) fills the plan gauge without lich spending a request on
   the plan to measure it. Needs Claude Code 2.1.280 or newer and lich-plugin
-  0.16.0; without them the footer reads as before.
+  0.15.0; without them the footer reads as before.
 
 ### Changed
 
