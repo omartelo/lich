@@ -55,20 +55,17 @@ func controlOutcome(state string) error {
 }
 
 // controlledText words a control outcome for the command line and for an agent
-// alike. A command still on its way says it goes through, so neither reads it as
-// a failure and sends it again.
+// alike. A delivered command says it goes through, so neither reads it as a
+// failure and sends it again.
 func controlledText(out spawn.Controlled) string {
 	switch out.State {
 	case spawn.ControlDone:
 		return doneText(out)
-	case spawn.ControlDelivered:
-		return fmt.Sprintf("%q took the command (%s, id %s) and has not confirmed it yet: a prompt or "+
-			"a slash command runs only once the session is idle. It still goes through.",
-			out.Label, out.Action, out.CommandID)
 	case spawn.ControlEnded:
 		return fmt.Sprintf("%q ended before confirming the command (%s, id %s).", out.Label, out.Action, out.CommandID)
 	default:
-		return fmt.Sprintf("The command for %q (%s, id %s) is still queued: its mod has not collected it yet.",
+		return fmt.Sprintf("%q took the command (%s, id %s) and has not confirmed it yet: a prompt or "+
+			"a slash command runs only once the session is idle. It still goes through.",
 			out.Label, out.Action, out.CommandID)
 	}
 }
@@ -99,8 +96,9 @@ var controlTools = []mcpTool{
 		Description: "Drive another running Claude Code session in lich: type a prompt into it, stop the " +
 			"turn it is running, set the model or reasoning effort its next requests use, or run one " +
 			"of its slash commands, such as compact or clear. It waits up to 10 seconds (60 for a " +
-			"slash command) for the session to confirm. A result saying queued or delivered, with an " +
-			"id, is not a failure: the command still goes through. Claude Code sessions only, and " +
+			"slash command) for the session to confirm. A result saying delivered, with an id, is " +
+			"not a failure: the command still goes through. One the session never took fails, and " +
+			"nothing ran. Claude Code sessions only, and " +
 			"never your own. model and effort change that session only; the slash commands /model " +
 			"and /effort are refused because Claude Code would save them as the user's default for " +
 			"every new session.",

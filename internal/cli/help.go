@@ -94,8 +94,9 @@ var commands = []command{
 		about: "Drive a running Claude Code session: type a prompt into it, stop its\n" +
 			"turn, set the model or effort its next requests use (none given goes\n" +
 			"back to its own), or run one of its slash commands. Waits up to 10\n" +
-			"seconds (60 for a slash command) for the session to confirm; if it has\n" +
-			"not, prints the command's id and exits 2. The command still goes through.",
+			"seconds (60 for a slash command) for the session to confirm. One it\n" +
+			"took and has not confirmed prints its id and exits 2: it still goes\n" +
+			"through. One it never took is withdrawn, and fails: nothing ran.",
 	},
 	{
 		name: "worktrees",

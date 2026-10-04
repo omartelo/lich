@@ -293,8 +293,8 @@ func TestModCloseReleasesTheParkedPoll(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("closing the session left its poll parked")
 	}
-	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModDetached) {
-		t.Fatalf("enqueue after close: err = %v, want errModDetached", err)
+	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModNotRunning) {
+		t.Fatalf("enqueue after close: err = %v, want errModNotRunning", err)
 	}
 }
 
@@ -302,6 +302,7 @@ func TestEnqueueModCommandRefuses(t *testing.T) {
 	svc := newModService(t, events.New(), 10*time.Millisecond)
 	runModSession(svc, "attached")
 	pollMod(t, svc.ws, "attached")
+	runModSession(svc, "never")
 	tests := []struct {
 		name    string
 		session string
@@ -403,8 +404,8 @@ func TestModPollWhileClosingDoesNotReattach(t *testing.T) {
 	if err := svc.Close("s1"); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModDetached) {
-		t.Fatalf("enqueue after close: err = %v, want errModDetached", err)
+	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModNotRunning) {
+		t.Fatalf("enqueue after close: err = %v, want errModNotRunning", err)
 	}
 	if n := attachedMods(svc.ws); n != 0 {
 		t.Fatalf("the closed session left %d queue entries behind", n)
@@ -421,8 +422,8 @@ func TestModPollLandingAfterCloseTakesNoCommands(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 	pollMod(t, svc.ws, "s1")
-	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModDetached) {
-		t.Fatalf("enqueue after close: err = %v, want errModDetached", err)
+	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModNotRunning) {
+		t.Fatalf("enqueue after close: err = %v, want errModNotRunning", err)
 	}
 }
 

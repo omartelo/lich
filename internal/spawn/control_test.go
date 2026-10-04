@@ -20,6 +20,7 @@ func newControlService(t *testing.T) (*Service, *fakeTerminal) {
 		{ID: "s1", Label: "Session 3", Kind: "claude"},
 		{ID: "s2", Label: "auth-fix", Kind: "claude"},
 		{ID: "s3", Label: "codex-run", Kind: "codex"},
+		{ID: "s4", Label: "pi-run", Kind: "omp"},
 	}}}
 	term.outcome = terminal.ModOutcome{ID: "m1", State: terminal.ModAcked, OK: true}
 	return svc, term
@@ -63,6 +64,7 @@ func TestControlRefusesBeforeReachingTheSession(t *testing.T) {
 		name, from, target, action, value, args, want string
 	}{
 		{"another CLI", "s1", "codex-run", "abort", "", "", "only a Claude Code session"},
+		{"another CLI, by the name the user knows it by", "s1", "pi-run", "abort", "", "", `"pi-run" runs oh-my-pi,`},
 		{"the caller itself", "s1", "Session 3", "abort", "", "", "cannot control itself"},
 		{"a value on an abort", "s1", "auth-fix", "abort", "now", "", "takes nothing after it"},
 		{"args on a prompt", "s1", "auth-fix", "prompt", "go", "x", "only a command takes arguments"},
@@ -86,7 +88,7 @@ func TestControlRefusesBeforeReachingTheSession(t *testing.T) {
 }
 
 func TestControlReportsHowFarTheCommandGot(t *testing.T) {
-	for _, state := range []string{ControlDelivered, ControlQueued, ControlEnded} {
+	for _, state := range []string{ControlDelivered, ControlEnded} {
 		t.Run(state, func(t *testing.T) {
 			svc, term := newControlService(t)
 			term.outcome = terminal.ModOutcome{ID: "m4", State: state}
@@ -112,9 +114,22 @@ func TestControlNamesTheSessionThatRefused(t *testing.T) {
 
 func TestControlPassesTheTerminalsRefusalOn(t *testing.T) {
 	svc, term := newControlService(t)
-	term.runErr = errors.New("the session cannot take commands")
-	if _, err := svc.Control(context.Background(), "s1", "auth-fix", "", "abort", "", ""); !errors.Is(err, term.runErr) {
-		t.Fatalf("err = %v, want the terminal's", err)
+	term.runErr = errors.New("the session is not running")
+	_, err := svc.Control(context.Background(), "s1", "auth-fix", "", "abort", "", "")
+	if !errors.Is(err, term.runErr) || !strings.HasPrefix(err.Error(), `"auth-fix": `) {
+		t.Fatalf("err = %v, want the terminal's, naming the session", err)
+	}
+}
+
+// A command no poll collected was withdrawn and never runs, so the caller is
+// told it failed and may send it again.
+func TestControlFailsACommandTheSessionNeverTook(t *testing.T) {
+	svc, term := newControlService(t)
+	term.outcome = terminal.ModOutcome{ID: "m4", State: terminal.ModWithdrawn}
+	_, err := svc.Control(context.Background(), "s1", "auth-fix", "", "command", "compact", "")
+	if err == nil || !strings.Contains(err.Error(), `"auth-fix" did not take the command within 60 seconds`) ||
+		!strings.Contains(err.Error(), "nothing ran") {
+		t.Fatalf("err = %v, want one saying the command was withdrawn unrun", err)
 	}
 }
 

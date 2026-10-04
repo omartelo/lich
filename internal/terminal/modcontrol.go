@@ -24,7 +24,7 @@ const (
 
 // What RunModCommand learned about a command by the time its wait ended.
 const (
-	ModQueued    = "queued"    // no poll collected it
+	ModWithdrawn = "withdrawn" // no poll collected it, so it was taken back and never runs
 	ModDelivered = "delivered" // a poll carried it, and no ack came back yet
 	ModAcked     = "acked"     // the mod acked it: OK and Error say how it went
 	ModEnded     = "ended"     // the session exited or was closed first
@@ -59,6 +59,9 @@ const (
 	modRepollGrace = 5 * time.Second
 )
 
+var errModNotRunning = errors.New(
+	"the session is not running, so there is nothing to hand the command to: start it again, then retry")
+
 var errModDetached = errors.New(
 	"the session cannot take commands: no lich-plugin mod is polling from it. That needs Claude Code " +
 		modFirstClaudeCode + " or later with mods on, lich-plugin " + modCommandRelease +
@@ -77,7 +80,7 @@ type ModCommand struct {
 	Args   string `json:"args,omitempty"`
 }
 
-// ModOutcome is what became of one command: State is one of ModQueued,
+// ModOutcome is what became of one command: State is one of ModWithdrawn,
 // ModDelivered, ModAcked and ModEnded.
 type ModOutcome struct {
 	ID    string
@@ -239,7 +242,10 @@ func (q *modQueue) settle(session, id string, ok bool, reason string) {
 }
 
 // await waits for w's outcome until ctx ends, and then says how far the command
-// got. An ack that lands while the wait is ending still counts.
+// got. An ack that lands while the wait is ending still counts. A command no
+// poll collected is withdrawn: its caller has been told how it went, and a
+// command left queued past the wait would run unannounced, or be dropped
+// silently at the next poll once it outlived the attach window.
 func (q *modQueue) await(ctx context.Context, w *modWaiter) ModOutcome {
 	select {
 	case out := <-w.settled:
@@ -257,7 +263,22 @@ func (q *modQueue) await(ctx context.Context, w *modWaiter) ModOutcome {
 	if w.delivered {
 		return ModOutcome{ID: w.id, State: ModDelivered}
 	}
-	return ModOutcome{ID: w.id, State: ModQueued}
+	q.withdrawLocked(w)
+	return ModOutcome{ID: w.id, State: ModWithdrawn}
+}
+
+func (q *modQueue) withdrawLocked(w *modWaiter) {
+	rest := q.pending[w.session][:0]
+	for _, c := range q.pending[w.session] {
+		if c.ID != w.id {
+			rest = append(rest, c)
+		}
+	}
+	if len(rest) == 0 {
+		delete(q.pending, w.session)
+		return
+	}
+	q.pending[w.session] = rest
 }
 
 // forget drops a session's queue, releases its parked polls empty-handed and
@@ -378,9 +399,10 @@ func parseModAck(body []byte) (modAckRequest, error) {
 // id the mod's ack will carry (docs/hooks/mod-control.md). Delivery is at most
 // once and the ack is the only receipt. It fails when the transport is down,
 // when cmd is not a command the contract defines, carries a field of another
-// kind or names a slash command lich refuses, and with errModDetached when the
-// session has no process or no mod polling, which is every session but a
-// running Claude Code one with the lich-plugin mod.
+// kind or names a slash command lich refuses, with errModNotRunning when the
+// session has no process, and with errModDetached when no mod is polling from
+// it, which is every running session but a Claude Code one with the
+// lich-plugin mod.
 func (s *Service) EnqueueModCommand(id string, cmd ModCommand) (string, error) {
 	w, err := s.queueModCommand(id, cmd)
 	if err != nil {
@@ -391,8 +413,8 @@ func (s *Service) EnqueueModCommand(id string, cmd ModCommand) (string, error) {
 
 // RunModCommand queues cmd like EnqueueModCommand and waits, until ctx ends,
 // for the session's mod to ack it. A wait that ends first is not an error: the
-// outcome says whether the command is still queued or already delivered, and
-// either way it still goes through.
+// outcome says the command was delivered, and still goes through, or withdrawn
+// before any poll collected it, and never runs.
 func (s *Service) RunModCommand(ctx context.Context, id string, cmd ModCommand) (ModOutcome, error) {
 	w, err := s.queueModCommand(id, cmd)
 	if err != nil {
@@ -426,7 +448,7 @@ func (s *Service) queueModCommand(id string, cmd ModCommand) (*modWaiter, error)
 	// A poll from a process that is already gone can still land after Close
 	// and look like an attached mod for the length of the attach window.
 	if !s.Live(id) {
-		return nil, errModDetached
+		return nil, errModNotRunning
 	}
 	return s.ws.mods.enqueue(id, cmd)
 }

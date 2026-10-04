@@ -51,7 +51,6 @@ func TestControlSaysHowFarTheCommandGot(t *testing.T) {
 		{spawn.ControlDone, "effort", "high", 0, `"auth-fix" runs at high effort from its next request on.`},
 		{spawn.ControlDone, "effort", "", 0, `"auth-fix" is back on its own effort level.`},
 		{spawn.ControlDelivered, "command", "compact", ExitPending, "id m7) and has not confirmed it yet"},
-		{spawn.ControlQueued, "abort", "", ExitPending, "(abort, id m7) is still queued"},
 		{spawn.ControlEnded, "prompt", "go", ExitNoAnswer, `"auth-fix" ended before confirming the command (prompt, id m7)`},
 	}
 	for _, tc := range tests {

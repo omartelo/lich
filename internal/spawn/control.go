@@ -29,7 +29,6 @@ const (
 const (
 	ControlDone      = "done"
 	ControlDelivered = terminal.ModDelivered
-	ControlQueued    = terminal.ModQueued
 	ControlEnded     = terminal.ModEnded
 )
 
@@ -49,10 +48,11 @@ type Controlled struct {
 // Control gives a running Claude Code session one command through its mod
 // (docs/hooks/mod-control.md) and waits a bounded time for the mod to confirm
 // it. action is one of the mod's kinds, value what that kind carries, and args
-// what follows a slash command's name. A wait that ends first is not an error:
-// State says whether the command is still queued, already delivered, or the
-// session ended. An ack that says the command failed is the error, naming the
-// session and the mod's reason.
+// what follows a slash command's name. A wait that ends after the session took
+// the command is not an error: State says it was delivered and still goes
+// through, or that the session ended. A command the session never took is
+// withdrawn and is the error, and so is an ack that says the command failed,
+// each naming the session.
 func (s *Service) Control(
 	ctx context.Context, fromID, target, projectName, action, value, args string,
 ) (Controlled, error) {
@@ -75,14 +75,21 @@ func (s *Service) Control(
 		return Controlled{}, err
 	}
 
-	wait, cancel := context.WithTimeout(ctx, ackWaitFor(action))
+	label, bound := found.session.Label, ackWaitFor(action)
+	wait, cancel := context.WithTimeout(ctx, bound)
 	defer cancel()
 	out, err := s.term.RunModCommand(wait, found.session.ID, cmd)
 	if err != nil {
-		return Controlled{}, err
+		return Controlled{}, fmt.Errorf("%q: %w", label, err)
+	}
+	if out.State == terminal.ModWithdrawn {
+		return Controlled{}, fmt.Errorf(
+			"%q did not take the %s within %d seconds, so lich withdrew it and nothing ran: its mod stopped "+
+				"polling (Claude Code frozen, or the mod reloading). It is safe to send again",
+			label, action, int(bound/time.Second))
 	}
 	if out.State == terminal.ModAcked && !out.OK {
-		return Controlled{}, fmt.Errorf("%q refused the %s: %s", found.session.Label, action, out.Error)
+		return Controlled{}, fmt.Errorf("%q refused the %s: %s", label, action, out.Error)
 	}
 	state := out.State
 	if state == terminal.ModAcked {
@@ -127,7 +134,7 @@ func controllable(sess store.Session, fromID string) error {
 	if sess.Kind != providers.Claude {
 		return fmt.Errorf(
 			"%q runs %s, and only a Claude Code session can be controlled: lich drives one "+
-				"through a Claude Code mod, which no other CLI has", sess.Label, sess.Kind)
+				"through a Claude Code mod, which no other CLI has", sess.Label, kindName(sess.Kind))
 	}
 	// Refused for model and effort too, which would work: nobody asked for
 	// them, and allowing them would need a target that defaults to the caller,

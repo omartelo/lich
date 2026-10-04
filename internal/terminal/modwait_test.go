@@ -110,9 +110,10 @@ func TestRunModCommandNamesTheUpdateForAnOldMod(t *testing.T) {
 	}
 }
 
-// A wait that runs out before any poll says the command is still queued, and
-// leaves it queued: it still goes through.
-func TestRunModCommandTimingOutBeforeAPollIsQueued(t *testing.T) {
+// A wait that runs out before any poll withdraws the command: past the wait
+// nobody is told it is still coming, so it must never run. The contract
+// changed here: it used to stay queued for a poll inside the attach window.
+func TestRunModCommandTimingOutBeforeAPollWithdrawsIt(t *testing.T) {
 	svc := attachedModService(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -120,11 +121,28 @@ func TestRunModCommandTimingOutBeforeAPollIsQueued(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunModCommand: %v", err)
 	}
-	if out.State != ModQueued || out.ID == "" {
-		t.Fatalf("outcome = %+v, want queued with its id", out)
+	if out.State != ModWithdrawn || out.ID == "" {
+		t.Fatalf("outcome = %+v, want withdrawn with its id", out)
 	}
-	if got := pollMod(t, svc.ws, "s1"); !reflect.DeepEqual(got, []ModCommand{{ID: out.ID, Kind: ModAbort}}) {
-		t.Fatalf("poll after the wait = %v, want the command still there", got)
+	if got := pollMod(t, svc.ws, "s1"); len(got) != 0 {
+		t.Fatalf("poll after the wait = %v, want nothing: the command was withdrawn", got)
+	}
+}
+
+// Withdrawing one command leaves the others queued for the same session.
+func TestRunModCommandWithdrawsOnlyItsOwnCommand(t *testing.T) {
+	svc := attachedModService(t)
+	kept, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModPrompt, Text: "go"})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := svc.RunModCommand(ctx, "s1", ModCommand{Kind: ModAbort}); err != nil {
+		t.Fatalf("RunModCommand: %v", err)
+	}
+	if got := pollMod(t, svc.ws, "s1"); !reflect.DeepEqual(got, []ModCommand{{ID: kept, Kind: ModPrompt, Text: "go"}}) {
+		t.Fatalf("poll after the wait = %v, want only the prompt", got)
 	}
 }
 
@@ -167,6 +185,20 @@ func TestRunModCommandEndsWithTheSession(t *testing.T) {
 	got := finished(t, done)
 	if want := (ModOutcome{ID: cmd.ID, State: ModEnded}); got.out != want {
 		t.Fatalf("RunModCommand = %+v, want %+v", got.out, want)
+	}
+}
+
+// A session whose process exited (or never started) is not running, which is
+// not the same fix as a session whose mod is missing.
+func TestRunModCommandRefusesASessionThatIsNotRunning(t *testing.T) {
+	svc := attachedModService(t)
+	if err := svc.Close("s1"); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	for _, id := range []string{"s1", "never-started"} {
+		if _, err := svc.RunModCommand(context.Background(), id, ModCommand{Kind: ModAbort}); !errors.Is(err, errModNotRunning) {
+			t.Fatalf("%s: err = %v, want errModNotRunning", id, err)
+		}
 	}
 }
 

@@ -95,7 +95,7 @@ it, so an outcome that is neither done nor failed has a code of its own:
 |------|---------|
 | 0 | Done. For `send` and `wait`: an answer is in hand. |
 | 1 | Failed. The `lich: …` line on stderr says why. |
-| 2 | `send` / `wait` / `control` only: **the wait ran out and a ticket came back.** Nothing failed and the errand is still open: `lich wait <ticket>` picks the answer up later. For `control`: the command is queued or delivered and its id is printed; it still goes through. |
+| 2 | `send` / `wait` / `control` only: **the wait ran out and a ticket came back.** Nothing failed and the errand is still open: `lich wait <ticket>` picks the answer up later. For `control`: the session took the command and has not confirmed it yet; its id is printed, and it still goes through. |
 | 3 | `send` / `wait` / `control` only: **the errand is over and no answer is coming through lich**: never read, never delivered, or answered somewhere else. Retrying the wait is pointless; the output says what to do instead. For `control`: the session ended before confirming the command. |
 
 2 and 3 print their prose (or `--json`) on stdout like an answer does and write
@@ -533,11 +533,14 @@ $ lich control auth-fix command compact "keep the test plan"
 | `command <name> [<args>]` | a slash command's name, with or without the slash, and what follows it | the command ran |
 
 - **It waits for the session to confirm**: up to 10 seconds, or 60 for a slash
-  command, which runs only once the session is idle. A command not confirmed by
-  then prints its id and exits 2, and still goes through: a prompt sent to a busy
-  session starts its turn when the current one ends. A session that ends first
-  exits 3. A session that says the command failed (an abort with no turn running,
-  a slash command it does not have) exits 1 with its reason.
+  command, which runs only once the session is idle. A command the session took
+  but has not confirmed by then prints its id and exits 2, and still goes
+  through: a prompt sent to a busy session starts its turn when the current one
+  ends. A command the session never took in that time (its mod stopped polling)
+  is withdrawn and exits 1: nothing ran, so it is safe to send again. A session
+  that ends first exits 3. A session that says the command failed (an abort with
+  no turn running, a slash command it does not have) exits 1 with its reason, as
+  does one that is not running.
 - **`model` and `effort` change that session only**, from its next request on.
   The slash commands `/model` and `/effort` are refused: run this way, Claude Code
   saves what they set as your default for every new session.
@@ -555,8 +558,7 @@ $ lich control auth-fix command compact "keep the test plan"
 
 `--json` prints
 `{"id","project","label","action","value","command_id","state"}`, `value` absent
-when the action carried none; `state` is `done`, `delivered`, `queued` or
-`ended`.
+when the action carried none; `state` is `done`, `delivered` or `ended`.
 
 ### `lich worktrees [--project <name>] [--json]`
 
@@ -738,7 +740,7 @@ at lich.
 | `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model`, `effort`, `ultracode`, `folder` — `lich open` — plus optional `prompt` and `private` — `lich open --prompt [--private]`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |
-| `control_session` | `session`, `action` (`prompt`, `abort`, `model`, `effort`, `command`), optional `value`, `args` (`command` only) and `project`. `lich control`. Queued or delivered is a result, not an error. |
+| `control_session` | `session`, `action` (`prompt`, `abort`, `model`, `effort`, `command`), optional `value`, `args` (`command` only) and `project`. `lich control`. Delivered is a result, not an error; a command the session never took is withdrawn and fails. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |
 | `list_folders` | optional `project`: the folders and the sessions in each, as JSON. `lich folders`. |
 | `file_session` | `folder` (`""` takes the session out), optional `session` (omitted files the caller's own) and `project`. `lich file`. |

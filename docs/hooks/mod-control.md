@@ -45,11 +45,12 @@ A poll is also what attaches the mod. lich refuses to queue a command for a
 session whose mod has not polled within the last 30 seconds (the 25 second wait
 plus a 5 second grace for the next poll to arrive), so a session without the mod
 is told so when the command is issued, not left waiting for a command that
-nobody will collect. A session whose process has exited or been closed is
-refused the same way, whatever polled last. A command still queued 30 seconds
-after it was issued (its mod stopped polling) is dropped at the next poll
-rather than handed to a mod that comes back later, when it would land on an
-unrelated turn.
+nobody will collect. A session whose process has exited, been closed or never
+started is refused as not running, whatever polled last. A command still queued
+30 seconds after it was issued (its mod stopped polling) is dropped at the next
+poll rather than handed to a mod that comes back later, when it would land on an
+unrelated turn. A command whose caller stopped waiting before any poll collected
+it is withdrawn at once, so the caller is never told it is still coming.
 
 ### Commands
 
@@ -175,10 +176,11 @@ hook, which reports through [session-start](session-start.md) as usual.
   (`Service.RunModCommand`), matched by id and session.
 - **Queue** (`Service.EnqueueModCommand`): the one producer. It refuses an
   unknown kind, a field of another kind, an empty prompt, a `command` with no
-  name or named `model` or `effort`, and a session with no running process or
-  no mod polling (`errModDetached`), and otherwise returns the id the ack will
-  carry. `Service.RunModCommand` queues the same way and waits for the ack until
-  its context ends. `spawn.Control` is its one caller, behind `lich control` and
+  name or named `model` or `effort`, a session with no running process
+  (`errModNotRunning`) and one with no mod polling (`errModDetached`), and
+  otherwise returns the id the ack will carry. `Service.RunModCommand` queues the
+  same way and waits for the ack until its context ends; a command no poll
+  collected by then is withdrawn from the queue. `spawn.Control` is its one caller, behind `lich control` and
   `control_session`, and adds the rules about who asks: Claude Code only, never
   the caller's own session.
 - **Teardown**: a session's queue is dropped when its process exits, and when
@@ -225,8 +227,9 @@ hook, which reports through [session-start](session-start.md) as usual.
   so a mod reload drops it without telling lich.
 - **Commands queued when lich exits are dropped.** The queue is in memory.
 - **A slash command runs only once the session is idle.** `/compact` sent during
-  a turn acks after that turn and the compaction, so `lich control` reports it as
-  delivered, not done.
+  a turn acks after that turn and the compaction. `lich control` reports it as
+  done only when both finish within its 60-second wait, and as delivered
+  otherwise.
 - **A slash command that opens a dialog holds the session's commands until
   someone closes it.** Measured on 2.1.288 and 2.1.289: `/cost` holds Claude
   Code's command queue until Esc is pressed in the terminal, and its ack and
