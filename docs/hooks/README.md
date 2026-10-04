@@ -140,7 +140,7 @@ read these fixtures at a lich release tag, not from `main`.
 - [session-touched.md](session-touched.md) — a session changed files, so its
   git status refreshes immediately instead of on the next poll.
 - [mod-control.md](mod-control.md): the card drives a Claude Code session
-  through a lich-plugin mod (Claude Code 2.1.287 or later). Its client is a mod
+  through a lich-plugin mod (Claude Code 2.1.280 or later). Its client is a mod
   that long-polls for commands and acknowledges them, not a hook script.
 
 Each has a fixture file of the same name in [`fixtures/`](fixtures/); the format

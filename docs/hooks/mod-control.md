@@ -2,7 +2,7 @@
 
 Lets lich drive a Claude Code session from its card: start a turn with a prompt,
 stop the running turn, override the model or the effort level of each request,
-and compact the context. The client is a Claude Code **mod** (Claude Code 2.1.287
+and compact the context. The client is a Claude Code **mod** (Claude Code 2.1.280
 or later), a plugin whose hooks run inside the Claude Code process, shipped by
 the companion plugin. It is not a hook script: instead of reporting events, it
 holds a long poll open and applies the commands lich hands it, then reports how
@@ -77,8 +77,8 @@ unrelated turn.
 
 A field that does not belong to the kind is absent: lich refuses to queue a
 command that carries one. lich does not validate
-model names or effort levels; the mod passes them on and acks what Claude Code
-made of them.
+model names or effort levels. The mod refuses an effort outside `low`, `medium`,
+`high`, `xhigh` and `max`, and stores a model name unchecked.
 
 Both sides test against the response shapes in
 [`fixtures/mod-commands.json`](fixtures/mod-commands.json).
@@ -113,7 +113,7 @@ Both sides test against the payloads in
 
 | Claude Code mod                         | Codex hook             | Antigravity hook       | opencode event         | oh-my-pi event         | Crush hook             | Cursor CLI hook        | Kiro CLI hook          | ack `ok: true` means                       |
 |-----------------------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|--------------------------------------------|
-| `prompt` → `$.prompt.submit`            | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | the turn was submitted                     |
+| `prompt` → `$.prompt.submit`            | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | its turn started                           |
 | `abort` → `$.turn.abort`                | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | the running turn ended; lich ends it too   |
 | `model` → `turn.step` model override    | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | the override is set (or dropped)           |
 | `effort` → `turn.step` effort override  | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | the override is set (or dropped)           |
@@ -180,17 +180,31 @@ A failed ack, or an abort while lich has no turn open, changes nothing.
 - **An abort ends the turn only through its ack.** If the ack never arrives,
   the card keeps spinning until the next state report, as it did before this
   contract. And it ends it as `interrupted`, never `done`.
-- **`effort` is unmeasured.** The model override was confirmed in the
-  transcript on Claude Code 2.1.288; the effort override was not.
-- **Whether `UserPromptSubmit` fires for `$.prompt.submit` is unmeasured.** If it
-  does not, a prompt sent here starts a turn the card never hears open. The fix
-  then belongs in the ack, an `ok: true` `prompt` reporting `busy`, with no new
-  endpoint.
-- **The `$.http.fetch` timeout is unmeasured.** The 25 second wait has to stay
-  below it, or every poll ends as a client error and the mod backs off.
-- **A mod reload may strand a parked poll.** Whether a hot reload cancels the
-  old mod's fetch is unmeasured; if it does not, a command can drain into a
-  JavaScript context that no longer exists.
+- **Mods only run where Claude Code turns them on.** Measured on 2.1.200 to
+  2.1.288: before 2.1.280 the module is ignored or skipped, never refused, and
+  the plugin's shell hooks keep working. From 2.1.280 on, Claude Code still
+  gates installed plugins' modules behind a rollout flag it caches in
+  `~/.claude.json`, and running an older Claude Code under the same home can
+  leave it off for the next session. A session whose mod is off never polls, so
+  lich refuses its commands as detached.
+- **A mod loads only once its folder is trusted.** The shell hooks register
+  before the trust prompt is answered; the module waits for it.
+- **The poll has five seconds of slack.** Claude Code aborts a mod's
+  `$.http.fetch` at a fixed 30 seconds (measured on 2.1.288, with no option to
+  change it), and lich answers an empty poll at 25.
+- **The effort override is dropped for a model that takes none.** Measured on
+  2.1.288 on the wire and in the transcript: the override reaches the request,
+  except on a model with no effort setting, where Claude Code sends none. The
+  `effort` the shell hooks report does not reflect the override; the
+  transcript's per-reply `effort` does.
+- **A non-interactive run does not poll.** A `claude -p` inside a lich session
+  inherits the session's variables, so it would take the parent's commands and
+  hold its own exit for up to 25 seconds; the client polls only from an
+  interactive session.
+- **An override's ack means stored, not accepted.** Claude Code first sees a
+  `model` or `effort` override at the session's next request, after the ack, so
+  a model name it rejects fails there, inside Claude Code, while lich holds an
+  `ok: true`.
 - **Overrides live in the mod.** A model or effort override is the mod's state,
   so a mod reload drops it without telling lich.
 - **Commands queued when lich exits are dropped.** The queue is in memory.
