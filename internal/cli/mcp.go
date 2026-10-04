@@ -379,7 +379,7 @@ func property(kind, description string) map[string]any {
 }
 
 // mcpTools is the whole tool surface. Adding one is an entry here, or in
-// folderTools or controlTools. That is why registering MCP once buys every
+// folderTools, controlTools or askTools. That is why registering MCP once buys every
 // tool lich grows later, on every provider, with no further per-provider work.
 var mcpTools = append([]mcpTool{
 	{
@@ -667,7 +667,7 @@ var mcpTools = append([]mcpTool{
 			return "Answer sent.", nil
 		},
 	},
-}, append(folderTools, controlTools...)...)
+}, append(append(folderTools, controlTools...), askTools...)...)
 
 // handOver gives a just-opened session its first task, wording the outcome the
 // way send_to_session words it — the caller should not have to learn two

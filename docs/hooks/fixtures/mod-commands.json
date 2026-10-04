@@ -6,5 +6,6 @@
   {"id": "m5", "kind": "effort", "effort": "high"},
   {"id": "m6", "kind": "effort"},
   {"id": "m7", "kind": "command", "name": "compact", "args": "keep the test plan"},
-  {"id": "m8", "kind": "command", "name": "clear"}
+  {"id": "m8", "kind": "command", "name": "clear"},
+  {"id": "m9", "kind": "ask", "question": "what are you working on?"}
 ]

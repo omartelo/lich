@@ -99,6 +99,14 @@ var commands = []command{
 			"through. One it never took is withdrawn, and fails: nothing ran.",
 	},
 	{
+		name: "ask",
+		args: "[--project <name-or-path>] [--json] <session> <question...>",
+		about: "Ask a running Claude Code session a side question and print its answer.\n" +
+			"It answers from its own conversation without stopping its turn, and\n" +
+			"neither the question nor the answer enters that conversation. Waits up\n" +
+			"to 90 seconds; an answer that comes later is dropped.",
+	},
+	{
 		name: "worktrees",
 		args: "[--project <name-or-path>] [--json]",
 		about: "List a project's git worktrees: what is uncommitted in each and which\n" +

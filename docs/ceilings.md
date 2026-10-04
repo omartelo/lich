@@ -494,6 +494,18 @@ work when nobody knows it and that the call site never shows. The mechanism and 
     presses Esc in its terminal; lich cannot tell such a command apart before running it.
   - A session cannot control itself, for any action: an abort would end the asking turn, and a prompt or a slash
     command would only run after it.
+- **Only a Claude Code session can be asked a side question** (`lich ask`, `ask_session`, `spawn.Ask`): the
+  answer is a `$.model.fork` the same mod makes, so the seven other providers are refused by provider, as for
+  control. Owner's choice: no other CLI exposes a fork of its own conversation to anything running inside it. The
+  traps, all measured on Claude Code 2.1.289 (the contract's Known ceilings has the detail):
+  - The answer knows the conversation only up to the session's last request to the model: a reply being written,
+    or a tool call running, when the question lands is not in it.
+  - An ask cannot be cancelled. Past the 90 seconds lich waits, the fork runs on and is billed until it ends, and
+    its answer is dropped. A mod reload mid-answer loses it, and the caller waits out the 90 seconds.
+  - Its tokens never reach the session's cost: the fork is not in the transcript lich reads cost from. It is
+    cheap only while the prompt cache still holds the session's transcript.
+  - The answer is cut at 16,000 characters.
+  - A session cannot ask itself: the question would ride the request it is waiting on, which the fork never sees.
 - **The plan gauge answers to two undocumented endpoints, and only two providers have one**
   (`internal/quota`): Claude Code's and Codex's usage routes are what their own CLIs poll, not published API. A
   field renamed upstream drops the window it fed rather than raising anything — an entry lich has no name for is

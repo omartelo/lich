@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strings"
 	"testing"
@@ -218,7 +219,7 @@ func TestModAckBeforeTheWaitIsKept(t *testing.T) {
 	if err != nil {
 		t.Fatalf("queue: %v", err)
 	}
-	svc.ws.mods.settle("s1", w.id, true, "")
+	svc.ws.mods.settle(modAckRequest{SessionID: "s1", ID: w.id, OK: true})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if got := svc.ws.mods.await(ctx, w); got.State != ModAcked || !got.OK {
@@ -235,5 +236,39 @@ func TestModCommandDropsTheLeadingSlash(t *testing.T) {
 	want := []ModCommand{{ID: id, Kind: ModRunCommand, Name: "compact", Args: "keep the plan"}}
 	if got := pollMod(t, svc.ws, "s1"); !reflect.DeepEqual(got, want) {
 		t.Fatalf("poll = %v, want %v", got, want)
+	}
+}
+
+// An ask's answer rides its ack, and an answer runs past the 4 KiB every other
+// hook body is held to.
+func TestRunModCommandReturnsAnAsksAnswer(t *testing.T) {
+	svc := attachedModService(t)
+	done := runInBackground(context.Background(), svc, ModCommand{Kind: ModAsk, Question: "what now?"})
+	cmd := collectMod(t, svc.ws, "s1")
+	if cmd.Kind != ModAsk || cmd.Question != "what now?" {
+		t.Fatalf("the mod got %+v, want the ask", cmd)
+	}
+	answer := strings.Repeat("é", 16000)
+	postModAck(t, svc.ws, fmt.Sprintf(`{"session_id":"s1","id":%q,"kind":"ask","ok":true,"answer":%q}`, cmd.ID, answer))
+
+	got := finished(t, done)
+	want := ModOutcome{ID: cmd.ID, State: ModAcked, OK: true, Answer: answer}
+	if got.err != nil || got.out != want {
+		t.Fatalf("RunModCommand = %+v, %v; want the answer", got.out.State, got.err)
+	}
+}
+
+func TestModAckOverItsLimitIsRefused(t *testing.T) {
+	svc := attachedModService(t)
+	body := fmt.Sprintf(`{"session_id":"s1","id":"m1","kind":"ask","ok":true,"answer":%q}`,
+		strings.Repeat("x", modAckBodyLimit))
+	url := fmt.Sprintf("http://127.0.0.1:%d/mod/acks?token=%s", svc.ws.port, svc.ws.token)
+	resp, err := http.Post(url, "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("post ack: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("ack status = %d, want 400", resp.StatusCode)
 	}
 }

@@ -520,6 +520,22 @@ func TestControlOverTheRealDispatcher(t *testing.T) {
 	}
 }
 
+// TestAskOverTheRealDispatcher proves the four arguments `lich ask` posts land
+// on spawn.Ask in the order it declares them: the target, the project and the
+// question are strings side by side.
+func TestAskOverTheRealDispatcher(t *testing.T) {
+	env, _, term := wiredSpawn(t, &spawnGit{})
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"ask", "--project", "lich", "auth-fix", "why?"}, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	want := terminal.ModCommand{Kind: terminal.ModAsk, Question: "why?"}
+	if term.ranOn != "s2" || term.ran != want {
+		t.Errorf("ran %+v on %q, want %+v on s2", term.ran, term.ranOn, want)
+	}
+}
+
 // TestWorktreesOverTheRealDispatcher proves `lich worktrees` posts the caller's
 // session before the project name: swapped, the app resolves the project by a
 // session id and finds none.
