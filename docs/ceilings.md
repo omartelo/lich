@@ -465,7 +465,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   reaches that check, so a plugin old enough to send one only shows up in the startup prompt and the log.
 - **Only a Claude Code card can be driven from lich** (`internal/terminal/modcontrol.go`,
   `Service.EnqueueModCommand`): the control channel (docs/hooks/mod-control.md) has a mod as its client, and mods
-  are a Claude Code feature, from 2.1.287 on and only with the lich-plugin mod loaded. The other seven providers
+  are a Claude Code feature, from 2.1.280 on and only with the lich-plugin mod loaded. The other seven providers
   have nothing that runs inside them and polls, so they cannot be prompted, stopped or switched to another model
   this way, and a command for one of their sessions is refused as detached rather than queued for nobody.
 - **The plan gauge answers to two undocumented endpoints, and only two providers have one**

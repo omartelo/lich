@@ -25,7 +25,7 @@ const (
 const (
 	// modPollWait bounds how long GET /mod/commands holds an empty poll. The
 	// handler bounds itself because http.Serve sets no timeouts, and the bound
-	// has to stay under the mod's $.http.fetch timeout, which is unmeasured on
+	// has to stay under the mod's $.http.fetch timeout, a fixed 30s measured on
 	// Claude Code 2.1.288 (see the contract's ceilings).
 	modPollWait = 25 * time.Second
 	// modRepollGrace is how long a live mod takes to poll again after a
