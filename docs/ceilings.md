@@ -105,7 +105,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 
   | Provider | Rung | Why |
   | --- | --- | --- |
-  | Claude Code | full readout | per-turn token counts, and a model whose window is named (`windowForModel`) |
+  | Claude Code | full readout | per-turn token counts, and the window its mod reports, else one named from the model (`windowForModel`) |
   | Codex | full readout | the effective `model_context_window`, and a running `total_token_usage` |
   | oh-my-pi | cost only | a USD total on every assistant turn; no line carries a context window |
   | opencode | cost only | `session.cost` per conversation; no window recorded with it |
@@ -506,6 +506,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
     cheap only while the prompt cache still holds the session's transcript.
   - The answer is cut at 16,000 characters.
   - A session cannot ask itself: the question would ride the request it is waiting on, which the fork never sees.
+- **Only a Claude Code session reports its own readout** (`internal/terminal/modusage.go`,
+  docs/hooks/mod-usage.md): its mod, with lich-plugin 0.16.0, posts the context window, rate limits and cost
+  Claude Code measured, and those win over what lich derives for the conversation they name. Every other
+  provider, and a Claude Code session without the mod, keeps the derived figures, so two sessions on the same
+  model can disagree by the requests no transcript records (measured 2.7% and 3.1% of a session's cost on
+  2.1.289). The report fires at the end of a turn and never on a compaction, so the tokens stay the
+  transcript's and only the window and the money come from the report; and its cost replaces the
+  conversation's ledger row and drops its sub-agent rows, so a lich restarted before the session's first report
+  re-scans that conversation from the transcript until the report lands again. Only a long-lived token login's
+  plan gauge uses the reported rate limits: a credentials login keeps its usage route, which names the plan,
+  the account and the model-scoped caps a report does not carry.
 - **The plan gauge answers to two undocumented endpoints, and only two providers have one**
   (`internal/quota`): Claude Code's and Codex's usage routes are what their own CLIs poll, not published API. A
   field renamed upstream drops the window it fed rather than raising anything — an entry lich has no name for is
@@ -548,7 +559,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   account's own usage, once per cache window. That request carries Claude Code's system prompt verbatim because
   the API rejects an OAuth token without it — the same coupling as the user agent, and it fails closed, as a
   failed reading. Headers carry the two account-wide windows and no plan name, so such a session shows no
-  model-scoped weekly cap and no "Max 5x" badge.
+  model-scoped weekly cap and no "Max 5x" badge. A session on that login whose mod reports
+  (docs/hooks/mod-usage.md) stands in for the request until one of its windows resets, so the request is only
+  spent for an account no such session has spoken for since.
 - **The sandbox confines a working agent, not hostile code** (`internal/sandbox`): namespaces and mounts on
   Linux, a path policy on macOS, and nothing else — no seccomp filter, no Landlock ruleset. The network is
   never cut (the agent needs its API and the plugin's hooks report over loopback), so anything readable

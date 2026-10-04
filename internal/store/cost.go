@@ -66,6 +66,45 @@ func (s *Service) SaveCostLedger(
 	return nil
 }
 
+// ReplaceConversationCost records cost as the whole of what one conversation
+// has cost, for a provider that reported the figure itself: its row is written
+// with no offset to resume from, and the rows of its sub-agents' transcripts
+// (keyed by the conversation id, a slash and the file) are dropped, since the
+// reported figure already counts them. Like SaveCostLedger it writes nothing for
+// a session whose row is already gone.
+func (s *Service) ReplaceConversationCost(sessionID, conversationID string, cost float64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("replace conversation cost for %q: %w", sessionID, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(
+		`DELETE FROM session_costs WHERE session_id = ? AND substr(transcript_id, 1, ?) = ?`,
+		sessionID, len(conversationID)+1, conversationID+"/",
+	); err != nil {
+		return fmt.Errorf("drop sub-agent cost rows for %q: %w", sessionID, err)
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO session_costs
+		     (session_id, transcript_id, byte_offset, last_message_id, cost_usd, updated_at)
+		 SELECT ?, ?, 0, '', ?, CAST(strftime('%s', 'now') AS INTEGER)
+		 WHERE EXISTS (SELECT 1 FROM sessions WHERE id = ?)
+		 ON CONFLICT(session_id, transcript_id) DO UPDATE SET
+		     byte_offset = 0,
+		     last_message_id = '',
+		     cost_usd = excluded.cost_usd,
+		     updated_at = CASE WHEN session_costs.cost_usd = excluded.cost_usd
+		                       THEN session_costs.updated_at ELSE excluded.updated_at END`,
+		sessionID, conversationID, cost, sessionID,
+	); err != nil {
+		return fmt.Errorf("replace conversation cost for %q: %w", sessionID, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("replace conversation cost for %q: %w", sessionID, err)
+	}
+	return nil
+}
+
 // costRow is one session_costs row, carried across the delete/reinsert a
 // parked session's resume performs (see ReopenWorktreeSession).
 type costRow struct {

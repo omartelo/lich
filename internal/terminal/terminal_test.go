@@ -219,6 +219,19 @@ func (s stubBins) SaveForkCostOffset(sessionID, forkedFrom string) error {
 	return nil
 }
 
+func (s stubBins) ReplaceConversationCost(sessionID, conversationID string, cost float64) error {
+	if s.saveLedgerErr != nil {
+		return s.saveLedgerErr
+	}
+	for key := range s.ledgers {
+		if strings.HasPrefix(key, sessionID+"\x00"+conversationID+"/") {
+			delete(s.ledgers, key)
+		}
+	}
+	s.ledgers[sessionID+"\x00"+conversationID] = stubLedger{0, "", cost}
+	return nil
+}
+
 func (s stubBins) SessionCost(sessionID string) (float64, error) {
 	if s.sessionCostErr != nil {
 		return 0, s.sessionCostErr

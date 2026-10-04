@@ -18,6 +18,7 @@ import (
 	"github.com/omartelo/lich/internal/awake"
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/pricing"
+	"github.com/omartelo/lich/internal/quota"
 	"github.com/omartelo/lich/internal/store"
 )
 
@@ -239,6 +240,7 @@ type Store interface {
 	CostReadout() bool
 	CostLedger(sessionID, transcriptID string) (int64, string, float64, error)
 	SaveCostLedger(sessionID, transcriptID string, offset int64, lastMessage string, cost float64) error
+	ReplaceConversationCost(sessionID, conversationID string, cost float64) error
 	SessionCost(sessionID string) (float64, error)
 	SaveForkCostOffset(sessionID, forkedFrom string) error
 	AddHandsOn(sessionID string, seconds int64) error
@@ -327,6 +329,13 @@ type Service struct {
 	// startup; empty leaves a confined session without the copies dropped into
 	// it, never without a spawn. See SetDropDir.
 	dropDir string
+	// usageReports is the latest figures each Claude Code session measured
+	// about itself (docs/hooks/mod-usage.md), which the footer's readout
+	// prefers to what lich derives. rateLimitReports is where their rate
+	// limits go, wired by SetRateLimitReports and guarded by rateLimitsMu.
+	usageReports     usageReports
+	rateLimitsMu     sync.Mutex
+	rateLimitReports func(sessionID string, limits []quota.ReportedLimit)
 }
 
 // SetDropDir names the directory holding the copies of dropped files
@@ -417,6 +426,7 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			s.hub.Emit(pluginEventName, pluginEvent{ID: id, Version: version})
 		})
 		ws.setModAborted(s.noteInterrupt)
+		ws.setUsageReported(s.onUsageReport)
 	}
 	return s
 }
@@ -756,6 +766,7 @@ func (s *Service) Close(id string) error {
 	// this is the last chance a closed card gets to keep what it was worked.
 	s.FlushHandsOn()
 	s.hands.forget(id)
+	s.usageReports.forget(id)
 	var err error
 	if ok {
 		err = sess.pty.Close()

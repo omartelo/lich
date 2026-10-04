@@ -111,6 +111,9 @@ func (s *Service) transcriptSource(id string) (usageSource, bool) {
 // usageFrom is sessionUsage once the transcript behind it is known.
 func (s *Service) usageFrom(id string, src usageSource) (usageEvent, bool) {
 	u, ok, supported := contextUsageFor(src)
+	if report, reported := s.usageReports.of(id, src.id); ok && reported {
+		u = reportedContextUsage(u, report.Context)
+	}
 	// A provider whose window lich can read but has not read yet — a transcript
 	// still being written, a conversation before its first assistant line — keeps
 	// the readout's last value rather than repainting it at zero. A provider with
@@ -250,6 +253,13 @@ func (s *Service) sessionCost(id string, src usageSource) (float64, costMiss, bo
 	}
 	switch src.kind {
 	case providers.Claude:
+		if report, ok := s.usageReports.of(id, src.id); ok && report.CostUSD != nil {
+			if err := s.store.ReplaceConversationCost(id, src.id, *report.CostUSD); err != nil {
+				slog.Warn("terminal: save reported cost", "session", id, "err", err)
+				return 0, costMissUnread, false
+			}
+			break
+		}
 		if miss, ok := s.countTranscript(id, src.id, src.path); !ok {
 			return 0, miss, false
 		}

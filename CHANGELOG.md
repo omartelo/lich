@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nor the answer lands in its conversation. It answers from what the
   conversation held at its last finished reply, so not from the step it is on
   right now. Same requirements as `lich control`.
+- **A Claude Code session's footer shows the figures Claude Code measured itself.**
+  The cost is the one `/cost` totals, which counts requests no transcript
+  records, the context ring is drawn against the model's real window rather than
+  one guessed from its name, and a session logged in with a long-lived token
+  (`claude setup-token`) fills the plan gauge without lich spending a request on
+  the plan to measure it. Needs Claude Code 2.1.280 or newer and lich-plugin
+  0.16.0; without them the footer reads as before.
 
 ### Changed
 
