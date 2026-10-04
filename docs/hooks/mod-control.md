@@ -1,8 +1,8 @@
 # Contract: mod control
 
-Lets lich drive a Claude Code session from its card: start a turn with a prompt,
-stop the running turn, override the model or the effort level of each request,
-and compact the context. The client is a Claude Code **mod** (Claude Code 2.1.280
+Lets lich drive a Claude Code session (`lich control`, the `control_session` MCP
+tool): start a turn with a prompt, stop the running turn, override the model or
+the effort level of each request, and run one of its slash commands. The client is a Claude Code **mod** (Claude Code 2.1.280
 or later), a plugin whose hooks run inside the Claude Code process, shipped by
 the companion plugin. It is not a hook script: instead of reporting events, it
 holds a long poll open and applies the commands lich hands it, then reports how
@@ -60,25 +60,32 @@ unrelated turn.
 {"id": "m4", "kind": "model"}
 {"id": "m5", "kind": "effort",  "effort": "high"}
 {"id": "m6", "kind": "effort"}
-{"id": "m7", "kind": "compact", "instructions": "keep the test plan"}
-{"id": "m8", "kind": "compact"}
+{"id": "m7", "kind": "command", "name": "compact", "args": "keep the test plan"}
+{"id": "m8", "kind": "command", "name": "clear"}
 ```
 
 - `id`: opaque, unique within one lich process. Echo it in the ack.
-- `kind`: one of `prompt`, `abort`, `model`, `effort`, `compact`. A kind the
+- `kind`: one of `prompt`, `abort`, `model`, `effort`, `command`. A kind the
   mod does not know is acked `ok: false` with `error: "unknown kind"`, so a lich
   newer than the mod is told rather than ignored.
 - `text`: `prompt` only and never empty, the message that starts a turn.
 - `model`: `model` only. Present: every request from now on uses this model.
   Absent: drop the override and go back to the session's own model.
 - `effort`: `effort` only, with the same present/absent rule as `model`.
-- `instructions`: `compact` only and optional, passed to the compaction as its
-  instructions.
+- `name`: `command` only and required, the slash command's name without the
+  slash.
+- `args`: `command` only and optional, what follows the name, as typed.
 
 A field that does not belong to the kind is absent: lich refuses to queue a
 command that carries one. lich does not validate
 model names or effort levels. The mod refuses an effort outside `low`, `medium`,
 `high`, `xhigh` and `max`, and stores a model name unchecked.
+
+lich drops one leading `/` from `name`. It refuses a `command` named `model` or
+`effort`, in any case and with or without the slash: run through a mod, those
+save the value as the default for every new session, and the `model` and
+`effort` kinds are the per-session route. lich does not check that a command
+exists; the mod acks an unknown name `ok: false` with Claude Code's own error.
 
 Both sides test against the response shapes in
 [`fixtures/mod-commands.json`](fixtures/mod-commands.json).
@@ -103,8 +110,9 @@ X-Lich-Plugin: <plugin release>
 
 Responses: `204` ok · `401` invalid token · `400` invalid body.
 
-lich keeps no table of the commands it handed out, so an ack for an id it does
-not know (one from a previous lich process) is accepted like any other.
+lich does not resend commands, so an ack for an id nobody is waiting on (one
+from a previous lich process, or one whose wait already ended) is accepted like
+any other.
 
 Both sides test against the payloads in
 [`fixtures/mod-control.jsonl`](fixtures/mod-control.jsonl).
@@ -117,7 +125,7 @@ Both sides test against the payloads in
 | `abort` → `$.turn.abort`                | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | the running turn ended; lich ends it too   |
 | `model` → `turn.step` model override    | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | the override is set (or dropped)           |
 | `effort` → `turn.step` effort override  | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | the override is set (or dropped)           |
-| `compact` → `$.session.compact`         | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | the compaction ran                         |
+| `command` → `$.command.run({ command: name, args })` | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | none (no mod system)   | the command ran, which is once the session was idle |
 
 Mods are a Claude Code feature, so this contract has one client. Every other
 harness never polls, and lich refuses to queue a command for it as detached.
@@ -129,8 +137,8 @@ An `ok: true` ack of an `abort` ends the turn lich has open for the session the
 way a `Ctrl+C` typed at the PTY does: the card reads `interrupted`, not `done`.
 A failed ack, or an abort while lich has no turn open, changes nothing.
 
-`compact` re-fires Claude Code's `SessionStart` hook, which reports through
-[session-start](session-start.md) as usual.
+A `command` running `/compact` or `/clear` re-fires Claude Code's `SessionStart`
+hook, which reports through [session-start](session-start.md) as usual.
 
 ## Client rules (the mod)
 
@@ -147,6 +155,9 @@ A failed ack, or an abort while lich has no turn open, changes nothing.
   applying the next command. lich ends whatever turn it has open when the ack
   lands, so an ack that arrives after the next `prompt` opened a turn would end
   that turn instead.
+- A `prompt` and a `command` settle only once the session is idle. Apply them
+  in order, but do not wait for them before applying the next command: an
+  `abort` held behind one would reach the running turn only after it ended.
 
 ## lich server side
 
@@ -160,15 +171,20 @@ A failed ack, or an abort while lich has no turn open, changes nothing.
   A failed command is logged; an `ok: true` `abort` calls
   `Service.noteInterrupt`, which emits `session-status` with the state
   `interrupted` and closes the turn's snapshot window, exactly as for an
-  interrupt typed at the PTY.
+  interrupt typed at the PTY. Every ack first releases a wait on that command
+  (`Service.RunModCommand`), matched by id and session.
 - **Queue** (`Service.EnqueueModCommand`): the one producer. It refuses an
-  unknown kind, a field of another kind, an empty prompt, and a session with
-  no running process or no mod polling (`errModDetached`), and otherwise
-  returns the id the ack will carry. Nothing
-  calls it yet; the card's controls and any RPC or MCP surface come later.
+  unknown kind, a field of another kind, an empty prompt, a `command` with no
+  name or named `model` or `effort`, and a session with no running process or
+  no mod polling (`errModDetached`), and otherwise returns the id the ack will
+  carry. `Service.RunModCommand` queues the same way and waits for the ack until
+  its context ends. `spawn.Control` is its one caller, behind `lich control` and
+  `control_session`, and adds the rules about who asks: Claude Code only, never
+  the caller's own session.
 - **Teardown**: a session's queue is dropped when its process exits, and when
   it is closed once the process is gone (a live mod re-polls at once and would
-  attach again). Either releases a parked poll with `[]`.
+  attach again). Either releases a parked poll with `[]`, and releases any wait
+  on its commands as ended.
 
 ## Known ceilings
 
@@ -208,3 +224,18 @@ A failed ack, or an abort while lich has no turn open, changes nothing.
 - **Overrides live in the mod.** A model or effort override is the mod's state,
   so a mod reload drops it without telling lich.
 - **Commands queued when lich exits are dropped.** The queue is in memory.
+- **A slash command runs only once the session is idle.** `/compact` sent during
+  a turn acks after that turn and the compaction, so `lich control` reports it as
+  delivered, not done.
+- **A slash command that opens a dialog holds the session's commands until
+  someone closes it.** Measured on 2.1.288 and 2.1.289: `/cost` holds Claude
+  Code's command queue until Esc is pressed in the terminal, and its ack and
+  every later `command` wait behind it. lich cannot tell such a command apart in
+  advance. The mod does not wait on a `command`, so `abort`, `model` and
+  `effort` still apply. A dialog opens only on an idle session, so there is no
+  turn behind it to abort.
+- **`/model` and `/effort` are refused as commands.** Measured on 2.1.288: run
+  through a mod they write `~/.claude/settings.json` (`model`,
+  `modelSettings.<model>.effortLevel`), the default for every new session.
+- **A mod older than 0.15.0 does not know `command`.** It acks `ok: false`,
+  `unknown kind`, and lich reports "update lich-plugin to 0.15.0 or later".

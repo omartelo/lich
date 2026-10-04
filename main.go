@@ -326,6 +326,10 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //     SetProjects also disarms the guard that keeps two projects off the same
 //     directory, and SetDropDir points the sandbox's read-only bind wherever
 //     the caller likes.
+//   - terminal.EnqueueModCommand and terminal.RunModCommand queue a command for
+//     a session's mod with none of spawn.Control's checks (Claude Code only,
+//     never the caller's own session); `lich control` and control_session
+//     reach them through spawn.Control.
 func denyInternal(d *rpc.Handler) {
 	for _, method := range []string{
 		"store.Close",
@@ -346,6 +350,8 @@ func denyInternal(d *rpc.Handler) {
 		"quota.SetSessions",
 		"terminal.SessionAccount",
 		"terminal.SetDropDir",
+		"terminal.EnqueueModCommand",
+		"terminal.RunModCommand",
 	} {
 		d.Deny(method)
 	}
