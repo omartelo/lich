@@ -397,7 +397,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   lich already running in the fallback browser is not focused by it either, and what a system browser does
   with the forwarded command line is its own.
 - **A prompt in use is recognised from the bytes going in, never from the line itself**
-  (`internal/terminal/draft.go`): a relayed message pastes at the prompt and sends an Enter behind it, so lich
+  (`internal/terminal/draft.go`; typed deliveries only, a Claude Code session with its mod is handed the message, see below): a relayed message pastes at the prompt and sends an Enter behind it, so lich
   holds the delivery back while the user has unsent input there. What it counts is printable input since the last
   Enter, escape sequences skipped — it cannot see the line, so an edit that leaves it empty by another route
   (Ctrl+W, a click into the middle of it) reads as a draft that is still there, and a delivery waits out
@@ -432,7 +432,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   marks and stalled toasts land on its card, and closing them is the workflow's own job. opencode's
   `send_to_session` takes `private` from lich-plugin 0.13.2; its `open_session` takes no task at all, so a private
   hand-off at open is `lich open --prompt --private` there.
-- **A relayed Enter is timed against silence, not against the target** (`internal/relay`, `awaitSettled`): lich
+- **A relayed Enter is timed against silence, not against the target** (`internal/relay`, `awaitSettled`; typed deliveries only, a Claude Code session with its mod is handed the message, see below): lich
   presses Enter once the target's PTY has been quiet for `defaultSubmitDelay`, because nothing here can read a TUI's
   screen to know it has taken the paste in. The window that opens on the target's own keyboard is closed rather
   than lived with: from the paste to the Enter its keystrokes are held and written at the prompt the Enter leaves
@@ -442,6 +442,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   events rather than bytes, the bracketed paste markers do not survive, and every provider TUI then guesses at where
   a paste ends from timing alone. A target that repaints on a timer of its own never goes quiet and gets its Enter
   at `defaultSettleLimit` regardless, which is the case this cannot tell from a paste still arriving.
+- **A relayed message reaches a Claude Code session through its mod, and every other session by typing**
+  (`internal/relay`, `deliver` and `handOff`; `terminal.SubmitPrompt`): the other seven providers have no mod
+  system, so a task, a result note and a scheduled prompt are typed at them with every trap the two bullets above
+  describe. A Claude Code session is typed at too while no mod polls from it: lich-plugin older than 0.14.0, mods
+  off, a folder not trusted yet, or a session so new its mod has not polled. Delivery through the mod is at most
+  once: a prompt no poll collected is typed instead, one a poll collected is never typed again, so a collected
+  prompt lost on the way (the mod reloading as the response lands) is reported unread, not sent twice. A hook that
+  drops the prompt is reported undelivered with its reason, except at a session that was mid-turn, whose ack lich
+  stops waiting for after the receipt window.
 - **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`,
   `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that
   wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and

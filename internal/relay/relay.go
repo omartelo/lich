@@ -3,20 +3,22 @@
 // its own. Claude Code has one; Codex, opencode, oh-my-pi and Crush do not, and
 // this works the same for all five.
 //
-// The delivery is deliberately dumb: lich types the message at the target's
-// prompt and submits it, exactly as the user would. What it never does is read
-// the answer off the terminal — a TUI's output is boxes, spinners and ANSI, and
-// parsing it would mean a parser per provider, each hostage to a release.
-// Instead the message it types asks the agent to report back by running
-// `lich reply <ticket>`, so the answer is *written by the agent that produced
-// it*. That is what keeps this provider-agnostic: anything that can run a shell
-// command can answer.
+// The delivery is deliberately dumb: lich hands the message to the target's
+// mod where one runs (Claude Code with lich-plugin), and otherwise types it at
+// the target's prompt and submits it, exactly as the user would. What it never
+// does is read the answer off the terminal — a TUI's output is boxes, spinners
+// and ANSI, and parsing it would mean a parser per provider, each hostage to a
+// release. Instead the message it delivers asks the agent to report back by
+// running `lich reply <ticket>`, so the answer is *written by the agent that
+// produced it*. That is what keeps this provider-agnostic: anything that can
+// run a shell command can answer.
 package relay
 
 import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -209,8 +211,12 @@ type Terminal interface {
 	// HoldInput keeps what the person at that session types out of the
 	// submission this delivery is making, and hands it back at the prompt
 	// afterwards. The returned release is called once the Enter is through
-	// (see deliver).
+	// (see typeIn).
 	HoldInput(id string) func()
+	// SubmitPrompt hands text to the session's Claude Code mod as a prompt of
+	// its own and returns the wait on the mod's ack; ErrNoMod when no mod polls
+	// from that session.
+	SubmitPrompt(id, text string) (func(context.Context) PromptReceipt, error)
 }
 
 // Peer is one session a caller may address: the label it is addressed by, the
@@ -402,6 +408,9 @@ type Service struct {
 	// settleLimit caps the wait for a target to finish taking a paste in
 	// (defaultSettleLimit). A field for the same reason.
 	settleLimit time.Duration
+	// modAckWait bounds the wait on a mod's ack for a delivery that carries no
+	// ticket (defaultModAckWait). A field for the same reason.
+	modAckWait time.Duration
 	// plugins answers what a provider's sessions can do, which depends on state
 	// this package has none of: whether the companion plugin is installed there,
 	// and whether it is new enough to carry lich's own operations. Nil — the
@@ -445,6 +454,7 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 		deliveryLimit: defaultDeliveryLimit,
 		nudgeDelay:    defaultNudgeDelay,
 		settleLimit:   defaultSettleLimit,
+		modAckWait:    defaultModAckWait,
 	}
 }
 
@@ -564,13 +574,34 @@ func (s *Service) send(
 	return result, nil
 }
 
-// handOff puts a composed message in the target's PTY and starts everything
-// that watches what becomes of it. Called either on the caller's goroutine or,
-// for a target that was not at a prompt yet, on the one holding the message
-// back — and once more from watchReceipt, when the first write reached a
-// terminal nothing was reading.
+// handOff hands a composed message to the target's mod, or types it where no
+// mod takes it, and starts everything that watches what becomes of it. Called
+// either on the caller's goroutine or, for a target that was not at a prompt
+// yet, on the one holding the message back — and once more from watchReceipt,
+// when the first write reached a terminal nothing was reading.
 func (s *Service) handOff(id string, t *ticket, kind, message string) error {
+	// Stamped before the mod is handed it too: its session's busy report can
+	// arrive milliseconds after the prompt is queued.
+	busy := s.stampDelivery(t)
+	await, err := s.term.SubmitPrompt(t.targetID, message)
+	if errors.Is(err, ErrNoMod) {
+		return s.typeTask(id, t, kind, message, busy)
+	}
+	if err != nil {
+		return fmt.Errorf("deliver to %q: %w", t.target, err)
+	}
+	// Queued for the mod is submitted the way an Enter typed into a busy
+	// session is: the agent reads it once its prompt is free.
+	s.markSubmitted(id, t)
+	go s.watchModReceipt(id, t, kind, message, busy, await)
+	return nil
+}
+
+// stampDelivery stamps the ticket as delivered now and reports whether the
+// target was busy, which decides the turn this message lands in.
+func (s *Service) stampDelivery(t *ticket) bool {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	// Read here rather than at Send: a queued message can wait out a whole setup
 	// script, and what the target was doing back then decides nothing about the
 	// turn this message lands in.
@@ -579,7 +610,7 @@ func (s *Service) handOff(id string, t *ticket, kind, message string) error {
 		t.skipTurns = 1
 	}
 	// Stamped before the write, not after: a delivery is two writes a beat apart
-	// (see deliver), and turn accounting ignores an undelivered ticket. A target
+	// (see typeIn), and turn accounting ignores an undelivered ticket. A target
 	// reporting inside that beat would be lost — its busy report, and the ticket
 	// is closed unread with the message queued and the reply that follows landing
 	// on nothing; its done, and the skip meant for the turn already running is
@@ -587,25 +618,19 @@ func (s *Service) handOff(id string, t *ticket, kind, message string) error {
 	t.delivered = s.now()
 	s.deliveries++
 	t.deliverySeq = s.deliveries
-	s.mu.Unlock()
+	return busy
+}
 
-	if err := s.deliver(t.targetID, message); err != nil {
-		return fmt.Errorf("deliver to %q: %w", t.target, err)
-	}
+// markSubmitted records that the agent has the message, and raises both cards'
+// marks.
+func (s *Service) markSubmitted(id string, t *ticket) {
 	s.mu.Lock()
 	t.submitted = true
 	s.mu.Unlock()
-	// Announced only once the message is actually in the PTY: a mark raised
-	// before the write would survive a delivery that never happened.
+	// Announced only once the message is actually in: a mark raised before the
+	// write would survive a delivery that never happened.
 	s.announce(t.targetID, t.sender, DirectionIn, id)
 	s.announce(t.fromID, t.target, DirectionOut, id)
-	// A target that was already working is not checked: it will read this at the
-	// end of the turn it is in, whenever that is, and its provider is busy the
-	// whole time — there is nothing here to tell apart.
-	if !busy && s.reportsState(kind) {
-		go s.watchReceipt(id, t, kind, message)
-	}
-	return nil
 }
 
 // queueDelivery holds a task back until its target is at a prompt, then hands

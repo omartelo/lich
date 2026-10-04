@@ -173,6 +173,11 @@ hook (`docs/hooks/session-state.md`), and it is the same thing its card shows:
 
 Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
 
+A Claude Code session running the lich-plugin mod is not typed at: it receives
+the task as a message from the plugin, so whatever its user was typing at its
+prompt is left alone. A task the mod collected is never typed again; one no poll
+collected is typed as usual.
+
 - `<session>` is the label on the card, **or** the roster name that session
   answers to (`myrepo-a1b2`, the one lich passes as `--name` and a mention
   writes at a prompt). Both name the same session and both are accepted, because
@@ -206,7 +211,9 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
   and the output sends a person to that card: nothing is queued, so the task has
   to be sent again once the screen is clear. Exit 3. Only reported for providers that
   report their state at all (the plugin, `docs/hooks/`) — silence has to mean
-  something before it can be read as anything.
+  something before it can be read as anything. A task handed to a Claude Code
+  session's mod is never typed again: one its mod collected and the session never
+  started on is reported here too.
 - **Never delivered**: the task was held for a session that never reached a
   prompt — it ended, or whatever had its terminal outlasted the queue (10
   minutes). The ticket is dropped rather than left to expire, and the output
@@ -1003,7 +1010,8 @@ receiving agent only because this text describes it.
   (`frontend/src/lib/session/sessions.ts`) appends it **without focusing it** —
   an agent opening three workers must not drag the view along three times.
 - **Relay** — `internal/relay`: resolves a label to a live session, composes the
-  message above, types it through the terminal service, and holds the ticket the
+  message above, hands it to the target's Claude Code mod when one is polling and
+  types it through the terminal service otherwise, and holds the ticket the
   answer comes back on. Tickets live in memory: one exists for as long as its
   errand does, and a lich that restarted has no PTY left to answer into.
 - **UI push** — the relay emits the global app event `session-relay`

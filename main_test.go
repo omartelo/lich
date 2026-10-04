@@ -37,6 +37,7 @@ var denied = map[string]reflect.Type{
 	"terminal.SetDropDir":             reflect.TypeFor[*terminal.Service](),
 	"terminal.EnqueueModCommand":      reflect.TypeFor[*terminal.Service](),
 	"terminal.RunModCommand":          reflect.TypeFor[*terminal.Service](),
+	"terminal.SubmitPrompt":           reflect.TypeFor[*terminal.Service](),
 }
 
 // stubService stands in for the registered services: dispatch resolves a
@@ -59,6 +60,7 @@ func (stubService) SetProjects() error         { return nil }
 func (stubService) SetDropDir() error          { return nil }
 func (stubService) EnqueueModCommand() error   { return nil }
 func (stubService) RunModCommand() error       { return nil }
+func (stubService) SubmitPrompt() error        { return nil }
 func (stubService) Allowed() error             { return nil }
 
 func denyingDispatcher() *rpc.Handler {

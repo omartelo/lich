@@ -8,9 +8,12 @@ the companion plugin. It is not a hook script: instead of reporting events, it
 holds a long poll open and applies the commands lich hands it, then reports how
 each one went.
 
-This replaces nothing. The other contracts keep reporting the session's state,
-and a prompt sent here surfaces in Claude Code as a message from the plugin
-rather than as text typed at the PTY.
+It also carries lich's relay to a Claude Code session: a task sent with
+`lich send` or `send_to_session`, the note that results are ready and a
+scheduled prompt arrive as a `prompt` when the mod is attached, and are typed at
+the PTY otherwise. The other contracts keep reporting the session's state, and a
+prompt sent here surfaces in Claude Code as a message from the plugin rather
+than as text typed at the PTY.
 
 See [README.md](README.md) for the shared transport (`LICH_PORT` / `LICH_TOKEN`
 / `LICH_SESSION_ID`) and the client rules every hook follows; the rules below
@@ -174,7 +177,7 @@ hook, which reports through [session-start](session-start.md) as usual.
   `interrupted` and closes the turn's snapshot window, exactly as for an
   interrupt typed at the PTY. Every ack first releases a wait on that command
   (`Service.RunModCommand`), matched by id and session.
-- **Queue** (`Service.EnqueueModCommand`): the one producer. It refuses an
+- **Queue** (`Service.EnqueueModCommand`): the producer behind `lich control`. It refuses an
   unknown kind, a field of another kind, an empty prompt, a `command` with no
   name or named `model` or `effort`, a session with no running process
   (`errModNotRunning`) and one with no mod polling (`errModDetached`), and
@@ -182,7 +185,9 @@ hook, which reports through [session-start](session-start.md) as usual.
   same way and waits for the ack until its context ends; a command no poll
   collected by then is withdrawn from the queue. `spawn.Control` is its one caller, behind `lich control` and
   `control_session`, and adds the rules about who asks: Claude Code only, never
-  the caller's own session.
+  the caller's own session. `Service.SubmitPrompt` is the relay's producer
+  (`internal/relay`): it queues a `prompt` the same way and hands the relay the
+  wait on its ack, and a session with no mod polling is typed at instead.
 - **Teardown**: a session's queue is dropped when its process exits, and when
   it is closed once the process is gone (a live mod re-polls at once and would
   attach again). Either releases a parked poll with `[]`, and releases any wait
@@ -226,6 +231,9 @@ hook, which reports through [session-start](session-start.md) as usual.
 - **Overrides live in the mod.** A model or effort override is the mod's state,
   so a mod reload drops it without telling lich.
 - **Commands queued when lich exits are dropped.** The queue is in memory.
+- **A relayed prompt is typed only when no poll collected it.** A relayed
+  prompt a poll collected and nobody acked may still run, so lich never types it
+  again: the relay reports it unread instead.
 - **A slash command runs only once the session is idle.** `/compact` sent during
   a turn acks after that turn and the compaction. `lich control` reports it as
   done only when both finish within its 60-second wait, and as delivered
