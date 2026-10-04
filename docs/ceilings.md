@@ -463,11 +463,20 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   before the pin or by hand, is caught at startup from its installed version, and again by the `X-Lich-Plugin`
   header its hooks send (docs/hooks/README.md) once a session reports. A report whose payload lich refuses never
   reaches that check, so a plugin old enough to send one only shows up in the startup prompt and the log.
-- **Only a Claude Code card can be driven from lich** (`internal/terminal/modcontrol.go`,
-  `Service.EnqueueModCommand`): the control channel (docs/hooks/mod-control.md) has a mod as its client, and mods
-  are a Claude Code feature, from 2.1.280 on and only with the lich-plugin mod loaded. The other seven providers
-  have nothing that runs inside them and polls, so they cannot be prompted, stopped or switched to another model
-  this way, and a command for one of their sessions is refused as detached rather than queued for nobody.
+- **Only a Claude Code session can be driven from lich** (`lich control`, `control_session`, `spawn.Control`,
+  `internal/terminal/modcontrol.go`): the control channel (docs/hooks/mod-control.md) has a mod as its client,
+  and mods are a Claude Code feature, from 2.1.280 on and only with the lich-plugin mod loaded, with lich-plugin
+  0.15.0 or newer. The other seven providers have nothing that runs inside them and polls, so they cannot be
+  prompted, stopped, switched to another model or handed a slash command this way, and `spawn.Control` refuses
+  their sessions by provider before anything is queued. The mod-control contract's Known ceilings has the rest;
+  three are traps a caller walks into:
+  - `/model` and `/effort` are refused as slash commands: measured on Claude Code 2.1.288, run through a mod they
+    write `~/.claude/settings.json` (`model`, `modelSettings.<model>.effortLevel`), the default for every new
+    session. The `model` and `effort` actions are the per-session route.
+  - A slash command that opens a dialog (`/cost`) holds that session's later slash commands until someone
+    presses Esc in its terminal; lich cannot tell such a command apart before running it.
+  - A session cannot control itself, for any action: an abort would end the asking turn, and a prompt or a slash
+    command would only run after it.
 - **The plan gauge answers to two undocumented endpoints, and only two providers have one**
   (`internal/quota`): Claude Code's and Codex's usage routes are what their own CLIs poll, not published API. A
   field renamed upstream drops the window it fed rather than raising anything — an entry lich has no name for is

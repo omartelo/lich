@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"net"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ import (
 	"github.com/omartelo/lich/internal/rpc"
 	"github.com/omartelo/lich/internal/spawn"
 	"github.com/omartelo/lich/internal/store"
+	"github.com/omartelo/lich/internal/terminal"
 )
 
 // The tests above answer the CLI with canned JSON, which proves what it prints
@@ -330,6 +332,19 @@ type spawnTerminal struct {
 	kind   string
 	cwd    string
 	closed string
+	// ran is the last command handed to a session's mod, and ranOn that
+	// session.
+	ran   terminal.ModCommand
+	ranOn string
+}
+
+func (s *spawnTerminal) RunModCommand(
+	_ context.Context, id string, cmd terminal.ModCommand,
+) (terminal.ModOutcome, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ran, s.ranOn = cmd, id
+	return terminal.ModOutcome{ID: "m1", State: terminal.ModAcked, OK: true}, nil
 }
 
 func (s *spawnTerminal) Start(_, _, cwd, kind, _, _ string, _, _ bool, _, _ int) error {
@@ -474,6 +489,27 @@ func TestRenameWithoutATargetRenamesTheCallersOwnSession(t *testing.T) {
 	}
 	if rows.renamed != [2]string{"s1", "planner"} {
 		t.Errorf("renamed = %v, want the calling session under the new name", rows.renamed)
+	}
+}
+
+// TestControlOverTheRealDispatcher proves the six arguments `lich control`
+// posts land on spawn.Control in the order it declares them, the context it
+// takes first included: the action, the name and its arguments are strings side
+// by side, and shifted by one the session would run the wrong command.
+func TestControlOverTheRealDispatcher(t *testing.T) {
+	env, _, term := wiredSpawn(t, &spawnGit{})
+
+	var stdout, stderr bytes.Buffer
+	args := []string{"control", "--project", "lich", "auth-fix", "command", "/compact", "keep the plan"}
+	if code := Run(args, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	want := terminal.ModCommand{Kind: terminal.ModRunCommand, Name: "/compact", Args: "keep the plan"}
+	if term.ranOn != "s2" || term.ran != want {
+		t.Errorf("ran %+v on %q, want %+v on s2", term.ran, term.ranOn, want)
+	}
+	if stdout.String() != "\"auth-fix\" ran /compact.\n" {
+		t.Errorf("stdout = %q", stdout.String())
 	}
 }
 

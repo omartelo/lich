@@ -20,6 +20,7 @@
 package spawn
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -118,6 +119,9 @@ type Terminal interface {
 	// peer roster, read out of the provider's own record. Empty when there is
 	// none, which is what leaves `lich close` matching the derived name.
 	AgentName(id string) string
+	// RunModCommand queues cmd for the session's Claude Code mod and waits,
+	// until ctx ends, for the mod to confirm it.
+	RunModCommand(ctx context.Context, id string, cmd terminal.ModCommand) (terminal.ModOutcome, error)
 }
 
 // Events is where an opened session is announced to the window. A nil one leaves

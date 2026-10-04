@@ -87,6 +87,17 @@ var commands = []command{
 			"user's: the provider's auto-title never overwrites it again.",
 	},
 	{
+		name: "control",
+		args: "[--project <name-or-path>] [--json] <session>\n" +
+			"            prompt <text> | abort | model [<model>] | effort [<level>] |\n" +
+			"            command <name> [<args>]",
+		about: "Drive a running Claude Code session: type a prompt into it, stop its\n" +
+			"turn, set the model or effort its next requests use (none given goes\n" +
+			"back to its own), or run one of its slash commands. Waits up to 10\n" +
+			"seconds (60 for a slash command) for the session to confirm; if it has\n" +
+			"not, prints the command's id and exits 2. The command still goes through.",
+	},
+	{
 		name: "worktrees",
 		args: "[--project <name-or-path>] [--json]",
 		about: "List a project's git worktrees: what is uncommitted in each and which\n" +

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A running Claude Code session can be driven from outside its terminal.**
+  `lich control auth-fix prompt "run the tests again"`, or `control_session` from
+  an agent, types a prompt into it, stops its turn, sets the model or effort its
+  next requests use, or runs one of its slash commands, such as `/compact`. It
+  waits for the session to confirm and says so when the command is still on its
+  way. The model and effort apply to that session only: `/model` and `/effort`
+  are refused because Claude Code saves them as your default for every new
+  session. Needs Claude Code 2.1.280 or newer and lich-plugin 0.15.0.
+
 ## [0.57.0] - 2026-10-03
 
 ### Changed
