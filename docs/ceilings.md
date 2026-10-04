@@ -446,11 +446,19 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (`internal/relay`, `deliver` and `handOff`; `terminal.SubmitPrompt`): the other seven providers have no mod
   system, so a task, a result note and a scheduled prompt are typed at them with every trap the two bullets above
   describe. A Claude Code session is typed at too while no mod polls from it: lich-plugin older than 0.14.0, mods
-  off, a folder not trusted yet, or a session so new its mod has not polled. Delivery through the mod is at most
-  once: a prompt no poll collected is typed instead, one a poll collected is never typed again, so a collected
+  off, a folder not trusted yet, or a session so new its mod has not polled. A session whose mod polls is handed
+  the message while its user is mid-sentence, since nothing is typed into that line. Delivery through the mod is at
+  most once: a prompt no poll collected is typed instead, one a poll collected is never typed again, so a collected
   prompt lost on the way (the mod reloading as the response lands) is reported unread, not sent twice. A hook that
   drops the prompt is reported undelivered with its reason, except at a session that was mid-turn, whose ack lich
   stops waiting for after the receipt window.
+- **Only a Claude Code subagent becomes a lich card** (lich-plugin's `hooks/agent-cards.js`, its
+  `docs/agent-cards.md`): the plugin's mod takes the model's general-purpose `Agent` call and runs it as a lich
+  session on a worktree of its own, with `lich open --prompt` and `lich wait`. The other seven providers have no
+  mod system, so nothing can take a subagent call from them, and their subagents stay inside their CLI. On Claude
+  Code too, a typed agent (Explore, Plan, a plugin's), a workflow step, another plugin's spawn, a remote one and a
+  worker's own subagents stay native, and the worker is reached with `send_to_session` or `lich send`, never with
+  Claude Code's `SendMessage`.
 - **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`,
   `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that
   wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and

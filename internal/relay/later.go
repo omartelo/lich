@@ -77,7 +77,7 @@ func (s *Service) deliverDue() {
 			if sess.ScheduledPrompt == "" || sess.ScheduledAt == 0 || sess.ScheduledAt > now {
 				continue
 			}
-			if !s.term.Ready(sess.ID) {
+			if !s.takesDelivery(sess.ID) {
 				continue
 			}
 			// Cleared before the write, not after: deliver blocks while the paste

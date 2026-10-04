@@ -27,16 +27,33 @@ type PromptReceipt struct {
 	Reason string
 }
 
+// HandedPrompt is a prompt queued for a session's mod.
+type HandedPrompt struct {
+	// Await waits for the mod's ack until ctx ends, and says how far the
+	// prompt got.
+	Await func(context.Context) PromptReceipt
+	// Collected reports whether a poll has carried the prompt to the mod yet.
+	Collected func() bool
+}
+
 // defaultModAckWait bounds the wait on a mod's ack for a delivery that carries
 // no ticket. An idle session acks within a second or two, once its turn
 // started; past this the session is not idle, and the prompt runs once it is.
 const defaultModAckWait = 10 * time.Second
 
+// takesDelivery is whether a message can go to a session now: its prompt is
+// free, or its mod takes the message without touching what its user is typing.
+// A session whose mod polls is past its setup script, since only the agent the
+// script hands over to runs one.
+func (s *Service) takesDelivery(id string) bool {
+	return s.term.Ready(id) || s.term.ModAttached(id)
+}
+
 // handToMod hands a message to the session's mod, and reports whether it is
 // the mod's to deliver now: false with no error means type it instead, which
 // is what a session with no mod and a prompt no poll collected both want.
 func (s *Service) handToMod(sessionID, message string) (bool, error) {
-	await, err := s.term.SubmitPrompt(sessionID, message)
+	handed, err := s.term.SubmitPrompt(sessionID, message)
 	if errors.Is(err, ErrNoMod) {
 		return false, nil
 	}
@@ -45,7 +62,7 @@ func (s *Service) handToMod(sessionID, message string) (bool, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), s.modAckWait)
 	defer cancel()
-	receipt := await(ctx)
+	receipt := handed.Await(ctx)
 	switch receipt.State {
 	case PromptWithdrawn:
 		return false, nil
@@ -110,6 +127,7 @@ func (s *Service) errandWindow(t *ticket) (context.Context, context.CancelFunc) 
 func (s *Service) typeWithdrawn(id string, t *ticket, kind, message string) {
 	s.mu.Lock()
 	current, live := s.tickets[id]
+	t.collected = nil
 	s.mu.Unlock()
 	if !live || current != t {
 		return

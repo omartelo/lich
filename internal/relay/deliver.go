@@ -108,7 +108,7 @@ func (s *Service) awaitFree(sessionID string) error {
 func (s *Service) awaitReady(dest candidate, deadline time.Time) error {
 	for {
 		time.Sleep(readyPoll)
-		if s.term.Ready(dest.ID) {
+		if s.takesDelivery(dest.ID) {
 			return nil
 		}
 		if !s.term.Live(dest.ID) {

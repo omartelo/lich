@@ -110,6 +110,7 @@ reads what each CLI writes down and no two of them write down the same things.
 | Open a session with ultracode on | yes | no | no | no | no | no | no | no |
 | Drive a running session from `lich control` or an agent: prompt, stop, model, effort, slash command | yes | no | no | no | no | no | no | no |
 | A message from another session arrives without being typed into the terminal | yes | no | no | no | no | no | no | no |
+| A subagent the agent starts runs as a lich session with its own card and worktree | yes | no | no | no | no | no | no | no |
 | Delegate privately from a subagent or workflow step | yes | yes | yes | yes | yes | yes | yes | yes |
 | A resumed session keeps the model and effort it was on | model only | yes | no | model | yes | no | model | model; effort untested |
 | A result still waits for you after you interrupt a wait for it | yes | yes | yes | yes | no | yes | yes | yes |

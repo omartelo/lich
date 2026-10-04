@@ -19,27 +19,39 @@ type fakeMod struct {
 	prompts  []string
 }
 
-func (f *fakeTerminal) SubmitPrompt(id, text string) (func(context.Context) PromptReceipt, error) {
+// A prompt whose receipt is anything but withdrawn reads as collected from the
+// start, as one a polling mod takes at once does.
+func (f *fakeTerminal) SubmitPrompt(id, text string) (HandedPrompt, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	mod := f.mods[id]
 	if mod == nil {
-		return nil, ErrNoMod
+		return HandedPrompt{}, ErrNoMod
 	}
 	if mod.err != nil {
-		return nil, mod.err
+		return HandedPrompt{}, mod.err
 	}
 	if len(mod.prompts) >= len(mod.receipts) {
-		return nil, ErrNoMod
+		return HandedPrompt{}, ErrNoMod
 	}
 	receipt := mod.receipts[len(mod.prompts)]
 	mod.prompts = append(mod.prompts, text)
-	return func(ctx context.Context) PromptReceipt {
-		if receipt.State != PromptAcked && receipt.State != PromptEnded {
-			<-ctx.Done()
-		}
-		return receipt
+	return HandedPrompt{
+		Await: func(ctx context.Context) PromptReceipt {
+			if receipt.State != PromptAcked && receipt.State != PromptEnded {
+				<-ctx.Done()
+			}
+			return receipt
+		},
+		Collected: func() bool { return receipt.State != PromptWithdrawn },
 	}, nil
+}
+
+func (f *fakeTerminal) ModAttached(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	mod := f.mods[id]
+	return mod != nil && len(mod.prompts) < len(mod.receipts)
 }
 
 // attachMod gives a session a mod that answers its prompts with receipts, in
@@ -389,4 +401,91 @@ func TestTheTicketNoticeGoesThroughTheMod(t *testing.T) {
 		t.Errorf("third prompt = %q, want the notice", notice)
 	}
 	assertNotTyped(t, term, "s2")
+}
+
+// A prompt no poll collected is not in the session yet, so a turn the user ran
+// there meanwhile is not its turn: the errand stays open, and the task is typed
+// once it is withdrawn.
+func TestATurnBeforeAnyPollCollectedTheTaskDoesNotCloseIt(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.attachMod("s2", withdrawn)
+	svc := viaMod(term, nil)
+	svc.receiptWindow = 200 * time.Millisecond
+
+	done := make(chan Result, 1)
+	go func() {
+		got, _ := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+		done <- got
+	}()
+	awaitDelivered(t, svc, 1)
+	svc.Observe("s2", stateBusy)
+	svc.Observe("s2", stateDone)
+
+	if !awaitWritten(term, "s2", "run the tests") {
+		t.Fatalf("the task was never typed: %q", term.writesTo("s2"))
+	}
+	if got := <-done; got.Status != StatusUnread {
+		t.Errorf("status = %q, want unread: the typed task was never picked up", got.Status)
+	}
+}
+
+// The mod applies commands in order, and the abort it acked is answered only
+// once the report it raised is through: a report that waited on the nudge's
+// ack would wait on itself.
+func TestAStateReportDoesNotWaitOnTheNudgesAck(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.attachMod("s1", collected)
+	svc := viaMod(term, nil)
+	svc.modAckWait = 5 * time.Second
+	svc.Observe("s1", stateBusy)
+	plant(svc, "t1", "s1", "s2", "docs")
+	if err := svc.Reply("", "t1", "all green"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+
+	returned := make(chan struct{})
+	go func() {
+		svc.Observe("s1", stateInterrupted)
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("the report waited on the nudge's ack")
+	}
+	if !awaitPrompts(term, "s1", 1) {
+		t.Fatal("the sender's mod was never handed the nudge")
+	}
+}
+
+// The mod never touches the user's line, so a task does not wait for it.
+func TestATaskReachesADraftingSessionThroughItsMod(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.attachMod("s2", ackedOK)
+	term.typeAt("s2", true)
+	svc := viaMod(term, nil)
+
+	if _, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if prompts := term.promptsTo("s2"); len(prompts) != 1 {
+		t.Errorf("the mod was handed %d prompts, want the task", len(prompts))
+	}
+	assertNotTyped(t, term, "s2")
+}
+
+func TestAScheduledPromptReachesADraftingSessionThroughItsMod(t *testing.T) {
+	writer := &scheduleWriter{}
+	term := newFakeTerminal("s1")
+	term.attachMod("s1", ackedOK)
+	term.typeAt("s1", true)
+	svc := newRelay(scheduled(1000, "run the release checklist", writer), term, nil)
+	svc.now = at(1000)
+
+	svc.deliverDue()
+
+	if prompts := term.promptsTo("s1"); len(prompts) != 1 {
+		t.Fatalf("the mod was handed %q, want the scheduled prompt", prompts)
+	}
+	assertNotTyped(t, term, "s1")
 }

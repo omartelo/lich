@@ -40,12 +40,12 @@ func TestSubmitPromptFindsNoModToHandItTo(t *testing.T) {
 // the test goroutine.
 func submitInBackground(t *testing.T, ctx context.Context, svc *Service) <-chan relay.PromptReceipt {
 	t.Helper()
-	await, err := svc.SubmitPrompt("s1", "run the tests")
+	handed, err := svc.SubmitPrompt("s1", "run the tests")
 	if err != nil {
 		t.Fatalf("SubmitPrompt: %v", err)
 	}
 	done := make(chan relay.PromptReceipt, 1)
-	go func() { done <- await(ctx) }()
+	go func() { done <- handed.Await(ctx) }()
 	return done
 }
 
@@ -110,5 +110,46 @@ func TestSubmitPromptEndsWithTheSession(t *testing.T) {
 	}
 	if got := receiptOf(t, done); got.State != relay.PromptEnded {
 		t.Fatalf("receipt = %+v, want ended", got)
+	}
+}
+
+func TestSubmitPromptIsCollectedOnceAPollCarriesIt(t *testing.T) {
+	svc := attachedModService(t)
+	handed, err := svc.SubmitPrompt("s1", "run the tests")
+	if err != nil {
+		t.Fatalf("SubmitPrompt: %v", err)
+	}
+	if handed.Collected() {
+		t.Fatal("collected before any poll")
+	}
+	collectMod(t, svc.ws, "s1")
+	if !handed.Collected() {
+		t.Fatal("not collected after a poll carried it")
+	}
+}
+
+func TestModAttachedOnlyWhileAModPollsFromARunningSession(t *testing.T) {
+	unpolled := newModService(t, events.New(), 10*time.Millisecond)
+	runModSession(unpolled, "s1")
+	stopped := attachedModService(t)
+	if err := stopped.Close("s1"); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	tests := []struct {
+		name string
+		svc  *Service
+		want bool
+	}{
+		{"polled", attachedModService(t), true},
+		{"no poll", unpolled, false},
+		{"not running", stopped, false},
+		{"no transport", &Service{}, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.svc.ModAttached("s1"); got != tc.want {
+				t.Fatalf("ModAttached = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

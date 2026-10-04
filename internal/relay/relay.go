@@ -214,9 +214,11 @@ type Terminal interface {
 	// (see typeIn).
 	HoldInput(id string) func()
 	// SubmitPrompt hands text to the session's Claude Code mod as a prompt of
-	// its own and returns the wait on the mod's ack; ErrNoMod when no mod polls
-	// from that session.
-	SubmitPrompt(id, text string) (func(context.Context) PromptReceipt, error)
+	// its own; ErrNoMod when no mod polls from that session.
+	SubmitPrompt(id, text string) (HandedPrompt, error)
+	// ModAttached is whether a Claude Code mod polls from that session, which
+	// takes a prompt without touching the line its user is typing.
+	ModAttached(id string) bool
 }
 
 // Peer is one session a caller may address: the label it is addressed by, the
@@ -339,6 +341,10 @@ type ticket struct {
 	// message handed to a busy session is answered a turn later — and the ending
 	// of the turn in progress says nothing about this request.
 	skipTurns int
+	// collected reports whether a poll carried the message to the target's mod;
+	// nil for a typed one. Until then nothing in that session has it, so a turn
+	// ending there is not its turn (turnCandidates).
+	collected func() bool
 }
 
 // Service relays prompts between sessions. Tickets live in memory only: one
@@ -552,8 +558,8 @@ func (s *Service) send(
 	s.announceInboxAll(senders)
 
 	message := compose(sender, id, prompt, s.offersTools(dest.Peer.Kind))
-	if s.term.Ready(dest.ID) {
-		// A target that is at a prompt is written to on the caller's own
+	if s.takesDelivery(dest.ID) {
+		// A target that takes the message now is written to on the caller's own
 		// goroutine, so a PTY that refuses the write is the error this call
 		// returns rather than an outcome mailed to the sender later.
 		if err := s.handOff(id, t, dest.Peer.Kind, message); err != nil {
@@ -583,17 +589,20 @@ func (s *Service) handOff(id string, t *ticket, kind, message string) error {
 	// Stamped before the mod is handed it too: its session's busy report can
 	// arrive milliseconds after the prompt is queued.
 	busy := s.stampDelivery(t)
-	await, err := s.term.SubmitPrompt(t.targetID, message)
+	handed, err := s.term.SubmitPrompt(t.targetID, message)
 	if errors.Is(err, ErrNoMod) {
 		return s.typeTask(id, t, kind, message, busy)
 	}
 	if err != nil {
 		return fmt.Errorf("deliver to %q: %w", t.target, err)
 	}
+	s.mu.Lock()
+	t.collected = handed.Collected
+	s.mu.Unlock()
 	// Queued for the mod is submitted the way an Enter typed into a busy
 	// session is: the agent reads it once its prompt is free.
 	s.markSubmitted(id, t)
-	go s.watchModReceipt(id, t, kind, message, busy, await)
+	go s.watchModReceipt(id, t, kind, message, busy, handed.Await)
 	return nil
 }
 

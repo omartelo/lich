@@ -175,7 +175,7 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
 
 A Claude Code session running the lich-plugin mod is not typed at: it receives
 the task as a message from the plugin, so whatever its user was typing at its
-prompt is left alone. A task the mod collected is never typed again; one no poll
+prompt is left alone and the task does not wait for them to finish it. A task the mod collected is never typed again; one no poll
 collected is typed as usual.
 
 - `<session>` is the label on the card, **or** the roster name that session

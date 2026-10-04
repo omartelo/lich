@@ -24,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session.** A task sent with `lich send` or `send_to_session`, the note that
   results are ready and a scheduled prompt reach a Claude Code session running
   the lich-plugin mod as a message from the plugin, so what you were typing at
-  its prompt stays yours. Other providers, and Claude Code without the mod, are
+  its prompt stays yours, and the message no longer waits for you to stop
+  typing. Other providers, and Claude Code without the mod, are
   typed at as before. Needs Claude Code 2.1.280 or newer and lich-plugin 0.14.0.
 
 ## [0.57.0] - 2026-10-03
