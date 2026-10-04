@@ -108,6 +108,9 @@ reads what each CLI writes down and no two of them write down the same things.
 | Fork a conversation into a new worktree | yes | yes | no | yes | no | no | no | no |
 | Open a session at a chosen reasoning effort | yes | yes | yes | no | yes | no | in the model name | yes |
 | Open a session with ultracode on | yes | no | no | no | no | no | no | no |
+| Drive a running session from `lich control` or an agent: prompt, stop, model, effort, slash command | yes | no | no | no | no | no | no | no |
+| A message from another session arrives without being typed into the terminal | yes | no | no | no | no | no | no | no |
+| A subagent the agent starts runs as a lich session with its own card and worktree | yes | no | no | no | no | no | no | no |
 | Delegate privately from a subagent or workflow step | yes | yes | yes | yes | yes | yes | yes | yes |
 | A resumed session keeps the model and effort it was on | model only | yes | no | model | yes | no | model | model; effort untested |
 | A result still waits for you after you interrupt a wait for it | yes | yes | yes | yes | no | yes | yes | yes |
@@ -118,6 +121,9 @@ spinner, for the bell, for the Review tab's last turn, or for the hold that keep
 the machine awake. The Review tab says so on the session itself rather than
 leaving you to notice the switch never appeared. Kiro CLI meters spend in credits
 rather than dollars, so its own footer is the only place that figure can be read.
+Driving a running session needs Claude Code 2.1.280 or newer with lich-plugin
+0.15.0: it runs through a Claude Code mod, and no other CLI has anything running
+inside it that lich could hand a command to.
 
 Every gap is deliberate, none of them is lich withholding something the CLI
 reports, and [`docs/ceilings.md`](docs/ceilings.md) says what was measured behind

@@ -266,11 +266,11 @@ func TestModCancelledPollLeavesTheQueue(t *testing.T) {
 	<-done
 	waitFor(t, func() bool { return parkedPolls(svc.ws, "s1") == 0 }, "the server to see the client leave")
 
-	id, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModCompact})
+	id, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModRunCommand, Name: "clear"})
 	if err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
-	want := []ModCommand{{ID: id, Kind: ModCompact}}
+	want := []ModCommand{{ID: id, Kind: ModRunCommand, Name: "clear"}}
 	if got := pollMod(t, svc.ws, "s1"); !reflect.DeepEqual(got, want) {
 		t.Fatalf("poll = %v, want %v", got, want)
 	}
@@ -293,8 +293,8 @@ func TestModCloseReleasesTheParkedPoll(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("closing the session left its poll parked")
 	}
-	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModDetached) {
-		t.Fatalf("enqueue after close: err = %v, want errModDetached", err)
+	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModNotRunning) {
+		t.Fatalf("enqueue after close: err = %v, want errModNotRunning", err)
 	}
 }
 
@@ -302,6 +302,7 @@ func TestEnqueueModCommandRefuses(t *testing.T) {
 	svc := newModService(t, events.New(), 10*time.Millisecond)
 	runModSession(svc, "attached")
 	pollMod(t, svc.ws, "attached")
+	runModSession(svc, "never")
 	tests := []struct {
 		name    string
 		session string
@@ -314,8 +315,16 @@ func TestEnqueueModCommandRefuses(t *testing.T) {
 		{"text on an abort", "attached", ModCommand{Kind: ModAbort, Text: "x"}, false},
 		{"a model on a prompt", "attached", ModCommand{Kind: ModPrompt, Text: "go", Model: "m"}, false},
 		{"an effort on a model", "attached", ModCommand{Kind: ModModel, Effort: "high"}, false},
-		{"instructions on an effort", "attached", ModCommand{Kind: ModEffort, Instructions: "x"}, false},
-		{"text on a compact", "attached", ModCommand{Kind: ModCompact, Text: "x"}, false},
+		{"args on an effort", "attached", ModCommand{Kind: ModEffort, Args: "x"}, false},
+		{"text on a command", "attached", ModCommand{Kind: ModRunCommand, Name: "clear", Text: "x"}, false},
+		{"a command with no name", "attached", ModCommand{Kind: ModRunCommand}, false},
+		{"a command named only a slash", "attached", ModCommand{Kind: ModRunCommand, Name: " / "}, false},
+		{"the model command", "attached", ModCommand{Kind: ModRunCommand, Name: "model", Args: "opus"}, false},
+		{"the effort command with its slash", "attached", ModCommand{Kind: ModRunCommand, Name: "/effort"}, false},
+		{"the model command in capitals", "attached", ModCommand{Kind: ModRunCommand, Name: "Model"}, false},
+		{"the model command with its args in the name", "attached", ModCommand{Kind: ModRunCommand, Name: "model opus"}, false},
+		{"the model command behind two slashes", "attached", ModCommand{Kind: ModRunCommand, Name: "//model"}, false},
+		{"compact, which the contract dropped", "attached", ModCommand{Kind: "compact"}, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -395,8 +404,8 @@ func TestModPollWhileClosingDoesNotReattach(t *testing.T) {
 	if err := svc.Close("s1"); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModDetached) {
-		t.Fatalf("enqueue after close: err = %v, want errModDetached", err)
+	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModNotRunning) {
+		t.Fatalf("enqueue after close: err = %v, want errModNotRunning", err)
 	}
 	if n := attachedMods(svc.ws); n != 0 {
 		t.Fatalf("the closed session left %d queue entries behind", n)
@@ -413,8 +422,8 @@ func TestModPollLandingAfterCloseTakesNoCommands(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 	pollMod(t, svc.ws, "s1")
-	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModDetached) {
-		t.Fatalf("enqueue after close: err = %v, want errModDetached", err)
+	if _, err := svc.EnqueueModCommand("s1", ModCommand{Kind: ModAbort}); !errors.Is(err, errModNotRunning) {
+		t.Fatalf("enqueue after close: err = %v, want errModNotRunning", err)
 	}
 }
 
@@ -486,8 +495,8 @@ func TestModCommandsMatchFixture(t *testing.T) {
 		{ID: "m4", Kind: ModModel},
 		{ID: "m5", Kind: ModEffort, Effort: "high"},
 		{ID: "m6", Kind: ModEffort},
-		{ID: "m7", Kind: ModCompact, Instructions: "keep the test plan"},
-		{ID: "m8", Kind: ModCompact},
+		{ID: "m7", Kind: ModRunCommand, Name: "compact", Args: "keep the test plan"},
+		{ID: "m8", Kind: ModRunCommand, Name: "clear"},
 	}
 	encoded, err := json.Marshal(cmds)
 	if err != nil {

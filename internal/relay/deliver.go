@@ -6,12 +6,22 @@ import (
 	"time"
 )
 
-// deliver puts message at a session's prompt and sends it — two writes, a beat
+// deliver hands a message that carries no ticket to the session's mod, and
+// types it where no mod takes it (see handToMod).
+func (s *Service) deliver(sessionID, message string) error {
+	handled, err := s.handToMod(sessionID, message)
+	if handled || err != nil {
+		return err
+	}
+	return s.typeIn(sessionID, message)
+}
+
+// typeIn puts message at a session's prompt and sends it — two writes, a beat
 // apart, because the Enter has to arrive after the prompt has taken the paste
 // (see defaultSubmitDelay). It waits for a prompt that is free first: this
 // Enter sends everything on the line, including whatever the person at that
 // session had started typing.
-func (s *Service) deliver(sessionID, message string) error {
+func (s *Service) typeIn(sessionID, message string) error {
 	if err := s.awaitFree(sessionID); err != nil {
 		return err
 	}
@@ -59,10 +69,10 @@ func (s *Service) awaitSettled(sessionID string) {
 
 // awaitFree blocks while a session's prompt belongs to somebody else — the
 // checkout's setup script, or the user mid-sentence at it, both of which
-// terminal.Ready answers. Every write this package makes goes through deliver,
-// so this one gate covers the task, the nudge and the retry alike; a check at
-// each call site would be three places to forget it in and would still leave
-// the window between the check and the write open.
+// terminal.Ready answers. Every typed write this package makes goes through
+// typeIn, so this one gate covers the task, the nudge and the retry alike; a
+// check at each call site would be three places to forget it in and would
+// still leave the window between the check and the write open.
 //
 // It is bounded by the same budget a queued delivery gets and, in practice,
 // cannot spend it: unsent input goes stale on its own well inside that
@@ -98,7 +108,7 @@ func (s *Service) awaitFree(sessionID string) error {
 func (s *Service) awaitReady(dest candidate, deadline time.Time) error {
 	for {
 		time.Sleep(readyPoll)
-		if s.term.Ready(dest.ID) {
+		if s.takesDelivery(dest.ID) {
 			return nil
 		}
 		if !s.term.Live(dest.ID) {
@@ -197,4 +207,20 @@ func (s *Service) watchReceipt(id string, t *ticket, kind, message string) {
 	if unattended {
 		s.announceInbox(t.fromID)
 	}
+}
+
+// typeTask types a ticket's task at its target and starts the receipt check
+// on a target that was idle and reports its state.
+func (s *Service) typeTask(id string, t *ticket, kind, message string, busy bool) error {
+	if err := s.typeIn(t.targetID, message); err != nil {
+		return fmt.Errorf("deliver to %q: %w", t.target, err)
+	}
+	s.markSubmitted(id, t)
+	// A target that was already working is not checked: it will read this at the
+	// end of the turn it is in, whenever that is, and its provider is busy the
+	// whole time — there is nothing here to tell apart.
+	if !busy && s.reportsState(kind) {
+		go s.watchReceipt(id, t, kind, message)
+	}
+	return nil
 }

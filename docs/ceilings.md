@@ -397,7 +397,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   lich already running in the fallback browser is not focused by it either, and what a system browser does
   with the forwarded command line is its own.
 - **A prompt in use is recognised from the bytes going in, never from the line itself**
-  (`internal/terminal/draft.go`): a relayed message pastes at the prompt and sends an Enter behind it, so lich
+  (`internal/terminal/draft.go`; typed deliveries only, a Claude Code session with its mod is handed the message, see below): a relayed message pastes at the prompt and sends an Enter behind it, so lich
   holds the delivery back while the user has unsent input there. What it counts is printable input since the last
   Enter, escape sequences skipped — it cannot see the line, so an edit that leaves it empty by another route
   (Ctrl+W, a click into the middle of it) reads as a draft that is still there, and a delivery waits out
@@ -432,7 +432,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   marks and stalled toasts land on its card, and closing them is the workflow's own job. opencode's
   `send_to_session` takes `private` from lich-plugin 0.13.2; its `open_session` takes no task at all, so a private
   hand-off at open is `lich open --prompt --private` there.
-- **A relayed Enter is timed against silence, not against the target** (`internal/relay`, `awaitSettled`): lich
+- **A relayed Enter is timed against silence, not against the target** (`internal/relay`, `awaitSettled`; typed deliveries only, a Claude Code session with its mod is handed the message, see below): lich
   presses Enter once the target's PTY has been quiet for `defaultSubmitDelay`, because nothing here can read a TUI's
   screen to know it has taken the paste in. The window that opens on the target's own keyboard is closed rather
   than lived with: from the paste to the Enter its keystrokes are held and written at the prompt the Enter leaves
@@ -442,6 +442,23 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   events rather than bytes, the bracketed paste markers do not survive, and every provider TUI then guesses at where
   a paste ends from timing alone. A target that repaints on a timer of its own never goes quiet and gets its Enter
   at `defaultSettleLimit` regardless, which is the case this cannot tell from a paste still arriving.
+- **A relayed message reaches a Claude Code session through its mod, and every other session by typing**
+  (`internal/relay`, `deliver` and `handOff`; `terminal.SubmitPrompt`): the other seven providers have no mod
+  system, so a task, a result note and a scheduled prompt are typed at them with every trap the two bullets above
+  describe. A Claude Code session is typed at too while no mod polls from it: lich-plugin older than 0.14.0, mods
+  off, a folder not trusted yet, or a session so new its mod has not polled. A session whose mod polls is handed
+  the message while its user is mid-sentence, since nothing is typed into that line. Delivery through the mod is at
+  most once: a prompt no poll collected is typed instead, one a poll collected is never typed again, so a collected
+  prompt lost on the way (the mod reloading as the response lands) is reported unread, not sent twice. A hook that
+  drops the prompt is reported undelivered with its reason, except at a session that was mid-turn, whose ack lich
+  stops waiting for after the receipt window.
+- **Only a Claude Code subagent becomes a lich card** (lich-plugin's `hooks/agent-cards.js`, its
+  `docs/agent-cards.md`): the plugin's mod takes the model's general-purpose `Agent` call and runs it as a lich
+  session on a worktree of its own, with `lich open --prompt` and `lich wait`. The other seven providers have no
+  mod system, so nothing can take a subagent call from them, and their subagents stay inside their CLI. On Claude
+  Code too, a typed agent (Explore, Plan, a plugin's), a workflow step, another plugin's spawn, a remote one and a
+  worker's own subagents stay native, and the worker is reached with `send_to_session` or `lich send`, never with
+  Claude Code's `SendMessage`.
 - **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`,
   `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that
   wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and
@@ -463,11 +480,20 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   before the pin or by hand, is caught at startup from its installed version, and again by the `X-Lich-Plugin`
   header its hooks send (docs/hooks/README.md) once a session reports. A report whose payload lich refuses never
   reaches that check, so a plugin old enough to send one only shows up in the startup prompt and the log.
-- **Only a Claude Code card can be driven from lich** (`internal/terminal/modcontrol.go`,
-  `Service.EnqueueModCommand`): the control channel (docs/hooks/mod-control.md) has a mod as its client, and mods
-  are a Claude Code feature, from 2.1.280 on and only with the lich-plugin mod loaded. The other seven providers
-  have nothing that runs inside them and polls, so they cannot be prompted, stopped or switched to another model
-  this way, and a command for one of their sessions is refused as detached rather than queued for nobody.
+- **Only a Claude Code session can be driven from lich** (`lich control`, `control_session`, `spawn.Control`,
+  `internal/terminal/modcontrol.go`): the control channel (docs/hooks/mod-control.md) has a mod as its client,
+  and mods are a Claude Code feature, from 2.1.280 on and only with the lich-plugin mod loaded, with lich-plugin
+  0.15.0 or newer. The other seven providers have nothing that runs inside them and polls, so they cannot be
+  prompted, stopped, switched to another model or handed a slash command this way, and `spawn.Control` refuses
+  their sessions by provider before anything is queued. The mod-control contract's Known ceilings has the rest;
+  three are traps a caller walks into:
+  - `/model` and `/effort` are refused as slash commands: measured on Claude Code 2.1.288, run through a mod they
+    write `~/.claude/settings.json` (`model`, `modelSettings.<model>.effortLevel`), the default for every new
+    session. The `model` and `effort` actions are the per-session route.
+  - A slash command that opens a dialog (`/cost`) holds that session's later slash commands until someone
+    presses Esc in its terminal; lich cannot tell such a command apart before running it.
+  - A session cannot control itself, for any action: an abort would end the asking turn, and a prompt or a slash
+    command would only run after it.
 - **The plan gauge answers to two undocumented endpoints, and only two providers have one**
   (`internal/quota`): Claude Code's and Codex's usage routes are what their own CLIs poll, not published API. A
   field renamed upstream drops the window it fed rather than raising anything — an entry lich has no name for is

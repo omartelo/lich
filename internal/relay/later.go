@@ -14,7 +14,7 @@ import (
 //
 // It lives in this package because delivery is the whole of the feature and the
 // delivery is already here: the paste, the wait for the target to take it in,
-// and the Enter behind it (see deliver) — the one path that gets a TUI to
+// and the Enter behind it (see typeIn) — the one path that gets a TUI to
 // accept a message on every provider and on Windows too. What it deliberately
 // does not reuse is the message the relay composes around a task: there is no
 // sender, no ticket and nobody to report back to. The user is the one waiting.
@@ -77,12 +77,12 @@ func (s *Service) deliverDue() {
 			if sess.ScheduledPrompt == "" || sess.ScheduledAt == 0 || sess.ScheduledAt > now {
 				continue
 			}
-			if !s.term.Ready(sess.ID) {
+			if !s.takesDelivery(sess.ID) {
 				continue
 			}
 			// Cleared before the write, not after: deliver blocks while the paste
-			// settles, and a pass slow enough to overlap the next one would type the
-			// same prompt twice. A write that then fails costs a prompt the user can
+			// settles or the mod acks, and a pass slow enough to overlap the next one
+			// would deliver the same prompt twice. A write that then fails costs a prompt the user can
 			// still see on their own screen and retype; two unasked-for turns cannot
 			// be taken back.
 			if err := s.sessions.SetSessionSchedule(sess.ID, 0, ""); err != nil {

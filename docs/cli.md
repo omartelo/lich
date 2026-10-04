@@ -95,8 +95,8 @@ it, so an outcome that is neither done nor failed has a code of its own:
 |------|---------|
 | 0 | Done. For `send` and `wait`: an answer is in hand. |
 | 1 | Failed. The `lich: …` line on stderr says why. |
-| 2 | `send` / `wait` only: **the wait ran out and a ticket came back.** Nothing failed and the errand is still open: `lich wait <ticket>` picks the answer up later. |
-| 3 | `send` / `wait` only: **the errand is over and no answer is coming through lich**: never read, never delivered, or answered somewhere else. Retrying the wait is pointless; the output says what to do instead. |
+| 2 | `send` / `wait` / `control` only: **the wait ran out and a ticket came back.** Nothing failed and the errand is still open: `lich wait <ticket>` picks the answer up later. For `control`: the session took the command and has not confirmed it yet; its id is printed, and it still goes through. |
+| 3 | `send` / `wait` / `control` only: **the errand is over and no answer is coming through lich**: never read, never delivered, or answered somewhere else. Retrying the wait is pointless; the output says what to do instead. For `control`: the session ended before confirming the command. |
 
 2 and 3 print their prose (or `--json`) on stdout like an answer does and write
 nothing on stderr: they are outcomes, not failures. No other command has an
@@ -129,7 +129,7 @@ guess at the one it resembles, and exit 1 — a typo does not open a window.
 Arguments the app itself takes still do: bare `lich`, and `lich --` with the
 Chromium flags behind it.
 
-`--json` on `sessions`, `send`, `wait`, `open`, `close`, `worktrees`, `folders`, `file`,
+`--json` on `sessions`, `send`, `wait`, `open`, `close`, `control`, `worktrees`, `folders`, `file`,
 `rename-folder`, `cost` and `version`
 replaces the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
@@ -173,6 +173,11 @@ hook (`docs/hooks/session-state.md`), and it is the same thing its card shows:
 
 Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
 
+A Claude Code session running the lich-plugin mod is not typed at: it receives
+the task as a message from the plugin, so whatever its user was typing at its
+prompt is left alone and the task does not wait for them to finish it. A task the mod collected is never typed again; one no poll
+collected is typed as usual.
+
 - `<session>` is the label on the card, **or** the roster name that session
   answers to (`myrepo-a1b2`, the one lich passes as `--name` and a mention
   writes at a prompt). Both name the same session and both are accepted, because
@@ -206,7 +211,9 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
   and the output sends a person to that card: nothing is queued, so the task has
   to be sent again once the screen is clear. Exit 3. Only reported for providers that
   report their state at all (the plugin, `docs/hooks/`) — silence has to mean
-  something before it can be read as anything.
+  something before it can be read as anything. A task handed to a Claude Code
+  session's mod is never typed again: one its mod collected and the session never
+  started on is reported here too.
 - **Never delivered**: the task was held for a session that never reached a
   prompt — it ended, or whatever had its terminal outlasted the queue (10
   minutes). The ticket is dropped rather than left to expire, and the output
@@ -512,6 +519,54 @@ Renamed "auth-fix" to "the login bug".
 - The provider's own idea of the session's name is untouched: nothing here runs
   `/rename` inside the terminal, exactly as the window's rename does not.
 
+### `lich control [--project <name>] [--json] <session> <action> [<value>] [<args>]`
+
+Drives a running Claude Code session from outside its terminal, through the
+lich-plugin mod inside it (`docs/hooks/mod-control.md`).
+
+```
+$ lich control auth-fix prompt "run the tests again"
+"auth-fix" started a turn on the prompt.
+$ lich control auth-fix command compact "keep the test plan"
+"auth-fix" ran /compact.
+```
+
+| Action | Value | Done means |
+|--------|-------|------------|
+| `prompt <text>` | the prompt, required | a turn started on it |
+| `abort` | none | the running turn stopped |
+| `model [<model>]` | a model name; none goes back to the session's own | its next requests use it |
+| `effort [<level>]` | `low`, `medium`, `high`, `xhigh` or `max`; none goes back to its own | its next requests use it |
+| `command <name> [<args>]` | a slash command's name, with or without the slash, and what follows it | the command ran |
+
+- **It waits for the session to confirm**: up to 10 seconds, or 60 for a slash
+  command, which runs only once the session is idle. A command the session took
+  but has not confirmed by then prints its id and exits 2, and still goes
+  through: a prompt sent to a busy session starts its turn when the current one
+  ends. A command the session never took in that time (its mod stopped polling)
+  is withdrawn and exits 1: nothing ran, so it is safe to send again. A session
+  that ends first exits 3. A session that says the command failed (an abort with
+  no turn running, a slash command it does not have) exits 1 with its reason, as
+  does one that is not running.
+- **`model` and `effort` change that session only**, from its next request on.
+  The slash commands `/model` and `/effort` are refused: run this way, Claude Code
+  saves what they set as your default for every new session.
+- **A slash command that opens a dialog (`/cost`) holds the session's later slash
+  commands until someone presses Esc in its terminal.** `abort`, `model` and
+  `effort` still apply.
+- **Claude Code 2.1.280 or later, with lich-plugin 0.15.0 or later, in a trusted
+  folder.** Any other session is refused: another CLI has nothing inside it lich
+  could hand a command to, and a Claude Code session without the mod polling is
+  refused as one that cannot take commands, naming what to fix. A mod older than
+  0.15.0 runs everything but `command`, which it refuses with
+  "update lich-plugin to 0.15.0 or later".
+- **A session cannot control itself.** An abort would end the turn asking for
+  it, and a prompt or a slash command would only run once that turn is over.
+
+`--json` prints
+`{"id","project","label","action","value","command_id","state"}`, `value` absent
+when the action carried none; `state` is `done`, `delivered` or `ended`.
+
 ### `lich worktrees [--project <name>] [--json]`
 
 Lists a project's git worktrees — what each is called, whether it holds
@@ -692,6 +747,7 @@ at lich.
 | `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model`, `effort`, `ultracode`, `folder` — `lich open` — plus optional `prompt` and `private` — `lich open --prompt [--private]`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |
+| `control_session` | `session`, `action` (`prompt`, `abort`, `model`, `effort`, `command`), optional `value`, `args` (`command` only) and `project`. `lich control`. Delivered is a result, not an error; a command the session never took is withdrawn and fails. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |
 | `list_folders` | optional `project`: the folders and the sessions in each, as JSON. `lich folders`. |
 | `file_session` | `folder` (`""` takes the session out), optional `session` (omitted files the caller's own) and `project`. `lich file`. |
@@ -954,7 +1010,8 @@ receiving agent only because this text describes it.
   (`frontend/src/lib/session/sessions.ts`) appends it **without focusing it** —
   an agent opening three workers must not drag the view along three times.
 - **Relay** — `internal/relay`: resolves a label to a live session, composes the
-  message above, types it through the terminal service, and holds the ticket the
+  message above, hands it to the target's Claude Code mod when one is polling and
+  types it through the terminal service otherwise, and holds the ticket the
   answer comes back on. Tickets live in memory: one exists for as long as its
   errand does, and a lich that restarted has no PTY left to answer into.
 - **UI push** — the relay emits the global app event `session-relay`

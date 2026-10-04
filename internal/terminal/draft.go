@@ -8,7 +8,7 @@ import (
 
 // What the user has typed at a prompt and not sent yet, and why lich has to
 // know: a relayed message is pasted straight into that prompt and an Enter is
-// sent behind it (internal/relay, deliver), so one landing mid-sentence sends
+// sent behind it (internal/relay, typeIn), so one landing mid-sentence sends
 // lich's text and the user's half-written one as a single submission. The
 // user's half is gone — it was never in a scrollback, and no provider offers a
 // way to get it back.
@@ -55,7 +55,7 @@ var (
 // that is not theirs, and returns the release that hands their keystrokes back.
 //
 // A relayed delivery is two writes a beat apart — the paste, then the Enter
-// that sends it (internal/relay, deliver) — and everything typed in between
+// that sends it (internal/relay, typeIn) — and everything typed in between
 // lands on the same line and is submitted as part of the relayed message.
 // Unlike a delivery that waits out a draft, this is not an omission: it is the
 // user's own text going somewhere they never sent it, and the window is theirs

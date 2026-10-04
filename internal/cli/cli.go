@@ -50,11 +50,11 @@ const NotACommand = -1
 // Exit codes past 0 (done) and 1 (failed) are outcomes a script branches on
 // without parsing --json. docs/cli.md is the contract for them.
 const (
-	// ExitPending is a send or wait that ran out of time and handed back a live
-	// ticket: nothing failed, and no answer is in hand yet.
+	// ExitPending is a send, wait or control that ran out of time and handed back
+	// a live ticket or command id: nothing failed, and no answer is in hand yet.
 	ExitPending = 2
-	// ExitNoAnswer is an errand that is over with no answer coming through lich:
-	// the task was never read, never delivered, or answered somewhere else.
+	// ExitNoAnswer is an errand or a control over with no answer coming through
+	// lich: never read, never delivered, answered elsewhere, or the session ended.
 	ExitNoAnswer = 3
 )
 
@@ -146,6 +146,8 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.close, args[1:])
 	case "rename":
 		return c.run(c.rename, args[1:])
+	case "control":
+		return c.run(c.control, args[1:])
 	case "worktrees":
 		return c.run(c.worktrees, args[1:])
 	case "folders":

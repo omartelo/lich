@@ -46,17 +46,24 @@ func (s *Service) Observe(sessionID, state string) {
 	for _, e := range quiet {
 		s.announceInbox(e.t.fromID)
 	}
+	// Both deliveries run off the reporter's goroutine: a mod's ack for them can
+	// wait on that report's own response (the mod applies an aborted turn's ack
+	// first), and the reporter may be the keyboard of every card.
 	if notice != "" {
-		if err := s.deliver(sessionID, notice); err != nil {
-			slog.Warn("relay: ticket request not delivered", "session", sessionID, "err", err)
-		}
+		go s.deliverNotice(sessionID, notice)
 	}
 	// This session as a sender: its turn ending frees its prompt, which is what
 	// a nudge held back during the turn was waiting for. A turn stopped with Esc
 	// or Ctrl-C frees it just the same, and is how a wait for results is usually
 	// abandoned, so it flushes too.
 	if state == stateDone || state == stateInterrupted {
-		s.flushNudge(sessionID)
+		go s.flushNudge(sessionID)
+	}
+}
+
+func (s *Service) deliverNotice(sessionID, notice string) {
+	if err := s.deliver(sessionID, notice); err != nil {
+		slog.Warn("relay: ticket request not delivered", "session", sessionID, "err", err)
 	}
 }
 
@@ -196,7 +203,9 @@ func (s *Service) turnCandidates(sessionID string) []string {
 			t.sawBusy = false
 			continue
 		}
-		if !t.sawBusy {
+		// Queued for a mod that has not collected it: the turn was somebody
+		// else's, and the message may still be withdrawn and typed.
+		if !t.sawBusy || (t.collected != nil && !t.collected()) {
 			continue
 		}
 		candidates = append(candidates, id)

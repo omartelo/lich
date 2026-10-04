@@ -1,13 +1,16 @@
 package spawn
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/omartelo/lich/internal/project"
 	"github.com/omartelo/lich/internal/store"
+	"github.com/omartelo/lich/internal/terminal"
 )
 
 // added is one session row the fake store was asked to write.
@@ -325,6 +328,21 @@ type fakeTerminal struct {
 	// names is what each session's agent has on record, standing in for the
 	// transcript the terminal service reads. Empty for a session nobody renamed.
 	names map[string]string
+	// ran is every command handed to a session's mod, ranOn the session each
+	// went to, and deadline the bound the wait was given. outcome and runErr
+	// are what the mod's side answers.
+	ran      []terminal.ModCommand
+	ranOn    []string
+	deadline time.Time
+	outcome  terminal.ModOutcome
+	runErr   error
+}
+
+func (f *fakeTerminal) RunModCommand(ctx context.Context, id string, cmd terminal.ModCommand) (terminal.ModOutcome, error) {
+	f.ran = append(f.ran, cmd)
+	f.ranOn = append(f.ranOn, id)
+	f.deadline, _ = ctx.Deadline()
+	return f.outcome, f.runErr
 }
 
 func (f *fakeTerminal) AgentName(id string) string { return f.names[id] }
