@@ -47,8 +47,8 @@ var askTools = []mcpTool{
 		Description: "Ask another running Claude Code session in lich a side question and get its " +
 			"answer, without interrupting it: it answers from its own conversation while its turn " +
 			"goes on, and neither the question nor the answer enters that conversation. It sees " +
-			"the conversation up to its last request to the model, not the step it is taking right " +
-			"now, and cannot use tools to find out more. Waits up to 90 seconds; ask for a brief " +
+			"the conversation as of its last finished reply, not the step it is taking right now, " +
+			"and cannot use tools to find out more. Waits up to 90 seconds; ask for a brief " +
 			"answer. Claude Code sessions only, and never your own.",
 		Schema: schema(map[string]any{
 			"session": property("string",

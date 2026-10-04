@@ -498,8 +498,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   answer is a `$.model.fork` the same mod makes, so the seven other providers are refused by provider, as for
   control. Owner's choice: no other CLI exposes a fork of its own conversation to anything running inside it. The
   traps, all measured on Claude Code 2.1.289 (the contract's Known ceilings has the detail):
-  - The answer knows the conversation only up to the session's last request to the model: a reply being written,
-    or a tool call running, when the question lands is not in it.
+  - The answer knows the conversation only as of the session's last finished model response: a reply being
+    written, a tool call running, or a prompt whose first reply is still being written is not in it.
   - An ask cannot be cancelled. Past the 90 seconds lich waits, the fork runs on and is billed until it ends, and
     its answer is dropped. A mod reload mid-answer loses it, and the caller waits out the 90 seconds.
   - Its tokens never reach the session's cost: the fork is not in the transcript lich reads cost from. It is

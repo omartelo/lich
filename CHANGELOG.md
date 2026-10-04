@@ -21,8 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `lich ask auth-fix what are you working on`, or `ask_session` from an agent,
   prints its answer in seconds while its turn goes on, and neither the question
   nor the answer lands in its conversation. It answers from what the
-  conversation held at its last request, so not from the step it is on right
-  now. Same requirements as `lich control`.
+  conversation held at its last finished reply, so not from the step it is on
+  right now. Same requirements as `lich control`.
 
 ### Changed
 

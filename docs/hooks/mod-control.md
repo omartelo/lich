@@ -276,10 +276,11 @@ a second request at twice the latency (measured on 2.1.289).
   `modelSettings.<model>.effortLevel`), the default for every new session.
 - **A mod older than 0.15.0 does not know `command`.** It acks `ok: false`,
   `unknown kind`, and lich reports "update lich-plugin to 0.15.0 or later".
-- **An answer knows the conversation up to the session's last request.** A
-  fork is that request again, so a reply being written or a tool call running
-  when the question lands is not in it: the session cannot say what it is
-  doing this very second. Measured on 2.1.289.
+- **An answer knows the conversation as of the session's last finished model
+  response.** A fork is that request again, so a reply being written or a tool
+  call running when the question lands is not in it, nor is a prompt whose first
+  reply is still being written: the session cannot say what it is doing this
+  very second. Measured on 2.1.289.
 - **An ask cannot be cancelled.** A fork takes no signal, and an Esc on the
   session's turn does not cut it (measured: it answered in full after the
   turn was interrupted). Once lich stops waiting, at 90 seconds, the fork runs

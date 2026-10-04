@@ -583,9 +583,10 @@ Fixing the flaky login test: the fixture user expires before the assertion.
   answer that comes later is dropped, and the command exits 1; so does every
   other way it ends without one: a session with no conversation yet (new, or
   just cleared), an API error, a session that ended.
-- **The answer knows the conversation up to the session's last request to the
-  model**: it cannot say what the session is doing this very second, and it
-  cannot run tools to find out more.
+- **The answer knows the conversation as of the session's last finished model
+  response**: it cannot say what the session is doing this very second (a prompt
+  it is still writing its first reply to is not in it either), and it cannot run
+  tools to find out more.
 - **It costs tokens on the asked session's account and never shows in its
   cost.** The prompt cache serves the conversation while it is warm.
 - **Claude Code 2.1.280 or later, with lich-plugin 0.15.0 or later, in a trusted
