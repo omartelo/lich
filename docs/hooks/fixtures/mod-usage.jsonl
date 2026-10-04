@@ -1,0 +1,18 @@
+{"name":"turn end","body":{"session_id":"s1","conversation_id":"c1","context":{"window":200000,"tokens":43592,"percent":22},"rate_limits":[{"kind":"five_hour","percent_used":14,"resets_at":"2026-10-05T00:30:00.000Z"},{"kind":"seven_day","percent_used":80,"resets_at":"2026-10-05T15:00:00.000Z"}],"cost_usd":0.0977631},"accept":{"session_id":"s1","conversation_id":"c1","context":{"window":200000,"tokens":43592,"percent":22},"rate_limits":[{"kind":"five_hour","percent_used":14,"resets_at":"2026-10-05T00:30:00.000Z"},{"kind":"seven_day","percent_used":80,"resets_at":"2026-10-05T15:00:00.000Z"}],"cost_usd":0.0977631}}
+{"name":"start, before the first response","body":{"session_id":"s1","conversation_id":"c1","context":{"window":1000000},"rate_limits":[{"kind":"five_hour","percent_used":0},{"kind":"seven_day","percent_used":1}],"cost_usd":0},"accept":{"context":{"window":1000000},"cost_usd":0}}
+{"name":"off a subscription","body":{"session_id":"s1","conversation_id":"c1","context":{"window":200000,"tokens":100,"percent":0},"rate_limits":[],"cost_usd":0.5},"accept":{"rate_limits":[]}}
+{"name":"no rate limits and no ledger","body":{"session_id":"s1","conversation_id":"c1","context":{"window":200000}},"accept":{"context":{"window":200000}}}
+{"name":"exceeded spend limit","body":{"session_id":"s1","conversation_id":"c1","context":{"window":200000},"rate_limits":[{"kind":"spend_limit","percent_used":104.5}]},"accept":{"rate_limits":[{"kind":"spend_limit","percent_used":104.5}]}}
+{"name":"extra fields are ignored","body":{"session_id":"s1","conversation_id":"c1","context":{"window":200000},"changed":["context"]},"accept":{"conversation_id":"c1"}}
+{"name":"missing session_id","body":{"conversation_id":"c1","context":{"window":200000}},"reject":"session_id is required"}
+{"name":"missing conversation_id","body":{"session_id":"s1","context":{"window":200000}},"reject":"conversation_id is required"}
+{"name":"missing context","body":{"session_id":"s1","conversation_id":"c1"},"reject":"context.window is required"}
+{"name":"zero window","body":{"session_id":"s1","conversation_id":"c1","context":{"window":0}},"reject":"context.window must be positive"}
+{"name":"negative tokens","body":{"session_id":"s1","conversation_id":"c1","context":{"window":200000,"tokens":-1}},"reject":"context.tokens must not be negative"}
+{"name":"percent past 100","body":{"session_id":"s1","conversation_id":"c1","context":{"window":200000,"percent":101}},"reject":"context.percent must be 0 to 100"}
+{"name":"fractional percent","body":{"session_id":"s1","conversation_id":"c1","context":{"window":200000,"percent":21.5}},"reject":"context.percent must be an integer"}
+{"name":"rate limit without kind","body":{"session_id":"s1","conversation_id":"c1","context":{"window":200000},"rate_limits":[{"percent_used":3}]},"reject":"a rate limit's kind is required"}
+{"name":"negative rate limit","body":{"session_id":"s1","conversation_id":"c1","context":{"window":200000},"rate_limits":[{"kind":"five_hour","percent_used":-1}]},"reject":"percent_used must not be negative"}
+{"name":"reset that is not a timestamp","body":{"session_id":"s1","conversation_id":"c1","context":{"window":200000},"rate_limits":[{"kind":"five_hour","percent_used":3,"resets_at":"soon"}]},"reject":"resets_at must be RFC 3339"}
+{"name":"negative cost","body":{"session_id":"s1","conversation_id":"c1","context":{"window":200000},"cost_usd":-0.01},"reject":"cost_usd must not be negative"}
+{"name":"malformed json","raw":"{","reject":"body must be a JSON object"}

@@ -21,6 +21,7 @@ whichever side moved first.
 | `session-touched.jsonl`| [session-touched.md](../session-touched.md)  | `/session-touched` |
 | `mod-control.jsonl`    | [mod-control.md](../mod-control.md)          | `/mod/acks`        |
 | `mod-commands.json`    | [mod-control.md](../mod-control.md)          | `/mod/commands`    |
+| `mod-usage.jsonl`      | [mod-usage.md](../mod-usage.md)              | `/mod/usage`       |
 
 `mod-commands.json` is the one file that is not cases: it is the response body
 lich sends to `GET /mod/commands`, one command of every shape, which lich
