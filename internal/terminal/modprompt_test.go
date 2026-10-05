@@ -29,7 +29,7 @@ func TestSubmitPromptFindsNoModToHandItTo(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := tc.svc.SubmitPrompt(tc.id, "run the tests"); !errors.Is(err, relay.ErrNoMod) {
+			if _, err := tc.svc.SubmitPrompt(tc.id, "run the tests", nil); !errors.Is(err, relay.ErrNoMod) {
 				t.Fatalf("err = %v, want relay.ErrNoMod", err)
 			}
 		})
@@ -40,7 +40,7 @@ func TestSubmitPromptFindsNoModToHandItTo(t *testing.T) {
 // the test goroutine.
 func submitInBackground(t *testing.T, ctx context.Context, svc *Service) <-chan relay.PromptReceipt {
 	t.Helper()
-	handed, err := svc.SubmitPrompt("s1", "run the tests")
+	handed, err := svc.SubmitPrompt("s1", "run the tests", nil)
 	if err != nil {
 		t.Fatalf("SubmitPrompt: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestSubmitPromptEndsWithTheSession(t *testing.T) {
 
 func TestSubmitPromptIsCollectedOnceAPollCarriesIt(t *testing.T) {
 	svc := attachedModService(t)
-	handed, err := svc.SubmitPrompt("s1", "run the tests")
+	handed, err := svc.SubmitPrompt("s1", "run the tests", nil)
 	if err != nil {
 		t.Fatalf("SubmitPrompt: %v", err)
 	}
@@ -151,5 +151,18 @@ func TestModAttachedOnlyWhileAModPollsFromARunningSession(t *testing.T) {
 				t.Fatalf("ModAttached = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestSubmitPromptCarriesItsNotification(t *testing.T) {
+	svc := attachedModService(t)
+	note := &relay.Notification{Status: relay.NotifyCompleted, Summary: `lich session "docs" finished`}
+	if _, err := svc.SubmitPrompt("s1", "the report", note); err != nil {
+		t.Fatalf("SubmitPrompt: %v", err)
+	}
+	cmd := collectMod(t, svc.ws, "s1")
+	want := *note
+	if cmd.Text != "the report" || cmd.Notification == nil || *cmd.Notification != want {
+		t.Fatalf("the mod was handed %+v, want the report as a notification %+v", cmd, want)
 	}
 }

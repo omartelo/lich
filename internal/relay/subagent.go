@@ -3,6 +3,7 @@ package relay
 import (
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 )
 
@@ -22,9 +23,9 @@ import (
 func (s *Service) tellNews(fromID string, n news, hasTools bool) error {
 	nudge := nudgeNotice(n.count, n.labels, hasTools)
 	if len(n.reports) == 0 {
-		return s.deliver(fromID, nudge)
+		return s.deliver(fromID, nudge, nil)
 	}
-	handled, err := s.handToMod(fromID, s.reportNote(n, hasTools))
+	handled, err := s.handToMod(fromID, s.reportNote(n, hasTools), reportNotification(n.reports))
 	if err != nil {
 		return err
 	}
@@ -62,6 +63,20 @@ func (s *Service) reportNote(n news, hasTools bool) string {
 	return strings.Join(parts, "\n\n")
 }
 
+// reportNotification is how the caller's screen sums up one flush's reports:
+// the line Claude Code shows for a background agent of its own that finished.
+func reportNotification(reports []*inboxEntry) *Notification {
+	names := make([]string, len(reports))
+	for i, e := range reports {
+		names[i] = strconv.Quote(e.target)
+	}
+	summary := "lich session " + names[0] + " finished"
+	if len(names) > 1 {
+		summary = "lich sessions " + strings.Join(names, ", ") + " finished"
+	}
+	return &Notification{Status: NotifyCompleted, Summary: summary}
+}
+
 // subagentReport is one worker's report as its sender reads it: who wrote it,
 // on which branch, under which ticket, and then the report itself.
 func subagentReport(e *inboxEntry, branch string) string {
@@ -82,6 +97,14 @@ func blockedNotice(target string) string {
 			"card. Its task stays open: open that card to answer it.",
 		target,
 	)
+}
+
+// blockedNotification sums up blockedNotice in the one line the caller sees.
+func blockedNotification(target string) *Notification {
+	return &Notification{
+		Status:  NotifyWaiting,
+		Summary: fmt.Sprintf("lich session %q is waiting on a permission prompt", target),
+	}
 }
 
 // blockedSendersLocked marks every subagent errand delivered to sessionID as

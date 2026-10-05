@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/omartelo/lich/internal/relay"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -80,7 +81,8 @@ var errModDetached = errors.New(
 		"(Claude Code loads the mod only after that)")
 
 // ModCommand is one instruction for a session's mod. Model and Effort absent
-// mean "drop the override", which the mod reads as null.
+// mean "drop the override", which the mod reads as null. Notification makes a
+// prompt one the mod submits as news from outside the session.
 type ModCommand struct {
 	ID       string `json:"id"`
 	Kind     string `json:"kind"`
@@ -90,6 +92,8 @@ type ModCommand struct {
 	Name     string `json:"name,omitempty"`
 	Args     string `json:"args,omitempty"`
 	Question string `json:"question,omitempty"`
+
+	Notification *relay.Notification `json:"notification,omitempty"`
 }
 
 // ModOutcome is what became of one command: State is one of ModWithdrawn,
@@ -466,6 +470,9 @@ func (s *Service) queueModCommand(id string, cmd ModCommand) (*modWaiter, error)
 	if err := checkQuestion(cmd); err != nil {
 		return nil, err
 	}
+	if err := checkNotification(cmd.Notification); err != nil {
+		return nil, err
+	}
 	// A poll from a process that is already gone can still land after Close
 	// and look like an attached mod for the length of the attach window.
 	if !s.Live(id) {
@@ -508,12 +515,25 @@ func checkQuestion(cmd ModCommand) error {
 	return nil
 }
 
+func checkNotification(note *relay.Notification) error {
+	if note == nil {
+		return nil
+	}
+	if note.Status != relay.NotifyCompleted && note.Status != relay.NotifyWaiting {
+		return fmt.Errorf("unknown notification status %q", note.Status)
+	}
+	if strings.TrimSpace(note.Summary) == "" {
+		return errors.New("a notification needs a summary, and none was given")
+	}
+	return nil
+}
+
 // ownModFields is cmd with only the fields its kind carries.
 func ownModFields(cmd ModCommand) ModCommand {
 	own := ModCommand{ID: cmd.ID, Kind: cmd.Kind}
 	switch cmd.Kind {
 	case ModPrompt:
-		own.Text = cmd.Text
+		own.Text, own.Notification = cmd.Text, cmd.Notification
 	case ModModel:
 		own.Model = cmd.Model
 	case ModEffort:

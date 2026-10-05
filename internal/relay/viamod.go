@@ -19,6 +19,21 @@ const (
 	PromptEnded     = "ended"     // the session exited first
 )
 
+// Notification asks the mod to submit a prompt as news from outside the
+// session: Claude Code shows Summary as one line where the prompt would be, and
+// the model reads the text whole (docs/hooks/mod-control.md, A prompt as a
+// notification).
+type Notification struct {
+	Status  string `json:"status"`
+	Summary string `json:"summary"`
+}
+
+// The statuses a Notification carries.
+const (
+	NotifyCompleted = "completed" // a subagent worker reported
+	NotifyWaiting   = "waiting"   // a subagent worker is blocked on a permission
+)
+
 // PromptReceipt is what became of one prompt handed to a mod. An ack OK means
 // its turn started.
 type PromptReceipt struct {
@@ -49,11 +64,12 @@ func (s *Service) takesDelivery(id string) bool {
 	return s.term.Ready(id) || s.term.ModAttached(id)
 }
 
-// handToMod hands a message to the session's mod, and reports whether it is
-// the mod's to deliver now: false with no error means type it instead, which
-// is what a session with no mod and a prompt no poll collected both want.
-func (s *Service) handToMod(sessionID, message string) (bool, error) {
-	handed, err := s.term.SubmitPrompt(sessionID, message)
+// handToMod hands a message to the session's mod, as a notification when note
+// is not nil, and reports whether it is the mod's to deliver now: false with no
+// error means type it instead, which is what a session with no mod and a prompt
+// no poll collected both want.
+func (s *Service) handToMod(sessionID, message string, note *Notification) (bool, error) {
+	handed, err := s.term.SubmitPrompt(sessionID, message, note)
 	if errors.Is(err, ErrNoMod) {
 		return false, nil
 	}

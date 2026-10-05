@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/omartelo/lich/internal/events"
+	"github.com/omartelo/lich/internal/relay"
 )
 
 // newModService is a service with a live transport whose empty polls answer
@@ -330,6 +331,12 @@ func TestEnqueueModCommandRefuses(t *testing.T) {
 			ModCommand{Kind: ModAsk, Question: strings.Repeat("x", modQuestionLimit+1)}, false},
 		{"text on an ask", "attached", ModCommand{Kind: ModAsk, Question: "why?", Text: "x"}, false},
 		{"a question on a prompt", "attached", ModCommand{Kind: ModPrompt, Text: "go", Question: "why?"}, false},
+		{"a notification on an abort", "attached",
+			ModCommand{Kind: ModAbort, Notification: &relay.Notification{Status: relay.NotifyCompleted, Summary: "x"}}, false},
+		{"a notification with no summary", "attached",
+			ModCommand{Kind: ModPrompt, Text: "go", Notification: &relay.Notification{Status: relay.NotifyCompleted, Summary: " "}}, false},
+		{"a notification of an unknown status", "attached",
+			ModCommand{Kind: ModPrompt, Text: "go", Notification: &relay.Notification{Status: "failed", Summary: "x"}}, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -503,6 +510,14 @@ func TestModCommandsMatchFixture(t *testing.T) {
 		{ID: "m7", Kind: ModRunCommand, Name: "compact", Args: "keep the test plan"},
 		{ID: "m8", Kind: ModRunCommand, Name: "clear"},
 		{ID: "m9", Kind: ModAsk, Question: "what are you working on?"},
+		{ID: "m10", Kind: ModPrompt,
+			Text: "[lich] Session \"docs\" finished the task you handed it (ticket t1). Its report:\n\n" +
+				"If a < b && c > d, see </result>.",
+			Notification: &relay.Notification{Status: relay.NotifyCompleted, Summary: `lich session "docs" finished`}},
+		{ID: "m11", Kind: ModPrompt,
+			Text: `[lich] Session "a<b&c", the subagent you opened, is waiting on a permission prompt in its card.`,
+			Notification: &relay.Notification{
+				Status: relay.NotifyWaiting, Summary: `lich session "a<b&c" is waiting on a permission prompt`}},
 	}
 	encoded, err := json.Marshal(cmds)
 	if err != nil {

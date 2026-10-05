@@ -52,10 +52,10 @@ func (s *Service) Observe(sessionID, state string) {
 	// wait on that report's own response (the mod applies an aborted turn's ack
 	// first), and the reporter may be the keyboard of every card.
 	if notice != "" {
-		go s.deliverNotice(sessionID, notice)
+		go s.deliverNotice(sessionID, notice, nil)
 	}
 	for _, t := range blocked {
-		go s.deliverNotice(t.fromID, blockedNotice(t.target))
+		go s.deliverNotice(t.fromID, blockedNotice(t.target), blockedNotification(t.target))
 	}
 	if finished {
 		go s.finishWorker(sessionID)
@@ -82,8 +82,8 @@ func (s *Service) noteBlockLocked(sessionID, state string) []*ticket {
 	return nil
 }
 
-func (s *Service) deliverNotice(sessionID, notice string) {
-	if err := s.deliver(sessionID, notice); err != nil {
+func (s *Service) deliverNotice(sessionID, notice string, note *Notification) {
+	if err := s.deliver(sessionID, notice, note); err != nil {
 		slog.Warn("relay: ticket request not delivered", "session", sessionID, "err", err)
 	}
 }

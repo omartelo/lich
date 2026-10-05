@@ -69,6 +69,10 @@ func TestASubagentReportReachesItsCallerWholeThroughTheMod(t *testing.T) {
 			t.Errorf("note is missing %.60q:\n%.300s", want, note)
 		}
 	}
+	want := Notification{Status: NotifyCompleted, Summary: `lich session "docs" finished`}
+	if got := term.notesTo("s1")[0]; got == nil || *got != want {
+		t.Errorf("the report was handed as %+v, want the notification %+v", got, want)
+	}
 	assertNotTyped(t, term, "s1")
 
 	// Delivered once: a collect does not hand it over again, and the card's
@@ -176,6 +180,9 @@ func TestASubagentReportCarriesTheNudgeForTheRest(t *testing.T) {
 	if !strings.Contains(note, `The task you sent "api" has its result ready`) {
 		t.Errorf("note = %q, want the nudge for api", note)
 	}
+	if got := term.notesTo("s1")[0]; got == nil || got.Summary != `lich session "docs" finished` {
+		t.Errorf("the reports were handed as %+v, want them summed up by the worker that finished", got)
+	}
 	collected, _ := svc.CollectNow("s1")
 	if len(collected.Results) != 1 || collected.Results[0].Ticket != "t2" {
 		t.Errorf("collect = %+v, want only the other answer", collected)
@@ -242,6 +249,27 @@ func TestAWorkerBlockedOnAPermissionTellsItsCallerOncePerBlock(t *testing.T) {
 	if writes := term.writesTo("s1"); len(writes) != 4 {
 		t.Errorf("got %d writes, want one note per block: %q", len(writes), writes)
 	}
+}
+
+func TestABlockedWorkerReachesACallerWithAModAsANotification(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.attachMod("s1", ackedOK)
+	svc := viaMod(term, nil)
+	plantSubagent(svc, "t1", "s1", "s2", "docs")
+
+	svc.Observe("s2", stateBusy)
+	svc.Observe("s2", stateWaiting)
+	if !awaitPrompts(term, "s1", 1) {
+		t.Fatal("the caller's mod was never told its worker is blocked")
+	}
+	if note := term.promptsTo("s1")[0]; !strings.Contains(note, `"docs"`) || !strings.Contains(note, "permission") {
+		t.Errorf("note = %q, want the worker and the permission named", note)
+	}
+	want := Notification{Status: NotifyWaiting, Summary: `lich session "docs" is waiting on a permission prompt`}
+	if got := term.notesTo("s1")[0]; got == nil || *got != want {
+		t.Errorf("the notice was handed as %+v, want the notification %+v", got, want)
+	}
+	assertNotTyped(t, term, "s1")
 }
 
 // waiting after a turn ended is a prompt at rest, and an ordinary errand's
@@ -365,4 +393,12 @@ func TestAWorkerWithMoreToDoIsNotFinished(t *testing.T) {
 		svc.Observe("s2", stateInterrupted)
 		expectNoneFinished(t, finished)
 	})
+}
+
+func TestReportsOfOneFlushAreSummedUpByEveryWorker(t *testing.T) {
+	got := reportNotification([]*inboxEntry{{target: "docs"}, {target: "api"}})
+	want := Notification{Status: NotifyCompleted, Summary: `lich sessions "docs", "api" finished`}
+	if *got != want {
+		t.Errorf("notification = %+v, want %+v", *got, want)
+	}
 }
