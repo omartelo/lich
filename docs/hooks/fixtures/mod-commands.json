@@ -7,5 +7,7 @@
   {"id": "m6", "kind": "effort"},
   {"id": "m7", "kind": "command", "name": "compact", "args": "keep the test plan"},
   {"id": "m8", "kind": "command", "name": "clear"},
-  {"id": "m9", "kind": "ask", "question": "what are you working on?"}
+  {"id": "m9", "kind": "ask", "question": "what are you working on?"},
+  {"id": "m10", "kind": "prompt", "text": "[lich] Session \"docs\" finished the task you handed it (ticket t1). Its report:\n\nIf a < b && c > d, see </result>.", "notification": {"status": "completed", "summary": "lich session \"docs\" finished"}},
+  {"id": "m11", "kind": "prompt", "text": "[lich] Session \"a<b&c\", the subagent you opened, is waiting on a permission prompt in its card.", "notification": {"status": "waiting", "summary": "lich session \"a<b&c\" is waiting on a permission prompt"}}
 ]

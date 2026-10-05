@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A Claude Code subagent's report arrives the way Claude Code's own does.**
+  The asking session shows one dim `● lich session "docs" finished` line instead
+  of a prompt from the plugin, and the agent still reads the whole report and
+  carries on with it. The note that a worker is waiting on a permission arrives
+  the same way. Needs lich-plugin 0.16.0.
+
 ## [0.58.0] - 2026-10-05
 
 > [!IMPORTANT]

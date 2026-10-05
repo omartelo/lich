@@ -93,7 +93,7 @@ func (s *Service) deliverDue() {
 				s.events.Emit(ScheduleEventName, ScheduleEvent{ID: sess.ID})
 			}
 			text := lateNotice(sess.ScheduledAt, now) + sess.ScheduledPrompt
-			if err := s.deliver(sess.ID, text); err != nil {
+			if err := s.deliver(sess.ID, text, nil); err != nil {
 				slog.Warn("relay: scheduled prompt not delivered", "session", sess.Label, "err", err)
 			}
 		}

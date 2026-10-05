@@ -458,7 +458,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (`spawn.OpenSubagent`), unless the call asked for worktree isolation, which opens a worktree of its own; it is
   filed under a folder named after the asker, its errand is kept past `ticketTTL` for as long as the worker runs,
   the asker hears once per block when the worker waits on a permission, and the report comes back whole in a
-  `[lich]` note through the asker's mod. Without a mod polling there the note is typed short and the report waits
+  `[lich]` note through the asker's mod. Both reach the asker the way Claude Code's own background agent's
+  completion does, one `● lich session "…" finished` line on screen and the note whole in the model's context
+  (docs/hooks/mod-control.md, A prompt as a notification), through a render path Claude Code does not document:
+  a Claude Code that drops it shows the raw XML as a prompt, and a lich-plugin older than 0.16.0 shows the note as
+  a prompt from the plugin. Without a mod polling there the note is typed short and the report waits
   for `wait_for_answer`, because typing a long report into a TUI is what the mod route exists to avoid. A worker in
   the asker's checkout is parked once it answered and the turn it answered in ended (`relay.SetWorkerFinished`,
   `spawn.CloseFinishedWorker`), so typing into its card after its report means resuming it from the history; one

@@ -217,8 +217,9 @@ type Terminal interface {
 	// (see typeIn).
 	HoldInput(id string) func()
 	// SubmitPrompt hands text to the session's Claude Code mod as a prompt of
-	// its own; ErrNoMod when no mod polls from that session.
-	SubmitPrompt(id, text string) (HandedPrompt, error)
+	// its own, submitted as a notification when note is not nil; ErrNoMod when
+	// no mod polls from that session.
+	SubmitPrompt(id, text string, note *Notification) (HandedPrompt, error)
 	// ModAttached is whether a Claude Code mod polls from that session, which
 	// takes a prompt without touching the line its user is typing.
 	ModAttached(id string) bool
@@ -633,7 +634,7 @@ func (s *Service) handOff(id string, t *ticket, kind, message string) error {
 	// Stamped before the mod is handed it too: its session's busy report can
 	// arrive milliseconds after the prompt is queued.
 	busy := s.stampDelivery(t)
-	handed, err := s.term.SubmitPrompt(t.targetID, message)
+	handed, err := s.term.SubmitPrompt(t.targetID, message, nil)
 	if errors.Is(err, ErrNoMod) {
 		return s.typeTask(id, t, kind, message, busy)
 	}

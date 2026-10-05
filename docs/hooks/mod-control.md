@@ -69,6 +69,8 @@ it is withdrawn at once, so the caller is never told it is still coming.
 {"id": "m7", "kind": "command", "name": "compact", "args": "keep the test plan"}
 {"id": "m8", "kind": "command", "name": "clear"}
 {"id": "m9", "kind": "ask",     "question": "what are you working on?"}
+{"id": "m10", "kind": "prompt", "text": "[lich] Session \"docs\" finished ...",
+ "notification": {"status": "completed", "summary": "lich session \"docs\" finished"}}
 ```
 
 - `id`: opaque, unique within one lich process. Echo it in the ack.
@@ -76,6 +78,13 @@ it is withdrawn at once, so the caller is never told it is still coming.
   mod does not know is acked `ok: false` with `error: "unknown kind"`, so a lich
   newer than the mod is told rather than ignored.
 - `text`: `prompt` only and never empty, the message that starts a turn.
+- `notification`: `prompt` only and optional. Present, the prompt is news from
+  outside the session, and the mod submits it the way Claude Code delivers its
+  own background agent's completion (see [A prompt as a
+  notification](#a-prompt-as-a-notification)). `status` is `completed` (a
+  subagent worker reported) or `waiting` (it is blocked on a permission), and
+  `summary` is the line the user sees, never empty. `text` reads whole on its
+  own, so a mod that predates the field submits it as it always did.
 - `model`: `model` only. Present: every request from now on uses this model.
   Absent: drop the override and go back to the session's own model.
 - `effort`: `effort` only, with the same present/absent rule as `model`.
@@ -97,6 +106,31 @@ exists; the mod acks an unknown name `ok: false` with Claude Code's own error.
 
 Both sides test against the response shapes in
 [`fixtures/mod-commands.json`](fixtures/mod-commands.json).
+
+### A prompt as a notification
+
+A `prompt` carrying `notification` is submitted with `asUser: true` and this
+text, the shape of the completion Claude Code writes for its own background
+agents:
+
+```
+<task-notification>
+<status>STATUS</status>
+<summary>SUMMARY</summary>
+<result>TEXT</result>
+</task-notification>
+```
+
+Claude Code shows it as one dim `● SUMMARY` line instead of the prompt, the
+model reads the text above whole, and it starts a turn like any prompt
+(measured on 2.1.289). There is no `task-id` or `tool-use-id`, so the model
+never tries to resume or stop a task it does not own.
+
+The mod escapes `&`, `<` and `>` in `status` and `summary`, which Claude Code
+decodes before it shows the line, and puts `text` in unescaped: the model reads
+the result byte for byte as written, so an escaped `a && b` would reach it as
+`a &amp;&amp; b`. A `</result>` or `</task-notification>` inside `text` still
+renders as the one line and reaches the model as written (measured on 2.1.289).
 
 ## Request: acknowledge a command
 
@@ -204,7 +238,7 @@ a second request at twice the latency (measured on 2.1.289).
 - **Queue** (`Service.EnqueueModCommand`): the producer behind `lich control`. It refuses an
   unknown kind, a field of another kind, an empty prompt, a `command` with no
   name or named `model` or `effort`, an `ask` with no question or one over
-  `modQuestionLimit`, a session with no running process
+  `modQuestionLimit`, a `notification` of another status or with no summary, a session with no running process
   (`errModNotRunning`) and one with no mod polling (`errModDetached`), and
   otherwise returns the id the ack will carry. `Service.RunModCommand` queues the
   same way and waits for the ack until its context ends; a command no poll
@@ -214,6 +248,9 @@ a second request at twice the latency (measured on 2.1.289).
   only, never the caller's own session. `Service.SubmitPrompt` is the relay's
   producer (`internal/relay`): it queues a `prompt` the same way and hands the
   relay the wait on its ack, and a session with no mod polling is typed at instead.
+  The relay asks for a notification only for what a subagent worker sends its
+  caller (`internal/relay/subagent.go`): its report and the notice that it is
+  blocked on a permission.
 - **Teardown**: a session's queue is dropped when its process exits, and when
   it is closed once the process is gone (a live mod re-polls at once and would
   attach again). Either releases a parked poll with `[]`, and releases any wait
@@ -274,6 +311,13 @@ a second request at twice the latency (measured on 2.1.289).
 - **`/model` and `/effort` are refused as commands.** Measured on 2.1.288: run
   through a mod they write `~/.claude/settings.json` (`model`,
   `modelSettings.<model>.effortLevel`), the default for every new session.
+- **A notification rides a render path Claude Code does not document.** It is
+  the shape Claude Code gives its own background agents' completions, measured
+  on 2.1.289. A Claude Code that stops rendering it shows the XML as a typed
+  prompt instead; the model still reads the report whole.
+- **A mod older than 0.16.0 does not know `notification`.** It submits `text`
+  as an ordinary prompt from the plugin, which is why `text` reads whole on its
+  own.
 - **A mod older than 0.15.0 does not know `command`.** It acks `ok: false`,
   `unknown kind`, and lich reports "update lich-plugin to 0.15.0 or later".
 - **An answer knows the conversation as of the session's last finished model

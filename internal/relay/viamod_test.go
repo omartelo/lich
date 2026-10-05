@@ -17,11 +17,12 @@ type fakeMod struct {
 	receipts []PromptReceipt
 	err      error
 	prompts  []string
+	notes    []*Notification
 }
 
 // A prompt whose receipt is anything but withdrawn reads as collected from the
 // start, as one a polling mod takes at once does.
-func (f *fakeTerminal) SubmitPrompt(id, text string) (HandedPrompt, error) {
+func (f *fakeTerminal) SubmitPrompt(id, text string, note *Notification) (HandedPrompt, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	mod := f.mods[id]
@@ -36,6 +37,7 @@ func (f *fakeTerminal) SubmitPrompt(id, text string) (HandedPrompt, error) {
 	}
 	receipt := mod.receipts[len(mod.prompts)]
 	mod.prompts = append(mod.prompts, text)
+	mod.notes = append(mod.notes, note)
 	return HandedPrompt{
 		Await: func(ctx context.Context) PromptReceipt {
 			if receipt.State != PromptAcked && receipt.State != PromptEnded {
@@ -67,6 +69,17 @@ func (f *fakeTerminal) failMod(id string, err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.mods[id] = &fakeMod{err: err}
+}
+
+// notesTo is the notification each prompt a session's mod was handed carried,
+// nil for an ordinary prompt, in order.
+func (f *fakeTerminal) notesTo(id string) []*Notification {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if mod := f.mods[id]; mod != nil {
+		return append([]*Notification(nil), mod.notes...)
+	}
+	return nil
 }
 
 // promptsTo is every prompt a session's mod was handed, in order.
@@ -139,6 +152,9 @@ func TestATaskToASessionWithAModIsHandedToItNotTyped(t *testing.T) {
 	prompts := term.promptsTo("s2")
 	if len(prompts) != 1 || !strings.Contains(prompts[0], "run the tests") || !strings.Contains(prompts[0], ticketID) {
 		t.Errorf("the mod was handed %q, want the composed task once", prompts)
+	}
+	if notes := term.notesTo("s2"); notes[0] != nil {
+		t.Errorf("the task was handed as a notification %+v, want an ordinary prompt", notes[0])
 	}
 	assertNotTyped(t, term, "s2")
 }
@@ -329,6 +345,9 @@ func TestANudgeReachesASenderThroughItsMod(t *testing.T) {
 	}
 	if prompt := term.promptsTo("s1")[0]; !strings.Contains(prompt, "[lich]") {
 		t.Errorf("nudge = %q, want the [lich] note", prompt)
+	}
+	if note := term.notesTo("s1")[0]; note != nil {
+		t.Errorf("the nudge was handed as a notification %+v, want an ordinary prompt", note)
 	}
 	assertNotTyped(t, term, "s1")
 }

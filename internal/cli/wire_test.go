@@ -61,7 +61,7 @@ func (*wiredTerminal) AgentName(string) string { return "" }
 func (*wiredTerminal) HoldInput(string) func() { return func() {} }
 
 // No mod polls from these sessions, so every message is typed and recorded.
-func (*wiredTerminal) SubmitPrompt(string, string) (relay.HandedPrompt, error) {
+func (*wiredTerminal) SubmitPrompt(string, string, *relay.Notification) (relay.HandedPrompt, error) {
 	return relay.HandedPrompt{}, relay.ErrNoMod
 }
 

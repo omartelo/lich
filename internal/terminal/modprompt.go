@@ -7,7 +7,8 @@ import (
 	"github.com/omartelo/lich/internal/relay"
 )
 
-// SubmitPrompt queues text as a prompt for session id's Claude Code mod, with
+// SubmitPrompt queues text as a prompt for session id's Claude Code mod, as a
+// notification when note is not nil, with
 // the wait on its ack, which says how far the prompt got once its context ends
 // (relay.PromptReceipt), and whether a poll collected it yet. It answers
 // relay.ErrNoMod for a session no mod can collect it from: the transport is
@@ -16,11 +17,11 @@ import (
 //
 // The wait is a closure because the ack can land before anyone waits on it,
 // and only the waiter queued with the prompt keeps it (modQueue.await).
-func (s *Service) SubmitPrompt(id, text string) (relay.HandedPrompt, error) {
+func (s *Service) SubmitPrompt(id, text string, note *relay.Notification) (relay.HandedPrompt, error) {
 	if s.ws == nil {
 		return relay.HandedPrompt{}, relay.ErrNoMod
 	}
-	w, err := s.queueModCommand(id, ModCommand{Kind: ModPrompt, Text: text})
+	w, err := s.queueModCommand(id, ModCommand{Kind: ModPrompt, Text: text, Notification: note})
 	if errors.Is(err, errModDetached) || errors.Is(err, errModNotRunning) {
 		return relay.HandedPrompt{}, relay.ErrNoMod
 	}
