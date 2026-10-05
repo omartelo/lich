@@ -225,8 +225,10 @@ func (s *Service) turnCandidates(sessionID string) []string {
 			continue
 		}
 		// Queued for a mod that has not collected it: the turn was somebody
-		// else's, and the message may still be withdrawn and typed.
-		if !t.sawBusy || (t.collected != nil && !t.collected()) {
+		// else's, and the message may still be withdrawn and typed. An errand
+		// the worker's mod answers is not ended by a turn without that answer:
+		// the turn handed work to the background and resumes later.
+		if !t.sawBusy || (t.collected != nil && !t.collected()) || t.modAnswers {
 			continue
 		}
 		candidates = append(candidates, id)

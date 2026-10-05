@@ -239,7 +239,7 @@ func (s *Service) await(ctx context.Context, id string, t *ticket, wait time.Dur
 		return Result{Ticket: id, Target: t.target, Status: StatusAnswered, Answer: t.answer}
 	case <-t.stalled:
 		s.leave(t)
-		return Result{Ticket: id, Target: t.target, Status: StatusUnanswered}
+		return Result{Ticket: id, Target: t.target, Status: stalledStatus(t)}
 	case <-t.unread:
 		s.leave(t)
 		return Result{Ticket: id, Target: t.target, Status: StatusUnread}
@@ -252,6 +252,16 @@ func (s *Service) await(ctx context.Context, id string, t *ticket, wait time.Dur
 		s.abandon(id, t)
 		return Result{Ticket: id, Target: t.target, Status: StatusPending}
 	}
+}
+
+// stalledStatus is how an errand whose stall channel closed ended: stopped when
+// its worker was closed, unanswered otherwise. Read after stalled closed, which
+// is after stopped was set.
+func stalledStatus(t *ticket) string {
+	if t.stopped {
+		return StatusStopped
+	}
+	return StatusUnanswered
 }
 
 // abandon drops the claim of a caller that hung up mid-wait. Nobody reads what
@@ -331,7 +341,7 @@ func (s *Service) giveUpLocked(id string, t *ticket) (string, bool) {
 		return StatusUnread, orphaned
 	}
 	if stalled {
-		return StatusUnanswered, orphaned
+		return stalledStatus(t), orphaned
 	}
 	if undelivered {
 		return StatusUndelivered, orphaned

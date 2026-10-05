@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A Claude Code subagent answers the way a native one does.** Its card is
+  handed the task alone, with no ticket or reply instructions, and its last
+  message is the report the asking session gets. A worker that hands work to
+  the background reports once that work is done, not before. Needs lich-plugin
+  0.17.0.
+
+### Fixed
+
+- **Stopping a Claude Code subagent no longer sends a stray note back.** Closing
+  its card, with TaskStop or `lich close`, used to leave the asking session a
+  "has its result ready" note pointing at a card that was gone; the task now
+  just ends.
+
 ## [0.59.0] - 2026-10-05
 
 ### Changed

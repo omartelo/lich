@@ -458,7 +458,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (`spawn.OpenSubagent`), unless the call asked for worktree isolation, which opens a worktree of its own; it is
   filed under a folder named after the asker, its errand is kept past `ticketTTL` for as long as the worker runs,
   the asker hears once per block when the worker waits on a permission, and the report comes back whole in a
-  `[lich]` note through the asker's mod. Both reach the asker the way Claude Code's own background agent's
+  `[lich]` note through the asker's mod. The worker's own mod answers for it (docs/hooks/mod-answer.md), so it is
+  handed the task with no ticket and its last message is its report; a worker whose mod had not polled when the
+  task went in, or runs a lich-plugin older than 0.17.0, is handed the ticket instead, and one whose final turn
+  ends blank, aborted, in an API error or a refusal leaves its errand open with nothing reported. Closing a worker
+  ends its errand without a word to the asker (`relay.SessionClosed`, wired before the PTY is killed so the
+  SessionEnd its CLI reports finds nothing to call unanswered). Both reach the asker the way Claude Code's own background agent's
   completion does, one `● lich session "…" finished` line on screen and the note whole in the model's context
   (docs/hooks/mod-control.md, A prompt as a notification), through a render path Claude Code does not document:
   a Claude Code that drops it shows the raw XML as a prompt, and a lich-plugin older than 0.16.0 shows the note as

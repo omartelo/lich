@@ -373,6 +373,23 @@ func TestMCPWaitWithATicketWaitsOnIt(t *testing.T) {
 	}
 }
 
+// A worker its caller closed was stopped on purpose: the outcome says so and
+// sends nobody to a card that is gone.
+func TestMCPWaitOnAStoppedWorkerSaysItWasStopped(t *testing.T) {
+	f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"Session 3","status":"stopped"}`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"wait_for_answer","arguments":{"ticket":"a1b2c3d4"}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	if !strings.Contains(text, "closed before it answered") || strings.Contains(text, "card") {
+		t.Errorf("text = %q, want the stop and no card to open", text)
+	}
+}
+
 func TestMCPListSessionsReturnsThemAsJSON(t *testing.T) {
 	f := newFakeLich(t, `[{"label":"docs","project":"lich","kind":"codex","state":"waiting"},
 	                      {"label":"api","project":"lich","kind":"crush"}]`)

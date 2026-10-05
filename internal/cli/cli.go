@@ -54,7 +54,8 @@ const (
 	// a live ticket or command id: nothing failed, and no answer is in hand yet.
 	ExitPending = 2
 	// ExitNoAnswer is an errand or a control over with no answer coming through
-	// lich: never read, never delivered, answered elsewhere, or the session ended.
+	// lich: never read, never delivered, answered elsewhere, a worker closed
+	// before it answered, or the session ended.
 	ExitNoAnswer = 3
 )
 
@@ -881,6 +882,10 @@ func (c *client) report(result relay.Result, asJSON bool) error {
 	}
 	if result.Status == relay.StatusUndelivered {
 		fmt.Fprintln(c.stdout, undeliveredText(result.Target))
+		return nil
+	}
+	if result.Status == relay.StatusStopped {
+		fmt.Fprintln(c.stdout, stoppedText(result.Target))
 		return nil
 	}
 	if result.Private {

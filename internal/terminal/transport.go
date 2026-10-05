@@ -131,6 +131,9 @@ type transport struct {
 	// usageReported receives a session's own measurements (modusage.go).
 	// Guarded by mu and wired by setUsageReported, like modAborted.
 	usageReported func(usageReport)
+	// workerAnswered receives a worker's reported answer (modanswer.go).
+	// Guarded by mu and wired by setWorkerAnswered, like modAborted.
+	workerAnswered func(id, text string)
 }
 
 // newTransport starts the listener on a random loopback port. input receives
@@ -188,6 +191,7 @@ func newTransport(
 	mux.HandleFunc("/mod/commands", t.modCommands)
 	mux.HandleFunc("/mod/acks", t.modAck)
 	mux.HandleFunc("/mod/usage", t.modUsage)
+	mux.HandleFunc("/mod/answer", t.modAnswer)
 	t.mux = mux
 	// Server and listener live for the process lifetime, like the PTY sessions
 	// they serve; add Shutdown if the app ever needs teardown. Serve returning

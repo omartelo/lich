@@ -67,6 +67,8 @@ func (*wiredTerminal) SubmitPrompt(string, string, *relay.Notification) (relay.H
 
 func (*wiredTerminal) ModAttached(string) bool { return false }
 
+func (*wiredTerminal) ModAnswers(string) bool { return false }
+
 func (w *wiredTerminal) Write(_, data string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()

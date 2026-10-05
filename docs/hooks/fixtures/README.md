@@ -22,6 +22,7 @@ whichever side moved first.
 | `mod-control.jsonl`    | [mod-control.md](../mod-control.md)          | `/mod/acks`        |
 | `mod-commands.json`    | [mod-control.md](../mod-control.md)          | `/mod/commands`    |
 | `mod-usage.jsonl`      | [mod-usage.md](../mod-usage.md)              | `/mod/usage`       |
+| `mod-answer.jsonl`     | [mod-answer.md](../mod-answer.md)            | `/mod/answer`      |
 
 `mod-commands.json` is the one file that is not cases: it is the response body
 lich sends to `GET /mod/commands`, one command of every shape, which lich

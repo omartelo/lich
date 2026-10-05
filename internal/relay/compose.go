@@ -79,6 +79,18 @@ func compose(sender, ticketID, prompt string, hasTools bool) string {
 	)
 }
 
+// composeForWorker is the task handed to a worker whose mod answers for it
+// (docs/hooks/mod-answer.md): the task under one line naming who asked, the way
+// a native subagent is handed its prompt. There is no ticket and no reply
+// command, because the worker's last message is its answer.
+func composeForWorker(sender, prompt string) string {
+	return fmt.Sprintf(
+		"[lich] Task from session %q, which opened this session as its subagent. "+
+			"Your final message when you finish is sent back to it as your report.\n\n%s",
+		sender, prompt,
+	)
+}
+
 // replyInstruction tells the receiving agent how to answer. Every agent has a
 // shell, so the command is always named; a provider lich registers its MCP
 // server with is offered the tool first, because a session that withholds shell

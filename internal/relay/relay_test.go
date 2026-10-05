@@ -70,6 +70,9 @@ type fakeTerminal struct {
 	// viamod_test.go). A session with none is typed at, as every test outside
 	// that file expects.
 	mods map[string]*fakeMod
+	// answering is whether that session's mod answers its subagent errands
+	// itself (see workeranswer_test.go).
+	answering map[string]bool
 }
 
 func newFakeTerminal(live ...string) *fakeTerminal {
@@ -79,7 +82,7 @@ func newFakeTerminal(live ...string) *fakeTerminal {
 		noisy: map[string]int{}, drained: map[string]int{},
 		names:   map[string]string{},
 		holding: map[string]bool{}, inHold: map[string][]string{},
-		mods: map[string]*fakeMod{},
+		mods: map[string]*fakeMod{}, answering: map[string]bool{},
 	}
 	for _, id := range live {
 		t.live[id] = true

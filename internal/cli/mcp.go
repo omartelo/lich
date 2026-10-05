@@ -706,6 +706,8 @@ func mcpOutcome(result relay.Result) string {
 		return unreadText(result.Target)
 	case relay.StatusUndelivered:
 		return undeliveredText(result.Target)
+	case relay.StatusStopped:
+		return stoppedText(result.Target)
 	}
 	if result.Private {
 		return fmt.Sprintf(
@@ -790,6 +792,17 @@ func undeliveredText(target string) string {
 // to the other session: whatever the agent there produced is on its screen and
 // nowhere lich can reach, so an answer that reads as "nothing happened" would
 // be the one wrong thing to say.
+// stoppedText is what both surfaces say about a subagent worker that was closed
+// before it answered. Whoever closed it stopped the work on purpose, so there
+// is no card to send the reader to.
+func stoppedText(target string) string {
+	return fmt.Sprintf(
+		"The %q session was closed before it answered, so the task was stopped and no "+
+			"answer is coming.",
+		target,
+	)
+}
+
 func unansweredText(target string) string {
 	return fmt.Sprintf(
 		"The %q session finished its turn without answering through lich. "+

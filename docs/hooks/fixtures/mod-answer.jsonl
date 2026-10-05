@@ -1,0 +1,8 @@
+{"name":"a worker's report","body":{"session_id":"s1","text":"Rewrote docs/cli.md; the tests pass."},"accept":{"session_id":"s1","text":"Rewrote docs/cli.md; the tests pass."}}
+{"name":"a report keeps its lines","body":{"session_id":"s1","text":"Done.\n\n- a < b && c > d\n- `go test` green"},"accept":{"text":"Done.\n\n- a < b && c > d\n- `go test` green"}}
+{"name":"extra fields are ignored","body":{"session_id":"s1","text":"Done.","turn_id":"t"},"accept":{"text":"Done."}}
+{"name":"missing session_id","body":{"text":"Done."},"reject":"session_id is required"}
+{"name":"missing text","body":{"session_id":"s1"},"reject":"text is required"}
+{"name":"blank text","body":{"session_id":"s1","text":" \n\t"},"reject":"a blank text is no answer"}
+{"name":"text is not a string","body":{"session_id":"s1","text":42},"reject":"text must be a string"}
+{"name":"malformed json","raw":"{","reject":"body must be a JSON object"}
