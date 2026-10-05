@@ -89,6 +89,7 @@ func (s *Service) Reply(replierID, ticketID, answer string) error {
 			// answer rather than the stall over it (giveUpLocked).
 			late.answer = answer
 			late.answered = true
+			s.noteWorkerReportedLocked(late)
 			s.stashLocked(ticketID, late, StatusAnswered, answer)
 			s.mu.Unlock()
 			s.announceInbox(late.fromID)
@@ -105,6 +106,7 @@ func (s *Service) Reply(replierID, ticketID, answer string) error {
 	}
 	t.answer = answer
 	t.answered = true
+	s.noteWorkerReportedLocked(t)
 	close(t.done)
 	// The errand is over the moment the answer lands, whether or not anyone is
 	// still waiting on it: a sender whose wait ran out has moved on, and the

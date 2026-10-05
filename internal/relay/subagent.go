@@ -2,13 +2,15 @@ package relay
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 )
 
-// A subagent errand (SendSubagent) is an ordinary one with three differences,
+// A subagent errand (SendSubagent) is an ordinary one with four differences,
 // all here: its report reaches the sender whole rather than as a nudge to
-// collect it, the sender hears when its worker blocks on a permission, and
-// sweep leaves it alone while the worker runs (workerHolds).
+// collect it, the sender hears when its worker blocks on a permission, sweep
+// leaves it alone while the worker runs (workerHolds), and the worker is
+// finished once it reported and its turn ended (finishedWorkerLocked).
 
 // tellNews delivers one flush's news to fromID. With no subagent report among
 // it that is the nudge, as ever. With one, the report goes to the sender's mod
@@ -109,5 +111,54 @@ func (s *Service) unblockLocked(sessionID string) {
 		if t.targetID == sessionID {
 			t.blockNoted = false
 		}
+	}
+}
+
+// SetWorkerFinished wires what runs for a worker that finished: it answered its
+// subagent errand and the turn it answered in ended, with no other errand open
+// at it. The app closes the worker there when it shares its caller's checkout
+// (spawn.CloseFinishedWorker). Called at startup, before any errand exists.
+func (s *Service) SetWorkerFinished(fn func(workerID string) error) {
+	s.workerFinished = fn
+}
+
+// noteWorkerReportedLocked marks the target of a subagent errand that was just
+// answered, for the end of its turn to finish. Called under s.mu.
+func (s *Service) noteWorkerReportedLocked(t *ticket) {
+	if t.subagent {
+		s.reportedWorkers[t.targetID] = true
+	}
+}
+
+// finishedWorkerLocked reads one state report for a worker that reported this
+// turn: a done finishes it unless another errand is still open at it, checked
+// before endedErrands takes this turn's errands off the table, since one of
+// those may still be answered late. An interrupt or the session ending clears
+// the mark without finishing it: whoever stopped that turn is still at its
+// card. Called under s.mu.
+func (s *Service) finishedWorkerLocked(sessionID, state string) bool {
+	if !s.reportedWorkers[sessionID] {
+		return false
+	}
+	switch state {
+	case stateDone:
+	case stateInterrupted, stateIdle:
+		delete(s.reportedWorkers, sessionID)
+		return false
+	default:
+		return false
+	}
+	delete(s.reportedWorkers, sessionID)
+	for _, t := range s.tickets {
+		if t.targetID == sessionID {
+			return false
+		}
+	}
+	return s.workerFinished != nil
+}
+
+func (s *Service) finishWorker(workerID string) {
+	if err := s.workerFinished(workerID); err != nil {
+		slog.Warn("relay: close a finished worker", "session", workerID, "err", err)
 	}
 }

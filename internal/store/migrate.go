@@ -18,6 +18,7 @@ var migrations = []func(*sql.Tx) error{
 	addSessionFolder,
 	addSessionUltracode,
 	addSessionSubagent,
+	addCostReported,
 }
 
 // addSessionEffort is version 2: the reasoning effort a session was opened at,
@@ -61,6 +62,16 @@ func addSessionUltracode(tx *sql.Tx) error {
 // subagents native, or a card would open cards of its own.
 func addSessionSubagent(tx *sql.Tx) error {
 	_, err := tx.Exec(`ALTER TABLE sessions ADD COLUMN subagent INTEGER NOT NULL DEFAULT 0`)
+	return err
+}
+
+// addCostReported is version 6: whether a ledger row holds a figure its
+// provider reported rather than one lich priced (ReplaceConversationCost). A
+// Claude Code session is priced from its transcripts until its mod reports what
+// Claude Code measured, so the rung is a fact of the row there, not of the
+// provider (providers.CostSourceOf).
+func addCostReported(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE session_costs ADD COLUMN reported INTEGER NOT NULL DEFAULT 0`)
 	return err
 }
 

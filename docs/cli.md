@@ -150,7 +150,9 @@ docs	lich	codex	lich-a1b2	busy
 api	revu	crush	revu-9f8e	-
 ```
 
-`No other live sessions.` when there are none. A session is listed only while a
+`--json` prints an array of `{"label","name","project","kind","state"}`, `[]`
+when there are none. lich-plugin's Claude Code mod reads it to count the
+subagent workers still running. `No other live sessions.` when there are none. A session is listed only while a
 process is running in it: a card whose terminal was never opened has nothing to
 type at.
 
@@ -432,6 +434,12 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
     [The answer is announced, and collected](#the-answer-is-announced-and-collected)).
   - is **not dropped by the ticket's one-hour TTL** while its session runs;
     closing it ends the errand as it ends any.
+  - **closes once it is done** when it runs in the caller's checkout: after it
+    answers the errand and the turn it answered in ends, lich parks it the way
+    `lich close` does, like a native subagent that returned its result. A worker
+    on a worktree of its own stays open, since that checkout holds its work, and
+    so does one the user pinned, one whose caller is gone, one with another
+    errand still open at it, and one whose turn was stopped with Esc.
   - tells the caller, in one short note per block, when it is **waiting on a
     permission** prompt in its card.
   - spawns with `LICH_SUBAGENT_CARDS=off` on every start, a resume included, so
@@ -719,7 +727,9 @@ all land in the same count.
 from two kinds of accounting and reads identically either way: `priced` is
 lich's own arithmetic over the token counts Claude Code and Codex write down,
 `reported` is the figure oh-my-pi, opencode or Crush computed themselves and
-handed over, with the omission their own accounting has. A row that ran both
+handed over, with the omission their own accounting has. A Claude Code session
+whose mod reported the cost Claude Code measured (`docs/hooks/mod-usage.md`) is
+`reported` too: that figure is Claude Code's arithmetic, not lich's. A row that ran both
 reads `mixed`, and a total that mixes them adds the line above the last one,
 splitting the counted sessions between the two. A row with no money to
 attribute — every session in it unpriced, or its spend earned by a provider CLI

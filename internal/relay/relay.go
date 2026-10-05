@@ -433,6 +433,12 @@ type Service struct {
 	// state a test that does not care is in — reads as "nothing is installed":
 	// no delivery is checked, and a relayed message names the command line.
 	plugins Plugins
+	// reportedWorkers is the sessions that answered a subagent errand in the
+	// turn running now; the turn ending finishes them (finishedWorkerLocked).
+	reportedWorkers map[string]bool
+	// workerFinished is told about a worker that finished. Nil leaves every
+	// worker running, the state a test that does not care is in.
+	workerFinished func(workerID string) error
 }
 
 // Plugins is what the relay needs to know about the companion plugin
@@ -452,25 +458,26 @@ type Plugins interface {
 // announcing what is in flight on events.
 func New(sessions Sessions, term Terminal, events Events) *Service {
 	return &Service{
-		tickets:       make(map[string]*ticket),
-		state:         make(map[string]string),
-		reported:      make(map[string]string),
-		ready:         make(map[string]*inboxEntry),
-		held:          make(map[string]*inboxEntry),
-		lapsed:        make(map[string]*ticket),
-		collectors:    make(map[string][]chan struct{}),
-		nudgeTimer:    make(map[string]*time.Timer),
-		nudging:       make(map[string]*sync.Mutex),
-		sessions:      sessions,
-		term:          term,
-		events:        events,
-		now:           time.Now,
-		submitDelay:   defaultSubmitDelay,
-		receiptWindow: defaultReceiptWindow,
-		deliveryLimit: defaultDeliveryLimit,
-		nudgeDelay:    defaultNudgeDelay,
-		settleLimit:   defaultSettleLimit,
-		modAckWait:    defaultModAckWait,
+		tickets:         make(map[string]*ticket),
+		state:           make(map[string]string),
+		reported:        make(map[string]string),
+		ready:           make(map[string]*inboxEntry),
+		held:            make(map[string]*inboxEntry),
+		lapsed:          make(map[string]*ticket),
+		reportedWorkers: make(map[string]bool),
+		collectors:      make(map[string][]chan struct{}),
+		nudgeTimer:      make(map[string]*time.Timer),
+		nudging:         make(map[string]*sync.Mutex),
+		sessions:        sessions,
+		term:            term,
+		events:          events,
+		now:             time.Now,
+		submitDelay:     defaultSubmitDelay,
+		receiptWindow:   defaultReceiptWindow,
+		deliveryLimit:   defaultDeliveryLimit,
+		nudgeDelay:      defaultNudgeDelay,
+		settleLimit:     defaultSettleLimit,
+		modAckWait:      defaultModAckWait,
 	}
 }
 

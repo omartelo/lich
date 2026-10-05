@@ -459,8 +459,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   filed under a folder named after the asker, its errand is kept past `ticketTTL` for as long as the worker runs,
   the asker hears once per block when the worker waits on a permission, and the report comes back whole in a
   `[lich]` note through the asker's mod. Without a mod polling there the note is typed short and the report waits
-  for `wait_for_answer`, because typing a long report into a TUI is what the mod route exists to avoid. The worker
-  spawns with `LICH_SUBAGENT_CARDS=off`, so its own subagents stay native. The other seven
+  for `wait_for_answer`, because typing a long report into a TUI is what the mod route exists to avoid. A worker in
+  the asker's checkout is parked once it answered and the turn it answered in ended (`relay.SetWorkerFinished`,
+  `spawn.CloseFinishedWorker`), so typing into its card after its report means resuming it from the history; one
+  on its own worktree, pinned, stopped with Esc, holding another errand, or whose asker is gone stays open. Esc in
+  the asker leaves its workers running, as it leaves Claude Code's own background agents (measured on 2.1.289);
+  the mod's TaskStop stops one, Claude Code's `ctrl+x ctrl+k` does not, and the asker's status line counts them
+  from `lich sessions --json` every 5 seconds. The
+  worker spawns with `LICH_SUBAGENT_CARDS=off`, so its own subagents stay native. The other seven
   providers have no mod system, so nothing can take a subagent call from them, and their subagents stay inside their CLI. On Claude
   Code too, a typed agent (Explore, Plan, a plugin's), a workflow step, another plugin's spawn, a remote one and a
   worker's own subagents stay native, and the worker is reached with `send_to_session` or `lich send`, never with

@@ -21,6 +21,7 @@ import (
 func (s *Service) Observe(sessionID, state string) {
 	s.mu.Lock()
 	blocked := s.noteBlockLocked(sessionID, state)
+	finished := s.finishedWorkerLocked(sessionID, state)
 	s.recordState(sessionID, state)
 	ended, notice := s.endedErrands(sessionID, state)
 	// A waiter still holding the line carries the news out through its own
@@ -55,6 +56,9 @@ func (s *Service) Observe(sessionID, state string) {
 	}
 	for _, t := range blocked {
 		go s.deliverNotice(t.fromID, blockedNotice(t.target))
+	}
+	if finished {
+		go s.finishWorker(sessionID)
 	}
 	// This session as a sender: its turn ending frees its prompt, which is what
 	// a nudge held back during the turn was waiting for. A turn stopped with Esc
