@@ -4,9 +4,13 @@
 {"name":"long error is clamped","body":{"session_id":"s1","id":"m5","kind":"command","ok":false,"error":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"},"accept":{"error":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}
 {"name":"id from a previous process","body":{"session_id":"s1","id":"m999","kind":"prompt","ok":true},"accept":{"id":"m999"}}
 {"name":"extra fields are ignored","body":{"session_id":"s1","id":"m6","kind":"abort","ok":true,"turn_id":"t"},"accept":{"id":"m6"}}
+{"name":"answered ask carries its answer","body":{"session_id":"s1","id":"m9","kind":"ask","ok":true,"answer":"Fixing the login test."},"accept":{"ok":true,"answer":"Fixing the login test."}}
+{"name":"unanswered ask carries why","body":{"session_id":"s1","id":"m9","kind":"ask","ok":false,"error":"nothing-to-fork"},"accept":{"ok":false,"error":"nothing-to-fork"}}
 {"name":"missing session_id","body":{"id":"m1","kind":"abort","ok":true},"reject":"session_id is required"}
 {"name":"missing id","body":{"session_id":"s1","kind":"abort","ok":true},"reject":"id is required"}
 {"name":"missing kind","body":{"session_id":"s1","id":"m1","ok":true},"reject":"kind is required"}
-{"name":"unknown kind","body":{"session_id":"s1","id":"m1","kind":"type","ok":true},"reject":"kind must be prompt, abort, model, effort or command"}
+{"name":"unknown kind","body":{"session_id":"s1","id":"m1","kind":"type","ok":true},"reject":"kind must be prompt, abort, model, effort, command or ask"}
+{"name":"answer on another kind","body":{"session_id":"s1","id":"m1","kind":"prompt","ok":true,"answer":"x"},"reject":"only an answered ask carries an answer"}
+{"name":"answer on a failed ask","body":{"session_id":"s1","id":"m9","kind":"ask","ok":false,"error":"aborted","answer":"x"},"reject":"only an answered ask carries an answer"}
 {"name":"ok is not a bool","body":{"session_id":"s1","id":"m1","kind":"abort","ok":"true"},"reject":"ok must be a boolean"}
 {"name":"malformed json","raw":"{","reject":"body must be a JSON object"}

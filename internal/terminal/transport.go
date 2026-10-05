@@ -406,6 +406,19 @@ func servePost[T hookBody](
 	parse func([]byte) (T, error),
 	apply func(T) error,
 ) {
+	servePostLimited(t, w, r, hookBodyLimit, parse, apply)
+}
+
+// servePostLimited is servePost for an endpoint whose body outgrows
+// hookBodyLimit. A body over limit is cut, fails to parse, and is a 400.
+func servePostLimited[T hookBody](
+	t *transport,
+	w http.ResponseWriter,
+	r *http.Request,
+	limit int64,
+	parse func([]byte) (T, error),
+	apply func(T) error,
+) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -415,7 +428,7 @@ func servePost[T hookBody](
 		return
 	}
 	plugin := r.Header.Get(pluginVersionHeader)
-	body, err := io.ReadAll(io.LimitReader(r.Body, hookBodyLimit))
+	body, err := io.ReadAll(io.LimitReader(r.Body, limit))
 	if err != nil {
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 		return

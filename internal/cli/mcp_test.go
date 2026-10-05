@@ -230,6 +230,7 @@ func TestMCPListsEveryTool(t *testing.T) {
 		"file_session":     {"folder"},
 		"rename_folder":    {"folder", "to"},
 		"control_session":  {"session", "action"},
+		"ask_session":      {"session", "question"},
 	}
 	// The read-only ones, which a client may auto-allow. wait_for_answer is
 	// not among them: collecting drains the inbox.

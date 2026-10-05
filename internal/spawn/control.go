@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/omartelo/lich/internal/providers"
-	"github.com/omartelo/lich/internal/store"
 	"github.com/omartelo/lich/internal/terminal"
 )
 
@@ -60,19 +59,18 @@ func (s *Service) Control(
 	if err != nil {
 		return Controlled{}, err
 	}
-	if strings.TrimSpace(target) == "" {
-		return Controlled{}, errors.New("name the session to control")
-	}
-	projects, err := s.sessions.LoadState()
-	if err != nil {
-		return Controlled{}, fmt.Errorf("read the workspace: %w", err)
-	}
-	found, err := findSession(projects, s.term.AgentName, target, projectName)
+	found, err := s.claudeTarget(target, projectName, "control", "controlled")
 	if err != nil {
 		return Controlled{}, err
 	}
-	if err := controllable(found.session, fromID); err != nil {
-		return Controlled{}, err
+	// Refused for model and effort too, which would work: nobody asked for
+	// them, and allowing them would need a target that defaults to the caller,
+	// since list_sessions never shows an agent its own label.
+	if found.session.ID == fromID {
+		return Controlled{}, fmt.Errorf(
+			"%q is this session, and a session cannot control itself: an abort would end the "+
+				"turn asking for it, and a prompt or a slash command would only run once that "+
+				"turn is over", found.session.Label)
 	}
 
 	label, bound := found.session.Label, ackWaitFor(action)
@@ -130,22 +128,28 @@ func modCommandFor(action, value, args string) (terminal.ModCommand, error) {
 	return cmd, nil
 }
 
-func controllable(sess store.Session, fromID string) error {
-	if sess.Kind != providers.Claude {
-		return fmt.Errorf(
-			"%q runs %s, and only a Claude Code session can be controlled: lich drives one "+
-				"through a Claude Code mod, which no other CLI has", sess.Label, kindName(sess.Kind))
+// claudeTarget finds the session target names, refusing one that does not run
+// Claude Code: lich reaches a session through its Claude Code mod. verb and
+// participle word the refusals for the caller's action.
+func (s *Service) claudeTarget(target, projectName, verb, participle string) (located, error) {
+	if strings.TrimSpace(target) == "" {
+		return located{}, fmt.Errorf("name the session to %s", verb)
 	}
-	// Refused for model and effort too, which would work: nobody asked for
-	// them, and allowing them would need a target that defaults to the caller,
-	// since list_sessions never shows an agent its own label.
-	if sess.ID == fromID {
-		return fmt.Errorf(
-			"%q is this session, and a session cannot control itself: an abort would end the "+
-				"turn asking for it, and a prompt or a slash command would only run once that "+
-				"turn is over", sess.Label)
+	projects, err := s.sessions.LoadState()
+	if err != nil {
+		return located{}, fmt.Errorf("read the workspace: %w", err)
 	}
-	return nil
+	found, err := findSession(projects, s.term.AgentName, target, projectName)
+	if err != nil {
+		return located{}, err
+	}
+	if found.session.Kind != providers.Claude {
+		return located{}, fmt.Errorf(
+			"%q runs %s, and only a Claude Code session can be %s: lich drives one "+
+				"through a Claude Code mod, which no other CLI has", found.session.Label,
+			kindName(found.session.Kind), participle)
+	}
+	return found, nil
 }
 
 func ackWaitFor(action string) time.Duration {

@@ -20,6 +20,7 @@ const (
 	ModModel      = "model"
 	ModEffort     = "effort"
 	ModRunCommand = "command"
+	ModAsk        = "ask"
 )
 
 // What RunModCommand learned about a command by the time its wait ended.
@@ -59,6 +60,16 @@ const (
 	modRepollGrace = 5 * time.Second
 )
 
+const (
+	// modAckBodyLimit bounds an ack, which carries an ask's answer: the mod cuts
+	// one at 16,000 UTF-16 units, at most three bytes each in JSON, plus room
+	// for the envelope.
+	modAckBodyLimit = 64 << 10
+	// modQuestionLimit bounds an ask's question, which rides every poll that
+	// carries it.
+	modQuestionLimit = 8 << 10
+)
+
 var errModNotRunning = errors.New(
 	"the session is not running, so there is nothing to hand the command to: start it again, then retry")
 
@@ -71,27 +82,29 @@ var errModDetached = errors.New(
 // ModCommand is one instruction for a session's mod. Model and Effort absent
 // mean "drop the override", which the mod reads as null.
 type ModCommand struct {
-	ID     string `json:"id"`
-	Kind   string `json:"kind"`
-	Text   string `json:"text,omitempty"`
-	Model  string `json:"model,omitempty"`
-	Effort string `json:"effort,omitempty"`
-	Name   string `json:"name,omitempty"`
-	Args   string `json:"args,omitempty"`
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	Text     string `json:"text,omitempty"`
+	Model    string `json:"model,omitempty"`
+	Effort   string `json:"effort,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Args     string `json:"args,omitempty"`
+	Question string `json:"question,omitempty"`
 }
 
 // ModOutcome is what became of one command: State is one of ModWithdrawn,
-// ModDelivered, ModAcked and ModEnded.
+// ModDelivered, ModAcked and ModEnded. Answer is an acked ask's reply.
 type ModOutcome struct {
-	ID    string
-	State string
-	OK    bool
-	Error string
+	ID     string
+	State  string
+	OK     bool
+	Error  string
+	Answer string
 }
 
 func knownModKind(kind string) bool {
 	switch kind {
-	case ModPrompt, ModAbort, ModModel, ModEffort, ModRunCommand:
+	case ModPrompt, ModAbort, ModModel, ModEffort, ModRunCommand, ModAsk:
 		return true
 	}
 	return false
@@ -230,15 +243,16 @@ func (q *modQueue) enqueue(id string, cmd ModCommand) (*modWaiter, error) {
 // settle hands an ack to the wait on its command. An ack for an id nobody is
 // waiting on, or from another session than the one the command went to, is
 // left alone.
-func (q *modQueue) settle(session, id string, ok bool, reason string) {
+func (q *modQueue) settle(ack modAckRequest) {
+	id := ack.ID
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	w := q.acks[id]
-	if w == nil || w.session != session {
+	if w == nil || w.session != ack.SessionID {
 		return
 	}
 	delete(q.acks, id)
-	w.settled <- ModOutcome{ID: id, State: ModAcked, OK: ok, Error: reason}
+	w.settled <- ModOutcome{ID: id, State: ModAcked, OK: ack.OK, Error: ack.Error, Answer: ack.Answer}
 }
 
 // await waits for w's outcome until ctx ends, and then says how far the command
@@ -348,6 +362,7 @@ type modAckRequest struct {
 	Kind      string `json:"kind"`
 	OK        bool   `json:"ok"`
 	Error     string `json:"error,omitempty"`
+	Answer    string `json:"answer,omitempty"`
 }
 
 // modAck receives the mod's ack. Every ack settles a wait on its command; only
@@ -355,8 +370,8 @@ type modAckRequest struct {
 // without firing Stop, so the ack is the only word lich gets that the turn is
 // over.
 func (t *transport) modAck(w http.ResponseWriter, r *http.Request) {
-	servePost(t, w, r, parseModAck, func(req modAckRequest) error {
-		t.mods.settle(req.SessionID, req.ID, req.OK, req.Error)
+	servePostLimited(t, w, r, modAckBodyLimit, parseModAck, func(req modAckRequest) error {
+		t.mods.settle(req)
 		if !req.OK {
 			slog.Warn("mod: command failed", "session", req.SessionID, "id", req.ID,
 				"kind", req.Kind, "error", req.Error)
@@ -390,6 +405,9 @@ func parseModAck(body []byte) (modAckRequest, error) {
 	}
 	if !knownModKind(req.Kind) {
 		return modAckRequest{}, fmt.Errorf("mod ack has unknown kind %q", req.Kind)
+	}
+	if req.Answer != "" && (req.Kind != ModAsk || !req.OK) {
+		return modAckRequest{}, errors.New("only an answered ask carries an answer")
 	}
 	req.Error = clampRunes(strings.TrimSpace(req.Error), hookTextLimit)
 	return req, nil
@@ -445,6 +463,9 @@ func (s *Service) queueModCommand(id string, cmd ModCommand) (*modWaiter, error)
 	if cmd.Kind == ModPrompt && strings.TrimSpace(cmd.Text) == "" {
 		return nil, errors.New("prompt command has no text")
 	}
+	if err := checkQuestion(cmd); err != nil {
+		return nil, err
+	}
 	// A poll from a process that is already gone can still land after Close
 	// and look like an attached mod for the length of the attach window.
 	if !s.Live(id) {
@@ -474,6 +495,19 @@ func runnableCommand(cmd ModCommand) (ModCommand, error) {
 	return cmd, nil
 }
 
+func checkQuestion(cmd ModCommand) error {
+	if cmd.Kind != ModAsk {
+		return nil
+	}
+	if strings.TrimSpace(cmd.Question) == "" {
+		return errors.New("an ask needs a question, and none was given")
+	}
+	if len(cmd.Question) > modQuestionLimit {
+		return fmt.Errorf("the question is %d bytes, over the %d an ask carries", len(cmd.Question), modQuestionLimit)
+	}
+	return nil
+}
+
 // ownModFields is cmd with only the fields its kind carries.
 func ownModFields(cmd ModCommand) ModCommand {
 	own := ModCommand{ID: cmd.ID, Kind: cmd.Kind}
@@ -486,6 +520,8 @@ func ownModFields(cmd ModCommand) ModCommand {
 		own.Effort = cmd.Effort
 	case ModRunCommand:
 		own.Name, own.Args = cmd.Name, cmd.Args
+	case ModAsk:
+		own.Question = cmd.Question
 	}
 	return own
 }

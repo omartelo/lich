@@ -325,6 +325,11 @@ func TestEnqueueModCommandRefuses(t *testing.T) {
 		{"the model command with its args in the name", "attached", ModCommand{Kind: ModRunCommand, Name: "model opus"}, false},
 		{"the model command behind two slashes", "attached", ModCommand{Kind: ModRunCommand, Name: "//model"}, false},
 		{"compact, which the contract dropped", "attached", ModCommand{Kind: "compact"}, false},
+		{"an ask with no question", "attached", ModCommand{Kind: ModAsk, Question: " \n"}, false},
+		{"an ask over the question limit", "attached",
+			ModCommand{Kind: ModAsk, Question: strings.Repeat("x", modQuestionLimit+1)}, false},
+		{"text on an ask", "attached", ModCommand{Kind: ModAsk, Question: "why?", Text: "x"}, false},
+		{"a question on a prompt", "attached", ModCommand{Kind: ModPrompt, Text: "go", Question: "why?"}, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -497,6 +502,7 @@ func TestModCommandsMatchFixture(t *testing.T) {
 		{ID: "m6", Kind: ModEffort},
 		{ID: "m7", Kind: ModRunCommand, Name: "compact", Args: "keep the test plan"},
 		{ID: "m8", Kind: ModRunCommand, Name: "clear"},
+		{ID: "m9", Kind: ModAsk, Question: "what are you working on?"},
 	}
 	encoded, err := json.Marshal(cmds)
 	if err != nil {

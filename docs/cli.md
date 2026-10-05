@@ -129,7 +129,7 @@ guess at the one it resembles, and exit 1 — a typo does not open a window.
 Arguments the app itself takes still do: bare `lich`, and `lich --` with the
 Chromium flags behind it.
 
-`--json` on `sessions`, `send`, `wait`, `open`, `close`, `control`, `worktrees`, `folders`, `file`,
+`--json` on `sessions`, `send`, `wait`, `open`, `close`, `control`, `ask`, `worktrees`, `folders`, `file`,
 `rename-folder`, `cost` and `version`
 replaces the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
@@ -567,6 +567,33 @@ $ lich control auth-fix command compact "keep the test plan"
 `{"id","project","label","action","value","command_id","state"}`, `value` absent
 when the action carried none; `state` is `done`, `delivered` or `ended`.
 
+### `lich ask [--project <name>] [--json] <session> <question...>`
+
+Asks a running Claude Code session a side question and prints its answer. The
+session answers from its own conversation while its turn goes on, through the
+lich-plugin mod (`docs/hooks/mod-control.md`); neither the question nor the
+answer enters that conversation.
+
+```
+$ lich ask auth-fix what are you working on
+Fixing the flaky login test: the fixture user expires before the assertion.
+```
+
+- **It waits up to 90 seconds** for the answer. A short one takes seconds. An
+  answer that comes later is dropped, and the command exits 1; so does every
+  other way it ends without one: a session with no conversation yet (new, or
+  just cleared), an API error, a session that ended.
+- **The answer knows the conversation as of the session's last finished model
+  response**: it cannot say what the session is doing this very second (a prompt
+  it is still writing its first reply to is not in it either), and it cannot run
+  tools to find out more.
+- **It costs tokens on the asked session's account and never shows in its
+  cost.** The prompt cache serves the conversation while it is warm.
+- **Claude Code 2.1.280 or later, with lich-plugin 0.15.0 or later, in a trusted
+  folder**, as for `lich control`, and never the session running the command.
+
+`--json` prints `{"id","project","label","answer"}`.
+
 ### `lich worktrees [--project <name>] [--json]`
 
 Lists a project's git worktrees — what each is called, whether it holds
@@ -748,6 +775,7 @@ at lich.
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |
 | `control_session` | `session`, `action` (`prompt`, `abort`, `model`, `effort`, `command`), optional `value`, `args` (`command` only) and `project`. `lich control`. Delivered is a result, not an error; a command the session never took is withdrawn and fails. |
+| `ask_session` | `session`, `question`, optional `project`. `lich ask`: the answer is the result, and every way it ends without one is an error. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |
 | `list_folders` | optional `project`: the folders and the sessions in each, as JSON. `lich folders`. |
 | `file_session` | `folder` (`""` takes the session out), optional `session` (omitted files the caller's own) and `project`. `lich file`. |

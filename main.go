@@ -329,7 +329,8 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //   - terminal.EnqueueModCommand and terminal.RunModCommand queue a command for
 //     a session's mod with none of spawn.Control's checks (Claude Code only,
 //     never the caller's own session); `lich control` and control_session
-//     reach them through spawn.Control.
+//     reach them through spawn.Control, `lich ask` and ask_session through
+//     spawn.Ask.
 //   - terminal.SubmitPrompt queues a prompt for a session's mod with none of the
 //     relay's ticket accounting; the relay is its one caller.
 func denyInternal(d *rpc.Handler) {

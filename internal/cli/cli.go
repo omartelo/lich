@@ -148,6 +148,8 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.rename, args[1:])
 	case "control":
 		return c.run(c.control, args[1:])
+	case "ask":
+		return c.run(c.ask, args[1:])
 	case "worktrees":
 		return c.run(c.worktrees, args[1:])
 	case "folders":
