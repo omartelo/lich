@@ -454,11 +454,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   stops waiting for after the receipt window.
 - **Only a Claude Code subagent becomes a lich card** (lich-plugin's `hooks/agent-cards.js`, its
   `docs/agent-cards.md`): the plugin's mod takes the model's general-purpose `Agent` call and runs it as a lich
-  session on a worktree of its own, with `lich open --prompt` and `lich wait`. The other seven providers have no
-  mod system, so nothing can take a subagent call from them, and their subagents stay inside their CLI. On Claude
+  session on a worktree of its own with `lich open --prompt`, in the background: the report comes back to the
+  asking session as a `[lich]` note, and like any errand's it is dropped once an hour passes with nobody waiting
+  on it (`ticketTTL`), so a worker that runs longer than that can finish with its report lost. The other seven
+  providers have no mod system, so nothing can take a subagent call from them, and their subagents stay inside their CLI. On Claude
   Code too, a typed agent (Explore, Plan, a plugin's), a workflow step, another plugin's spawn, a remote one and a
   worker's own subagents stay native, and the worker is reached with `send_to_session` or `lich send`, never with
-  Claude Code's `SendMessage`.
+  Claude Code's `SendMessage`. Settings › Providers › Claude Code turns it off with "Subagents as lich sessions"
+  (`store.SubagentCards`), which reaches the mod as `LICH_SUBAGENT_CARDS=off` at spawn, so a session already
+  running keeps the value it started with.
 - **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`,
   `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that
   wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and

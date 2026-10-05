@@ -16,6 +16,7 @@ import { PlanUsageSetting } from "./PlanUsageSetting"
 import { ProviderBinary } from "./ProviderBinary"
 import { RestoreSetting } from "./RestoreSetting"
 import { SettingBlock } from "./SettingBlock"
+import { SubagentCardsSetting } from "./SubagentCardsSetting"
 import { UltracodeSetting } from "./UltracodeSetting"
 
 const GLOBAL_SCOPE = ""
@@ -152,6 +153,7 @@ export function ProviderBinSettings({
       )}
 
       <UltracodeSetting providerId={providerId} providerName={providerName} />
+      <SubagentCardsSetting providerId={providerId} providerName={providerName} />
 
       <RestoreSetting providerId={providerId} providerName={providerName} />
     </>

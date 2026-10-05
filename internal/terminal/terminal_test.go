@@ -35,20 +35,21 @@ import (
 // value receivers can still write to it; a test that exercises cost builds one
 // with newCostStore.
 type stubBins struct {
-	bin             string
-	projectPath     string
-	providerSession string
-	providerErr     error
-	model           string
-	effort          string
-	entrypoint      string
-	sandbox         string
-	sandboxOn       bool
-	sshAgent        bool
-	ghToken         bool
-	ghAccount       string
-	skipPerms       bool
-	ultracode       bool
+	bin              string
+	projectPath      string
+	providerSession  string
+	providerErr      error
+	model            string
+	effort           string
+	entrypoint       string
+	sandbox          string
+	sandboxOn        bool
+	sshAgent         bool
+	ghToken          bool
+	ghAccount        string
+	skipPerms        bool
+	ultracode        bool
+	subagentCardsOff bool
 	// sessionUltracode is the per-session flag a session opened with ultracode
 	// carries on its row, apart from the provider-wide ultracode above.
 	sessionUltracode bool
@@ -123,6 +124,7 @@ func (s stubBins) ProjectPath(_ string) string         { return s.projectPath }
 func (s stubBins) SessionModel(_ string) string        { return s.model }
 func (s stubBins) SessionEffort(_ string) string       { return s.effort }
 func (s stubBins) Ultracode(_ string) bool             { return s.ultracode }
+func (s stubBins) SubagentCards(_ string) bool         { return !s.subagentCardsOff }
 func (s stubBins) SessionUltracode(id string) bool {
 	return s.sessionUltracode || s.inherited[id]
 }

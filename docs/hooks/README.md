@@ -73,6 +73,11 @@ project's own setup and run scripts and for commands typed in a card
 the agent in the PTY calls to reach the sessions beside it. That surface has its
 own contract in [cli.md](../cli.md).
 
+`LICH_SUBAGENT_CARDS=off` is the fifth, and the only one set from a setting: a
+Claude Code session gets it when the user turned "Subagents as lich sessions"
+off, and the plugin's agent-cards mod then leaves every subagent native. It is
+absent otherwise, which the mod reads as on.
+
 ### The plugin release
 
 Every hook request carries the plugin release it comes from in an
