@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.58.0] - 2026-10-05
+
+> [!IMPORTANT]
+> **For Claude Code users: lich can now drive, ask and read a running session, and its subagents run as lich sessions.**
+> `lich control`, `lich ask` and the footer's own measured cost and context work on a live Claude Code session, and a general-purpose subagent opens a card you can watch and steer. Needs lich-plugin 0.15.0 and Claude Code 2.1.280 or newer.
+
 ### Added
 
 - **A Claude Code subagent runs as a lich session you can watch and steer.** A
@@ -5229,7 +5235,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.57.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.58.0...HEAD
+[0.58.0]: https://github.com/omartelo/lich/compare/v0.57.0...v0.58.0
 [0.57.0]: https://github.com/omartelo/lich/compare/v0.56.0...v0.57.0
 [0.56.0]: https://github.com/omartelo/lich/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/omartelo/lich/compare/v0.54.0...v0.55.0
