@@ -268,6 +268,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 		env, read := term.SessionAccount(sessionID)
 		return quota.Account{Env: env, Read: read}
 	})
+	term.SetRateLimitReports(plans.ReportClaude)
 	dispatcher.Register("quota", plans)
 	// The relay is the only service whose caller is not the window: the `lich`
 	// CLI running inside a session reaches it over the same listener. It watches
@@ -320,12 +321,15 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //     due prompt.
 //   - relay.SetPlugins, project.SetAccounts, project.SetProjects,
 //     quota.SetSessions, store.SetSessionGone, store.SetScheduleForfeited,
-//     store.SetBranchOf, store.SetTranscriptOf and terminal.SetDropDir are startup wiring. Called with [null] they silently
+//     store.SetBranchOf, store.SetTranscriptOf, terminal.SetDropDir and
+//     terminal.SetRateLimitReports are startup wiring. Called with [null] they silently
 //     nil what they wired (encoding/json leaves a func or pointer alone on
 //     null), and the write races the readers already serving — nilling
 //     SetProjects also disarms the guard that keeps two projects off the same
 //     directory, and SetDropDir points the sandbox's read-only bind wherever
 //     the caller likes.
+//   - quota.ReportClaude is a session's own reading of its plan, which arrives
+//     over /mod/usage: called here it would put any numbers on the gauge.
 //   - terminal.EnqueueModCommand and terminal.RunModCommand queue a command for
 //     a session's mod with none of spawn.Control's checks (Claude Code only,
 //     never the caller's own session); `lich control` and control_session
@@ -351,8 +355,10 @@ func denyInternal(d *rpc.Handler) {
 		"project.SetAccounts",
 		"project.SetProjects",
 		"quota.SetSessions",
+		"quota.ReportClaude",
 		"terminal.SessionAccount",
 		"terminal.SetDropDir",
+		"terminal.SetRateLimitReports",
 		"terminal.EnqueueModCommand",
 		"terminal.RunModCommand",
 		"terminal.SubmitPrompt",

@@ -316,3 +316,56 @@ func TestForkingAnUncountedConversationOffsetsNothing(t *testing.T) {
 		t.Errorf("SessionCost = %v, want the whole 0.75 counted", cost)
 	}
 }
+
+// TestAReportedCostReplacesTheConversationsScan pins what a reported figure
+// overwrites: the conversation's own row and every sub-agent row beneath it,
+// since the report counts them already, and nothing of another conversation.
+func TestAReportedCostReplacesTheConversationsScan(t *testing.T) {
+	svc := newCostSession(t)
+	for _, row := range []struct {
+		transcript string
+		cost       float64
+	}{
+		{"uuid-a", 0.25},
+		{"uuid-a/agent-one.jsonl", 0.5},
+		{"uuid-ab", 1},
+		{"uuid-b/agent-two.jsonl", 2},
+	} {
+		if err := svc.SaveCostLedger("s1", row.transcript, 512, "msg", row.cost); err != nil {
+			t.Fatalf("SaveCostLedger %s: %v", row.transcript, err)
+		}
+	}
+
+	if err := svc.ReplaceConversationCost("s1", "uuid-a", 0.9); err != nil {
+		t.Fatalf("ReplaceConversationCost: %v", err)
+	}
+
+	total, err := svc.SessionCost("s1")
+	if err != nil {
+		t.Fatalf("SessionCost: %v", err)
+	}
+	if want := 0.9 + 1 + 2; total != want {
+		t.Errorf("SessionCost = %v, want %v: uuid-a reported, its sub-agent dropped, the rest kept", total, want)
+	}
+	offset, lastMessage, cost, err := svc.CostLedger("s1", "uuid-a")
+	if err != nil {
+		t.Fatalf("CostLedger: %v", err)
+	}
+	if offset != 0 || lastMessage != "" || cost != 0.9 {
+		t.Errorf("ledger = (%d, %q, %v), want (0, \"\", 0.9): nothing for a scan to resume from", offset, lastMessage, cost)
+	}
+}
+
+// TestAReportedCostForAMissingSessionIsDropped mirrors SaveCostLedger's race: a
+// report landing after its card was closed writes nothing.
+func TestAReportedCostForAMissingSessionIsDropped(t *testing.T) {
+	svc := newCostSession(t)
+
+	if err := svc.ReplaceConversationCost("gone", "uuid-a", 0.9); err != nil {
+		t.Fatalf("ReplaceConversationCost: %v", err)
+	}
+
+	if total, err := svc.SessionCost("gone"); err != nil || total != 0 {
+		t.Errorf("SessionCost = %v, %v, want 0 and no row", total, err)
+	}
+}

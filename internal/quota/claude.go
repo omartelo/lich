@@ -127,6 +127,9 @@ func (s *Service) claudePlan(a Account) Plan {
 		return unknown(p)
 	}
 	if token := a.lookup(claudeTokenVar); token != "" {
+		if reported, ok := s.reportedReading(a); ok {
+			return reported
+		}
 		return s.claudeProbe(p, token)
 	}
 	creds, status := s.claudeLogin(a)

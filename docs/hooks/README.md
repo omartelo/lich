@@ -144,6 +144,10 @@ read these fixtures at a lich release tag, not from `main`.
   through a lich-plugin mod (Claude Code 2.1.280 or later). Its client is a mod
   that long-polls for commands and acknowledges them, not a hook script.
 
+- [mod-usage.md](mod-usage.md): a Claude Code session reports the context
+  window, rate limits and cost it measured itself, through the same mod in a
+  module of its own. lich prefers those to what it derives.
+
 Each has a fixture file of the same name in [`fixtures/`](fixtures/); the format
 is documented there. mod-control has a second one, `mod-commands.json`, for the
 responses lich sends.

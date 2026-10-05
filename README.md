@@ -112,6 +112,7 @@ reads what each CLI writes down and no two of them write down the same things.
 | A message from another session arrives without being typed into the terminal | yes | no | no | no | no | no | no | no |
 | A subagent the agent starts runs as a lich session with its own card and worktree | yes | no | no | no | no | no | no | no |
 | Ask a running session a side question without stopping it (`lich ask`) | yes | no | no | no | no | no | no | no |
+| Context, cost and plan usage as the CLI measured them itself | yes | no | no | no | no | no | no | no |
 | Delegate privately from a subagent or workflow step | yes | yes | yes | yes | yes | yes | yes | yes |
 | A resumed session keeps the model and effort it was on | model only | yes | no | model | yes | no | model | model; effort untested |
 | A result still waits for you after you interrupt a wait for it | yes | yes | yes | yes | no | yes | yes | yes |
@@ -124,7 +125,9 @@ leaving you to notice the switch never appeared. Kiro CLI meters spend in credit
 rather than dollars, so its own footer is the only place that figure can be read.
 Driving a running session needs Claude Code 2.1.280 or newer with lich-plugin
 0.15.0: it runs through a Claude Code mod, and no other CLI has anything running
-inside it that lich could hand a command to.
+inside it that lich could hand a command to. The same mod, with lich-plugin 0.16.0,
+reports what Claude Code measured about itself; every other CLI's footer, and a
+Claude Code session without it, shows what lich reads from what the CLI wrote down.
 
 Every gap is deliberate, none of them is lich withholding something the CLI
 reports, and [`docs/ceilings.md`](docs/ceilings.md) says what was measured behind

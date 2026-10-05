@@ -227,6 +227,9 @@ type Service struct {
 	// own at an endpoint that rate-limits.
 	mu    sync.Mutex
 	cache map[string]reading
+	// reports is the last reading a Claude Code session reported for each
+	// token-login account, keyed like cache and guarded by mu (reported.go).
+	reports map[string]claudeReport
 }
 
 // reading is one cached answer, and when it was taken.
