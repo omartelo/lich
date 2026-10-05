@@ -309,7 +309,7 @@ func flagValue(value string) (string, bool) {
 // come last. Kiro's subcommand opens the session rather than a conversation, so
 // it comes before every flag.
 func providerArgs(
-	kind, name, resume, model, effort, lichBin, agent string, fork, skipPermissions, ultracode bool,
+	kind, name, resume, model, effort, lichBin, agent string, fork, skipPermissions, ultracode, agentCards bool,
 ) []string {
 	mcp := mcpArgs(kind, lichBin)
 	args := append([]string{}, subcommandArgs(kind)...)
@@ -320,7 +320,7 @@ func providerArgs(
 	args = append(args, modelArgs(kind, model, resume)...)
 	args = append(args, effortArgs(kind, effort, resume)...)
 	args = append(args, ultracodeArgs(kind, ultracode)...)
-	args = append(args, briefingArgs(kind)...)
+	args = append(args, briefingArgs(kind, agentCards)...)
 	if kind == providers.Codex {
 		return append(mcp, args...)
 	}
@@ -414,12 +414,12 @@ func ultracodeArgs(kind string, on bool) []string {
 // briefing is worded for what this spawn actually registered: a provider handed
 // lich's MCP server is pointed at the tools, everyone else at the command line
 // (relay.SpawnBriefing).
-func briefingArgs(kind string) []string {
+func briefingArgs(kind string, agentCards bool) []string {
 	flag, ok := briefingFlags[kind]
 	if !ok {
 		return nil
 	}
-	return []string{flag, relay.SpawnBriefing(providers.AcceptsMCPServer(kind))}
+	return []string{flag, relay.SpawnBriefing(providers.AcceptsMCPServer(kind), agentCards)}
 }
 
 // skipPermissionArgs returns the flag that drops a provider's permission

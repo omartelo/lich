@@ -135,7 +135,7 @@ func (s *Service) spawnSession(
 		bin: resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
 		args: providerArgs(
 			kind, name, resume, s.store.SessionModel(id), s.store.SessionEffort(id), mcpBin,
-			kiroPluginAgent(kind), fork, skipPermissions, ultracode,
+			kiroPluginAgent(kind), fork, skipPermissions, ultracode, s.briefsAgentCards(id, kind),
 		),
 		dir:  cwd,
 		env:  subagentCardsEnv(s.sessionEnv(id, projectID, cwd), kind, s.subagentCardsOn(id, kind)),

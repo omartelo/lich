@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/omartelo/lich/internal/providers"
@@ -29,5 +30,25 @@ func TestSubagentCardsEnv(t *testing.T) {
 				t.Errorf("subagentCardsEnv = %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+// A Claude Code spawn whose subagents become lich cards is briefed to fan out
+// through its own Agent tool; every other spawn keeps the line against it.
+func TestBriefingFollowsSubagentCards(t *testing.T) {
+	cards := providerArgs(providers.Claude, "", "", "", "", "/usr/bin/lich", "", false, false, false, true)
+	plain := providerArgs(providers.Claude, "", "", "", "", "/usr/bin/lich", "", false, false, false, false)
+	briefing := func(args []string) string {
+		at := slices.Index(args, "--append-system-prompt")
+		if at < 0 || at+1 >= len(args) {
+			t.Fatalf("no briefing in %v", args)
+		}
+		return args[at+1]
+	}
+	if !strings.Contains(briefing(cards), "Agent tool") {
+		t.Errorf("a card spawn is not pointed at the Agent tool:\n%s", briefing(cards))
+	}
+	if strings.Contains(briefing(plain), "Agent tool") {
+		t.Errorf("a spawn without cards is pointed at the Agent tool:\n%s", briefing(plain))
 	}
 }

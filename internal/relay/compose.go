@@ -39,15 +39,29 @@ import (
 // (internal/terminal, wrapArgv). Windows escapes a double quote as \" for
 // CommandLineToArgvW, cmd.exe does not read that as an escape, and the < and >
 // left outside quotes by it are redirection.
-func SpawnBriefing(hasTools bool) string {
+//
+// agentCards is whether this is a Claude Code session whose lich-plugin mod
+// runs a general-purpose subagent as one of those cards. There the agent's own
+// Agent tool is the better route (in the background, its report back on its
+// own, stopped with TaskStop), so the briefing sends it there and keeps lich's
+// own route for what a subagent cannot be.
+func SpawnBriefing(hasTools, agentCards bool) string {
 	route := "Open one with `lich open --worktree BRANCH --prompt 'the task'`, which opens the " +
 		"session and hands it the task in one command."
 	if hasTools {
 		route = "The lich tools in your list open one and hand it the task."
 	}
-	return "You are running inside lich, which runs coding-agent sessions side by side and can " +
+	intro := "You are running inside lich, which runs coding-agent sessions side by side and can " +
 		"open more of them beside this one — each a card the user watches and can take over " +
-		"mid-task, in its own git worktree when the work needs its own checkout. When work is " +
+		"mid-task, in its own git worktree when the work needs its own checkout. "
+	if agentCards {
+		return intro + "Here your own Agent tool opens them: a general-purpose subagent runs as " +
+			"one of those cards, in this checkout unless you ask for isolation 'worktree', " +
+			"in the background, and its report comes back to you on its own. Fan work out with " +
+			"it. Open a session yourself only for what a subagent cannot be: another agent " +
+			"kind, a branch the user named, or work that must outlive this session. " + route
+	}
+	return intro + "When work is " +
 		"to be fanned out — several tasks at once, one per branch or checkout — those sessions " +
 		"are what to open, not the subagents your own harness runs: a subagent has no checkout, " +
 		"no card, and nothing the user can steer or resume. " + route

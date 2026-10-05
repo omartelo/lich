@@ -22,9 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   background like a native one. Its full report comes back to the asking
   session when it is done, however long it runs, and the asking session hears
   when the worker is waiting on a permission in its card. Explore, Plan and
-  other agent types stay inside Claude Code. Turn it off in Settings › Providers
-  › Claude Code › Subagents as lich sessions. Needs Claude Code 2.1.280 or newer
-  and lich-plugin 0.15.0.
+  other agent types stay inside Claude Code, and lich tells Claude Code to fan
+  work out this way rather than opening sessions itself. Turn it off in Settings
+  › Providers › Claude Code › Subagents as lich sessions. Needs Claude Code
+  2.1.280 or newer and lich-plugin 0.15.0.
 - **A running Claude Code session can be driven from outside its terminal.**
   `lich control auth-fix prompt "run the tests again"`, or `control_session` from
   an agent, types a prompt into it, stops its turn, sets the model or effort its
