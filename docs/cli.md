@@ -719,7 +719,9 @@ all land in the same count.
 from two kinds of accounting and reads identically either way: `priced` is
 lich's own arithmetic over the token counts Claude Code and Codex write down,
 `reported` is the figure oh-my-pi, opencode or Crush computed themselves and
-handed over, with the omission their own accounting has. A row that ran both
+handed over, with the omission their own accounting has. A Claude Code session
+whose mod reported the cost Claude Code measured (`docs/hooks/mod-usage.md`) is
+`reported` too: that figure is Claude Code's arithmetic, not lich's. A row that ran both
 reads `mixed`, and a total that mixes them adds the line above the last one,
 splitting the counted sessions between the two. A row with no money to
 attribute — every session in it unpriced, or its spend earned by a provider CLI

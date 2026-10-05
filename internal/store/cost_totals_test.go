@@ -363,3 +363,78 @@ func TestAForkedSessionUnderItsOffsetCountsAsZero(t *testing.T) {
 			report.CostUSD)
 	}
 }
+
+// A Claude Code session whose cost its mod reported (ReplaceConversationCost)
+// carries Claude Code's own arithmetic, not lich's, so it lands on the reported
+// rung even though Claude Code's transcripts are otherwise priced here.
+func TestCostTotalsCountsAReportedClaudeCostAsReported(t *testing.T) {
+	svc := costWorkspace(t)
+	bill(t, svc, "p1", "s1", providers.Claude, 1.00)
+	if err := svc.AddSession("p1", "s2", "s2", providers.Claude, "", 3, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	if err := svc.ReplaceConversationCost("s2", "uuid-s2", 2.00); err != nil {
+		t.Fatalf("ReplaceConversationCost: %v", err)
+	}
+
+	report, err := svc.CostTotals("", "", 0)
+	if err != nil {
+		t.Fatalf("CostTotals: %v", err)
+	}
+	if report.Priced != 1 || report.Reported != 1 || report.Source != CostSourceMixed {
+		t.Errorf("total = %d priced, %d reported, %q, want 1, 1 and mixed",
+			report.Priced, report.Reported, report.Source)
+	}
+	if report.CostUSD != 3.00 {
+		t.Errorf("total = %v, want 3.00", report.CostUSD)
+	}
+}
+
+// A scan that takes the conversation back after a restart (SaveCostLedger) is
+// lich's arithmetic again, so the row returns to the priced rung.
+func TestARescannedConversationIsPricedAgain(t *testing.T) {
+	svc := costWorkspace(t)
+	if err := svc.AddSession("p1", "s1", "s1", providers.Claude, "", 2, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	if err := svc.ReplaceConversationCost("s1", "uuid-s1", 2.00); err != nil {
+		t.Fatalf("ReplaceConversationCost: %v", err)
+	}
+	if err := svc.SaveCostLedger("s1", "uuid-s1", 10, "m1", 1.50); err != nil {
+		t.Fatalf("SaveCostLedger: %v", err)
+	}
+
+	report, err := svc.CostTotals("", "", 0)
+	if err != nil {
+		t.Fatalf("CostTotals: %v", err)
+	}
+	if report.Priced != 1 || report.Reported != 0 {
+		t.Errorf("tallies = %d priced, %d reported, want 1 and 0", report.Priced, report.Reported)
+	}
+}
+
+// A resume re-keys the ledgers onto a new session id, and a reported figure has
+// to stay reported across it.
+func TestAResumedSessionKeepsItsReportedRung(t *testing.T) {
+	svc := costWorkspace(t)
+	if err := svc.AddSession("p1", "s1", "Session 1", providers.Claude, "/tmp/alpha-wt", 2, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	if err := svc.ReplaceConversationCost("s1", "uuid-a", 0.4); err != nil {
+		t.Fatalf("ReplaceConversationCost: %v", err)
+	}
+	if err := svc.CloseSession("p1", "s1", ""); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+	if _, err := svc.ReopenWorktreeSession("p1", "/tmp/alpha-wt", "s2"); err != nil {
+		t.Fatalf("ReopenWorktreeSession: %v", err)
+	}
+
+	report, err := svc.CostTotals("", "", 0)
+	if err != nil {
+		t.Fatalf("CostTotals: %v", err)
+	}
+	if report.Priced != 0 || report.Reported != 1 {
+		t.Errorf("tallies = %d priced, %d reported, want 0 and 1", report.Priced, report.Reported)
+	}
+}

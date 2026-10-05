@@ -57,7 +57,8 @@ func (s *Service) SaveCostLedger(
 		     byte_offset = excluded.byte_offset,
 		     last_message_id = excluded.last_message_id,
 		     cost_usd = excluded.cost_usd,
-		     updated_at = excluded.updated_at`,
+		     updated_at = excluded.updated_at,
+		     reported = 0`,
 		sessionID, transcriptID, offset, lastMessage, cost, sessionID,
 	)
 	if err != nil {
@@ -70,8 +71,9 @@ func (s *Service) SaveCostLedger(
 // has cost, for a provider that reported the figure itself: its row is written
 // with no offset to resume from, and the rows of its sub-agents' transcripts
 // (keyed by the conversation id, a slash and the file) are dropped, since the
-// reported figure already counts them. Like SaveCostLedger it writes nothing for
-// a session whose row is already gone.
+// reported figure already counts them. The row is marked reported, which puts
+// the session on that rung in CostTotals. Like SaveCostLedger it writes nothing
+// for a session whose row is already gone.
 func (s *Service) ReplaceConversationCost(sessionID, conversationID string, cost float64) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -86,13 +88,14 @@ func (s *Service) ReplaceConversationCost(sessionID, conversationID string, cost
 	}
 	if _, err := tx.Exec(
 		`INSERT INTO session_costs
-		     (session_id, transcript_id, byte_offset, last_message_id, cost_usd, updated_at)
-		 SELECT ?, ?, 0, '', ?, CAST(strftime('%s', 'now') AS INTEGER)
+		     (session_id, transcript_id, byte_offset, last_message_id, cost_usd, updated_at, reported)
+		 SELECT ?, ?, 0, '', ?, CAST(strftime('%s', 'now') AS INTEGER), 1
 		 WHERE EXISTS (SELECT 1 FROM sessions WHERE id = ?)
 		 ON CONFLICT(session_id, transcript_id) DO UPDATE SET
 		     byte_offset = 0,
 		     last_message_id = '',
 		     cost_usd = excluded.cost_usd,
+		     reported = 1,
 		     updated_at = CASE WHEN session_costs.cost_usd = excluded.cost_usd
 		                       THEN session_costs.updated_at ELSE excluded.updated_at END`,
 		sessionID, conversationID, cost, sessionID,
@@ -116,12 +119,13 @@ type costRow struct {
 	// moves old spend onto a new session id, and re-dating it would move that
 	// money into today's window.
 	updatedAt int64
+	reported  bool
 }
 
 // costLedgers reads every ledger a session holds.
 func costLedgers(tx *sql.Tx, sessionID string) ([]costRow, error) {
 	rows, err := tx.Query(
-		`SELECT transcript_id, byte_offset, last_message_id, cost_usd, updated_at
+		`SELECT transcript_id, byte_offset, last_message_id, cost_usd, updated_at, reported
 		   FROM session_costs WHERE session_id = ?`, sessionID,
 	)
 	if err != nil {
@@ -133,7 +137,7 @@ func costLedgers(tx *sql.Tx, sessionID string) ([]costRow, error) {
 	for rows.Next() {
 		var row costRow
 		if err := rows.Scan(
-			&row.transcriptID, &row.offset, &row.lastMessage, &row.cost, &row.updatedAt,
+			&row.transcriptID, &row.offset, &row.lastMessage, &row.cost, &row.updatedAt, &row.reported,
 		); err != nil {
 			return nil, fmt.Errorf("scan cost ledger for %q: %w", sessionID, err)
 		}
@@ -147,9 +151,9 @@ func restoreCostLedgers(tx *sql.Tx, sessionID string, ledgers []costRow) error {
 	for _, row := range ledgers {
 		if _, err := tx.Exec(
 			`INSERT INTO session_costs
-			     (session_id, transcript_id, byte_offset, last_message_id, cost_usd, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?)`,
-			sessionID, row.transcriptID, row.offset, row.lastMessage, row.cost, row.updatedAt,
+			     (session_id, transcript_id, byte_offset, last_message_id, cost_usd, updated_at, reported)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			sessionID, row.transcriptID, row.offset, row.lastMessage, row.cost, row.updatedAt, row.reported,
 		); err != nil {
 			return fmt.Errorf("restore cost ledger for %q: %w", sessionID, err)
 		}
@@ -275,13 +279,19 @@ type projectRow struct {
 	reported int
 }
 
-// count folds one (project, kind) group in. Only counted sessions land on a
-// rung: an unpriced one carries no money to attribute to anybody's arithmetic.
-func (r *projectRow) count(kind string, sessions, unpriced int, cost float64) {
+// count folds one (project, kind, reported) group in. Only counted sessions
+// land on a rung: an unpriced one carries no money to attribute to anybody's
+// arithmetic. A session holding a figure its provider reported is on the
+// reported rung whatever its kind's rung is (ReplaceConversationCost).
+func (r *projectRow) count(kind string, reported bool, sessions, unpriced int, cost float64) {
 	r.Sessions += sessions
 	r.Unpriced += unpriced
 	r.CostUSD += cost
-	switch providers.CostSourceOf(kind) {
+	source := providers.CostSourceOf(kind)
+	if reported {
+		source = providers.CostSourceReported
+	}
+	switch source {
 	case providers.CostSourcePriced:
 		r.priced += sessions - unpriced
 	case providers.CostSourceReported:
@@ -352,10 +362,11 @@ func (s *Service) CostTotals(project, provider string, since int64) (CostReport,
 	return report, nil
 }
 
-// costRows reads the ledger grouped by project *and session kind*, folded into
-// one row per project. The kind is in the grouping because whose arithmetic a
-// session's dollars are is a fact of the provider that spent them
-// (providers.CostSourceOf) and the ledger itself records nothing about it.
+// costRows reads the ledger grouped by project, session kind and whether the
+// session holds a reported figure, folded into one row per project. Whose
+// arithmetic a session's dollars are is a fact of the provider that spent them
+// (providers.CostSourceOf), except for a session whose ledger carries a figure
+// its provider reported itself, which the ledger marks (ReplaceConversationCost).
 //
 // A forked session's money is netted the same way the live readout nets it
 // (SessionCost), per session and floored at zero — MAX over a NULL cost is NULL,
@@ -365,12 +376,14 @@ func (s *Service) costRows(project, provider string, since int64) ([]*projectRow
 	rows, err := s.db.Query(
 		`SELECT p.name,
 		        s.kind,
+		        COALESCE(c.reported, 0),
 		        COUNT(*),
 		        SUM(CASE WHEN c.cost IS NULL THEN 1 ELSE 0 END),
 		        COALESCE(SUM(MAX(c.cost - s.fork_cost_offset, 0)), 0)
 		   FROM sessions s
 		   JOIN projects p ON p.id = s.project_id
-		   LEFT JOIN (SELECT session_id, SUM(cost_usd) AS cost, MAX(updated_at) AS seen
+		   LEFT JOIN (SELECT session_id, SUM(cost_usd) AS cost, MAX(updated_at) AS seen,
+		                     MAX(reported) AS reported
 		                FROM session_costs GROUP BY session_id) c ON c.session_id = s.id
 		  WHERE (? = '' OR LOWER(p.name) = LOWER(?))
 		    AND (? = '' OR s.kind = ?)
@@ -379,7 +392,7 @@ func (s *Service) costRows(project, provider string, since int64) ([]*projectRow
 		                    CASE WHEN s.is_open = 1
 		                         THEN CAST(strftime('%s', 'now') AS INTEGER)
 		                         ELSE s.closed_at END) >= ?)
-		  GROUP BY p.id, p.name, s.kind
+		  GROUP BY p.id, p.name, s.kind, COALESCE(c.reported, 0)
 		  ORDER BY p.name`,
 		project, project, provider, provider, since, since,
 	)
@@ -393,10 +406,11 @@ func (s *Service) costRows(project, provider string, since int64) ([]*projectRow
 	for rows.Next() {
 		var (
 			name, kind         string
+			reported           bool
 			sessions, unpriced int
 			cost               float64
 		)
-		if err := rows.Scan(&name, &kind, &sessions, &unpriced, &cost); err != nil {
+		if err := rows.Scan(&name, &kind, &reported, &sessions, &unpriced, &cost); err != nil {
 			return nil, fmt.Errorf("scan cost total: %w", err)
 		}
 		row := byName[name]
@@ -405,7 +419,7 @@ func (s *Service) costRows(project, provider string, since int64) ([]*projectRow
 			byName[name] = row
 			order = append(order, row)
 		}
-		row.count(kind, sessions, unpriced, cost)
+		row.count(kind, reported, sessions, unpriced, cost)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate cost totals: %w", err)
