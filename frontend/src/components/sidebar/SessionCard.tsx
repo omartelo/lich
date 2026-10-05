@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import type { KeyboardEvent } from "react"
+import type { CSSProperties, KeyboardEvent } from "react"
 import {
   ArrowDown,
   ArrowLeft,
@@ -55,6 +55,8 @@ import { usePullRequest } from "@/lib/pulls/use-pull-request"
 import { CloseButton } from "@/components/common/CloseButton"
 import { DiffStat } from "@/components/DiffStat"
 import { SessionEntrypointItem } from "./SessionEntrypointItem"
+import { CardColorContextSub } from "./CardColorMenu"
+import { type CardColor, CARD_COLORS, isCardColor, TINTED_FILL } from "@/lib/session/card-color"
 import { SessionForkItem } from "./SessionForkItem"
 import { SessionStatusIcon } from "./SessionStatusIcon"
 import { SessionTooltip } from "./SessionTooltip"
@@ -126,6 +128,8 @@ interface SessionCardProps {
   // Pin the card to the head of the list, or unpin it. A pinned card offers no
   // close affordance at all — unpinning is the way back to closing it.
   onPin: (pinned: boolean) => void
+  // Paint the card with a palette colour, "" to hand it back to the theme.
+  onColor: (color: string) => void
   // Open a shell session rooted at this card's shown directory, and answer with
   // its id. The menu item is wired for agent sessions alone — the user dropping
   // into a terminal in the worktree the agent works in, without cd-ing there by
@@ -144,6 +148,20 @@ interface SessionCardProps {
   // terminal's prompt, so any other card would be writing somewhere the user
   // cannot see.
   delegateGroups: DelegateGroup[]
+}
+
+// Exactly one fill per state, so no two bg utilities are left for the cascade
+// to pick between.
+function cardFill(color: CardColor | undefined, active: boolean, showing: boolean) {
+  if (active) {
+    return color ? TINTED_FILL.active : "bg-accent"
+  }
+  // On screen, but not the pane the keyboard is in: one step down the same
+  // fill, never a second kind of mark.
+  if (showing) {
+    return color ? TINTED_FILL.showing : "bg-accent/55"
+  }
+  return color && TINTED_FILL.rest
 }
 
 // The card itself is the drag grip for reordering the list — no separate handle.
@@ -165,6 +183,7 @@ export function SessionCard({
   onFile,
   onNewFolder,
   onPin,
+  onColor,
   onOpenTerminal,
   onSetEntrypoint,
   onPulls,
@@ -176,6 +195,7 @@ export function SessionCard({
   // a question about every open project — not about the one this card sits in.
   const { projects, sessions, scheduleSession } = useProjects()
   const pinned = !!session.pinned
+  const color = isCardColor(session.color) ? session.color : undefined
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -416,12 +436,14 @@ export function SessionCard({
                   <button
                     type="button"
                     onClick={onSelect}
+                    style={
+                      color ? ({ "--card-tint": CARD_COLORS[color] } as CSSProperties) : undefined
+                    }
                     className={cn(
-                      "group relative flex w-full flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent/60",
-                      active && "bg-accent text-accent-foreground",
-                      // On screen, but not the pane the keyboard is in: one step
-                      // down the same fill, never a second kind of mark.
-                      showing && !active && "bg-accent/55",
+                      "group relative flex w-full flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors",
+                      color ? TINTED_FILL.hover : "hover:bg-accent/60",
+                      active && "text-accent-foreground",
+                      cardFill(color, active, showing),
                     )}
                   />
                 }
@@ -715,6 +737,7 @@ export function SessionCard({
             {pinned ? <PinOff /> : <Pin />}
             {pinned ? "Unpin" : "Pin"}
           </ContextMenuItem>
+          <CardColorContextSub current={color} onPick={onColor} />
           {/* Beside the pin, because they are the same move at two scales: the
               pin promises one card the top of the list, a folder gathers a set
               of them under a name. Neither closes or moves anything else. */}

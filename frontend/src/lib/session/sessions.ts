@@ -71,6 +71,9 @@ export interface Session {
   // carrying its name — so this field is both the membership and the folder's
   // identity, and renaming one rewrites every session in it.
   folder?: string
+  // The palette colour the user painted the card with (CARD_COLORS), absent for
+  // one that follows the theme. Painting a folder writes it on each of its cards.
+  color?: string
   // The session that asked for this one, when it was opened by delegation:
   // absent for every session opened from the window. The id is the live half —
   // it resolves to whatever that session is called now — and the label is the
@@ -490,6 +493,34 @@ export function setSessionsFolder(
     [projectId]: {
       ...current,
       sessions: current.sessions.map((s) => (ids.has(s.id) ? withFolder(s, folder) : s)),
+    },
+  }
+}
+
+function withColor(session: Session, color: string): Session {
+  const { color: _was, ...rest } = session
+  return color ? { ...rest, color } : rest
+}
+
+// setSessionsColor paints sessions with a palette colour, or hands them back to
+// the theme with an empty name. A list because painting a folder paints every
+// card in it in one commit. Unknown ids are ignored, as in setSessionsFolder.
+export function setSessionsColor(
+  state: SessionState,
+  projectId: string,
+  sessionIds: readonly string[],
+  color: string,
+): SessionState {
+  const current = state[projectId]
+  const ids = new Set(sessionIds)
+  if (!current || !current.sessions.some((s) => ids.has(s.id))) {
+    return state
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: current.sessions.map((s) => (ids.has(s.id) ? withColor(s, color) : s)),
     },
   }
 }

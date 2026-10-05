@@ -376,7 +376,10 @@ type Session struct {
 	// user has not filed. It rides the row rather than a preference because it
 	// is what the list is organised by — a workspace of forty sessions that
 	// came back ungrouped after a restart would be a workspace nobody files.
-	Folder          string `json:"folder"`
+	Folder string `json:"folder"`
+	// Color is the palette colour the user painted the card with, "" for one
+	// that follows the theme.
+	Color           string `json:"color"`
 	OriginSessionID string `json:"originSessionId"`
 	OriginLabel     string `json:"originLabel"`
 	// ScheduledAt is when the prompt below is due, in unix seconds, 0 for a
@@ -669,7 +672,7 @@ func (s *Service) ProjectAt(path string) (string, string) {
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
 		`SELECT id, label, kind, path, provider_session_id, entrypoint, run, sandbox, pinned,
-		        folder, origin_session_id, origin_label, scheduled_at, scheduled_prompt, unread,
+		        folder, color, origin_session_id, origin_label, scheduled_at, scheduled_prompt, unread,
 		        mcp_servers, sandbox_links,
 		        EXISTS (SELECT 1 FROM session_last_turn WHERE session_id = sessions.id)
 		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
@@ -686,7 +689,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 		var servers, links string
 		if err := rows.Scan(
 			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID,
-			&sess.Entrypoint, &sess.Run, &sess.Sandbox, &sess.Pinned, &sess.Folder,
+			&sess.Entrypoint, &sess.Run, &sess.Sandbox, &sess.Pinned, &sess.Folder, &sess.Color,
 			&sess.OriginSessionID, &sess.OriginLabel,
 			&sess.ScheduledAt, &sess.ScheduledPrompt, &sess.Unread, &servers, &links,
 			&sess.HasLastTurn,

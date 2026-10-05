@@ -28,6 +28,7 @@ const storedSession = (overrides: Partial<StoredSession> = {}): StoredSession =>
   sandbox: "",
   pinned: false,
   folder: "",
+  color: "",
   originSessionId: "",
   originLabel: "",
   hasLastTurn: false,
@@ -153,6 +154,13 @@ describe("buildSessionState", () => {
       originSessionId: "s0",
       originLabel: "Parent",
     })
+  })
+
+  it("carries the colour a card was painted with", () => {
+    const state = buildSessionState([
+      storedProject({ sessions: [storedSession({ color: "violet" })] }),
+    ])
+    expect(state.p1.sessions[0].color).toBe("violet")
   })
 
   it("keys every project separately", () => {

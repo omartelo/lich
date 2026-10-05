@@ -19,6 +19,7 @@ var migrations = []func(*sql.Tx) error{
 	addSessionUltracode,
 	addSessionSubagent,
 	addCostReported,
+	addSessionColor,
 }
 
 // addSessionEffort is version 2: the reasoning effort a session was opened at,
@@ -72,6 +73,13 @@ func addSessionSubagent(tx *sql.Tx) error {
 // provider (providers.CostSourceOf).
 func addCostReported(tx *sql.Tx) error {
 	_, err := tx.Exec(`ALTER TABLE session_costs ADD COLUMN reported INTEGER NOT NULL DEFAULT 0`)
+	return err
+}
+
+// addSessionColor is version 7: the palette colour the user painted a card
+// with, "" for one that follows the theme (SetSessionColor).
+func addSessionColor(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE sessions ADD COLUMN color TEXT NOT NULL DEFAULT ''`)
 	return err
 }
 

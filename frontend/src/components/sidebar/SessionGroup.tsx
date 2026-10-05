@@ -16,6 +16,7 @@ import type { PaneGroup } from "@/lib/session/panes"
 import { delegatesOf, type Session, sessionOrigin } from "@/lib/session/sessions"
 import { useCardDrag } from "@/lib/session/use-card-drag"
 import { useClosingSessions } from "@/lib/session/use-closing-sessions"
+import { sharedColor } from "@/lib/session/card-color"
 import { useProjects } from "@/providers/projects"
 import { CardTransition } from "./CardTransition"
 import { SessionCard } from "./SessionCard"
@@ -149,6 +150,7 @@ export function SessionGroup({
     renameSession,
     setEntrypoint,
     pinSession,
+    colorSessions,
     newSession,
   } = useProjects()
   const navigate = useNavigate()
@@ -267,6 +269,10 @@ export function SessionGroup({
           folders={folders}
           onFileAll={filable ? (target) => onFile(ids, target) : undefined}
           onNewFolder={filable ? () => onNewFolder(ids) : undefined}
+          color={folder ? sharedColor(sessions) : undefined}
+          // A folder's own, and withheld under a filter for the reason
+          // onFileAll is: the cards drawn are only the ones that matched.
+          onColor={folder && sortable ? (color) => colorSessions(projectId, ids, color) : undefined}
           collapsed={collapsed}
           isDragging={group.isDragging}
           providers={providers}
@@ -348,6 +354,7 @@ export function SessionGroup({
                           setEntrypoint(projectId, session.id, entrypoint)
                         }
                         onPin={(pinned) => pinSession(projectId, session.id, pinned)}
+                        onColor={(color) => colorSessions(projectId, [session.id], color)}
                         // The folder it is already in is not a place to move it
                         // to; leaving it is its own item on the card. A card drawn
                         // in a wall is offered nothing: the wall outranks the

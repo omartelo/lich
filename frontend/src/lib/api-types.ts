@@ -370,6 +370,8 @@ export interface StoredSession {
    * A folder has no row of its own — it is the set of sessions carrying its
    * name — so this is both the membership and the folder's identity. */
   folder: string
+  /** The palette colour the card is painted with, "" for one that follows the theme. */
+  color: string
   /** The session that asked for this one, "" for a session nobody delegated. */
   originSessionId: string
   /** What that session was called at the time; all that survives its close. */

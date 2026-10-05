@@ -20,6 +20,7 @@ export function buildSessionState(loaded: StoredProject[]): SessionState {
       ...(session.sandbox === "on" ? { sandboxed: true } : {}),
       ...(session.pinned ? { pinned: true } : {}),
       ...(session.folder ? { folder: session.folder } : {}),
+      ...(session.color ? { color: session.color } : {}),
       ...(session.originSessionId
         ? { originSessionId: session.originSessionId, originLabel: session.originLabel }
         : {}),

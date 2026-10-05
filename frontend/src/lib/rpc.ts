@@ -490,6 +490,10 @@ export const Store = {
    * A session is in at most one folder, so this is a write, never an append. */
   SetSessionFolder: (sessionID: string, folder: string) =>
     call<null>("store.SetSessionFolder", [sessionID, folder]),
+  /** Paint a session's card with a palette colour, or hand it back to the theme
+   * with an empty name. */
+  SetSessionColor: (sessionID: string, color: string) =>
+    call<null>("store.SetSessionColor", [sessionID, color]),
   /** Rename one project's folder across every session filed under it, parked
    * ones included; an empty name takes the folder apart. Resolves to the ids
    * of every session the write moved. */
