@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/omartelo/lich/internal/providers"
+	"github.com/omartelo/lich/internal/semver"
 )
 
 // The Claude Code side: `claude plugin ...` for every mutation, and the CLI's
@@ -38,6 +39,22 @@ func (s *Service) claudePinMarketplace() error {
 		slog.Debug("agentplugin: claude marketplace remove", "err", err)
 	}
 	return s.run(providers.Claude, "plugin", "marketplace", "add", gitURL+"#v"+version)
+}
+
+// SubagentCardsRelease is the first lich-plugin release whose Claude Code mod
+// runs a general-purpose subagent as a lich session (hooks/agent-cards.js).
+const SubagentCardsRelease = "0.15.0"
+
+// ClaudeRunsSubagentCards reports whether the installed Claude Code plugin is a
+// release whose mod turns subagents into lich sessions. It reads Claude Code's
+// plugin state on each call.
+func ClaudeRunsSubagentCards() bool {
+	version, ok := claudeInstalledVersion()
+	return ok && runsSubagentCards(version)
+}
+
+func runsSubagentCards(version string) bool {
+	return !semver.Less(version, SubagentCardsRelease)
 }
 
 // claudeInstalledVersion reads the plugin's installed version from Claude

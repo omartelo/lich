@@ -2819,7 +2819,7 @@ func TestTheNudgeNamesTheToolOnlyWhereItExists(t *testing.T) {
 // has. Naming tools that are not in the list would leave that session believing
 // it has no way to open anything.
 func TestSpawnBriefingNamesTheRouteThisSpawnGave(t *testing.T) {
-	withTools, withCommand := SpawnBriefing(true), SpawnBriefing(false)
+	withTools, withCommand := SpawnBriefing(true, false), SpawnBriefing(false, false)
 
 	if strings.Contains(withTools, "lich open") {
 		t.Errorf("a session with the tools is sent to the command line:\n%s", withTools)
@@ -2841,6 +2841,28 @@ func TestSpawnBriefingNamesTheRouteThisSpawnGave(t *testing.T) {
 		if !strings.Contains(briefing, "subagent") {
 			t.Errorf("the briefing draws no line against a subagent:\n%s", briefing)
 		}
+	}
+}
+
+// TestSpawnBriefingSendsCardsToTheAgentTool pins the Claude Code case where the
+// lich-plugin mod turns a general-purpose subagent into a lich card: there the
+// agent's own Agent tool is the better way to fan out (in the background, its
+// report back on its own), so the briefing points at it instead of drawing a
+// line against it, and keeps open_session for what a subagent cannot be.
+func TestSpawnBriefingSendsCardsToTheAgentTool(t *testing.T) {
+	cards := SpawnBriefing(true, true)
+	for _, want := range []string{"Agent tool", "card", "isolation", "tools in your list"} {
+		if !strings.Contains(cards, want) {
+			t.Errorf("the card briefing is missing %q:\n%s", want, cards)
+		}
+	}
+	// The briefing is one argv entry that cmd.exe reads on Windows (see
+	// SpawnBriefing), where a double quote is not an escape.
+	if strings.Contains(cards, `"`) {
+		t.Errorf("the card briefing carries a double quote:\n%s", cards)
+	}
+	if strings.Contains(cards, "not the subagents your own harness runs") {
+		t.Errorf("the card briefing still steers away from the Agent tool:\n%s", cards)
 	}
 }
 
