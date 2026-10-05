@@ -96,7 +96,7 @@ it, so an outcome that is neither done nor failed has a code of its own:
 | 0 | Done. For `send` and `wait`: an answer is in hand. |
 | 1 | Failed. The `lich: …` line on stderr says why. |
 | 2 | `send` / `wait` / `control` only: **the wait ran out and a ticket came back.** Nothing failed and the errand is still open: `lich wait <ticket>` picks the answer up later. For `control`: the session took the command and has not confirmed it yet; its id is printed, and it still goes through. |
-| 3 | `send` / `wait` / `control` only: **the errand is over and no answer is coming through lich**: never read, never delivered, or answered somewhere else. Retrying the wait is pointless; the output says what to do instead. For `control`: the session ended before confirming the command. |
+| 3 | `send` / `wait` / `control` only: **the errand is over and no answer is coming through lich**: never read, never delivered, answered somewhere else, or a subagent worker closed before it answered (`stopped`). Retrying the wait is pointless; the output says what to do instead. For `control`: the session ended before confirming the command. |
 
 2 and 3 print their prose (or `--json`) on stdout like an answer does and write
 nothing on stderr: they are outcomes, not failures. No other command has an
@@ -150,9 +150,11 @@ docs	lich	codex	lich-a1b2	busy
 api	revu	crush	revu-9f8e	-
 ```
 
-`--json` prints an array of `{"label","name","project","kind","state"}`, `[]`
-when there are none. lich-plugin's Claude Code mod reads it to count the
-subagent workers still running. `No other live sessions.` when there are none. A session is listed only while a
+`--json` prints an array of `{"label","name","project","kind","state","id"}`,
+`[]` when there are none. `id` is the session's lich id, the `LICH_SESSION_ID`
+its process carries. lich-plugin's Claude Code mod reads it to count the
+subagent workers still running, and to name the card behind a recorded session
+id. The MCP tool `list_sessions` returns the same objects. `No other live sessions.` when there are none. A session is listed only while a
 process is running in it: a card whose terminal was never opened has nothing to
 type at.
 
@@ -432,8 +434,22 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
     the worker's label, its branch, the ticket and the full report, so the
     model uses it without a collect call (see
     [The answer is announced, and collected](#the-answer-is-announced-and-collected)).
-  - is **not dropped by the ticket's one-hour TTL** while its session runs;
-    closing it ends the errand as it ends any.
+  - **answers by itself** where its own Claude Code mod does (lich-plugin
+    0.17.0 or later, polling when the task goes in): it is handed the task
+    under one line naming the caller, with no ticket and no reply command, and
+    the final message of a turn that ends with nothing left running in the
+    background is its answer, as a native subagent's last message is its
+    result ([mod-answer](hooks/mod-answer.md)). A turn that hands work to the
+    background does not end the errand; the turn Claude Code resumes in when
+    that work finishes answers it. A worker that still calls
+    `reply_to_session` itself is answered once: the first answer wins. Any
+    other worker is handed the ticket and answers through it.
+  - is **not dropped by the ticket's one-hour TTL** while its session runs.
+  - **ends its errand in silence when it is closed**, by `lich close`,
+    `close_session`, the caller's TaskStop or the card's own close: the caller
+    hears nothing and nothing waits in its inbox, since whoever closed it
+    stopped the work. A caller holding the line on the ticket hears `stopped`
+    (exit 3).
   - **closes once it is done** when it runs in the caller's checkout: after it
     answers the errand and the turn it answered in ends, lich parks it the way
     `lich close` does, like a native subagent that returned its result. A worker

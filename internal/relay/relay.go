@@ -117,6 +117,10 @@ const (
 	// for a session that was not at one, and that session died or stayed busy
 	// past defaultDeliveryLimit. Nothing is queued anymore and nothing was read.
 	StatusUndelivered = "undelivered"
+	// StatusStopped means a subagent worker was closed before it answered: its
+	// caller stopped it (SessionClosed). Only a caller holding the line hears
+	// it; nothing is filed or announced.
+	StatusStopped = "stopped"
 )
 
 // Session states the relay watches, spelled as the hook contract reports them
@@ -223,6 +227,9 @@ type Terminal interface {
 	// ModAttached is whether a Claude Code mod polls from that session, which
 	// takes a prompt without touching the line its user is typing.
 	ModAttached(id string) bool
+	// ModAnswers is whether that session's mod answers a subagent errand with
+	// its turn's final message (docs/hooks/mod-answer.md).
+	ModAnswers(id string) bool
 }
 
 // Peer is one session a caller may address: the label it is addressed by, the
@@ -246,6 +253,10 @@ type Peer struct {
 	Project string `json:"project"`
 	Kind    string `json:"kind"`
 	State   string `json:"state"`
+	// ID is the session's lich id, the LICH_SESSION_ID its process carries,
+	// so a reader holding a recorded id can find its card. Last, because
+	// fields are appended to this shape, never inserted.
+	ID string `json:"id"`
 }
 
 // Result is what a caller gets back from Send or Wait. Answer is empty unless
@@ -291,7 +302,11 @@ type ticket struct {
 	// open request has to be shown which is which before it can pick the ticket
 	// its answer belongs to (see errandOfLocked). The whole prompt is not kept —
 	// it runs to promptLimit, and what a reader needs is the line they recognise.
-	asked  string
+	asked string
+	// prompt is the task itself, composed into the message when it is handed
+	// over (handOff): whether the target's mod answers for it is known only
+	// then.
+	prompt string
 	done   chan struct{}
 	answer string
 
@@ -308,6 +323,10 @@ type ticket struct {
 	// subagent is a ticket sent with SendSubagent: its worker is the sender's
 	// subagent, and its errand lives as long as the worker does.
 	subagent bool
+	// modAnswers is a subagent errand handed to a worker whose mod answers it
+	// (WorkerAnswered). A turn ending without that answer handed work to the
+	// background, so it does not end the errand (turnCandidates).
+	modAnswers bool
 	// blockNoted is whether the sender was already told its subagent waits on a
 	// permission in the block running now. A busy or done report ends the block.
 	blockNoted bool
@@ -320,6 +339,10 @@ type ticket struct {
 	// Observe for how a turn is told apart from the one already running when the
 	// message arrived.
 	stalled chan struct{}
+	// stopped is set before stalled closes when the errand ended because its
+	// worker was closed (SessionClosed), which a waiter hears as stopped rather
+	// than unanswered.
+	stopped bool
 	// unread closes when the target never reacted to the task at all. See
 	// watchReceipt.
 	unread chan struct{}
@@ -585,6 +608,7 @@ func (s *Service) send(
 		target:      dest.Peer.Label,
 		created:     s.now(),
 		asked:       askedExcerpt(prompt),
+		prompt:      prompt,
 		private:     mode == errandPrivate,
 		subagent:    mode == errandSubagent,
 		done:        make(chan struct{}),
@@ -602,19 +626,18 @@ func (s *Service) send(
 	s.clearAll(expired)
 	s.announceInboxAll(senders)
 
-	message := compose(sender, id, prompt, s.offersTools(dest.Peer.Kind))
 	if s.takesDelivery(dest.ID) {
 		// A target that takes the message now is written to on the caller's own
 		// goroutine, so a PTY that refuses the write is the error this call
 		// returns rather than an outcome mailed to the sender later.
-		if err := s.handOff(id, t, dest.Peer.Kind, message); err != nil {
+		if err := s.handOff(id, t, dest.Peer.Kind); err != nil {
 			s.mu.Lock()
 			delete(s.tickets, id)
 			s.mu.Unlock()
 			return Result{}, err
 		}
 	} else {
-		go s.queueDelivery(id, t, dest, message)
+		go s.queueDelivery(id, t, dest)
 	}
 	// The caller's own wait bounds this call and nothing else: the errand
 	// outlives it either way, and blocking past what was asked would run past
@@ -625,12 +648,13 @@ func (s *Service) send(
 	return result, nil
 }
 
-// handOff hands a composed message to the target's mod, or types it where no
-// mod takes it, and starts everything that watches what becomes of it. Called
-// either on the caller's goroutine or, for a target that was not at a prompt
-// yet, on the one holding the message back — and once more from watchReceipt,
-// when the first write reached a terminal nothing was reading.
-func (s *Service) handOff(id string, t *ticket, kind, message string) error {
+// handOff composes a ticket's message, hands it to the target's mod, or types
+// it where no mod takes it, and starts everything that watches what becomes of
+// it. Called either on the caller's goroutine or, for a target that was not at
+// a prompt yet, on the one holding the message back; and once more from
+// watchReceipt, when the first write reached a terminal nothing was reading.
+func (s *Service) handOff(id string, t *ticket, kind string) error {
+	message := s.taskMessage(id, t, kind)
 	// Stamped before the mod is handed it too: its session's busy report can
 	// arrive milliseconds after the prompt is queued.
 	busy := s.stampDelivery(t)
@@ -702,10 +726,10 @@ func (s *Service) markSubmitted(id string, t *ticket) {
 // hears it the way it hears any other outcome — through the inbox, or on the
 // ticket it is still holding — because a promise of news at your prompt has to
 // be kept by the failures too.
-func (s *Service) queueDelivery(id string, t *ticket, dest candidate, message string) {
+func (s *Service) queueDelivery(id string, t *ticket, dest candidate) {
 	err := s.awaitReady(dest, s.now().Add(s.deliveryLimit))
 	if err == nil {
-		err = s.handOff(id, t, dest.Peer.Kind, message)
+		err = s.handOff(id, t, dest.Peer.Kind)
 	}
 	if err != nil {
 		s.failDelivery(id, t, err)
@@ -819,8 +843,8 @@ func (s *Service) sweep() ([]*ticket, []string) {
 // workerHolds is whether a subagent's worker is still running, which keeps its
 // errand off ticketTTL: a worker that runs longer than the hour is the case a
 // subagent exists for, and its report has to find its way home. Closing the
-// worker ends the errand the way it ends any (Observe, idle), and the TTL runs
-// from there. Called under s.mu.
+// worker ends the errand (SessionClosed), and the TTL runs from there. Called
+// under s.mu.
 func (s *Service) workerHolds(subagent bool, targetID string) bool {
 	return subagent && s.term.Live(targetID)
 }

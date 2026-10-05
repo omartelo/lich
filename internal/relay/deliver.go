@@ -163,7 +163,7 @@ func (s *Service) offersTools(kind string) bool {
 // resend automated, it carries the same ticket, and it costs nothing new: a
 // terminal that swallows it was going to be reported unread anyway, and one
 // mid-dialog got the first write already.
-func (s *Service) watchReceipt(id string, t *ticket, kind, message string) {
+func (s *Service) watchReceipt(id string, t *ticket, kind string) {
 	timer := time.NewTimer(s.receiptWindow)
 	defer timer.Stop()
 	select {
@@ -184,7 +184,7 @@ func (s *Service) watchReceipt(id string, t *ticket, kind, message string) {
 		t.redelivered = true
 		s.mu.Unlock()
 		slog.Warn("relay: task was typed and nothing read it, typing it again", "target", t.target)
-		if err := s.handOff(id, t, kind, message); err == nil {
+		if err := s.handOff(id, t, kind); err == nil {
 			return
 		}
 		// The second write was refused — the session died under it. Nothing read
@@ -221,7 +221,7 @@ func (s *Service) typeTask(id string, t *ticket, kind, message string, busy bool
 	// end of the turn it is in, whenever that is, and its provider is busy the
 	// whole time — there is nothing here to tell apart.
 	if !busy && s.reportsState(kind) {
-		go s.watchReceipt(id, t, kind, message)
+		go s.watchReceipt(id, t, kind)
 	}
 	return nil
 }

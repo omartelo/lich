@@ -78,7 +78,11 @@ Claude Code session gets it when the user turned "Subagents as lich sessions"
 off, and the plugin's agent-cards mod then leaves every subagent native. A
 session opened with `lich open --subagent` gets it too, whatever the setting,
 on every spawn of it including a resume, so a worker's own subagents never open
-cards of their own. It is absent otherwise, which the mod reads as on.
+cards of their own. It is absent otherwise, which the mod reads as on. The mod
+also reads it as "this session may be a worker" and reports its turns'
+answers ([mod-answer.md](mod-answer.md)); lich ignores the report from a
+session with no subagent errand open, which is every session the setting
+turned it on for.
 
 ### The plugin release
 
@@ -154,6 +158,10 @@ read these fixtures at a lich release tag, not from `main`.
 - [mod-usage.md](mod-usage.md): a Claude Code session reports the context
   window, rate limits and cost it measured itself, through the same mod in a
   module of its own. lich prefers those to what it derives.
+
+- [mod-answer.md](mod-answer.md): a Claude Code subagent worker answers the
+  task it was handed with its turn's final message, through the same mod, the
+  way a native subagent's last message is its result.
 
 Each has a fixture file of the same name in [`fixtures/`](fixtures/); the format
 is documented there. mod-control has a second one, `mod-commands.json`, for the

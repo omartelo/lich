@@ -73,6 +73,13 @@ func (p *pluginVersions) setOnIncompatible(fn func(id, version string)) {
 	p.mu.Unlock()
 }
 
+// of is the release session id's hooks last named, "" when none reported.
+func (p *pluginVersions) of(id string) string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.byID[id]
+}
+
 func (p *pluginVersions) forget(id string) {
 	p.mu.Lock()
 	delete(p.byID, id)

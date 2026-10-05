@@ -44,6 +44,7 @@ func (s *Service) roster(fromID string) ([]candidate, error) {
 					Project: p.Name,
 					Kind:    sess.Kind,
 					State:   s.reportedState(sess.ID),
+					ID:      sess.ID,
 				},
 			})
 		}

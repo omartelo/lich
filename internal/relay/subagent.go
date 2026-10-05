@@ -172,12 +172,7 @@ func (s *Service) finishedWorkerLocked(sessionID, state string) bool {
 		return false
 	}
 	delete(s.reportedWorkers, sessionID)
-	for _, t := range s.tickets {
-		if t.targetID == sessionID {
-			return false
-		}
-	}
-	return s.workerFinished != nil
+	return !s.errandOpenAtLocked(sessionID) && s.workerFinished != nil
 }
 
 func (s *Service) finishWorker(workerID string) {

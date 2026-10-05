@@ -274,6 +274,21 @@ func TestSessionsListsPeers(t *testing.T) {
 	}
 }
 
+// The lich id rides --json last, so a mod holding a recorded LICH_SESSION_ID
+// can find that session's card.
+func TestSessionsJSONCarriesTheLichID(t *testing.T) {
+	f := newFakeLich(t, `[{"label":"docs","name":"lich-s2","project":"lich","kind":"codex","state":"done","id":"s2"}]`)
+
+	code, stdout, stderr := run(t, f, "sessions", "--json")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	want := `{"label":"docs","name":"lich-s2","project":"lich","kind":"codex","state":"done","id":"s2"}`
+	if !strings.Contains(stdout, want) {
+		t.Errorf("output = %s, want %s", stdout, want)
+	}
+}
+
 func TestSessionsSaysWhenThereAreNone(t *testing.T) {
 	f := newFakeLich(t, `[]`)
 
@@ -1133,7 +1148,7 @@ func TestOpenSaysWhenTheSessionRunsConfined(t *testing.T) {
 // change the status. Pinned as literals because the numbers are the contract.
 func TestSendAndWaitExitOnTheirOutcome(t *testing.T) {
 	for status, want := range map[string]int{
-		"answered": 0, "pending": 2, "unread": 3, "unanswered": 3, "undelivered": 3,
+		"answered": 0, "pending": 2, "unread": 3, "unanswered": 3, "undelivered": 3, "stopped": 3,
 	} {
 		f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"`+status+`"}`)
 		for _, args := range [][]string{

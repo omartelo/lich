@@ -279,6 +279,10 @@ type Service struct {
 	// without answering (internal/relay). Guarded by mu: wired after the
 	// transport is already serving.
 	onState func(id, state string)
+	// onClosed, when set, is told about every session Close takes down, before
+	// its process dies: the relay ends a closed worker's errand there, ahead of
+	// the SessionEnd the dying CLI reports. Guarded by mu like onState.
+	onClosed func(id string)
 	// spawns is how each live session's PTY was started — what it runs and where
 	// — keyed by session id. Read by providerKind, which is what stops a
 	// session-start report from repainting a card lich itself chose the provider
@@ -655,6 +659,14 @@ func (s *Service) SetSessionState(fn func(id, state string)) {
 	s.onState = fn
 }
 
+// SetSessionClosed wires fn to every session Close takes down, called before
+// its process is killed. Only one watcher, the relay (relay.SessionClosed).
+func (s *Service) SetSessionClosed(fn func(id string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onClosed = fn
+}
+
 // stateWatcher reads the watcher under the lock, so a report arriving while it
 // is being wired sees one function or none, never a torn read.
 func (s *Service) stateWatcher() func(id, state string) {
@@ -751,7 +763,11 @@ func (s *Service) Close(id string) error {
 		delete(s.sessions, id)
 		close(sess.done)
 	}
+	closed := s.onClosed
 	s.mu.Unlock()
+	if closed != nil {
+		closed(id)
+	}
 	s.spawns.Delete(id)
 	// A turn dies with its session, and an open one left behind would keep the
 	// machine awake for a card that no longer exists.

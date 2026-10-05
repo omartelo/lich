@@ -276,6 +276,10 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// answering the request it was given.
 	rl := relay.New(db, term, hub)
 	term.SetSessionState(rl.Observe)
+	// A worker's mod reports its answer, and a closed worker's errand ends
+	// without a word to its caller.
+	term.SetWorkerAnswer(rl.WorkerAnswered)
+	term.SetSessionClosed(rl.SessionClosed)
 	// Both questions the relay asks about a provider — whether its sessions
 	// report at all, and whether they can answer with a tool — are about what
 	// the plugin put there.
@@ -310,6 +314,10 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //     argument array with a 1MB bound.
 //   - relay.Observe is the hooks' session-state stream, which arrives over
 //     /hook: forging a SessionEnd here closes another session's errands.
+//   - relay.WorkerAnswered is a worker's answer, which arrives over
+//     /mod/answer: called here it answers another session's errand.
+//   - relay.SessionClosed is what the terminal tells the relay as it closes a
+//     session: called here it ends a running worker's errand in silence.
 //   - drop.Purge deletes every copy dropped into a session, by id: the page
 //     closes sessions through the store, which is what reports one gone.
 //   - drop.SetPicker is startup wiring like the ones below, and nilling it
@@ -327,8 +335,9 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //     checks; the relay calls it for a worker that reported back.
 //   - relay.SetPlugins, relay.SetWorkerFinished, project.SetAccounts, project.SetProjects,
 //     quota.SetSessions, store.SetSessionGone, store.SetScheduleForfeited,
-//     store.SetBranchOf, store.SetTranscriptOf, terminal.SetDropDir and
-//     terminal.SetRateLimitReports are startup wiring. Called with [null] they silently
+//     store.SetBranchOf, store.SetTranscriptOf, terminal.SetDropDir,
+//     terminal.SetRateLimitReports, terminal.SetWorkerAnswer and
+//     terminal.SetSessionClosed are startup wiring. Called with [null] they silently
 //     nil what they wired (encoding/json leaves a func or pointer alone on
 //     null), and the write races the readers already serving — nilling
 //     SetProjects also disarms the guard that keeps two projects off the same
@@ -355,6 +364,8 @@ func denyInternal(d *rpc.Handler) {
 		"drop.Purge",
 		"drop.SetPicker",
 		"relay.Observe",
+		"relay.WorkerAnswered",
+		"relay.SessionClosed",
 		"relay.RunSchedules",
 		"agentplugin.RepairRegistrations",
 		"relay.SetPlugins",
@@ -367,6 +378,8 @@ func denyInternal(d *rpc.Handler) {
 		"terminal.SessionAccount",
 		"terminal.SetDropDir",
 		"terminal.SetRateLimitReports",
+		"terminal.SetWorkerAnswer",
+		"terminal.SetSessionClosed",
 		"terminal.EnqueueModCommand",
 		"terminal.RunModCommand",
 		"terminal.SubmitPrompt",
