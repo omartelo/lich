@@ -145,6 +145,20 @@ func (s *Service) Ultracode(providerID string) bool {
 	return err == nil && value == "true"
 }
 
+// subagentCardsKey is the settings key that runs a provider's general-purpose
+// subagents as lich sessions. Global only, and off only for the literal
+// "false": the cards are on until the user turns them off.
+func subagentCardsKey(providerID string) string {
+	return "provider." + providerID + ".subagentCards"
+}
+
+// SubagentCards reports whether this provider's general-purpose subagents run
+// as lich sessions.
+func (s *Service) SubagentCards(providerID string) bool {
+	value, err := s.GetSetting(subagentCardsKey(providerID), globalScope)
+	return err != nil || value != "false"
+}
+
 // Sandbox rungs, ordered by how much of the machine a session can reach. They
 // are the stored spelling of the control in Settings › Providers, and anything
 // this list does not name reads as SandboxOff — an unknown value must never be

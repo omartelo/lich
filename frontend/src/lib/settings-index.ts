@@ -60,6 +60,13 @@ export const SETTING_ENTRIES: readonly SettingEntry[] = [
   },
   {
     section: "providers",
+    title: "Subagents as lich sessions",
+    also: "agent subagent card worktree delegate background",
+    perProvider: true,
+    onlyFor: "claude",
+  },
+  {
+    section: "providers",
     title: "Restored sessions",
     also: "resume conversation start new restart ask",
     perProvider: true,

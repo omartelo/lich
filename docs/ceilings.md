@@ -458,7 +458,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   mod system, so nothing can take a subagent call from them, and their subagents stay inside their CLI. On Claude
   Code too, a typed agent (Explore, Plan, a plugin's), a workflow step, another plugin's spawn, a remote one and a
   worker's own subagents stay native, and the worker is reached with `send_to_session` or `lich send`, never with
-  Claude Code's `SendMessage`.
+  Claude Code's `SendMessage`. Settings › Providers › Claude Code turns it off with "Subagents as lich sessions"
+  (`store.SubagentCards`), which reaches the mod as `LICH_SUBAGENT_CARDS=off` at spawn, so a session already
+  running keeps the value it started with.
 - **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`,
   `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that
   wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and

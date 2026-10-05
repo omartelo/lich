@@ -77,6 +77,19 @@ export function supportsUltracode(id: string): boolean {
   return id === "claude"
 }
 
+// subagentCardsKey holds the flag that runs a provider's general-purpose
+// subagents as lich sessions (mirrors store.subagentCardsKey in Go, which the
+// spawn reads). On unless the stored value is "false". Global only.
+export function subagentCardsKey(id: string): string {
+  return `provider.${id}.subagentCards`
+}
+
+// supportsSubagentCards: only Claude Code's subagents can become lich sessions,
+// through the lich-plugin mod, so Settings offers the switch there alone.
+export function supportsSubagentCards(id: string): boolean {
+  return id === "claude"
+}
+
 // How far a provider runs without asking, as one ladder ordered by risk. The
 // two settings keys stay exactly as they are — this is the shape the user
 // chooses in, not the shape lich stores.
