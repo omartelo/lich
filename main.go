@@ -286,7 +286,11 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	dispatcher.Register("relay", rl)
 	// Its caller is not the window either: opening a session for an agent starts
 	// the PTY here rather than waiting for someone to click the card.
-	dispatcher.Register("spawn", spawn.New(db, proj, term, hub))
+	spawner := spawn.New(db, proj, term, hub)
+	// A subagent worker in its caller's checkout closes once it reported and
+	// its turn ended, the way a native subagent ends with its result.
+	rl.SetWorkerFinished(spawner.CloseFinishedWorker)
+	dispatcher.Register("spawn", spawner)
 	dispatcher.Register("themes", themes.New(version))
 	denyInternal(dispatcher)
 	term.Mount("/rpc/", dispatcher)
@@ -319,7 +323,9 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //     and never returning: called over /rpc/ it holds that request open for the
 //     life of the process and starts a second loop racing the first for every
 //     due prompt.
-//   - relay.SetPlugins, project.SetAccounts, project.SetProjects,
+//   - spawn.CloseFinishedWorker closes a session with none of spawn.Close's
+//     checks; the relay calls it for a worker that reported back.
+//   - relay.SetPlugins, relay.SetWorkerFinished, project.SetAccounts, project.SetProjects,
 //     quota.SetSessions, store.SetSessionGone, store.SetScheduleForfeited,
 //     store.SetBranchOf, store.SetTranscriptOf, terminal.SetDropDir and
 //     terminal.SetRateLimitReports are startup wiring. Called with [null] they silently
@@ -352,6 +358,8 @@ func denyInternal(d *rpc.Handler) {
 		"relay.RunSchedules",
 		"agentplugin.RepairRegistrations",
 		"relay.SetPlugins",
+		"relay.SetWorkerFinished",
+		"spawn.CloseFinishedWorker",
 		"project.SetAccounts",
 		"project.SetProjects",
 		"quota.SetSessions",

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/omartelo/lich/internal/store"
 )
 
 // A subagent edits what the session that asked for it sees, the way Claude
@@ -136,5 +138,85 @@ func TestOpenSubagentNeedsACallingSession(t *testing.T) {
 				t.Errorf("wrote %d rows, want nothing opened", len(sessions.rows))
 			}
 		})
+	}
+}
+
+// finishedWorkers is closable plus three workers: one beside its caller in a
+// shared worktree, one beside a caller in the project's own directory, and one
+// on a worktree of its own.
+func finishedWorkers(t *testing.T) (*Service, *fakeSessions, *fakeTerminal, *fakeEvents) {
+	t.Helper()
+	svc, sessions, _, term, events := closer(t)
+	sessions.projects[0].Sessions = append(sessions.projects[0].Sessions,
+		store.Session{ID: "w1", Label: "Session 9", Kind: "claude", Path: "/wt/shared", OriginSessionID: "s2"},
+		store.Session{ID: "w2", Label: "Session 10", Kind: "claude", OriginSessionID: "s1"},
+		store.Session{ID: "w3", Label: "subagent/docs-ab12", Kind: "claude", Path: "/wt/docs", OriginSessionID: "s2"},
+	)
+	return svc, sessions, term, events
+}
+
+// A worker in its caller's checkout has nothing of its own to keep once it
+// reported, so it closes the way a native subagent ends: parked, card down.
+func TestCloseFinishedWorkerClosesOneSharingItsCallersCheckout(t *testing.T) {
+	for _, id := range []string{"w1", "w2"} {
+		svc, sessions, term, events := finishedWorkers(t)
+
+		if err := svc.CloseFinishedWorker(id); err != nil {
+			t.Fatalf("CloseFinishedWorker(%s): %v", id, err)
+		}
+		if len(sessions.parked) != 1 || sessions.parked[0].sessionID != id {
+			t.Errorf("%s: parked = %+v, want the worker parked", id, sessions.parked)
+		}
+		if len(term.closed) != 1 || term.closed[0] != id {
+			t.Errorf("%s: closed PTYs = %v, want the worker's", id, term.closed)
+		}
+		if len(events.events) != 1 || events.events[0].name != ClosedEventName {
+			t.Errorf("%s: events = %+v, want its card taken down", id, events.events)
+		}
+	}
+}
+
+// A worker on a worktree of its own holds work nobody else has, so it stays
+// open for the user, as does one whose caller is gone (nothing says whose
+// checkout it shared) and one the user pinned.
+func TestCloseFinishedWorkerKeepsOneWithSomethingToKeep(t *testing.T) {
+	cases := map[string]func(*fakeSessions){
+		"own worktree": func(*fakeSessions) {},
+		"caller gone": func(s *fakeSessions) {
+			s.projects[0].Sessions[1].ID = "elsewhere"
+		},
+		"pinned": func(s *fakeSessions) {
+			last := len(s.projects[0].Sessions) - 1
+			s.projects[0].Sessions[last].Path = "/wt/shared"
+			s.projects[0].Sessions[last].Pinned = true
+		},
+	}
+	for name, arrange := range cases {
+		svc, sessions, term, events := finishedWorkers(t)
+		arrange(sessions)
+		id := "w3"
+		if name == "caller gone" {
+			id = "w1"
+		}
+
+		if err := svc.CloseFinishedWorker(id); err != nil {
+			t.Fatalf("%s: CloseFinishedWorker: %v", name, err)
+		}
+		if len(sessions.parked) != 0 || len(term.closed) != 0 || len(events.events) != 0 {
+			t.Errorf("%s: parked %+v, closed %v, events %+v; want the worker left open",
+				name, sessions.parked, term.closed, events.events)
+		}
+	}
+}
+
+// A worker the user already closed is not an error: there is nothing to do.
+func TestCloseFinishedWorkerIgnoresAWorkerAlreadyGone(t *testing.T) {
+	svc, sessions, term, _ := finishedWorkers(t)
+
+	if err := svc.CloseFinishedWorker("nobody"); err != nil {
+		t.Fatalf("CloseFinishedWorker: %v", err)
+	}
+	if len(sessions.parked) != 0 || len(term.closed) != 0 {
+		t.Errorf("parked %+v, closed %v; want nothing touched", sessions.parked, term.closed)
 	}
 }

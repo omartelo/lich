@@ -116,6 +116,56 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 	return closed, nil
 }
 
+// CloseFinishedWorker closes a subagent worker (OpenSubagent) that has reported
+// back and ended its turn, when it runs in its caller's checkout: like a native
+// subagent that returned, it has nothing of its own left to keep. The close is
+// the parking Close performs, so its conversation stays resumable from the
+// history.
+//
+// A worker on a worktree of its own is left open, since that checkout holds
+// work nothing else does, and so is one the user pinned and one whose caller is
+// no longer in the workspace, which leaves no checkout to call shared. A worker
+// already gone is not an error. The relay calls this (relay.SetWorkerFinished).
+func (s *Service) CloseFinishedWorker(id string) error {
+	projects, err := s.sessions.LoadState()
+	if err != nil {
+		return fmt.Errorf("read the workspace: %w", err)
+	}
+	found, ok := sessionByID(projects, id)
+	if !ok || found.session.Pinned || !sharesCallersCheckout(found) {
+		return nil
+	}
+	active := neighborOf(found.project, id)
+	if err := s.sessions.CloseSession(found.project.ID, id, active); err != nil {
+		return err
+	}
+	s.finish(found, active)
+	return nil
+}
+
+// sessionByID finds a session by its id across the workspace.
+func sessionByID(projects []store.Project, id string) (located, bool) {
+	for _, p := range projects {
+		for _, sess := range p.Sessions {
+			if sess.ID == id {
+				return located{project: p, session: sess}, true
+			}
+		}
+	}
+	return located{}, false
+}
+
+// sharesCallersCheckout is whether a worker runs where the session that opened
+// it runs (besideCaller), rather than on a checkout of its own.
+func sharesCallersCheckout(worker located) bool {
+	for _, sess := range worker.project.Sessions {
+		if sess.ID == worker.session.OriginSessionID {
+			return sess.Path == worker.session.Path
+		}
+	}
+	return false
+}
+
 // removeCheckout takes a worktree off disk together with the session that was
 // the last one in it.
 //

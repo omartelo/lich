@@ -432,6 +432,12 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
     [The answer is announced, and collected](#the-answer-is-announced-and-collected)).
   - is **not dropped by the ticket's one-hour TTL** while its session runs;
     closing it ends the errand as it ends any.
+  - **closes once it is done** when it runs in the caller's checkout: after it
+    answers the errand and the turn it answered in ends, lich parks it the way
+    `lich close` does, like a native subagent that returned its result. A worker
+    on a worktree of its own stays open, since that checkout holds its work, and
+    so does one the user pinned, one whose caller is gone, one with another
+    errand still open at it, and one whose turn was stopped with Esc.
   - tells the caller, in one short note per block, when it is **waiting on a
     permission** prompt in its card.
   - spawns with `LICH_SUBAGENT_CARDS=off` on every start, a resume included, so
