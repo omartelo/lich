@@ -44,12 +44,15 @@ type Collected struct {
 // worker. What is typed instead is one short nudge (nudgeNotice), debounced so
 // a burst of workers finishing together costs one.
 type inboxEntry struct {
-	ticket string
-	fromID string
-	target string
-	status string
-	answer string
-	ready  time.Time
+	ticket   string
+	fromID   string
+	targetID string
+	target   string
+	status   string
+	answer   string
+	ready    time.Time
+	private  bool
+	subagent bool
 	// nudged is whether a notice naming this entry was already typed. One nudge
 	// per entry: re-nudging on every turn end would start a turn per nudge,
 	// forever, for a sender that chose not to collect.
@@ -190,8 +193,9 @@ func (s *Service) unregister(fromID string, wake chan struct{}) {
 // lets go of the lock.
 func (s *Service) stashLocked(id string, t *ticket, status, answer string) {
 	entry := &inboxEntry{
-		ticket: id, fromID: t.fromID, target: t.target,
+		ticket: id, fromID: t.fromID, targetID: t.targetID, target: t.target,
 		status: status, answer: answer, ready: s.now(),
+		private: t.private, subagent: t.subagent,
 	}
 	if t.private {
 		s.held[id] = entry
@@ -282,7 +286,8 @@ func (s *Service) announceInboxAll(senders []string) {
 }
 
 // flushNudge types one nudge naming everything waiting for fromID, if any of
-// it has not been nudged before. Ran by the debounce timer and by Observe when
+// it has not been nudged before, and hands a subagent's report over whole where
+// the sender's mod takes it (tellNews). Ran by the debounce timer and by Observe when
 // the sender's turn ends — a delivery mid-turn would queue as its own turn,
 // which is the cost this whole path exists to avoid. The two triggers can land
 // on the same fromID close together, so the whole attempt is serialized per
@@ -309,32 +314,14 @@ func (s *Service) flushNudge(fromID string) {
 		s.mu.Unlock()
 		return
 	}
-	var marked []string
-	count := 0
-	targets := map[string]bool{}
-	for id, e := range s.ready {
-		if e.fromID != fromID {
-			continue
-		}
-		if !e.nudged {
-			e.nudged = true
-			marked = append(marked, id)
-		}
-		count++
-		targets[e.target] = true
-	}
+	news := s.takeNewsLocked(fromID)
 	s.mu.Unlock()
-	if len(marked) == 0 {
+	if len(news.marked) == 0 {
 		return
 	}
-	labels := make([]string, 0, len(targets))
-	for label := range targets {
-		labels = append(labels, label)
-	}
-	sort.Strings(labels)
 
 	sender, _ := s.sessionOf(fromID)
-	if err := s.deliver(fromID, nudgeNotice(count, labels, s.offersTools(sender.Kind))); err != nil {
+	if err := s.tellNews(fromID, news, s.offersTools(sender.Kind)); err != nil {
 		// The notice is the only thing that tells an agent results are waiting —
 		// the results themselves are never typed — so one that never reached the
 		// prompt has to be sendable again: the entries take their mark back and the
@@ -343,11 +330,66 @@ func (s *Service) flushNudge(fromID string) {
 		// success would let two flushes racing each find the same entry fresh.
 		slog.Warn("relay: news not delivered", "session", fromID, "err", err)
 		s.mu.Lock()
-		for _, id := range marked {
+		s.restoreReportsLocked(news.reports)
+		for _, id := range news.marked {
 			if e, ok := s.ready[id]; ok {
 				e.nudged = false
 			}
 		}
 		s.mu.Unlock()
 	}
+}
+
+// news is what one flush tells a sender: the entries it marks as announced,
+// how many results wait and from whom, and the subagent reports among them,
+// which are taken out of the inbox while the flush hands them over whole
+// (tellNews).
+type news struct {
+	marked  []string
+	count   int
+	labels  []string
+	reports []*inboxEntry
+	// others is the labels of the results that are not reports, for the nudge
+	// that rides beside them.
+	others []string
+}
+
+// takeNewsLocked marks every entry waiting for fromID that no notice named yet,
+// and takes the subagent reports among them out of the inbox into held, so a
+// collect racing the hand-over cannot return them a second time. held is where
+// Wait still finds them by ticket. Called under s.mu.
+func (s *Service) takeNewsLocked(fromID string) news {
+	var found news
+	targets, others := map[string]bool{}, map[string]bool{}
+	for id, e := range s.ready {
+		if e.fromID != fromID {
+			continue
+		}
+		found.count++
+		targets[e.target] = true
+		if e.nudged {
+			others[e.target] = true
+			continue
+		}
+		e.nudged = true
+		found.marked = append(found.marked, id)
+		if !e.subagent || e.status != StatusAnswered {
+			others[e.target] = true
+			continue
+		}
+		delete(s.ready, id)
+		s.held[id] = e
+		found.reports = append(found.reports, e)
+	}
+	found.labels, found.others = sortedKeys(targets), sortedKeys(others)
+	return found
+}
+
+func sortedKeys(set map[string]bool) []string {
+	keys := make([]string, 0, len(set))
+	for key := range set {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

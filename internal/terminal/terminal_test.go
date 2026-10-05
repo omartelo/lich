@@ -50,6 +50,7 @@ type stubBins struct {
 	skipPerms        bool
 	ultracode        bool
 	subagentCardsOff bool
+	subagentSession  bool
 	// sessionUltracode is the per-session flag a session opened with ultracode
 	// carries on its row, apart from the provider-wide ultracode above.
 	sessionUltracode bool
@@ -125,6 +126,7 @@ func (s stubBins) SessionModel(_ string) string        { return s.model }
 func (s stubBins) SessionEffort(_ string) string       { return s.effort }
 func (s stubBins) Ultracode(_ string) bool             { return s.ultracode }
 func (s stubBins) SubagentCards(_ string) bool         { return !s.subagentCardsOff }
+func (s stubBins) SessionSubagent(_ string) bool       { return s.subagentSession }
 func (s stubBins) SessionUltracode(id string) bool {
 	return s.sessionUltracode || s.inherited[id]
 }

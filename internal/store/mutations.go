@@ -208,7 +208,7 @@ func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
 // holds a single connection, and a subprocess or a 32 MB read under the write
 // lock stalls every other caller for as long as it takes.
 func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
-	branch := s.parkedBranch(sessionID)
+	branch := s.SessionBranch(sessionID)
 	s.indexTranscript(sessionID)
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(
@@ -221,15 +221,16 @@ func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
 	})
 }
 
-// parkedBranch names the branch of the checkout a session is running in, for the
-// row about to be parked. A session with no path of its own runs in its
+// SessionBranch names the branch of the checkout a session is running in: for
+// the row about to be parked, and for the report a subagent sends home
+// (internal/relay). A session with no path of its own runs in its
 // project's directory, which is then the checkout to ask about.
 //
 // Every failure answers "": a store without the wiring, a session id nothing
 // matches, a directory git cannot name a branch for. None of them is worth
 // refusing a close over — the row loses the branch as a search term and keeps
 // everything else.
-func (s *Service) parkedBranch(sessionID string) string {
+func (s *Service) SessionBranch(sessionID string) string {
 	if s.branchOf == nil {
 		return ""
 	}
@@ -302,7 +303,7 @@ func (s *Service) ReopenSession(sessionID, newSessionID string) (*Session, error
 // reopen is the resume behind both doors: it finds one parked session with the
 // given WHERE clause and re-adds it to the workspace under a fresh id
 // (newSessionID), carrying over the old label, kind, path, provider session id,
-// label_auto flag, model, effort, ultracode, entrypoint, sandbox, pin, origin and scheduled prompt.
+// label_auto flag, model, effort, ultracode, subagent mark, entrypoint, sandbox, pin, origin and scheduled prompt.
 // The fresh id is deliberate: it makes the frontend treat the card as
 // never-spawned, so its resume prompt fires and the provider conversation
 // continues instead of starting cold.
@@ -314,7 +315,7 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// cycle — reinserting without it would reset to 1 and let the ai-title
 		// stomp the chosen name, breaking SetSessionTitle's contract.
 		//
-		// model, effort, ultracode and entrypoint ride along for the same reason, one rung lower:
+		// model, effort, ultracode, the subagent mark and entrypoint ride along for the same reason, one rung lower:
 		// they are what the session was born with, and a resumed card that the
 		// user restarts as a new conversation starts on them again; a reinsert
 		// that dropped the entrypoint would put the terminal back on a bare shell
@@ -339,18 +340,18 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// session, and the row is what says where it belongs.
 		var labelAuto int
 		var projectID, model, effort, entrypoint, sandbox, folder string
-		var run, ultracode bool
+		var run, ultracode, subagent bool
 		var forkOffset float64
 		row := tx.QueryRow(
 			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
-			        model, effort, ultracode, entrypoint, run, sandbox, pinned, folder, origin_session_id, origin_label,
+			        model, effort, ultracode, subagent, entrypoint, run, sandbox, pinned, folder, origin_session_id, origin_label,
 			        scheduled_at, scheduled_prompt, fork_cost_offset
 			   FROM sessions `+where,
 			args...,
 		)
 		if err := row.Scan(
 			&old.ID, &projectID, &old.Label, &old.Kind, &old.Path, &old.ProviderSessionID,
-			&labelAuto, &model, &effort, &ultracode, &entrypoint, &run, &sandbox, &old.Pinned, &folder,
+			&labelAuto, &model, &effort, &ultracode, &subagent, &entrypoint, &run, &sandbox, &old.Pinned, &folder,
 			&old.OriginSessionID, &old.OriginLabel,
 			&old.ScheduledAt, &old.ScheduledPrompt, &forkOffset,
 		); err != nil {
@@ -389,11 +390,11 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		if _, err := tx.Exec(
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
-			    model, effort, ultracode, entrypoint, run, sandbox, pinned, folder, origin_session_id, origin_label,
+			    model, effort, ultracode, subagent, entrypoint, run, sandbox, pinned, folder, origin_session_id, origin_label,
 			    scheduled_at, scheduled_prompt, fork_cost_offset, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, old.Path, old.ProviderSessionID, labelAuto,
-			model, effort, ultracode, entrypoint, run, sandbox, old.Pinned, folder, old.OriginSessionID, old.OriginLabel,
+			model, effort, ultracode, subagent, entrypoint, run, sandbox, old.Pinned, folder, old.OriginSessionID, old.OriginLabel,
 			old.ScheduledAt, old.ScheduledPrompt, forkOffset, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
@@ -682,6 +683,30 @@ func (s *Service) SessionUltracode(sessionID string) bool {
 	var on bool
 	if err := s.db.QueryRow(
 		`SELECT ultracode FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&on); err != nil {
+		return false
+	}
+	return on
+}
+
+// SetSessionSubagent records that a session was opened as another session's
+// subagent (internal/spawn, OpenSubagent), so every spawn of it, a resume
+// included, keeps its own subagents native.
+func (s *Service) SetSessionSubagent(sessionID string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET subagent = 1 WHERE id = ?`, sessionID,
+	); err != nil {
+		return fmt.Errorf("mark %q as a subagent: %w", sessionID, err)
+	}
+	return nil
+}
+
+// SessionSubagent reports whether a session was opened as a subagent. A read
+// failure answers false, which leaves the user's setting in charge.
+func (s *Service) SessionSubagent(sessionID string) bool {
+	var on bool
+	if err := s.db.QueryRow(
+		`SELECT subagent FROM sessions WHERE id = ?`, sessionID,
 	).Scan(&on); err != nil {
 		return false
 	}

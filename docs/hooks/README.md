@@ -75,8 +75,10 @@ own contract in [cli.md](../cli.md).
 
 `LICH_SUBAGENT_CARDS=off` is the fifth, and the only one set from a setting: a
 Claude Code session gets it when the user turned "Subagents as lich sessions"
-off, and the plugin's agent-cards mod then leaves every subagent native. It is
-absent otherwise, which the mod reads as on.
+off, and the plugin's agent-cards mod then leaves every subagent native. A
+session opened with `lich open --subagent` gets it too, whatever the setting,
+on every spawn of it including a resume, so a worker's own subagents never open
+cards of their own. It is absent otherwise, which the mod reads as on.
 
 ### The plugin release
 

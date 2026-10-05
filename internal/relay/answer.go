@@ -29,7 +29,7 @@ func (s *Service) Wait(ctx context.Context, ticketID string, waitSeconds int) (R
 		s.mu.Unlock()
 		s.clearAll(expired)
 		s.announceInboxAll(senders)
-		return Result{Ticket: e.ticket, Target: e.target, Status: e.status, Answer: e.answer, Private: true}, nil
+		return Result{Ticket: e.ticket, Target: e.target, Status: e.status, Answer: e.answer, Private: e.private}, nil
 	}
 	if late, lapsed := s.lapsed[ticketID]; lapsed {
 		s.mu.Unlock()

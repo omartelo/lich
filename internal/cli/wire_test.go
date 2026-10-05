@@ -37,6 +37,9 @@ func (wiredSessions) LoadState() ([]store.Project, error) {
 // Nothing here schedules a prompt; the relay only ever calls this to clear one.
 func (wiredSessions) SetSessionSchedule(string, int64, string) error { return nil }
 
+// No checkout here has a branch git could name.
+func (wiredSessions) SessionBranch(string) string { return "" }
+
 type wiredTerminal struct {
 	mu    sync.Mutex
 	typed string
@@ -213,6 +216,7 @@ type spawnStore struct {
 	model     string
 	effort    string
 	ultracode bool
+	subagent  bool
 	// renamed is the session id and label the last rename wrote.
 	renamed [2]string
 	// filed is the session id and folder the last filing wrote, and refolded
@@ -234,6 +238,13 @@ func (s *spawnStore) AddSessionFrom(_, _, _, _, _ string, _ int, _, _ string) er
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.rows++
+	return nil
+}
+
+func (s *spawnStore) SetSessionSubagent(string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.subagent = true
 	return nil
 }
 
@@ -436,6 +447,33 @@ func TestOpenUltracodeOverTheRealDispatcher(t *testing.T) {
 	}
 	if rows.effort != "medium" {
 		t.Errorf("row effort = %q, want medium beside ultracode", rows.effort)
+	}
+}
+
+// TestOpenSubagentOverTheRealDispatcher proves the seven arguments `lich open
+// --subagent` posts land on spawn.OpenSubagent in the order it declares them.
+func TestOpenSubagentOverTheRealDispatcher(t *testing.T) {
+	env, rows, term := wiredSpawn(t, &spawnGit{})
+
+	var stdout, stderr bytes.Buffer
+	args := []string{
+		"open", "--subagent", "--kind", "claude", "--model", "opus", "--effort", "high",
+		"--ultracode", "--json", "--prompt", "port the parser",
+	}
+	// The hand-off has no relay behind this dispatcher, so it fails after the
+	// open, which is the part under test.
+	Run(args, "test", env, &stdout, &stderr)
+	if rows.rows != 1 || !rows.subagent {
+		t.Fatalf("rows %d, subagent %v; want one marked row (stderr %q)", rows.rows, rows.subagent, stderr.String())
+	}
+	if term.kind != "claude" || term.cwd != "/src/lich" {
+		t.Errorf("started %q in %q, want claude in the caller's checkout", term.kind, term.cwd)
+	}
+	if rows.model != "opus" || rows.effort != "high" || !rows.ultracode {
+		t.Errorf("row %q %q %v, want every override", rows.model, rows.effort, rows.ultracode)
+	}
+	if rows.filed[1] != "sender" {
+		t.Errorf("filed = %v, want the caller's label", rows.filed)
 	}
 }
 

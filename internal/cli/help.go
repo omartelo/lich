@@ -58,7 +58,7 @@ var commands = []command{
 		name: "open",
 		args: "[--project <name-or-path>] [--kind <provider>] [--worktree <branch>]\n" +
 			"            [--base <branch>] [--model <model>] [--effort <level>] [--ultracode]\n" +
-			"            [--folder <name>] [--prompt <task> [--private]] [--json]",
+			"            [--folder <name>] [--prompt <task> [--private | --subagent]] [--json]",
 		about: "Open a new session and start it. --project takes a project already open,\n" +
 			"by name, or the absolute path of a directory, which is opened as a\n" +
 			"project first — one lich closed comes back with the sessions it was\n" +
@@ -69,8 +69,11 @@ var commands = []command{
 			"--folder files it under that sidebar folder from its first frame.\n" +
 			"--prompt hands the new session that task as soon as its agent is up, so\n" +
 			"opening a worker for a task is one command rather than two, and\n" +
-			"--private hands it over the way `send --private` does. Prints the\n" +
-			"name the new session is addressed by.",
+			"--private hands it over the way `send --private` does. --subagent opens\n" +
+			"it as this session's subagent: in this session's checkout unless\n" +
+			"--worktree names one, filed under a folder named after this session,\n" +
+			"its report handed back whole. Prints the name the new session is\n" +
+			"addressed by.",
 	},
 	{
 		name: "close",

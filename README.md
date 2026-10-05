@@ -110,7 +110,7 @@ reads what each CLI writes down and no two of them write down the same things.
 | Open a session with ultracode on | yes | no | no | no | no | no | no | no |
 | Drive a running session from `lich control` or an agent: prompt, stop, model, effort, slash command | yes | no | no | no | no | no | no | no |
 | A message from another session arrives without being typed into the terminal | yes | no | no | no | no | no | no | no |
-| A subagent the agent starts runs as a lich session with its own card and worktree | yes | no | no | no | no | no | no | no |
+| A subagent the agent starts runs as a lich session with its own card, in the asking session's checkout, and hands its full report back | yes | no | no | no | no | no | no | no |
 | Ask a running session a side question without stopping it (`lich ask`) | yes | no | no | no | no | no | no | no |
 | Context, cost and plan usage as the CLI measured them itself | yes | no | no | no | no | no | no | no |
 | Delegate privately from a subagent or workflow step | yes | yes | yes | yes | yes | yes | yes | yes |
