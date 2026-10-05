@@ -7,22 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- **A Claude Code subagent's card closes once it hands its report back,** the
-  way a native subagent ends with its result, when it worked in the asking
-  session's checkout. One on a worktree of its own stays open with its work, as
-  does one you pinned or stopped with Esc. A closed one is in the history and
-  resumes from there. With lich-plugin 0.15.0, Claude Code's own status line
-  shows how many lich workers the session is waiting on, and its `TaskStop`
-  stops a worker as it stops a native subagent.
-
-### Fixed
-
-- **`lich cost` labels the cost a Claude Code session measured itself as
-  `reported`.** It was counted as `priced`, lich's own arithmetic, though the
-  figure is Claude Code's.
-
 ## [0.58.0] - 2026-10-05
 
 > [!IMPORTANT]
@@ -72,6 +56,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its prompt stays yours, and the message no longer waits for you to stop
   typing. Other providers, and Claude Code without the mod, are
   typed at as before. Needs Claude Code 2.1.280 or newer and lich-plugin 0.14.0.
+- **A Claude Code subagent's card closes once it hands its report back,** the
+  way a native subagent ends with its result, when it worked in the asking
+  session's checkout. One on a worktree of its own stays open with its work, as
+  does one you pinned or stopped with Esc. A closed one is in the history and
+  resumes from there. With lich-plugin 0.15.0, Claude Code's own status line
+  shows how many lich workers the session is waiting on, and its `TaskStop`
+  stops a worker as it stops a native subagent.
+
+### Fixed
+
+- **`lich cost` labels the cost a Claude Code session measured itself as
+  `reported`.** It was counted as `priced`, lich's own arithmetic, though the
+  figure is Claude Code's.
 
 ## [0.57.0] - 2026-10-03
 
