@@ -12,3 +12,11 @@ func subagentCardsEnv(env []string, kind string, on bool) []string {
 	}
 	return append(env, "LICH_SUBAGENT_CARDS=off")
 }
+
+// subagentCardsOn is whether a session's subagents become cards: the user's
+// setting, except in a session that is itself a subagent's card
+// (store.SessionSubagent), whose own subagents stay native so a worker sharing
+// its caller's checkout never opens cards of its own.
+func (s *Service) subagentCardsOn(id, kind string) bool {
+	return s.store.SubagentCards(kind) && !s.store.SessionSubagent(id)
+}

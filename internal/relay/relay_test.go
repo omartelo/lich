@@ -20,9 +20,14 @@ type fakeSessions struct {
 	// schedule, when set, takes the scheduled-prompt writes deliverDue makes. A
 	// test that does not schedule anything leaves it nil, which accepts them.
 	schedule func(sessionID string, at int64, prompt string) error
+	// branches is the branch each session's checkout is on; a session missing
+	// from it answers "", as one git cannot name a branch for does.
+	branches map[string]string
 }
 
 func (f fakeSessions) LoadState() ([]store.Project, error) { return f.projects, f.err }
+
+func (f fakeSessions) SessionBranch(sessionID string) string { return f.branches[sessionID] }
 
 func (f fakeSessions) SetSessionSchedule(sessionID string, at int64, prompt string) error {
 	if f.schedule == nil {

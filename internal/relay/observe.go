@@ -20,6 +20,7 @@ import (
 // request the target had not read yet, which is worse than saying nothing.
 func (s *Service) Observe(sessionID, state string) {
 	s.mu.Lock()
+	blocked := s.noteBlockLocked(sessionID, state)
 	s.recordState(sessionID, state)
 	ended, notice := s.endedErrands(sessionID, state)
 	// A waiter still holding the line carries the news out through its own
@@ -52,6 +53,9 @@ func (s *Service) Observe(sessionID, state string) {
 	if notice != "" {
 		go s.deliverNotice(sessionID, notice)
 	}
+	for _, t := range blocked {
+		go s.deliverNotice(t.fromID, blockedNotice(t.target))
+	}
 	// This session as a sender: its turn ending frees its prompt, which is what
 	// a nudge held back during the turn was waiting for. A turn stopped with Esc
 	// or Ctrl-C frees it just the same, and is how a wait for results is usually
@@ -59,6 +63,19 @@ func (s *Service) Observe(sessionID, state string) {
 	if state == stateDone || state == stateInterrupted {
 		go s.flushNudge(sessionID)
 	}
+}
+
+// noteBlockLocked reads one report for what it says about subagent errands
+// worked at sessionID: a waiting mid-turn is a block their senders hear about
+// once, and a busy or done ends it. Called under s.mu, before recordState.
+func (s *Service) noteBlockLocked(sessionID, state string) []*ticket {
+	switch state {
+	case stateWaiting:
+		return s.blockedSendersLocked(sessionID)
+	case stateBusy, stateDone, stateInterrupted:
+		s.unblockLocked(sessionID)
+	}
+	return nil
 }
 
 func (s *Service) deliverNotice(sessionID, notice string) {

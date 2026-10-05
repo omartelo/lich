@@ -184,6 +184,9 @@ type Sessions interface {
 	// session (see deliverDue). Only ever called to clear here: the window is
 	// what parks one.
 	SetSessionSchedule(sessionID string, at int64, prompt string) error
+	// SessionBranch is the branch of the checkout a session runs in, "" when
+	// git cannot name one. A subagent's report names it (subagentReport).
+	SessionBranch(sessionID string) string
 }
 
 // Events is where the relay announces a request in flight. The app's event hub
@@ -301,6 +304,12 @@ type ticket struct {
 	// apart from the session itself. Its outcome is held for the ticket alone,
 	// never drained by a no-ticket collect, counted or nudged (SendPrivate).
 	private bool
+	// subagent is a ticket sent with SendSubagent: its worker is the sender's
+	// subagent, and its errand lives as long as the worker does.
+	subagent bool
+	// blockNoted is whether the sender was already told its subagent waits on a
+	// permission in the block running now. A busy or done report ends the block.
+	blockNoted bool
 	// answered records that the answer is in, for the waiter that gave up in the
 	// same instant it arrived: it leaves last and has to notice it was the one
 	// holding the ticket.
@@ -374,7 +383,8 @@ type Service struct {
 	ready map[string]*inboxEntry
 	// held is where the outcomes of private tickets wait, apart from ready, so
 	// nothing that reads the inbox for a sender can reach them: only a Wait on
-	// their ticket does.
+	// their ticket does. A subagent's report waits here too once it was handed
+	// to its sender whole (takeNewsLocked).
 	held map[string]*inboxEntry
 	// lapsed is the errands that ended without an answer — a turn over with no
 	// reply, or a task nobody read — kept answerable by their ticket. A worker
@@ -498,7 +508,7 @@ func (s *Service) Peers(fromID string) ([]Peer, error) {
 // (see queueDelivery). ctx is the caller's: one that hangs up mid-wait hears
 // nothing, and the errand's outcome goes to its inbox as if its wait had run out.
 func (s *Service) Send(ctx context.Context, fromID, target, project, prompt string, waitSeconds int) (Result, error) {
-	return s.send(ctx, fromID, target, project, prompt, waitSeconds, false)
+	return s.send(ctx, fromID, target, project, prompt, waitSeconds, errandShared)
 }
 
 // SendPrivate is Send for a caller that runs inside the sender session without
@@ -509,11 +519,37 @@ func (s *Service) Send(ctx context.Context, fromID, target, project, prompt stri
 func (s *Service) SendPrivate(
 	ctx context.Context, fromID, target, project, prompt string, waitSeconds int,
 ) (Result, error) {
-	return s.send(ctx, fromID, target, project, prompt, waitSeconds, true)
+	return s.send(ctx, fromID, target, project, prompt, waitSeconds, errandPrivate)
 }
 
+// SendSubagent is Send for a worker opened as the sender's subagent (`lich open
+// --subagent`), so the errand behaves like the subagent it replaces: the report
+// reaches the sender whole where its mod takes it (flushNudge), the errand is not
+// dropped by ticketTTL while the worker lives (sweep), and the sender hears once
+// when the worker blocks on a permission (Observe). It needs a sending session:
+// there is nobody else to report to.
+func (s *Service) SendSubagent(
+	ctx context.Context, fromID, target, project, prompt string, waitSeconds int,
+) (Result, error) {
+	if fromID == "" {
+		return Result{}, fmt.Errorf("a subagent reports to the session that asked for it, and this call came from no session")
+	}
+	return s.send(ctx, fromID, target, project, prompt, waitSeconds, errandSubagent)
+}
+
+// errandMode is who an errand's outcome is for: the sending session (Send), the
+// one caller holding its ticket (SendPrivate), or the sending session as its
+// subagent's (SendSubagent).
+type errandMode int
+
+const (
+	errandShared errandMode = iota
+	errandPrivate
+	errandSubagent
+)
+
 func (s *Service) send(
-	ctx context.Context, fromID, target, project, prompt string, waitSeconds int, private bool,
+	ctx context.Context, fromID, target, project, prompt string, waitSeconds int, mode errandMode,
 ) (Result, error) {
 	prompt = sanitize(prompt)
 	if strings.TrimSpace(prompt) == "" {
@@ -541,7 +577,8 @@ func (s *Service) send(
 		target:      dest.Peer.Label,
 		created:     s.now(),
 		asked:       askedExcerpt(prompt),
-		private:     private,
+		private:     mode == errandPrivate,
+		subagent:    mode == errandSubagent,
 		done:        make(chan struct{}),
 		stalled:     make(chan struct{}),
 		unread:      make(chan struct{}),
@@ -576,7 +613,7 @@ func (s *Service) send(
 	// the HTTP client's own budget (internal/cli, waitBudget) and report a
 	// timeout on an errand that is running perfectly well.
 	result := s.await(ctx, id, t, waitFor(waitSeconds))
-	result.Private = private
+	result.Private = t.private
 	return result, nil
 }
 
@@ -738,14 +775,14 @@ func (s *Service) sweep() ([]*ticket, []string) {
 	var expired []*ticket
 	cutoff := s.now().Add(-ticketTTL)
 	for id, t := range s.tickets {
-		if t.attended == 0 && lastActive(t).Before(cutoff) {
+		if t.attended == 0 && lastActive(t).Before(cutoff) && !s.workerHolds(t.subagent, t.targetID) {
 			delete(s.tickets, id)
 			expired = append(expired, t)
 		}
 	}
 	touched := map[string]bool{}
 	for id, e := range s.ready {
-		if e.ready.Before(cutoff) {
+		if e.ready.Before(cutoff) && !s.workerHolds(e.subagent, e.targetID) {
 			delete(s.ready, id)
 			if e.fromID != "" {
 				touched[e.fromID] = true
@@ -753,7 +790,7 @@ func (s *Service) sweep() ([]*ticket, []string) {
 		}
 	}
 	for id, t := range s.lapsed {
-		if t.lapsed.Before(cutoff) {
+		if t.lapsed.Before(cutoff) && !s.workerHolds(t.subagent, t.targetID) {
 			delete(s.lapsed, id)
 		}
 	}
@@ -769,6 +806,15 @@ func (s *Service) sweep() ([]*ticket, []string) {
 		senders = append(senders, fromID)
 	}
 	return expired, senders
+}
+
+// workerHolds is whether a subagent's worker is still running, which keeps its
+// errand off ticketTTL: a worker that runs longer than the hour is the case a
+// subagent exists for, and its report has to find its way home. Closing the
+// worker ends the errand the way it ends any (Observe, idle), and the TTL runs
+// from there. Called under s.mu.
+func (s *Service) workerHolds(subagent bool, targetID string) bool {
+	return subagent && s.term.Live(targetID)
 }
 
 // ticketIDBytes is the length of a ticket id before hex encoding. Short enough

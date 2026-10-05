@@ -10,9 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **A Claude Code subagent runs as a lich session you can watch and steer.** A
-  general-purpose subagent the agent starts opens its own card on a worktree off
-  the asking session's branch, in the background like a native one, and its
-  report comes back to the asking session when it is done. Explore, Plan and
+  general-purpose subagent the agent starts opens its own card in the asking
+  session's checkout (or on a worktree of its own when the agent asks for
+  isolation), filed in a folder named after the asking session, in the
+  background like a native one. Its full report comes back to the asking
+  session when it is done, however long it runs, and the asking session hears
+  when the worker is waiting on a permission in its card. Explore, Plan and
   other agent types stay inside Claude Code. Turn it off in Settings › Providers
   › Claude Code › Subagents as lich sessions. Needs Claude Code 2.1.280 or newer
   and lich-plugin 0.15.0.

@@ -75,6 +75,9 @@ const shortCall = 10 * time.Second
 const (
 	relaySend        = "relay.Send"
 	relaySendPrivate = "relay.SendPrivate"
+	// relaySendSubagent hands the task to a worker opened with --subagent
+	// (relay.SendSubagent).
+	relaySendSubagent = "relay.SendSubagent"
 )
 
 func sendMethod(private bool) string {
@@ -474,6 +477,7 @@ func (c *client) open(args []string) error {
 	ultracode := flags.Bool("ultracode", false, "turn Claude Code's ultracode on, at whatever effort the session runs")
 	prompt := flags.String("prompt", "", "task to hand the new session as soon as its agent is up")
 	private := flags.Bool("private", false, privateFlagUsage+"; needs --prompt")
+	subagent := flags.Bool("subagent", false, subagentFlagUsage)
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := c.parse(flags, args); err != nil {
 		return err
@@ -487,10 +491,18 @@ func (c *client) open(args []string) error {
 		return fmt.Errorf("--private applies to the task handed over with --prompt: add a prompt, or drop --private")
 	}
 	method := sendMethod(*private)
+	spawnMethod := "spawn.Open"
+	call := []any{c.sessionID(), *project, *kind, *worktree, *base, *model, *effort, *folder, *ultracode}
+	if *subagent {
+		if err := c.checkSubagent(*prompt, *project, *folder, *private); err != nil {
+			return err
+		}
+		method, spawnMethod = relaySendSubagent, "spawn.OpenSubagent"
+		call = []any{c.sessionID(), *kind, *worktree, *base, *model, *effort, *ultracode}
+	}
 
 	var opened spawn.Session
-	call := []any{c.sessionID(), *project, *kind, *worktree, *base, *model, *effort, *folder, *ultracode}
-	if err := c.call(context.Background(), "spawn.Open", call, openCall, &opened); err != nil {
+	if err := c.call(context.Background(), spawnMethod, call, openCall, &opened); err != nil {
 		return err
 	}
 	delivered, failure := c.handOff(opened, *prompt, method)
@@ -508,6 +520,33 @@ func (c *client) open(args []string) error {
 		return nil
 	}
 	return c.report(*delivered, false)
+}
+
+// subagentFlagUsage describes --subagent on `lich open`.
+const subagentFlagUsage = "open the session as this session's subagent: in this session's checkout " +
+	"unless --worktree names one, filed under a folder named after this session, its report " +
+	"handed back whole, and no expiry while it runs; needs --prompt"
+
+// checkSubagent refuses an `open --subagent` that cannot be one, before
+// anything is opened: a subagent works for the session asking, so it needs one
+// and a task, takes that session's project and folder, and reports to it
+// rather than to a ticket alone.
+func (c *client) checkSubagent(prompt, project, folder string, private bool) error {
+	switch {
+	case c.sessionID() == "":
+		return errors.New("--subagent opens a worker for the session asking for it, and this is not " +
+			"running in a lich session (LICH_SESSION_ID is unset): drop --subagent, or run it from inside one")
+	case prompt == "":
+		return errors.New("--subagent hands the worker its task with --prompt: add a prompt")
+	case project != "":
+		return errors.New("--subagent opens in the asking session's project: drop --project")
+	case folder != "":
+		return errors.New("--subagent files the worker under a folder named after the asking session: drop --folder")
+	case private:
+		return errors.New("--subagent hands its report back to the asking session, which --private " +
+			"keeps from it: drop one of the two")
+	}
+	return nil
 }
 
 // opening is what `lich open --json` prints. The session's fields stay at the
@@ -537,6 +576,8 @@ func (c *client) handOff(opened spawn.Session, prompt, method string) (*relay.Re
 		if method == relaySendPrivate {
 			send = "lich send --private"
 		}
+		// A send has no subagent mode: the session is open, so the plain send is
+		// what reaches it, with the report collected the usual way.
 		return nil, fmt.Errorf(
 			"the session is open, but the task did not reach it: %w — hand it the task with "+
 				"`%s %q '<task>'` once whatever that says is dealt with",

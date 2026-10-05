@@ -89,6 +89,7 @@ type Sessions interface {
 	SetSessionModel(sessionID, model string) error
 	SetSessionEffort(sessionID, effort string) error
 	SetSessionUltracode(sessionID string) error
+	SetSessionSubagent(sessionID string) error
 	SetRunEntrypoint(sessionID, entrypoint string) error
 	RenameSession(sessionID, label string) error
 	SetSessionFolder(sessionID, folder string) error
@@ -214,12 +215,51 @@ func New(sessions Sessions, worktrees Worktrees, term Terminal, events Events) *
 func (s *Service) Open(
 	fromID, projectName, kind, worktree, base, model, effort, folder string, ultracode bool,
 ) (Session, error) {
-	if base != "" && worktree == "" {
+	return s.openSession(request{
+		fromID: fromID, projectName: projectName, kind: kind, worktree: worktree, base: base,
+		model: model, effort: effort, folder: folder, ultracode: ultracode,
+	})
+}
+
+// OpenSubagent opens a session as the subagent of the session fromID runs in
+// (`lich open --subagent`), the way lich-plugin's mod turns Claude Code's own
+// subagent call into a card. It is Open with three differences, each of which
+// makes the card behave like the subagent it replaces:
+//
+//   - without a worktree it opens in the caller's checkout — its worktree, or
+//     the project directory it runs in — rather than the project's own
+//     directory, so the worker edits what the caller sees;
+//   - it is filed under a folder named after the caller's label, so workers sit
+//     under whoever asked for them;
+//   - it is marked on its row (SetSessionSubagent), so every spawn of it keeps
+//     its own subagents native: a card does not open cards.
+//
+// The project is always the caller's. A caller that is not a session lich holds
+// is refused before anything is opened: there is no checkout to share and no
+// one to report to.
+func (s *Service) OpenSubagent(
+	fromID, kind, worktree, base, model, effort string, ultracode bool,
+) (Session, error) {
+	return s.openSession(request{
+		fromID: fromID, kind: kind, worktree: worktree, base: base,
+		model: model, effort: effort, ultracode: ultracode, subagent: true,
+	})
+}
+
+// request is one Open or OpenSubagent call. subagent selects OpenSubagent's
+// placement, folder and row mark.
+type request struct {
+	fromID, projectName, kind, worktree, base, model, effort, folder string
+	ultracode, subagent                                              bool
+}
+
+func (s *Service) openSession(req request) (Session, error) {
+	if req.base != "" && req.worktree == "" {
 		return Session{}, fmt.Errorf(
 			"a base is the branch a new worktree starts from, and no worktree was asked "+
 				"for, so %q would be dropped in silence — name the worktree to create, or "+
 				"leave the base out",
-			base,
+			req.base,
 		)
 	}
 
@@ -232,22 +272,35 @@ func (s *Service) Open(
 	if err != nil {
 		return Session{}, fmt.Errorf("read the workspace: %w", err)
 	}
-	projects, target, err := s.ensureProject(projects, fromID, projectName)
+	originID, originLabel := originOf(projects, req.fromID)
+	if req.subagent && originID == "" {
+		return Session{}, errors.New(
+			"a subagent is opened for the session asking for it, and this is not running " +
+				"in a session lich holds — open it without --subagent, or from inside a session",
+		)
+	}
+	projects, target, err := s.ensureProject(projects, req.fromID, req.projectName)
 	if err != nil {
 		return Session{}, err
 	}
-	kind, err = resolveKind(projects, fromID, kind)
+	kind, err := resolveKind(projects, req.fromID, req.kind)
 	if err != nil {
 		return Session{}, err
 	}
-	model, effort, folder = strings.TrimSpace(model), strings.TrimSpace(effort), strings.TrimSpace(folder)
-	if err := checkOverrides(kind, model, effort, ultracode); err != nil {
+	model, effort, folder := strings.TrimSpace(req.model), strings.TrimSpace(req.effort), strings.TrimSpace(req.folder)
+	if err := checkOverrides(kind, model, effort, req.ultracode); err != nil {
 		return Session{}, err
 	}
 
-	at, err := s.place(target, worktree, base)
+	at, err := s.place(target, req.worktree, req.base)
 	if err != nil {
 		return Session{}, err
+	}
+	if req.subagent {
+		folder = originLabel
+		if req.worktree == "" {
+			at = besideCaller(target, req.fromID, at)
+		}
 	}
 	cwd, stored, label := at.cwd, at.stored, at.label
 
@@ -255,7 +308,6 @@ func (s *Service) Open(
 	if err != nil {
 		return Session{}, err
 	}
-	originID, originLabel := originOf(projects, fromID)
 	opened := Session{
 		ID:              id,
 		ProjectID:       target.ID,
@@ -288,14 +340,51 @@ func (s *Service) Open(
 	// which is the state this package exists to prevent; the spawn below reads
 	// the model back from the row, so the session starts on the provider's own
 	// default and the failure is reported once it is running.
-	overrideErr := s.recordOverrides(id, label, model, effort, ultracode)
+	overrideErr := s.recordOverrides(id, label, model, effort, req.ultracode)
+	markErr := s.markSubagent(id, label, req.subagent)
 	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, false, at.setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)
 	}
-	if err := errors.Join(folderErr, overrideErr); err != nil {
+	if err := errors.Join(folderErr, overrideErr, markErr); err != nil {
 		return Session{}, err
 	}
 	return opened, nil
+}
+
+// besideCaller is the caller's own checkout as a placement: where it runs,
+// under the project's next label (the checkout's name is already the caller's),
+// with no setup script, which that checkout ran when it was made. A caller
+// missing from target falls back to at, which originOf has already ruled out.
+func besideCaller(target store.Project, fromID string, at placement) placement {
+	for _, sess := range target.Sessions {
+		if sess.ID != fromID {
+			continue
+		}
+		cwd := sess.Path
+		if cwd == "" {
+			cwd = target.Path
+		}
+		return placement{cwd: cwd, stored: sess.Path, label: fmt.Sprintf("Session %d", target.NextSeq)}
+	}
+	return at
+}
+
+// markSubagent records a subagent's mark on its row before its terminal starts,
+// which reads it back (internal/terminal, subagentCardsOn). A write that fails
+// is reported once the session is running, for the reason recordOverrides
+// gives.
+func (s *Service) markSubagent(id, label string, subagent bool) error {
+	if !subagent {
+		return nil
+	}
+	if err := s.sessions.SetSessionSubagent(id); err != nil {
+		return fmt.Errorf(
+			"session %q is open, but it could not be marked as a subagent, so its own "+
+				"subagents may open cards: %w",
+			label, err,
+		)
+	}
+	return nil
 }
 
 // fileOpened files a just-inserted session under the folder it was opened into,

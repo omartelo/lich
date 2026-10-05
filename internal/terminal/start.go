@@ -137,7 +137,7 @@ func (s *Service) spawnSession(
 			kiroPluginAgent(kind), fork, skipPermissions, ultracode,
 		),
 		dir:  cwd,
-		env:  subagentCardsEnv(s.sessionEnv(id, projectID, cwd), kind, s.store.SubagentCards(kind)),
+		env:  subagentCardsEnv(s.sessionEnv(id, projectID, cwd), kind, s.subagentCardsOn(id, kind)),
 		cols: cols,
 		rows: rows,
 	}

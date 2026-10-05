@@ -17,6 +17,7 @@ var migrations = []func(*sql.Tx) error{
 	addSessionEffort,
 	addSessionFolder,
 	addSessionUltracode,
+	addSessionSubagent,
 }
 
 // addSessionEffort is version 2: the reasoning effort a session was opened at,
@@ -51,6 +52,15 @@ func addSessionFolder(tx *sql.Tx) error {
 // like the model, because Claude Code forgets it on --resume.
 func addSessionUltracode(tx *sql.Tx) error {
 	_, err := tx.Exec(`ALTER TABLE sessions ADD COLUMN ultracode INTEGER NOT NULL DEFAULT 0`)
+	return err
+}
+
+// addSessionSubagent is version 5: whether a session was opened as another
+// session's subagent (SetSessionSubagent). A flag for the same reason as
+// ultracode: every spawn of the worker, a resume included, must keep its own
+// subagents native, or a card would open cards of its own.
+func addSessionSubagent(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE sessions ADD COLUMN subagent INTEGER NOT NULL DEFAULT 0`)
 	return err
 }
 

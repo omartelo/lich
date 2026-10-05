@@ -454,9 +454,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   stops waiting for after the receipt window.
 - **Only a Claude Code subagent becomes a lich card** (lich-plugin's `hooks/agent-cards.js`, its
   `docs/agent-cards.md`): the plugin's mod takes the model's general-purpose `Agent` call and runs it as a lich
-  session on a worktree of its own with `lich open --prompt`, in the background: the report comes back to the
-  asking session as a `[lich]` note, and like any errand's it is dropped once an hour passes with nobody waiting
-  on it (`ticketTTL`), so a worker that runs longer than that can finish with its report lost. The other seven
+  session with `lich open --subagent --prompt`, in the background. The card opens in the asking session's checkout
+  (`spawn.OpenSubagent`), unless the call asked for worktree isolation, which opens a worktree of its own; it is
+  filed under a folder named after the asker, its errand is kept past `ticketTTL` for as long as the worker runs,
+  the asker hears once per block when the worker waits on a permission, and the report comes back whole in a
+  `[lich]` note through the asker's mod. Without a mod polling there the note is typed short and the report waits
+  for `wait_for_answer`, because typing a long report into a TUI is what the mod route exists to avoid. The worker
+  spawns with `LICH_SUBAGENT_CARDS=off`, so its own subagents stay native. The other seven
   providers have no mod system, so nothing can take a subagent call from them, and their subagents stay inside their CLI. On Claude
   Code too, a typed agent (Explore, Plan, a plugin's), a workflow step, another plugin's spawn, a remote one and a
   worker's own subagents stay native, and the worker is reached with `send_to_session` or `lich send`, never with

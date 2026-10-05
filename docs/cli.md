@@ -319,7 +319,7 @@ lich: 2 requests are open against this session, and an answer that names no tick
 Outside a session, or with nothing open, it is an error rather than a guess, and
 the ticket is still the way to name a specific errand.
 
-### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--ultracode] [--folder <name>] [--prompt <task> [--private]]`
+### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--ultracode] [--folder <name>] [--prompt <task> [--private | --subagent]]`
 
 Opens a new session, starts it, and prints the two names it is addressed by:
 
@@ -415,6 +415,28 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   on. Waiting for the answer is `lich wait`'s job, and it takes the timeout.
   `--private` hands it over the way `lich send --private` does, and is refused
   without `--prompt`, before anything is opened.
+- `--subagent` opens the session as the **calling session's subagent**, the way
+  lich-plugin's mod turns Claude Code's own `Agent` call into a card. It needs
+  `--prompt` and a calling session (`LICH_SESSION_ID`), and refuses `--project`,
+  `--folder` and `--private`, all before anything is opened. The worker:
+  - opens in the **caller's checkout** — its worktree, or the project directory
+    it runs in — so it edits what the caller sees, and takes the project's
+    counter for its label. With `--worktree` it opens that worktree exactly as
+    without the flag.
+  - is filed under a **folder named after the caller's label**, created if
+    none is, so workers sit under whoever asked for them.
+  - hands its **report back whole**: when it answers and nobody is holding the
+    line, the note that reaches the caller through its Claude Code mod carries
+    the worker's label, its branch, the ticket and the full report, so the
+    model uses it without a collect call (see
+    [The answer is announced, and collected](#the-answer-is-announced-and-collected)).
+  - is **not dropped by the ticket's one-hour TTL** while its session runs;
+    closing it ends the errand as it ends any.
+  - tells the caller, in one short note per block, when it is **waiting on a
+    permission** prompt in its card.
+  - spawns with `LICH_SUBAGENT_CARDS=off` on every start, a resume included, so
+    its own subagents stay inside its CLI: a card does not open cards.
+  `--json` keeps its shape: the session and its `delivery`.
 - `--folder` files the new session under that sidebar folder, written before the
   window hears of the session, so the card arrives in the folder's block instead
   of under its checkout. The name is matched exactly, as everywhere folders are
@@ -947,10 +969,23 @@ N workers paid all of that N times. The nudge costs one line, arrives once per
 batch (results landing within a couple of seconds share it, and a sender
 mid-turn hears nothing until its turn ends), and the text comes back through
 the collect call, inside a turn the sender chose. A result nobody collects
-expires with its ticket's TTL, one hour.
+expires with its ticket's TTL, one hour — except a subagent's, which waits as
+long as its worker runs.
 
 A caller that *is* still waiting carries the result out itself and nothing is
 typed — delivering both would deliver twice.
+
+**A subagent's report is the exception** (`lich open --subagent`). Where the
+sender's Claude Code mod takes the note, the note carries the report whole,
+under a line naming the worker, its branch and the ticket, with the nudge for
+anything else waiting beside it — that is what a native subagent's result looks
+like to the model, and the mod hands it over as its own prompt without touching
+what the user is typing. The report then leaves the inbox: `wait_for_answer`
+with no ticket does not return it again, while `lich wait <ticket>` still does.
+A sender whose mod does not take it (no mod polls, or none collected the note)
+is typed the short nudge instead and collects the report as usual: typing a
+long report into a TUI is what the mod route exists to avoid. A report collected
+before the note goes out is not delivered again.
 
 A sender that is not a session — the `lich` command from a script — is never
 nudged: its result waits in the inbox for `lich wait <ticket>`, or expires.

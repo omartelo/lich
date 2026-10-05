@@ -226,6 +226,7 @@ type Store interface {
 	SessionModel(sessionID string) string
 	SessionEffort(sessionID string) string
 	SessionUltracode(sessionID string) bool
+	SessionSubagent(sessionID string) bool
 	InheritUltracode(sessionID, forkedFrom string) error
 	SessionEntrypoint(sessionID string) string
 	SessionSandbox(sessionID string) string
