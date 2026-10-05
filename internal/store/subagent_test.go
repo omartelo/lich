@@ -40,3 +40,31 @@ func TestSessionBranchReadsTheSessionsCheckout(t *testing.T) {
 		t.Errorf("SessionBranch(s1) = %q, want the project directory's", got)
 	}
 }
+
+// A fork of a subagent worker's conversation is marked a subagent too, found by
+// the provider conversation it branches, so the copy keeps its own subagents
+// native like the worker it was copied from.
+func TestInheritSubagentFollowsTheForkedConversation(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "worker", "Session 1", "claude", "", 2, "")
+	_ = svc.AddSession("p1", "plain", "Session 2", "claude", "", 3, "")
+	_ = svc.AddSession("p1", "fork1", "Session 3", "claude", "", 4, "")
+	_ = svc.AddSession("p1", "fork2", "Session 4", "claude", "", 5, "")
+	_ = svc.SetProviderSession("worker", "conv-worker")
+	_ = svc.SetProviderSession("plain", "conv-plain")
+	_ = svc.SetSessionSubagent("worker")
+
+	if err := svc.InheritSubagent("fork1", "conv-worker"); err != nil {
+		t.Fatalf("InheritSubagent: %v", err)
+	}
+	if !svc.SessionSubagent("fork1") {
+		t.Error("fork of a worker's conversation is not a subagent, want it marked")
+	}
+	if err := svc.InheritSubagent("fork2", "conv-plain"); err != nil {
+		t.Fatalf("InheritSubagent: %v", err)
+	}
+	if svc.SessionSubagent("fork2") {
+		t.Error("fork of a plain conversation is marked a subagent, want it left alone")
+	}
+}

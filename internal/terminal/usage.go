@@ -323,6 +323,15 @@ func (s *Service) inheritUltracode(id, forkedFrom string) {
 	}
 }
 
+// inheritSubagent carries a worker's subagent mark onto its fork before it
+// spawns (store.InheritSubagent). A failure is logged and dropped for
+// recordForkCost's reason: the fork still starts, and may open cards.
+func (s *Service) inheritSubagent(id, forkedFrom string) {
+	if err := s.store.InheritSubagent(id, forkedFrom); err != nil {
+		slog.Warn("terminal: inherit subagent mark", "session", id, "err", err)
+	}
+}
+
 // wholeCost prices one conversation whole, for the providers that report a
 // running total rather than per-turn deltas: each reads its own store, and
 // the two database providers say only that the row could not be read.

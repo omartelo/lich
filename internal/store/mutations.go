@@ -713,6 +713,20 @@ func (s *Service) SessionSubagent(sessionID string) bool {
 	return on
 }
 
+// InheritSubagent marks a fork a subagent when the session that ran the
+// conversation it branches, forkedFrom, was one. The fork's row is a fresh
+// insert, so without this a copy of a worker would open cards of its own.
+func (s *Service) InheritSubagent(sessionID, forkedFrom string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET subagent = 1 WHERE id = ? AND EXISTS
+		   (SELECT 1 FROM sessions WHERE provider_session_id = ? AND subagent = 1)`,
+		sessionID, forkedFrom,
+	); err != nil {
+		return fmt.Errorf("inherit the subagent mark on %q: %w", sessionID, err)
+	}
+	return nil
+}
+
 // InheritUltracode turns ultracode on for a fork when the session that ran the
 // conversation it branches, forkedFrom, has it on. The fork's row is a fresh
 // insert that knows nothing of its parent, and Claude Code drops ultracode on

@@ -64,6 +64,7 @@ func (s *Service) Start(
 	if fork {
 		s.recordForkCost(id, kind, resume)
 		s.inheritUltracode(id, resume)
+		s.inheritSubagent(id, resume)
 	}
 	// Resolved before the lock, because it reads a file: the conversation this
 	// spawn replaces is still on the row until its successor reports, so a name

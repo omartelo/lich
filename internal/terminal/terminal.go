@@ -228,6 +228,7 @@ type Store interface {
 	SessionUltracode(sessionID string) bool
 	SessionSubagent(sessionID string) bool
 	InheritUltracode(sessionID, forkedFrom string) error
+	InheritSubagent(sessionID, forkedFrom string) error
 	SessionEntrypoint(sessionID string) string
 	SessionSandbox(sessionID string) string
 	SetSessionSandbox(sessionID, sandbox string) error
