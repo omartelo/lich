@@ -339,19 +339,19 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// project_id is read rather than passed: reopening by id knows only the
 		// session, and the row is what says where it belongs.
 		var labelAuto int
-		var projectID, model, effort, entrypoint, sandbox, folder string
+		var projectID, model, effort, entrypoint, sandbox, folder, color string
 		var run, ultracode, subagent bool
 		var forkOffset float64
 		row := tx.QueryRow(
 			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
-			        model, effort, ultracode, subagent, entrypoint, run, sandbox, pinned, folder, origin_session_id, origin_label,
+			        model, effort, ultracode, subagent, entrypoint, run, sandbox, pinned, folder, color, origin_session_id, origin_label,
 			        scheduled_at, scheduled_prompt, fork_cost_offset
 			   FROM sessions `+where,
 			args...,
 		)
 		if err := row.Scan(
 			&old.ID, &projectID, &old.Label, &old.Kind, &old.Path, &old.ProviderSessionID,
-			&labelAuto, &model, &effort, &ultracode, &subagent, &entrypoint, &run, &sandbox, &old.Pinned, &folder,
+			&labelAuto, &model, &effort, &ultracode, &subagent, &entrypoint, &run, &sandbox, &old.Pinned, &folder, &color,
 			&old.OriginSessionID, &old.OriginLabel,
 			&old.ScheduledAt, &old.ScheduledPrompt, &forkOffset,
 		); err != nil {
@@ -390,11 +390,11 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		if _, err := tx.Exec(
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
-			    model, effort, ultracode, subagent, entrypoint, run, sandbox, pinned, folder, origin_session_id, origin_label,
+			    model, effort, ultracode, subagent, entrypoint, run, sandbox, pinned, folder, color, origin_session_id, origin_label,
 			    scheduled_at, scheduled_prompt, fork_cost_offset, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, old.Path, old.ProviderSessionID, labelAuto,
-			model, effort, ultracode, subagent, entrypoint, run, sandbox, old.Pinned, folder, old.OriginSessionID, old.OriginLabel,
+			model, effort, ultracode, subagent, entrypoint, run, sandbox, old.Pinned, folder, color, old.OriginSessionID, old.OriginLabel,
 			old.ScheduledAt, old.ScheduledPrompt, forkOffset, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
@@ -419,6 +419,7 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 			Sandbox:           sandbox,
 			Pinned:            old.Pinned,
 			Folder:            folder,
+			Color:             color,
 			OriginSessionID:   old.OriginSessionID,
 			OriginLabel:       old.OriginLabel,
 			ScheduledAt:       old.ScheduledAt,
@@ -524,6 +525,19 @@ func (s *Service) SetSessionFolder(sessionID, folder string) error {
 		`UPDATE sessions SET folder = ? WHERE id = ?`, folder, sessionID,
 	); err != nil {
 		return fmt.Errorf("set session %q folder: %w", sessionID, err)
+	}
+	return nil
+}
+
+// SetSessionColor paints a session's card with a palette colour, or hands it
+// back to the theme with an empty name. The name is stored as given: the
+// palette lives in the window, which draws a name it does not know as no colour
+// at all.
+func (s *Service) SetSessionColor(sessionID, color string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET color = ? WHERE id = ?`, color, sessionID,
+	); err != nil {
+		return fmt.Errorf("set session %q color: %w", sessionID, err)
 	}
 	return nil
 }

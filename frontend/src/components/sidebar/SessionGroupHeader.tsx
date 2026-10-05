@@ -16,6 +16,8 @@ import type { ProviderState } from "@/lib/providers-store"
 import { type DropState, FILE_TARGET_ATTRIBUTE } from "@/lib/session/file-drag-store"
 import type { ProviderKind } from "@/lib/session/sessions"
 import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
+import { CARD_COLORS, type CardColor } from "@/lib/session/card-color"
+import { CardColorDropdownSub } from "./CardColorMenu"
 import { cn } from "@/lib/utils"
 import { FolderLaunchMenuItems, type LaunchCheckout } from "./FolderLaunchMenuItems"
 import { type RunMenuAction, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
@@ -49,6 +51,10 @@ interface SessionGroupHeaderProps {
   folders?: string[]
   onFileAll?: (folder: string) => void
   onNewFolder?: () => void
+  // The colour every card in a folder shares, drawn on its icon, and the way to
+  // paint them all at once. Present on a folder's header alone.
+  color?: CardColor
+  onColor?: (color: string) => void
   // What a folded block says about the cards it hides (collapsedMark).
   mark: "wait" | "done" | null
   // How the header answers a card being dragged (file-drag-store), and what it
@@ -76,6 +82,7 @@ interface SessionGroupTitleButtonProps {
   fixed: boolean
   folder: boolean
   count: number
+  color?: CardColor
   // What the block says while it is folded: a session waiting on the user
   // (amber), a finished turn nobody has read (emerald), or nothing. Folding a
   // block hides its cards' rings, and news the user folded away is still news.
@@ -93,6 +100,7 @@ function SessionGroupTitleButton({
   fixed,
   folder,
   count,
+  color,
   mark,
   collapsed,
   dropOver,
@@ -120,7 +128,12 @@ function SessionGroupTitleButton({
           !collapsed && "rotate-90",
         )}
       />
-      {folder && <Folder className="size-3 shrink-0 text-muted-foreground/70" />}
+      {folder && (
+        <Folder
+          className="size-3 shrink-0 text-muted-foreground/70"
+          style={color ? { color: CARD_COLORS[color] } : undefined}
+        />
+      )}
       <span className="min-w-0 truncate text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors group-hover/collapse:text-muted-foreground">
         {name}
       </span>
@@ -160,6 +173,8 @@ export function SessionGroupHeader({
   folders,
   onFileAll,
   onNewFolder,
+  color,
+  onColor,
   mark,
   drop,
   dropFolder,
@@ -226,6 +241,7 @@ export function SessionGroupHeader({
           fixed={fixed}
           folder={folder}
           count={count}
+          color={color}
           mark={mark}
           collapsed={collapsed}
           dropOver={drop === "over"}
@@ -269,7 +285,7 @@ export function SessionGroupHeader({
           its own action, so a menu reachable only by right-click is one nobody
           finds. A checkout's block earns one too — filing its whole list at once
           is what makes a folder worth making with forty cards on screen. */}
-      {(onRename || onDissolve || onFileAll) && (
+      {(onRename || onDissolve || onFileAll || onColor) && (
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label={`Options for ${name}`}
@@ -291,6 +307,7 @@ export function SessionGroupHeader({
                 Ungroup
               </DropdownMenuItem>
             )}
+            {onColor && <CardColorDropdownSub current={color} onPick={onColor} />}
             {onFileAll && onNewFolder && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>

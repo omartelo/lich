@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `id` field, appended last, carries the `LICH_SESSION_ID` of that session, so a
   script or plugin holding a recorded id can find its card.
 
+- **Color a session card.** Right-click a card and pick one of eight colors under
+  **Color**; the card takes a light tint that fills in further when it is selected.
+  A folder's **⋯** menu has the same **Color** item and paints every card in it.
+  **Theme** hands a card back to the theme's own look.
+
 ### Changed
 
 - **A Claude Code subagent answers the way a native one does.** Its card is

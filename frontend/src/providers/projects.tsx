@@ -21,6 +21,7 @@ import {
   renameFolder,
   setSessionsFolder,
   setSessionPinned,
+  setSessionsColor,
   setSessionSchedule,
   type Session,
   type SessionKind,
@@ -670,6 +671,17 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const colorSessions = useCallback((projectId: string, sessionIds: string[], color: string) => {
+    const next = setSessionsColor(sessionsRef.current, projectId, sessionIds, color)
+    if (next === sessionsRef.current) {
+      return
+    }
+    commit(next)
+    for (const id of sessionIds) {
+      void Store.SetSessionColor(id, color)
+    }
+  }, [])
+
   // Renaming a folder rewrites every session filed under it, here and in the
   // store — the name is the folder's identity, so there is nothing else to
   // update. An empty `to` takes the folder apart.
@@ -703,6 +715,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       setEntrypoint,
       scheduleSession,
       pinSession,
+      colorSessions,
       fileSessions,
       renameSessionFolder,
       reorderProjects,
@@ -728,6 +741,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       setEntrypoint,
       scheduleSession,
       pinSession,
+      colorSessions,
       fileSessions,
       renameSessionFolder,
       reorderProjects,

@@ -71,6 +71,10 @@ export interface ProjectsValue {
    * Filing under a name no session carries yet is what creates that folder; a
    * list, because a checkout's whole block is filed in one gesture. */
   fileSessions: (projectId: string, sessionIds: string[], folder: string) => void
+  /** Paint sessions' cards with a palette colour, or hand them back to the
+   * theme with an empty name. A list, because painting a folder paints every
+   * card in it. */
+  colorSessions: (projectId: string, sessionIds: string[], color: string) => void
   /** Rename a project's folder across every session in it; an empty name takes
    * the folder apart and drops its cards back into their checkouts' blocks. */
   renameSessionFolder: (projectId: string, from: string, to: string) => void
