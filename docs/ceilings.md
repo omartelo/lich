@@ -507,7 +507,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   - The answer is cut at 16,000 characters.
   - A session cannot ask itself: the question would ride the request it is waiting on, which the fork never sees.
 - **Only a Claude Code session reports its own readout** (`internal/terminal/modusage.go`,
-  docs/hooks/mod-usage.md): its mod, with lich-plugin 0.16.0, posts the context window, rate limits and cost
+  docs/hooks/mod-usage.md): its mod, with lich-plugin 0.15.0, posts the context window, rate limits and cost
   Claude Code measured, and those win over what lich derives for the conversation they name. Every other
   provider, and a Claude Code session without the mod, keeps the derived figures, so two sessions on the same
   model can disagree by the requests no transcript records (measured 2.7% and 3.1% of a session's cost on
