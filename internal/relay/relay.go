@@ -253,6 +253,10 @@ type Peer struct {
 	Project string `json:"project"`
 	Kind    string `json:"kind"`
 	State   string `json:"state"`
+	// ID is the session's lich id, the LICH_SESSION_ID its process carries,
+	// so a reader holding a recorded id can find its card. Last, because
+	// fields are appended to this shape, never inserted.
+	ID string `json:"id"`
 }
 
 // Result is what a caller gets back from Send or Wait. Answer is empty unless

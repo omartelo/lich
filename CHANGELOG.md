@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`lich sessions --json` and `list_sessions` name each session's lich id.** A new
+  `id` field, appended last, carries the `LICH_SESSION_ID` of that session, so a
+  script or plugin holding a recorded id can find its card.
+
 ### Changed
 
 - **A Claude Code subagent answers the way a native one does.** Its card is

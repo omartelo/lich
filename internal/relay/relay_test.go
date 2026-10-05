@@ -400,9 +400,9 @@ func TestPeersListsLiveSessionsWithoutTheCaller(t *testing.T) {
 	// as a different session, which is what sent the first real run down two
 	// channels at once.
 	want := []Peer{
-		{Label: "docs", Name: "lich-s2", Project: "lich", Kind: "codex"},
-		{Label: "api", Name: "lich-s3", Project: "lich", Kind: "opencode"},
-		{Label: "api", Name: "revu-s5", Project: "revu", Kind: "crush"},
+		{Label: "docs", Name: "lich-s2", Project: "lich", Kind: "codex", ID: "s2"},
+		{Label: "api", Name: "lich-s3", Project: "lich", Kind: "opencode", ID: "s3"},
+		{Label: "api", Name: "revu-s5", Project: "revu", Kind: "crush", ID: "s5"},
 	}
 	if len(peers) != len(want) {
 		t.Fatalf("got %d peers %v, want %d", len(peers), peers, len(want))

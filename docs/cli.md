@@ -150,9 +150,11 @@ docs	lich	codex	lich-a1b2	busy
 api	revu	crush	revu-9f8e	-
 ```
 
-`--json` prints an array of `{"label","name","project","kind","state"}`, `[]`
-when there are none. lich-plugin's Claude Code mod reads it to count the
-subagent workers still running. `No other live sessions.` when there are none. A session is listed only while a
+`--json` prints an array of `{"label","name","project","kind","state","id"}`,
+`[]` when there are none. `id` is the session's lich id, the `LICH_SESSION_ID`
+its process carries. lich-plugin's Claude Code mod reads it to count the
+subagent workers still running, and to name the card behind a recorded session
+id. The MCP tool `list_sessions` returns the same objects. `No other live sessions.` when there are none. A session is listed only while a
 process is running in it: a card whose terminal was never opened has nothing to
 type at.
 

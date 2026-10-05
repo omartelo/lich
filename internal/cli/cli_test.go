@@ -274,6 +274,21 @@ func TestSessionsListsPeers(t *testing.T) {
 	}
 }
 
+// The lich id rides --json last, so a mod holding a recorded LICH_SESSION_ID
+// can find that session's card.
+func TestSessionsJSONCarriesTheLichID(t *testing.T) {
+	f := newFakeLich(t, `[{"label":"docs","name":"lich-s2","project":"lich","kind":"codex","state":"done","id":"s2"}]`)
+
+	code, stdout, stderr := run(t, f, "sessions", "--json")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	want := `{"label":"docs","name":"lich-s2","project":"lich","kind":"codex","state":"done","id":"s2"}`
+	if !strings.Contains(stdout, want) {
+		t.Errorf("output = %s, want %s", stdout, want)
+	}
+}
+
 func TestSessionsSaysWhenThereAreNone(t *testing.T) {
 	f := newFakeLich(t, `[]`)
 
