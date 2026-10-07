@@ -540,6 +540,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   re-scans that conversation from the transcript until the report lands again. Only a long-lived token login's
   plan gauge uses the reported rate limits: a credentials login keeps its usage route, which names the plan,
   the account and the model-scoped caps a report does not carry.
+- **Only a Claude Code session's status line shows its errands** (`internal/terminal/modstatus.go`,
+  docs/hooks/mod-status.md): the requests it owes, the ones it handed out and the answers waiting in its inbox
+  are read by its mod, and mods are a Claude Code feature. On the seven other providers, and on a Claude Code
+  session without the mod, the card's tooltip and inbox mark are the only place they show. The read is polled
+  by the mod, so the status line lags an errand by up to its read interval, and an errand sent privately (a
+  subagent or workflow step inside the session) never shows there, since the session's own collect never
+  reaches it.
 - **The plan gauge answers to two undocumented endpoints, and only two providers have one**
   (`internal/quota`): Claude Code's and Codex's usage routes are what their own CLIs poll, not published API. A
   field renamed upstream drops the window it fed rather than raising anything — an entry lich has no name for is
