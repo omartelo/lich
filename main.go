@@ -280,6 +280,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// without a word to its caller.
 	term.SetWorkerAnswer(rl.WorkerAnswered)
 	term.SetSessionClosed(rl.SessionClosed)
+	term.SetErrandStatus(rl.Status)
 	// Both questions the relay asks about a provider — whether its sessions
 	// report at all, and whether they can answer with a tool — are about what
 	// the plugin put there.
