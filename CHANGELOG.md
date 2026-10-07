@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Dragging a session card in a worktree keeps the card its own size.** The
+  worktree's long path no longer stretches the cards wider than the sidebar and
+  pushes the rest of the list sideways while the drag is in flight.
+
 ## [0.61.0] - 2026-10-07
 
 ### Added
