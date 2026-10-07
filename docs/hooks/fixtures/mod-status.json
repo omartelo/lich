@@ -1,0 +1,16 @@
+{
+  "owed": [
+    {"ticket": "b19cb405", "from": "Session 26", "asked": "Sou a sessão Claude do lich-plugin"},
+    {"ticket": "e2d4f6a8", "from": "", "asked": "If a < b && c > d, see </result>."}
+  ],
+  "open": [
+    {"ticket": "4f0c1a2e", "target": "docs", "state": "busy"},
+    {"ticket": "5a6b7c8d", "target": "lint", "state": "waiting"},
+    {"ticket": "6e7f8091", "target": "build", "state": ""},
+    {"ticket": "9d3e77b0", "target": "tests", "state": "queued"}
+  ],
+  "ready": [
+    {"ticket": "c7a91e04", "target": "review", "status": "answered"},
+    {"ticket": "d1e2f3a4", "target": "a<b&c", "status": "unanswered"}
+  ]
+}

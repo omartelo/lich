@@ -163,6 +163,10 @@ read these fixtures at a lich release tag, not from `main`.
   task it was handed with its turn's final message, through the same mod, the
   way a native subagent's last message is its result.
 
+- [mod-status.md](mod-status.md): a Claude Code session's mod reads the relay
+  errands it is part of (owed, open, ready to collect) for its status line,
+  without collecting anything.
+
 Each has a fixture file of the same name in [`fixtures/`](fixtures/); the format
 is documented there. mod-control has a second one, `mod-commands.json`, for the
-responses lich sends.
+responses lich sends; mod-status has only a response, `mod-status.json`.

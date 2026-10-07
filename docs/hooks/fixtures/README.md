@@ -23,10 +23,12 @@ whichever side moved first.
 | `mod-commands.json`    | [mod-control.md](../mod-control.md)          | `/mod/commands`    |
 | `mod-usage.jsonl`      | [mod-usage.md](../mod-usage.md)              | `/mod/usage`       |
 | `mod-answer.jsonl`     | [mod-answer.md](../mod-answer.md)            | `/mod/answer`      |
+| `mod-status.json`      | [mod-status.md](../mod-status.md)            | `/mod/status`      |
 
-`mod-commands.json` is the one file that is not cases: it is the response body
-lich sends to `GET /mod/commands`, one command of every shape, which lich
-asserts its encoding against and the mod asserts it can read.
+`mod-commands.json` and `mod-status.json` are the two files that are not cases:
+each is a response body lich sends, to `GET /mod/commands` (one command of every
+shape) and `GET /mod/status` (every list and every value a field takes), which
+lich asserts its encoding against and the mod asserts it can read.
 
 The file is named after the contract, not the endpoint — `/hook` predates the
 naming and keeps its path for the plugin releases already pointing at it.
