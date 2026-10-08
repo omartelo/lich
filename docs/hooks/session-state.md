@@ -73,14 +73,14 @@ list says that, so like Codex it never reports `idle`.
 It fires instead of `Stop` when a usage limit, an overload or a failed login ends
 the turn (2.1.293), and a client that registers only `Stop` leaves the card
 spinning until the next prompt. It reports `done` like `Stop`: the turn is over
-either way. Which error it was is not in the report — lich reads it off the
+either way. Which error it was is not in the report: lich reads it off the
 transcript on every `done`, and a usage limit it finds there parks the turn's
 continuation for when the limit resets (docs/ceilings.md).
 
 **Codex reports no end at all for a turn a usage limit stopped**: measured on
 0.144.5, `UserPromptSubmit` fires and `Stop` never does. lich ends that turn
 itself, reading the rollout of every open Codex turn, and publishes it as
-`interrupted` — the state it already raises for a turn that ended without the
+`interrupted`, the state it already raises for a turn that ended without the
 provider saying so.
 
 **oh-my-pi carries `busy` on `turn_start` rather than after a tool.** Its

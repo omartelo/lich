@@ -86,12 +86,12 @@ export const USAGE_EVENT = "session-usage"
 // Global event the backend emits when a session's scheduled prompt changed
 // without the window writing it (see relay.ScheduleEventName): typed at its
 // session, or parked and dropped by lich around a usage limit. Payload:
-// { id, at, prompt? } — at is 0 and prompt absent when nothing is waiting
+// { id, at, prompt? }; at is 0 and prompt absent when nothing is waiting
 // anymore.
 export const SCHEDULE_EVENT = "session-schedule"
 
 // Global event the backend emits when a plan's usage limit ended a session's
-// turn (see terminal.limitEventName). Payload: { id, window, resetsAt } —
+// turn (see terminal.limitEventName). Payload: { id, window, resetsAt }.
 // window is "session", "weekly" or "" for one the card has no name for, and
 // resetsAt is unix seconds, 0 when the provider did not say. Nothing clears it
 // but the session's next turn (session-limit-store).

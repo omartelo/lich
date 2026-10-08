@@ -119,7 +119,7 @@ const (
 
 // scanCodexUsageLimit reads whether a Codex rollout's last turn ended on a usage
 // limit. Codex writes no error for it: the turn completes with no agent message,
-// right after a token_count whose rate_limits show a window spent to 100% —
+// right after a token_count whose rate_limits show a window spent to 100%,
 // measured on 0.144.5 against a server answering usage_limit_reached. A turn
 // that completed with something said, or one still running, is no limit.
 func scanCodexUsageLimit(path string) (usageLimit, bool) {
@@ -234,7 +234,7 @@ func (s *Service) RunLimitWatch() {
 }
 
 // watchCodexLimits ends each open Codex turn whose rollout shows it stopped on a
-// usage limit. It ends it the way an interrupted one is ended — a limit is not a
+// usage limit. It ends it the way an interrupted one is ended: a limit is not a
 // finished turn either, and the provider will never report the end itself.
 func (s *Service) watchCodexLimits() {
 	for _, id := range s.turns.openIDs() {

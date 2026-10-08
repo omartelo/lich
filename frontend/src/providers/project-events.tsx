@@ -165,8 +165,8 @@ export function useSessionEvents({
     return () => off()
   }, [])
 
-  // A scheduled prompt changed on the backend's side — typed at its session,
-  // or parked and dropped around a usage limit — so the mark follows at that
+  // A scheduled prompt changed on the backend's side (typed at its session,
+  // or parked and dropped around a usage limit), so the mark follows at that
   // moment rather than at the next reload. The row is already written there,
   // so this never writes back.
   useEffect(() => {

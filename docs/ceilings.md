@@ -586,12 +586,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   next prompt; opencode and oh-my-pi retry by themselves and lich adds nothing on top. Claude Code's end arrives
   only as `StopFailure`, which an older lich-plugin does not report. Codex raises no hook for it, so an open
   Codex turn is read off its rollout every 30 seconds, and the limit is *inferred*: a turn completing with
-  nothing said right after a window shows 100% spent (measured on `codex exec` 0.144.5, never on the TUI) — a
+  nothing said right after a window shows 100% spent (measured on `codex exec` 0.144.5, never on the TUI); a
   change to that shape stops the read without a word. The continuation is a scheduled prompt told apart from a
   person's by its exact text, so someone parking those same words has them dropped on the session's next turn.
   Nothing is parked for a reset already past or more than 24 hours out (Claude Code's own auto-continue gives up
   at the same horizon), nor over a prompt already parked there. Any turn starting before it is due drops it,
-  which is also what keeps it from landing behind Claude Code's own `autoContinueAtUsageLimit` — a setting the
+  which is also what keeps it from landing behind Claude Code's own `autoContinueAtUsageLimit`, a setting the
   server enables per account, which is why the prompt is due two minutes after the reset rather than at it. The
   card's limit rung lives in the window alone: a reload drops it, while the parked prompt stays on the card as a
   plain scheduled one.

@@ -67,8 +67,8 @@ func TestParkResumeParksNothingItShouldNotWaitFor(t *testing.T) {
 	}
 }
 
-// A turn starting before the reset makes the continuation moot — the person
-// went on by hand, or Claude Code resumed on its own — and it is dropped rather
+// A turn starting before the reset makes the continuation moot (the person
+// went on by hand, or Claude Code resumed on its own), and it is dropped rather
 // than typed behind that turn. Learned from the row too, so a continuation
 // parked before a restart is dropped all the same.
 func TestATurnStartingDropsTheParkedContinuation(t *testing.T) {
