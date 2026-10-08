@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.62.1] - 2026-10-08
+
 ### Fixed
 
 - **Work handed to a new Claude Code or Cursor CLI session no longer answers its
@@ -5407,7 +5409,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.62.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.62.1...HEAD
+[0.62.1]: https://github.com/omartelo/lich/compare/v0.62.0...v0.62.1
 [0.62.0]: https://github.com/omartelo/lich/compare/v0.61.0...v0.62.0
 [0.61.0]: https://github.com/omartelo/lich/compare/v0.60.0...v0.61.0
 [0.60.0]: https://github.com/omartelo/lich/compare/v0.59.0...v0.60.0
