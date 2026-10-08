@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Resume conversations you started outside lich.** The palette's History tab
+  has an **Outside lich** group under the closed sessions: every conversation
+  Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush, Cursor CLI or Kiro
+  CLI kept on disk from a run in one of your projects or its worktrees, newest
+  first, searchable by title, project and path. Enter opens it as a session of
+  that project and resumes it, the same way a closed session comes back.
+  Headless runs and sub-agents are left out, and so is a session lich opened and
+  you closed for good.
+
 - **Take uncommitted work into a new worktree.** When the project's checkout has
   changes it has not committed, the **+** dialog lists it as a base of its own,
   `<branch> · working tree`. Pick it and the new worktree starts on the same

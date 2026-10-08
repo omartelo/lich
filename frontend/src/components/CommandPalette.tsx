@@ -11,6 +11,8 @@ import {
 } from "@/lib/session/use-session-status"
 import { SessionStatusIcon } from "@/components/sidebar/SessionStatusIcon"
 import {
+  adoptedSession,
+  externalLabel,
   filterPalette,
   historyAction,
   nextTab,
@@ -28,6 +30,7 @@ import {
   type PaletteTab,
 } from "@/lib/session/command-palette"
 import { useClosedProjects } from "@/lib/session/use-closed-projects"
+import { useExternalSessions } from "@/lib/session/use-external-sessions"
 import { useHistorySearch } from "@/lib/session/use-history-search"
 import { useTranscriptSearch } from "@/lib/session/use-transcript-search"
 import { toast } from "sonner"
@@ -35,7 +38,7 @@ import { PickerDialog, PickerEmpty, PickerGroup, PickerRow } from "@/components/
 import { agoLabel } from "@/lib/ago"
 import { displayPath } from "@/lib/paths"
 import { isSessionKind } from "@/lib/session/sessions"
-import type { Project } from "@/lib/api-types"
+import type { ExternalSession, Project } from "@/lib/api-types"
 import { Store } from "@/lib/rpc"
 import { cn, errorText } from "@/lib/utils"
 
@@ -91,6 +94,29 @@ export function CommandPalette() {
     })
   }
 
+  const external = useExternalSessions(open && tab === "History")
+
+  // Adoption files the conversation as a parked session, then resumes it
+  // through the history's own door, which reopens a closed project first.
+  const adopt = async (session: ExternalSession) => {
+    const id = crypto.randomUUID()
+    const label = externalLabel(session)
+    try {
+      await Store.AdoptExternalSession(
+        session.projectId,
+        id,
+        session.kind,
+        session.path,
+        session.providerSessionId,
+        label,
+      )
+    } catch (error: unknown) {
+      toast.error(`Could not resume ${label}: ${errorText(error)}`)
+      return
+    }
+    await resumeClosedSession(adoptedSession(session, id))
+  }
+
   const flat = useMemo(() => paletteSessions(projects, sessions), [projects, sessions])
   // Which sessions hold a turn, sampled once per opening rather than
   // subscribed to. The palette is mounted for the whole app's life, so a
@@ -105,8 +131,8 @@ export function CommandPalette() {
   }, [open])
   const all = useMemo(() => rankSessions(flat, running), [flat, running])
   const results = useMemo(
-    () => filterPalette(query, all, projects, closed, history, closedTotal),
-    [query, all, projects, closed, history, closedTotal],
+    () => filterPalette(query, all, projects, closed, history, closedTotal, external),
+    [query, all, projects, closed, history, closedTotal, external],
   )
   // What was said inside the sessions, not just their names. It arrives after
   // the name-matched groups (it is a disk read behind a debounce), so it is
@@ -177,6 +203,10 @@ export function CommandPalette() {
         close()
         void resumeClosedSession(row.session)
         return
+      case "external":
+        close()
+        void adopt(row.session)
+        return
     }
   }
 
@@ -199,7 +229,10 @@ export function CommandPalette() {
   // only be dropped — and the hint bar has to say so before it is pressed.
   const actionHint = (() => {
     const row = rows[active]
-    return row?.kind === "history" ? historyAction(row.session) : "open"
+    if (row?.kind === "history") {
+      return historyAction(row.session)
+    }
+    return row?.kind === "external" ? "resume" : "open"
   })()
 
   const onInputKeyDown = (event: React.KeyboardEvent) => {
@@ -387,7 +420,51 @@ function ListRow({
       return (
         <HistoryRow session={row.session} selected={selected} onSelect={onSelect} onRun={onRun} />
       )
+    case "external":
+      return (
+        <ExternalRow session={row.session} selected={selected} onSelect={onSelect} onRun={onRun} />
+      )
   }
+}
+
+// A conversation started outside lich reads like a closed session without the
+// branch: the provider mark with no ring, the title, the project and the
+// directory it ran in, and how long ago it last moved. The group it sits in is
+// what says where it came from.
+function ExternalRow({
+  session,
+  selected,
+  onSelect,
+  onRun,
+}: {
+  session: ExternalSession
+  selected: boolean
+  onSelect: () => void
+  onRun: () => void
+}) {
+  const updated = agoLabel(session.updatedAt)
+  return (
+    <PickerRow selected={selected} onSelect={onSelect} onRun={onRun}>
+      <SessionStatusIcon
+        kind={isSessionKind(session.kind) ? session.kind : "claude"}
+        status={null}
+        unread={false}
+      />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm">{externalLabel(session)}</span>
+        <span className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
+          <span className="shrink-0 text-foreground/70">{session.projectName}</span>
+          <span className="shrink-0 opacity-45">·</span>
+          <span className="truncate">{displayPath(session.path || session.projectPath)}</span>
+        </span>
+      </span>
+      {updated && (
+        <span className="shrink-0 font-mono text-[0.625rem] tabular-nums text-muted-foreground">
+          {updated}
+        </span>
+      )}
+    </PickerRow>
+  )
 }
 
 // A closed session names itself the way its card did — the provider mark, the

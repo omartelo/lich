@@ -108,6 +108,7 @@ reads what each CLI writes down and no two of them write down the same things.
 | Machine kept out of idle sleep while a turn runs | yes | yes | yes | yes | yes | no | no | yes |
 | Review tab's **Last turn**, with the agent's recap | yes | yes | yes | yes | yes | no | no | yes |
 | Search the conversation from the palette | yes | yes | yes | yes | yes | yes | no | yes |
+| Resume a conversation started outside lich, from the palette's History tab | yes | yes | yes | yes | yes | Linux; macOS and Windows untested | yes | yes |
 | Fork a conversation into a new worktree | yes | yes | no | yes | no | no | no | no |
 | Open a session at a chosen reasoning effort | yes | yes | yes | no | yes | no | in the model name | yes |
 | Open a session with ultracode on | yes | no | no | no | no | no | no | no |
@@ -137,6 +138,12 @@ Driving a running session needs Claude Code 2.1.280 or newer with lich-plugin
 inside it that lich could hand a command to. The same mod, with lich-plugin 0.16.0,
 reports what Claude Code measured about itself; every other CLI's footer, and a
 Claude Code session without it, shows what lich reads from what the CLI wrote down.
+The History tab's **Outside lich** group lists conversations that ran in one of
+your projects' checkouts and that lich does not hold. A session lich opened and you
+closed for good stays out of it, except one closed before this release: lich tells
+its own Claude Code conversations apart by the name it starts them under, and the
+other seven CLIs write down nothing that could tell them apart, so theirs show up
+there once.
 
 Every gap is deliberate, none of them is lich withholding something the CLI
 reports, and [`docs/ceilings.md`](docs/ceilings.md) says what was measured behind
