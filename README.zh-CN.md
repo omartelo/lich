@@ -124,7 +124,7 @@ Claude Code 的 mod 实现，其他 CLI 内部都没有能让 lich 递交命令�
 mod 配上 lich-plugin 0.16.0，会报告 Claude Code 对自己量出的数；其他 CLI 的底栏，以及没有
 它的 Claude Code 会话，显示的是 lich 从 CLI 写下的记录里读出来的数。
 History 页的 **Outside lich** 分组列出在你某个项目的检出目录里跑过、而 lich 没有持有的对话。
-lich 打开过、又被你彻底关掉的会话不会出现在里面，只有本版本之前关掉的例外：lich 靠启动时
+lich 打开过、又被你彻底关掉的会话不会出现在里面，只有 0.62.0 之前关掉的例外：lich 靠启动时
 给 Claude Code 起的名字认出自己的对话，其他七个 CLI 没有写下任何能区分的东西，所以它们的
 这类对话会在那里出现一次。
 
