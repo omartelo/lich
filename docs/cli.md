@@ -969,7 +969,7 @@ own command line (`providers.AcceptsMCPServer`):
 | Codex | `-c mcp_servers.lich.command=…` and `…args=["mcp"]` | at spawn |
 | Antigravity | an `agy mcp add` the plugin install runs — its own supported interface, so lich never formats that document | with the plugin |
 | Crush | an `mcp add` line in the block the plugin install writes into `crushrc` | with the plugin |
-| opencode | its plugin defines the same eight as tools of its own — a plugin there cannot register an MCP server | with the plugin |
+| opencode | its plugin defines eight of them as tools of its own, none of the folder tools, `control_session` or `ask_session` among them — a plugin there cannot register an MCP server | with the plugin |
 | oh-my-pi | a `lich` entry merged into `mcp.json` beside the extension the plugin install writes | with the plugin |
 | Cursor CLI | a `lich` entry merged into `~/.cursor/mcp.json` by the install — its `mcp` subcommand only lists, enables and disables what is already there | with the plugin |
 | Kiro CLI | a `kiro-cli mcp add --agent lich` the plugin install runs, so the entry lands in the agent lich owns rather than in the user's global `mcp.json` | with the plugin |
