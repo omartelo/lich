@@ -117,7 +117,7 @@ harness and not by lich:
 - **It runs commands.** Then it gets a hook-registration file mapping its own
   event names onto the scripts already in `hooks/`, and the install is either
   its plugin CLI (Claude Code, Codex) or lich writing the files (Antigravity,
-  Crush).
+  Crush, Kiro CLI).
 - **It loads a module.** Then it gets a single-file client of its own
   (`opencode/lich.js`, `omp/lich.js`) posting the same payloads to the same
   endpoints.
