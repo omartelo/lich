@@ -93,7 +93,16 @@ test("an empty tree still admits what it left out", async () => {
 function changed(path: string, added: number, deleted: number): [string, DiffFile] {
   return [
     path,
-    { oldPath: path, newPath: path, status: "modified", binary: false, added, deleted, hunks: [] },
+    {
+      oldPath: path,
+      newPath: path,
+      status: "modified",
+      binary: false,
+      blobIds: "",
+      added,
+      deleted,
+      hunks: [],
+    },
   ]
 }
 

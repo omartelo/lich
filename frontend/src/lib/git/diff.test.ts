@@ -121,7 +121,12 @@ describe("parseDiff", () => {
   it("flags binary files without hunks", () => {
     const file = parseDiff(binaryDiff)[0]
     expect(file.binary).toBe(true)
+    expect(file.blobIds).toBe("0000000..ce542ef")
     expect(file.hunks).toHaveLength(0)
+  })
+
+  it("keeps the blob ids off an index line that also carries a mode", () => {
+    expect(parseDiff(noNewlineDiff)[0].blobIds).toBe("1111111..2222222")
   })
 
   it("treats no-newline markers as meta lines", () => {

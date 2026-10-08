@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { Notice } from "@/components/common/Notice"
 import { SearchInput } from "@/components/common/SearchInput"
 import { CommentBatch } from "@/components/diff/CommentBatch"
+import { ImageView, PdfView } from "@/components/diff/BinaryPreview"
 import { InjectMenu } from "@/components/diff/InjectMenu"
 import { type Composer, ReviewSlot } from "@/components/diff/ReviewSlots"
 import { FileTree } from "@/components/FileTree"
@@ -12,6 +13,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { NO_SLOTS, threadSlots, type SlotElements } from "@/lib/codemirror-threads"
 import { formatLineRef, parseDiff, type DiffFile } from "@/lib/git/diff"
 import { buildTree, treeFootnote, type TreeNode } from "@/lib/git/file-tree"
+import { previewKind } from "@/lib/git/preview"
 import {
   updateFileBrowse,
   useFileBrowse,
@@ -375,20 +377,7 @@ interface FilePreviewProps {
 }
 
 function FilePreview({ path, rel, line, onBack, onInject, onComment }: FilePreviewProps) {
-  // Filed like the tree above it: a preview left open is restored on the way
-  // back from the Review tab, and painting it from a skeleton every time would
-  // undo half of what restoring it was for. resetOn keeps one file's text from
-  // appearing for a moment under another file's name.
-  const {
-    data: text,
-    loading,
-    error,
-  } = useRemoteResource(`${path} ${rel}`, () => ProjectService.ReadFile(path, rel), {
-    empty: "",
-    resetOn: rel,
-    cache: `dock-file ${path} ${rel}`,
-  })
-
+  const kind = previewKind(rel)
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-border px-2 text-xs">
@@ -407,23 +396,52 @@ function FilePreview({ path, rel, line, onBack, onInject, onComment }: FilePrevi
           read-only
         </span>
       </div>
-      <div className="flex-1 overflow-y-auto">
-        {error !== null ? (
-          <Notice>{error}</Notice>
-        ) : loading ? (
-          <Notice>Loading…</Notice>
-        ) : (
-          <PreviewBody
-            text={text}
-            rel={rel}
-            line={line}
-            onInject={onInject}
-            onComment={onComment}
-          />
-        )}
-      </div>
+      {kind === "pdf" ? (
+        // The viewer scrolls its own pages, so it takes the panel's height
+        // rather than sitting in a scroller.
+        <PdfView path={path} rel={rel} gitRef="" version="" className="min-h-0 flex-1" />
+      ) : (
+        <div className="flex-1 overflow-y-auto">
+          {kind === "image" ? (
+            <div className="flex flex-col gap-2 p-3">
+              <ImageView path={path} rel={rel} gitRef="" version="" />
+            </div>
+          ) : (
+            <TextPreview
+              path={path}
+              rel={rel}
+              line={line}
+              onInject={onInject}
+              onComment={onComment}
+            />
+          )}
+        </div>
+      )}
     </div>
   )
+}
+
+function TextPreview({ path, rel, line, onInject, onComment }: Omit<FilePreviewProps, "onBack">) {
+  // Filed like the tree above it: a preview left open is restored on the way
+  // back from the Review tab, and painting it from a skeleton every time would
+  // undo half of what restoring it was for. resetOn keeps one file's text from
+  // appearing for a moment under another file's name.
+  const {
+    data: text,
+    loading,
+    error,
+  } = useRemoteResource(`${path} ${rel}`, () => ProjectService.ReadFile(path, rel), {
+    empty: "",
+    resetOn: rel,
+    cache: `dock-file ${path} ${rel}`,
+  })
+  if (error !== null) {
+    return <Notice>{error}</Notice>
+  }
+  if (loading) {
+    return <Notice>Loading…</Notice>
+  }
+  return <PreviewBody text={text} rel={rel} line={line} onInject={onInject} onComment={onComment} />
 }
 
 interface PreviewBodyProps {

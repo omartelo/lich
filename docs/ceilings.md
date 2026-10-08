@@ -241,6 +241,18 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   and inserts another are unrelated lines. Threads, comment boxes and the gap expanders live in the right
   column only; the left one holds an empty gap resized by a `ResizeObserver` to match, and anything that grows
   a right-hand gap without a resize the observer sees would push the columns out of step.
+- **An image or PDF preview reads only what this clone holds** (`internal/project/blob.go`): `/blob` serves the
+  working tree, `HEAD` or a snapshot tree, and has no GitHub fallback the way `FileLines` does, so the Pulls
+  screen still prints "Binary file". Adding it there takes two reads this endpoint does not make: the head blob
+  from the contents API, and the old side at the merge base, which gh does not report (`baseRefOid` is the base
+  branch's tip, and an image the base also changed would show the wrong "before"). SVG is refused on purpose:
+  git diffs it as text, and opened straight from the endpoint a document with a script would run on lich's own
+  origin, so rendering it needs a `Content-Security-Policy: sandbox` response and a test of its own. One side
+  is capped at `maxPreviewBytes` (20 MiB) and held whole in memory; the formats are what Chromium decodes in an
+  `<img>`, so HEIC, TIFF and PSD fall back to the "can't be previewed" line, and a Git LFS file shows the
+  pointer's text diff, never the image. Previews are not deferred the way a text diff's editor is
+  (`LazyDiffBody`): every image or PDF in an open Review panel is fetched as the panel opens, and a working
+  tree side is fetched again whenever its blob id in the diff changes.
 - **A line revert rebuilds its patch, and some of it cannot be done** (`internal/project/revertlines.go`): the
   panel sends line numbers and the text it drew, never a patch, so a file that moved since the draw is refused
   instead of reverting whatever those numbers point at now. The index is reverted with the working tree when it
