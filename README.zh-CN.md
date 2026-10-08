@@ -186,7 +186,8 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
 
 一切都跑在你自己的机器上。没有账号，不用登录，没有遥测 —— 后端是一个带 token 鉴权的
 本地回环监听器，除了更新检查之外没有任何东西离开 `localhost`：启动时以及每小时向 GitHub
-Releases 发一次版本查询。更新在 Windows/macOS 上就地应用，在 Arch 上通过 AUR 进行。
+Releases 发一次版本查询。Windows 安装程序装的版本会就地更新；用 Homebrew、Scoop、AUR
+或 Linux 软件包装的，则通过各自的包管理器更新，lich 会把命令递给你。
 设置 › 帮助会在你把日志附到 bug 报告之前，说明日志文件里都带了什么 —— 路径、项目名和
 分支名、你的 gh 登录名，绝不包含会话 token；`lich rage` 会把这份报告收进一个压缩包，
 而不上传其中任何内容。
