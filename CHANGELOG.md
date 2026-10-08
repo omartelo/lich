@@ -59,6 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (1.1.11 or newer); Cursor CLI's monthly allowance, from the login
   `cursor-agent login` wrote; and an OpenCode Go subscription's 5-hour, weekly
   and monthly windows, from the key `opencode auth login` stored for it.
+- **Hand a branch's pull request to its agent.** On a branch with no pull request,
+  the Pulls screen offers **Create with agent**: it puts a prompt in the branch's session
+  asking the agent to push the branch and open the pull request with
+  `gh pr create`, title and body written from its own commits. Nothing is sent until
+  you press Enter. The old button, now **Open on GitHub**, still opens GitHub's form.
 
 ### Changed
 
