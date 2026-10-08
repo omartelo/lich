@@ -43,9 +43,9 @@
 - **留住一个真正的终端。** 由 PTY 支撑的 shell，每个项目可以开好几个，在 GPU 上渲染
   —— 滚动缓冲区可以搜索，还能挺过整页刷新。给其中一个设一个入口命令 —— `lazygit`、
   `k9s`、`pnpm dev` —— 它每次启动都会直接进到那个工具里。底栏跟随 `cd` 并标明分支
-  —— 对于 Claude Code 或 Codex 会话，还有模型和已占用的上下文窗口；对于这两者、
-  Antigravity、Cursor CLI 和 OpenCode Go 订阅，还有你的套餐额度还剩多少；Claude Code
-  会话还能 —— 如果你要求的话 —— 显示它花了多少钱。
+  —— 对于 Claude Code、Codex 或 Kiro CLI 会话，还有模型和已占用的上下文窗口；对于
+  Claude Code、Codex、Antigravity、Cursor CLI 和 OpenCode Go 订阅，还有你的套餐额度还剩
+  多少；如果你要求的话，还有会话花了多少钱，只要该智能体记下了这个数。
 - **让一个会话为另一个干活。** 把任务交给另一张卡片，答案由它自己的智能体写回来，两端
   各跑着什么都不影响：智能体通过启动时交予的工具够到其他会话 —— Claude Code 和 Codex
   走 MCP —— 其余的随插件获得。这整套能力同时也是任何 shell 里的 `lich` 命令，`--json`
