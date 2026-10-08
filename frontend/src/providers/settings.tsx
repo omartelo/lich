@@ -63,6 +63,7 @@ const COST_BUDGET_STORAGE_KEY = "lich.footer.costBudget"
 const DESKTOP_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.desktop"
 const FINISHED_TURN_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.finishedTurn"
 const DIFF_LAYOUT_STORAGE_KEY = "lich.diff.layout"
+const HIDE_WHITESPACE_STORAGE_KEY = "lich.diff.hideWhitespace"
 
 // The workspace key the theme selection actually lives under. The localStorage
 // pref above keeps it too, but only as the cache the first frame paints from:
@@ -159,6 +160,9 @@ const readFinishedTurnNotifications = (): boolean =>
 const readDiffLayout = (): DiffLayout =>
   parseEnumPref(readPref(DIFF_LAYOUT_STORAGE_KEY), DIFF_LAYOUTS, "unified")
 
+const readHideWhitespace = (): boolean =>
+  parseBoolPref(readPref(HIDE_WHITESPACE_STORAGE_KEY), false)
+
 interface SettingsValue {
   /** Terminal font family, applied globally across all project terminals. */
   font: string
@@ -208,6 +212,9 @@ interface SettingsValue {
   /** How every diff draws: one column, or old and new side by side. */
   diffLayout: DiffLayout
   setDiffLayout: (layout: DiffLayout) => void
+  /** Whether every diff folds away the change blocks that only moved whitespace. */
+  hideWhitespace: boolean
+  setHideWhitespace: (hide: boolean) => void
 }
 
 const SettingsContext = createContext<SettingsValue | null>(null)
@@ -241,6 +248,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     readFinishedTurnNotifications,
   )
   const [diffLayout, setDiffLayoutState] = useState<DiffLayout>(readDiffLayout)
+  const [hideWhitespace, setHideWhitespaceState] = useState<boolean>(readHideWhitespace)
 
   // A selection the user (or a reconcile) has already written must not be
   // overwritten by the stored one still in flight, so the load below stands down
@@ -503,6 +511,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     writePref(DIFF_LAYOUT_STORAGE_KEY, next)
   }, [])
 
+  const setHideWhitespace = useCallback((next: boolean) => {
+    setHideWhitespaceState(next)
+    writePref(HIDE_WHITESPACE_STORAGE_KEY, next)
+  }, [])
+
   // Apply the resolved theme's CSS variables and toggle `.dark` for existing
   // dark variants. For "system", follow the OS scheme and keep following it
   // live.
@@ -618,6 +631,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setFinishedTurnNotifications,
       diffLayout,
       setDiffLayout,
+      hideWhitespace,
+      setHideWhitespace,
     }),
     [
       font,
@@ -650,6 +665,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setFinishedTurnNotifications,
       diffLayout,
       setDiffLayout,
+      hideWhitespace,
+      setHideWhitespace,
     ],
   )
 

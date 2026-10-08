@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commit with those changes copied in, untracked files included. The checkout
   you took them from keeps its copy.
 
+- **Diffs can hide changes that only moved whitespace.** A new button in the
+  Review dock and in a pull request's Files changed tab folds re-indented blocks
+  into unchanged lines, and a file that only changed whitespace says so instead
+  of showing a diff. A block that mixes a real change with re-indentation stays
+  whole, so a revert never puts back one line without its neighbours. The choice
+  is remembered and applies to every diff.
+
 ### Changed
 
 - **The window is laid out as islands.** The session sidebar, the terminals and

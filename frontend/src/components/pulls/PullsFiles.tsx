@@ -4,13 +4,14 @@ import { IconAction } from "@/components/common/IconAction"
 import { ResizeHandle } from "@/components/common/ResizeHandle"
 import { Notice } from "@/components/common/Notice"
 import { CommentBatch } from "@/components/diff/CommentBatch"
-import { CollapseAllAction, useDiffBulk } from "@/components/diff/diff-bulk"
+import { CollapseAllAction, HideWhitespaceAction, useDiffBulk } from "@/components/diff/diff-bulk"
 import { FileDiff } from "@/components/diff/FileDiff"
 import { DiffStat } from "@/components/DiffStat"
 import { FileTree } from "@/components/FileTree"
 import { SkeletonLines } from "@/components/common/SkeletonLines"
 import { Skeleton } from "@/components/ui/skeleton"
 import { buildTree } from "@/lib/git/file-tree"
+import { hideWhitespace } from "@/lib/git/whitespace"
 import type { ReviewThread as Thread } from "@/lib/api-types"
 import type { DiffReview } from "@/components/diff/ReviewSlots"
 import type { ThreadActions } from "./ReviewThread"
@@ -35,6 +36,7 @@ import { addReviewComment } from "@/lib/review-comments"
 import { ProjectService } from "@/lib/rpc"
 import { usePanelVisible } from "@/lib/use-panel-visible"
 import { usePanelWidth } from "@/lib/use-panel-width"
+import { useSettings } from "@/providers/settings"
 
 // The file tree is a navigator, not the review itself: hiding it hands the
 // whole width to the diff. Remembered in localStorage like every other UI pref,
@@ -153,6 +155,7 @@ export function PullsFiles({
   // Every file mounts its own CodeMirror, so a wide PR earns a way to fold them
   // all at once — same directive the Review dock hands its panel.
   const [bulk, toggleAll] = useDiffBulk()
+  const hidingWhitespace = useSettings().hideWhitespace
   const [treeOpen, toggleTree] = usePanelVisible(TREE_HIDDEN_KEY)
   const { width, handleProps } = usePanelWidth({
     storageKey: WIDTH_KEY,
@@ -214,8 +217,10 @@ export function PullsFiles({
     return <Notice className="px-4 py-6 text-sm">No file changes</Notice>
   }
 
-  const added = files.reduce((sum, file) => sum + file.added, 0)
-  const deleted = files.reduce((sum, file) => sum + file.deleted, 0)
+  // Counted as drawn: each card hides the same blocks on its own.
+  const counted = hidingWhitespace ? files.map(hideWhitespace) : files
+  const added = counted.reduce((sum, file) => sum + file.added, 0)
+  const deleted = counted.reduce((sum, file) => sum + file.deleted, 0)
   const viewedCount = files.filter((file) =>
     isViewed(viewed, file.newPath, fingerprints.get(file.newPath) ?? ""),
   ).length
@@ -257,6 +262,7 @@ export function PullsFiles({
           <span className="flex items-center gap-1.5">
             <DiffStat added={added} deleted={deleted} />
           </span>
+          <HideWhitespaceAction />
           <CollapseAllAction open={bulk.open} onToggle={toggleAll} />
         </div>
         <div className="flex-1 overflow-y-auto">

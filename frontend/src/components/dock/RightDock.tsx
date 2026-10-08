@@ -3,7 +3,7 @@ import { useState } from "react"
 import { ErrorBoundary } from "@/components/common/ErrorBoundary"
 import { IconAction } from "@/components/common/IconAction"
 import { ResizeHandle } from "@/components/common/ResizeHandle"
-import { CollapseAllAction, useDiffBulk } from "@/components/diff/diff-bulk"
+import { CollapseAllAction, HideWhitespaceAction, useDiffBulk } from "@/components/diff/diff-bulk"
 import { ReviewPanel } from "@/components/diff/ReviewPanel"
 import { DiffStat } from "@/components/DiffStat"
 import { Button } from "@/components/ui/button"
@@ -81,7 +81,10 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
         </Tabs>
         <span className="ml-auto flex items-center gap-1">
           {tab === "review" && status && status.files > 0 && (
-            <CollapseAllAction open={bulk.open} onToggle={toggleAll} />
+            <>
+              <HideWhitespaceAction />
+              <CollapseAllAction open={bulk.open} onToggle={toggleAll} />
+            </>
           )}
           <IconAction
             label={fullscreen ? "Exit full screen" : "Full screen"}

@@ -13,6 +13,7 @@ import {
   type Expansions,
 } from "@/lib/git/diff"
 import { shownLayout, SPLIT_MIN_WIDTH_PX } from "@/lib/git/diff-layout"
+import { hideWhitespace, whitespaceOnly } from "@/lib/git/whitespace"
 import { languageAbbr, splitPath } from "@/lib/git/lang-badge"
 import { isAnchored } from "@/lib/pulls/review-slots"
 import { useWidthAtLeast } from "@/lib/use-width-at-least"
@@ -87,13 +88,22 @@ export function FileDiff({
   // editor, because the document is built from it: an expanded gap is context
   // lines in the doc, never a second document cropped to a range.
   const [expansions, setExpansions] = useState<Expansions>(NO_EXPANSIONS)
+  const hidingWhitespace = useSettings().hideWhitespace
+  const shown = useMemo(
+    () => (hidingWhitespace ? hideWhitespace(file) : file),
+    [file, hidingWhitespace],
+  )
   // The diff as git printed it, and the diff as it is being read. They are the
   // same object until something is expanded, so a file nobody expanded pays
   // nothing, and the identity check below stays on the printed one.
-  const printed = useMemo(() => buildFileDoc(file), [file])
+  const original = useMemo(() => buildFileDoc(file), [file])
+  const printed = useMemo(
+    () => (shown === file ? original : buildFileDoc(shown)),
+    [shown, file, original],
+  )
   const doc = useMemo(
-    () => (expansions.size === 0 ? printed : buildFileDoc(file, expansions)),
-    [file, printed, expansions],
+    () => (expansions.size === 0 ? printed : buildFileDoc(shown, expansions)),
+    [shown, printed, expansions],
   )
   const openByDefault = !file.binary && printed.lineMeta.length <= LARGE_FILE_LINES
   const [expanded, setExpanded] = useState(openByDefault)
@@ -106,16 +116,29 @@ export function FileDiff({
   // Keyed on the text and not on the doc object: every refetch builds a fresh
   // one, so a reference check would reopen every hand-folded file on each
   // window focus. Only the content actually changing counts as a new file.
-  const lastText = useRef(printed.text)
+  //
+  // The text is git's, not what is drawn: hiding whitespace is not a new file,
+  // and must not reopen a file the Viewed tick folded.
+  const lastText = useRef(original.text)
   useEffect(() => {
-    if (lastText.current !== printed.text) {
-      lastText.current = printed.text
+    if (lastText.current !== original.text) {
+      lastText.current = original.text
       setExpanded(openByDefault)
       // The gaps moved with the content, and what was pulled into the old ones
       // is numbered against a file that no longer exists.
       setExpansions(NO_EXPANSIONS)
     }
-  }, [printed.text, openByDefault])
+  }, [original.text, openByDefault])
+  // Hiding moves the gaps as well: a hunk coming back can split one that lines
+  // were already pulled into, which would then draw those lines twice.
+  const lastHiding = useRef(hidingWhitespace)
+  useEffect(() => {
+    if (lastHiding.current !== hidingWhitespace) {
+      lastHiding.current = hidingWhitespace
+      setExpansions(NO_EXPANSIONS)
+    }
+  }, [hidingWhitespace])
+  const onlyWhitespace = whitespaceOnly(shown, file)
   // The nonce guard skips the initial mount so each file keeps its own
   // large-file default until the user actually triggers a bulk action.
   const lastNonce = useRef(bulk?.nonce)
@@ -204,7 +227,11 @@ export function FileDiff({
           </span>
         )}
         <span className="flex shrink-0 items-center gap-1.5">
-          <DiffStat added={file.added} deleted={file.deleted} />
+          {onlyWhitespace ? (
+            <span className="text-muted-foreground">Whitespace only</span>
+          ) : (
+            <DiffStat added={shown.added} deleted={shown.deleted} />
+          )}
         </span>
         <IconAction label="Add file as context" onClick={() => onInject(`@${file.newPath} `)}>
           <Paperclip className="size-3.5" />
@@ -234,8 +261,10 @@ export function FileDiff({
         )}
       </div>
       {expanded &&
-        (file.binary ? (
-          <p className="px-9 py-2 text-xs text-muted-foreground">Binary file</p>
+        (file.binary || onlyWhitespace ? (
+          <p className="px-9 py-2 text-xs text-muted-foreground">
+            {file.binary ? "Binary file" : "Only whitespace changed"}
+          </p>
         ) : (
           <LazyDiffBody
             key={layout}

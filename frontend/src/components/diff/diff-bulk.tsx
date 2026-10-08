@@ -1,6 +1,7 @@
-import { ChevronsDownUp, ChevronsUpDown } from "lucide-react"
+import { ChevronsDownUp, ChevronsUpDown, Space } from "lucide-react"
 import { useState } from "react"
 import { IconAction } from "@/components/common/IconAction"
+import { useSettings } from "@/providers/settings"
 
 // A collapse/expand-all directive shared by every file in a panel. The nonce is
 // bumped on each bulk action so files re-sync even to a target they already
@@ -23,6 +24,21 @@ export function CollapseAllAction({ open, onToggle }: { open: boolean; onToggle:
   return (
     <IconAction label={open ? "Collapse all files" : "Expand all files"} onClick={onToggle}>
       {open ? <ChevronsDownUp className="size-3.5" /> : <ChevronsUpDown className="size-3.5" />}
+    </IconAction>
+  )
+}
+
+// Beside it, and in the same two panels: one preference for every diff, so the
+// dock and a pull request never disagree about what a change is.
+export function HideWhitespaceAction() {
+  const { hideWhitespace, setHideWhitespace } = useSettings()
+  return (
+    <IconAction
+      label={hideWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
+      onClick={() => setHideWhitespace(!hideWhitespace)}
+      pressed={hideWhitespace}
+    >
+      <Space className="size-3.5" />
     </IconAction>
   )
 }
