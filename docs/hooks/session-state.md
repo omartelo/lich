@@ -119,7 +119,7 @@ tools, and nothing says why.
 **Crush reports no state at all.** Its only hook event is `PreToolUse`, and a
 `busy` with nothing that can end it would leave a spinner on the card until the
 next turn — a state that is wrong for longer than it is right. So the plugin
-registers this contract on the three harnesses that can close it, and a Crush
+registers this contract on the harnesses that can close it, and a Crush
 card carries no indicator. The day Crush ships `Stop` (its `docs/hooks/FUTURE.md`
 tracks the request, not the event), the column fills in from the existing script.
 
