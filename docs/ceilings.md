@@ -99,6 +99,19 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   lich has no "setup finished" signal to hang an automatic start on — `terminal.Ready` answers a different
   question, going false again for every turn the agent takes. So the card is one gesture, which is also what
   keeps eight worktrees from meaning eight dev servers.
+- **A session is ready for work only once its agent reports from its own prompt, where it can**
+  (`internal/terminal/startgate.go`): in a fresh worktree Claude Code, Codex, Cursor CLI and Antigravity ask
+  whether the folder is trusted and Crush asks whether to initialize the project, and a quiet screen is all
+  `terminal.Ready` used to read. Anything typed then (a relayed task, `lich open --prompt`, a scheduled
+  prompt, an issue or pull request handed over) went into the question, and the Enter behind it answered
+  it: Claude Code and Cursor CLI exit, Codex and Antigravity lose the text to a second screen, Crush runs an
+  init turn (measured 2026-10-08). Claude Code, Cursor CLI, oh-my-pi and Kiro CLI now stay unready until
+  their session-start report, which their hooks send only from the agent's prompt. That hold needs
+  lich-plugin's hooks in the provider: without them nothing would ever release it, so nothing is held and the
+  old trap is back. Codex (0.161.0), Antigravity, Crush and opencode report nothing before their first turn,
+  Codex not even at its prompt in a trusted folder, so a quiet screen is still all lich has for them, a
+  trust, hooks or init question included; opencode asks nothing, but under load it goes quiet mid-boot and
+  text typed then lands before its TUI does.
 - **The cost readout bills per `(session, transcript)`** (`internal/pricing`, `internal/terminal/usage_cost.go`): a
   conversation forked inside the PTY bills its copied history twice — lich's own resume continues the same
   transcript and is unaffected — and each sub-agent's own transcript is counted in, so one unreadable or

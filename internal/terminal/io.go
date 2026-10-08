@@ -249,6 +249,14 @@ func (s *Service) Ready(id string) bool {
 	if sess.drafting(time.Now()) {
 		return false
 	}
+	// A quiet screen is not a prompt in a fresh directory: Claude Code and
+	// Cursor CLI ask first whether it is trusted, and the Enter behind a
+	// delivery answers that question instead, which quits both
+	// (docs/ceilings.md). Their session-start comes only from the agent's own
+	// prompt, so it is what releases the session (startgate.go).
+	if sess.awaitsStart && !sess.started {
+		return false
+	}
 	if sess.ready {
 		return true
 	}

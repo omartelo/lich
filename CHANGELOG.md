@@ -97,6 +97,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Work handed to a new Claude Code or Cursor CLI session no longer answers its
+  trust question.** In a fresh worktree both first ask whether to trust the
+  folder, and a task sent then (from `lich open --prompt`, another agent, a
+  scheduled prompt, an issue or pull request handed over) used to land on that
+  question and quit the session. lich now waits until the agent itself reports
+  it is at its prompt, so the task arrives once you have answered the question
+  on its card. oh-my-pi and Kiro CLI get the same wait. Codex, Antigravity, Crush
+  and opencode still can't tell lich when they are ready, so text sent to their
+  first start in a worktree can still be lost to a question.
+
 - **Dragging a session card in a worktree keeps the card its own size.** The
   worktree's long path no longer stretches the cards wider than the sidebar and
   pushes the rest of the list sideways while the drag is in flight.
