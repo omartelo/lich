@@ -53,6 +53,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in the card's menu. Nothing is parked for a limit that resets more than a day
   out. Claude Code needs the lich-plugin release that reports `StopFailure`.
 
+- **Plan usage for Antigravity, Cursor CLI and OpenCode Go.** The footer gauge and
+  each provider's Settings section now show how much of the plan is left for
+  three more providers: Antigravity's weekly pools, read by asking `agy` itself
+  (1.1.11 or newer); Cursor CLI's monthly allowance, from the login
+  `cursor-agent login` wrote; and an OpenCode Go subscription's 5-hour, weekly
+  and monthly windows, from the key `opencode auth login` stored for it.
+
 ### Changed
 
 - **The window is laid out as islands.** The session sidebar, the terminals and

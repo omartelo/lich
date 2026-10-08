@@ -3,13 +3,13 @@
 // spent. It is not what a session cost — that is internal/pricing — and not how
 // full a context window is — that is internal/terminal's usage readout.
 //
-// Two of the six providers are read here. Claude Code and Codex each poll an
-// undocumented endpoint from their own CLI, authenticated with the OAuth access
-// token that CLI already wrote to disk; opencode, oh-my-pi and Crush run on the
-// user's own API keys, where there is no plan to report. Antigravity does meter
-// a subscription — a Google account, whose OAuth credentials sit in
-// ~/.gemini/oauth_creds.json — but no endpoint of its own has been measured, and
-// a gauge built on a guessed one would report a number nobody can check.
+// Five of the eight providers are read here. Claude Code, Codex and Cursor CLI
+// each poll an undocumented endpoint with the token their own CLI already wrote
+// to disk; opencode reads its Go subscription with the API key `opencode auth
+// login` stored for it. Antigravity keeps its Google login in the OS keyring
+// where nothing outside it can mint a token, so its own CLI is asked instead
+// (antigravity.go). oh-my-pi, Crush and Kiro CLI report no plan anywhere lich
+// can read, and opencode without a Go key has none to report.
 //
 // Which account is read is a question about one session, never about lich. A
 // session can be spawned from a binary the user configured — a wrapper that
@@ -40,6 +40,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -104,7 +105,16 @@ var accountVars = append([]string{
 	accountHomeVar,
 	accountUserVar,
 	codexHomeVar,
+	cursorConfigDirVar,
+	configHomeVar,
+	dataHomeVar,
 }, redirectVars...)
+
+// The XDG base directories Cursor CLI and opencode resolve their state under.
+const (
+	configHomeVar = "XDG_CONFIG_HOME"
+	dataHomeVar   = "XDG_DATA_HOME"
+)
 
 // Window is one metered window of a plan: how much of it is spent, how long it
 // runs, and when it starts over.
@@ -203,17 +213,29 @@ type Sessions func(sessionID string) Account
 // Service reads plan quota, caching one reading per account.
 type Service struct {
 	http *http.Client
-	// claudeURL, codexURL, probeURL and profileURL are the endpoints, fields so
-	// tests drive the parsers against a local server.
-	claudeURL  string
-	codexURL   string
-	probeURL   string
-	profileURL string
+	// claudeURL, codexURL, probeURL, profileURL, cursorURL and opencodeURL are
+	// the endpoints, fields so tests drive the parsers against a local server.
+	claudeURL   string
+	codexURL    string
+	probeURL    string
+	profileURL  string
+	cursorURL   string
+	opencodeURL string
+
+	// runAgy runs the Antigravity CLI with the given environment and arguments,
+	// a field so tests answer for it; nil leaves Antigravity out of the reading.
+	runAgy func(env []string, args ...string) ([]byte, error)
+	// agyTurns latches once agy answered the usage command with a model turn,
+	// guarded by mu: asking again would spend quota on every reading.
+	agyTurns bool
 
 	// claudeLogin reads the credentials a session's Claude login is stored in,
 	// a field so tests of quota responses supply a file login without reaching
 	// for the machine's Keychain. New wires it to readClaudeCredentials.
 	claudeLogin func(Account) (claudeCredentials, string)
+	// cursorKeychain reads the token cursor-agent keeps in the macOS Keychain,
+	// empty when there is none; a field for the same reason. Nil reads none.
+	cursorKeychain func() string
 
 	// now is time.Now, a field so a test can age the cache without sleeping.
 	now func() time.Time
@@ -241,14 +263,18 @@ type reading struct {
 // New returns a Service pointed at the live endpoints.
 func New() *Service {
 	return &Service{
-		http:        &http.Client{Timeout: httpTimeout},
-		claudeURL:   claudeUsageURL,
-		codexURL:    codexUsageURL,
-		probeURL:    claudeProbeURL,
-		profileURL:  claudeProfileURL,
-		claudeLogin: readClaudeCredentials,
-		now:         time.Now,
-		cache:       make(map[string]reading),
+		http:           &http.Client{Timeout: httpTimeout},
+		claudeURL:      claudeUsageURL,
+		codexURL:       codexUsageURL,
+		probeURL:       claudeProbeURL,
+		profileURL:     claudeProfileURL,
+		cursorURL:      cursorUsageURL,
+		opencodeURL:    opencodeUsageURL,
+		runAgy:         runAgy,
+		claudeLogin:    readClaudeCredentials,
+		cursorKeychain: readCursorKeychain,
+		now:            time.Now,
+		cache:          make(map[string]reading),
 	}
 }
 
@@ -257,9 +283,10 @@ func New() *Service {
 func (s *Service) SetSessions(fn Sessions) { s.sessions = fn }
 
 // Plans is every provider that meters a subscription, in Registry order, read
-// for the account sessionID spends. There is always one entry per such provider
-// — a failed reading is a Status, not an omission, so the UI can say which
-// provider it could not read.
+// for the account sessionID spends. A failed reading is a Status, not an
+// omission, so the UI can say which provider it could not read. A provider is
+// left out only when this account has no plan with it at all: no Antigravity
+// CLI on the machine, or no opencode Go key.
 //
 // An empty sessionID reads lich's own environment: the Settings screen asks
 // about the machine, not about a card.
@@ -274,12 +301,32 @@ func (s *Service) Plans(sessionID string) []Plan {
 	if cached, ok := s.cache[key]; ok && s.now().Sub(cached.at) < cacheTTL {
 		return cached.plans
 	}
-	plans := []Plan{s.claudePlan(account), s.codexPlan(account)}
+	plans := s.read(account)
 	at := s.now()
 	pace(plans, at)
 	s.cache[key] = reading{plans: plans, at: at}
 	return plans
 }
+
+// read asks every provider at once: the lock is held across the fetch, and
+// agy alone takes seconds to start, so a serial reading would hold every other
+// caller for the sum of them.
+func (s *Service) read(account Account) []Plan {
+	readers := []func(Account) Plan{
+		s.claudePlan, s.codexPlan, s.antigravityPlan, s.opencodePlan, s.cursorPlan,
+	}
+	plans := make([]Plan, len(readers))
+	var wg sync.WaitGroup
+	for i, read := range readers {
+		wg.Go(func() { plans[i] = read(account) })
+	}
+	wg.Wait()
+	return slices.DeleteFunc(plans, func(p Plan) bool { return p.Provider == "" })
+}
+
+// noPlan is a reader's answer for an account with no plan to report, which
+// Plans leaves out rather than draws.
+var noPlan Plan
 
 // cacheKey identifies the account a reading belongs to, so two sessions on the
 // same login share one reading — and a session on another login gets its own
@@ -349,7 +396,8 @@ func harnessFile(a Account, homeVar, sub string, name ...string) (string, bool) 
 	return filepath.Join(append([]string{base}, name...)...), true
 }
 
-// send performs one request with the given bearer token and headers, and hands
+// send performs one request with the given bearer token (none when empty: a
+// caller that authenticates by cookie passes it in headers) and headers, and hands
 // back the response for the caller to read. The bool is "the endpoint rejected
 // our token": a 401 or 403 is a login the user has to redo, which every caller
 // reports differently from a network failure. The body is closed here on every
@@ -363,7 +411,9 @@ func (s *Service) send(method, url, token, body string, headers map[string]strin
 	if err != nil {
 		return nil, true, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}

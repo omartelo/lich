@@ -46,9 +46,10 @@ lich lets you:
   you share it with; write your dev server into `.lich/run-worktree.sh` and every
   checkout gets a **Run** card for it, on the port lich reserved for that
   worktree. The footer follows `cd` and names the branch — and, for a
-  Claude Code or Codex session, the model, the context window in use and how
-  much of your plan's rolling window is left; for Claude Code, if you ask, what
-  the session has spent.
+  Claude Code or Codex session, the model and the context window in use; for
+  those two, Antigravity, Cursor CLI and an OpenCode Go subscription, how much
+  of your plan's rolling window is left; for Claude Code, if you ask, what the
+  session has spent.
 - **Put one session to work for another.** Hand a task to another card and its
   own agent writes the answer back, whatever runs in either end: the agent
   reaches the other sessions through tools handed at spawn — MCP for Claude
@@ -99,7 +100,7 @@ reads what each CLI writes down and no two of them write down the same things.
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
 | Context window in the footer | yes | yes | no | no | no | no | no | yes |
 | Cost in the footer | yes | yes | no | yes | yes | yes | no | credits |
-| How much of your plan is left | yes | yes | no | no | no | no | no | no |
+| How much of your plan is left | yes | yes | yes | OpenCode Go only | no | no | yes | no |
 | A turn your plan's usage limit stopped picks up again once the limit resets | yes | yes | no | its own retries | its own retries | no | no | no |
 | Spinner while a turn runs, ring when it ends | yes | yes | yes | yes | yes | no | no | yes |
 | Bell when the agent is blocked on you | yes | yes | no | yes | no | no | no | no |
@@ -126,6 +127,11 @@ spinner, for the bell, for the Review tab's last turn, or for the hold that keep
 the machine awake. The Review tab says so on the session itself rather than
 leaving you to notice the switch never appeared. Kiro CLI meters spend in credits
 rather than dollars, so its own footer is the only place that figure can be read.
+Antigravity's plan is read by asking `agy` itself (1.1.11 or newer; an older one
+would spend a turn answering, so lich does not ask it); opencode's only when you
+signed in to an OpenCode Go subscription, since otherwise it bills your own API
+keys; Cursor CLI's from the login `cursor-agent login` wrote, never the Cursor
+editor's. oh-my-pi, Crush and Kiro CLI report no plan lich can read.
 Driving a running session needs Claude Code 2.1.280 or newer with lich-plugin
 0.15.0: it runs through a Claude Code mod, and no other CLI has anything running
 inside it that lich could hand a command to. The same mod, with lich-plugin 0.16.0,
@@ -180,8 +186,9 @@ needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
 - **Providers** — set each provider's binary path and the global default in
   Global Settings › Providers. Project Settings › Providers can override that
   choice for one project; **Use default** removes the override, so later changes
-  to the global default flow through automatically. The Claude Code and Codex
-  sections open with how much of your plan is left and carry the ladder for what
+  to the global default flow through automatically. A provider's section opens
+  with how much of your plan is left, when lich can read it, and the Claude Code
+  and Codex sections carry the ladder for what
   the footer says about a session — the context ring, plus the cost readout for
   Claude Code, that last rung off by default since the figure only means
   something when you are billed per token.

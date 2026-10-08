@@ -129,22 +129,27 @@ func codexLabel(seconds int) string {
 // login they are spending now. A gauge under the wrong name is worse than a
 // gauge under none, so an expired token names nobody.
 func jwtEmail(token string, now time.Time) string {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return ""
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
-	if err != nil {
-		return ""
-	}
 	var claims struct {
 		Email string `json:"email"`
 		Exp   int64  `json:"exp"`
 	}
-	if json.Unmarshal(payload, &claims) != nil || claims.Exp <= 0 || now.Unix() >= claims.Exp {
+	if !jwtClaims(token, &claims) || claims.Exp <= 0 || now.Unix() >= claims.Exp {
 		return ""
 	}
 	return claims.Email
+}
+
+// jwtClaims decodes a JWT's payload into out, verifying nothing (see jwtEmail).
+func jwtClaims(token string, out any) bool {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
+	if err != nil {
+		return false
+	}
+	return json.Unmarshal(payload, out) == nil
 }
 
 // unixTimestamp renders a Unix-seconds reset as the RFC 3339 the frontend
