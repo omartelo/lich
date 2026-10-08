@@ -1,3 +1,8 @@
+// The hold is pure Service logic, but it builds on stubBins, the Store stub that
+// lives in the Unix-only suite (terminal_test.go), so this file rides the same
+// tag to keep the package building on Windows.
+//go:build !windows
+
 package terminal
 
 import (
