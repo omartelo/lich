@@ -542,6 +542,23 @@ func (s *Service) SetSessionColor(sessionID, color string) error {
 	return nil
 }
 
+// ColorFolder paints every session filed under one project's folder, as the
+// window's folder "Color" does card by card, and returns the ids it painted.
+// A folder has no colour of its own: it shows the one its cards share.
+func (s *Service) ColorFolder(projectID, folder, color string) ([]string, error) {
+	if folder == "" {
+		return nil, fmt.Errorf("color folder: no folder named")
+	}
+	painted, err := s.updatedIDs(
+		`UPDATE sessions SET color = ? WHERE project_id = ? AND folder = ? RETURNING id`,
+		color, projectID, folder,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("color folder %q in %q: %w", folder, projectID, err)
+	}
+	return painted, nil
+}
+
 // RenameFolder renames one project's folder, and takes it apart when `to` is
 // empty — ungrouping every session filed under it in one write.
 //
@@ -562,26 +579,34 @@ func (s *Service) RenameFolder(projectID, from, to string) ([]string, error) {
 	if from == "" {
 		return nil, fmt.Errorf("rename folder: no folder named")
 	}
-	rows, err := s.db.Query(
+	moved, err := s.updatedIDs(
 		`UPDATE sessions SET folder = ? WHERE project_id = ? AND folder = ? RETURNING id`,
 		to, projectID, from,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("rename folder %q in %q: %w", from, projectID, err)
 	}
+	return moved, nil
+}
+
+// updatedIDs runs an UPDATE ending in RETURNING id and collects the ids it
+// rewrote: what a folder-wide write reports, rather than a read taken before
+// it, so a card filed in between is answered for too.
+func (s *Service) updatedIDs(query string, args ...any) ([]string, error) {
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
-	moved := []string{}
+	ids := []string{}
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("rename folder %q in %q: %w", from, projectID, err)
+			return nil, err
 		}
-		moved = append(moved, id)
+		ids = append(ids, id)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rename folder %q in %q: %w", from, projectID, err)
-	}
-	return moved, nil
+	return ids, rows.Err()
 }
 
 // SetSessionUnread records whether a session's last finished turn is still

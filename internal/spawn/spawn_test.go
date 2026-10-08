@@ -76,6 +76,9 @@ type fakeSessions struct {
 	folderErr error
 	refolded  [][3]string
 	moved     []string
+	// colored records each folder painted as (project, folder, color); the write
+	// answers the rows projects has under that folder, and folderErr refuses it.
+	colored [][3]string
 }
 
 // closedRow is one session the store was asked to take out of the workspace.
@@ -134,6 +137,22 @@ func (f *fakeSessions) RenameFolder(projectID, from, to string) ([]string, error
 		}
 	}
 	return moved, nil
+}
+
+func (f *fakeSessions) ColorFolder(projectID, folder, color string) ([]string, error) {
+	if f.folderErr != nil {
+		return nil, f.folderErr
+	}
+	f.colored = append(f.colored, [3]string{projectID, folder, color})
+	painted := []string{}
+	for _, p := range f.projects {
+		for _, sess := range p.Sessions {
+			if p.ID == projectID && sess.Folder == folder {
+				painted = append(painted, sess.ID)
+			}
+		}
+	}
+	return painted, nil
 }
 
 func (f *fakeSessions) PurgeWorktreeSessions(_, path string) error {

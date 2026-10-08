@@ -63,3 +63,48 @@ func TestResumeKeepsTheColor(t *testing.T) {
 		t.Errorf("stored color after resume = %q, want %q", got, "green")
 	}
 }
+
+// TestColorFolderPaintsItsSessionsOnly: painting a folder is one write over the
+// cards filed under it, in that project alone, and answers which ones it hit.
+func TestColorFolderPaintsItsSessionsOnly(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddProject("p2", "beta", "/tmp/beta")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3, "")
+	_ = svc.AddSession("p2", "o1", "Other 1", "", "", 2, "")
+	_ = svc.SetSessionFolder("s1", "Apps")
+	_ = svc.SetSessionFolder("o1", "Apps")
+
+	painted, err := svc.ColorFolder("p1", "Apps", "teal")
+	if err != nil {
+		t.Fatalf("ColorFolder: %v", err)
+	}
+	if len(painted) != 1 || painted[0] != "s1" {
+		t.Errorf("painted = %v, want [s1]", painted)
+	}
+	if got := colorOf(t, svc, "p1", "s1"); got != "teal" {
+		t.Errorf("filed session color = %q, want teal", got)
+	}
+	if got := colorOf(t, svc, "p1", "s2"); got != "" {
+		t.Errorf("unfiled session color = %q, want empty", got)
+	}
+	if got := colorOf(t, svc, "p2", "o1"); got != "" {
+		t.Errorf("other project's session color = %q, want empty", got)
+	}
+}
+
+// TestColorFolderRefusesTheEmptyName: "" is every unfiled session, which no
+// folder colour was ever meant to reach.
+func TestColorFolderRefusesTheEmptyName(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+
+	if _, err := svc.ColorFolder("p1", "", "red"); err == nil {
+		t.Fatal("ColorFolder with no folder = nil, want an error")
+	}
+	if got := colorOf(t, svc, "p1", "s1"); got != "" {
+		t.Errorf("unfiled session color = %q, want empty", got)
+	}
+}

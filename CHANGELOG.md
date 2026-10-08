@@ -73,8 +73,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asking the agent to push the branch and open the pull request with
   `gh pr create`, title and body written from its own commits. Nothing is sent until
   you press Enter. The old button, now **Open on GitHub**, still opens GitHub's form.
+- **Agents can color folders.** `lich color-folder Auth teal` paints every card in a
+  sidebar folder, as the folder's **Color** menu does, and `''` hands them back to the
+  theme. The same move is the MCP tool `color_folder`, and the cards change live.
 
 ### Changed
+
+- **A Claude Code session that starts subagents sits in their folder.** The session
+  that asked for them used to stay outside the folder its workers were filed in; now
+  it moves in with them. A session you had already filed in a folder stays there, and
+  its subagents join it.
 
 - **The window is laid out as islands.** The session sidebar, the terminals and
   the side panel are rounded panels floating on a darker ground, separated by a

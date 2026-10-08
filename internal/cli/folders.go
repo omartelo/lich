@@ -11,11 +11,12 @@ import (
 	"github.com/omartelo/lich/internal/spawn"
 )
 
-// The sidebar's folders, on both surfaces: `lich folders`, `lich file` and
-// `lich rename-folder`, and the MCP tools that say the same thing. A folder is a
-// name on a session and nothing else (store.SetSessionFolder), so what an agent
-// can do with one is what the window's menus do: file a card, take it out,
-// rename the folder or take it apart.
+// The sidebar's folders, on both surfaces: `lich folders`, `lich file`,
+// `lich rename-folder` and `lich color-folder`, and the MCP tools that say the
+// same thing. A folder is a name on a session and nothing else
+// (store.SetSessionFolder), so what an agent can do with one is what the
+// window's menus do: file a card, take it out, rename the folder, take it apart
+// or paint its cards.
 
 func (c *client) folders(args []string) error {
 	flags := newFlagSet("folders")
@@ -108,6 +109,31 @@ func (c *client) renameFolder(args []string) error {
 	return nil
 }
 
+func (c *client) colorFolder(args []string) error {
+	flags := newFlagSet("color-folder")
+	project := flags.String(
+		"project", "", "project the folder is in, by name or by directory path; defaults to the caller's own",
+	)
+	asJSON := flags.Bool("json", false, "print the result as JSON")
+	if err := c.parse(flags, args); err != nil {
+		return err
+	}
+	if flags.NArg() != 2 {
+		return usageError("color-folder")
+	}
+
+	var colored spawn.Colored
+	call := []any{c.sessionID(), *project, flags.Arg(0), flags.Arg(1)}
+	if err := c.call(context.Background(), "spawn.ColorFolder", call, shortCall, &colored); err != nil {
+		return err
+	}
+	if *asJSON {
+		return c.emit(colored)
+	}
+	fmt.Fprint(c.stdout, coloredText(colored))
+	return nil
+}
+
 // filedText says where the session is now, and where it came out of when the
 // answer is that it is in no folder.
 func filedText(filed spawn.Filed) string {
@@ -129,6 +155,16 @@ func refiledText(refiled spawn.Refiled) string {
 		return fmt.Sprintf("Took folder %q apart, taking out %s.\n", refiled.From, moved)
 	}
 	return fmt.Sprintf("Moved %s from folder %q to %q.\n", moved, refiled.From, refiled.To)
+}
+
+// coloredText names every session painted, for refiledText's reason: a card
+// filed under the folder in between is painted too.
+func coloredText(colored spawn.Colored) string {
+	painted := relay.QuotedList(colored.Sessions)
+	if colored.Color == "" {
+		return fmt.Sprintf("Cleared the color of %s in folder %q.\n", painted, colored.Folder)
+	}
+	return fmt.Sprintf("Painted %s in folder %q %s.\n", painted, colored.Folder, colored.Color)
 }
 
 // folderTools are the folder commands as MCP tools, appended to mcpTools.
@@ -213,6 +249,33 @@ var folderTools = []mcpTool{
 				return "", err
 			}
 			return refiledText(refiled), nil
+		},
+	},
+	{
+		Name: "color_folder",
+		Description: "Paint every session filed under a sidebar folder with one color, the " +
+			"window's folder \"Color\", or with an empty color hand them back to the theme. " +
+			"A folder has no color of its own: it shows the one its cards share, so a card " +
+			"filed later keeps its own. Returns every session painted.",
+		Schema: schema(map[string]any{
+			"folder": property("string", "The folder to paint, exactly as list_folders names it."),
+			"color": property("string",
+				"One of red, orange, amber, green, teal, blue, violet, pink. An empty string "+
+					"clears it."),
+			"project": property("string",
+				"Project the folder is in, by name or by directory path. Defaults to your own."),
+		}, "folder", "color"),
+		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
+			// For file_session's reason: an empty color clears the folder's.
+			if _, named := args["color"]; !named {
+				return "", errors.New("name the color to paint the folder; an empty one clears it")
+			}
+			var colored spawn.Colored
+			call := []any{c.sessionID(), args.text("project"), args.text("folder"), args.text("color")}
+			if err := c.call(ctx, "spawn.ColorFolder", call, shortCall, &colored); err != nil {
+				return "", err
+			}
+			return coloredText(colored), nil
 		},
 	},
 }

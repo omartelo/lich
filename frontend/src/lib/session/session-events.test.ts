@@ -15,6 +15,7 @@ import {
   shouldToastAttention,
   statusReason,
   toClosedSession,
+  toColoredSessions,
   toFiledSessions,
   toOpenedSession,
   toSessionStatus,
@@ -487,5 +488,28 @@ describe("toFiledSessions", () => {
     expect(toFiledSessions({ projectId: "p1", folder: "Apps" })).toBeNull()
     expect(toFiledSessions({ projectId: "p1", ids: ["s1"] })).toBeNull()
     expect(toFiledSessions(null)).toBeNull()
+  })
+})
+
+describe("toColoredSessions", () => {
+  it("narrows sessions painted outside the window", () => {
+    expect(toColoredSessions({ projectId: "p1", ids: ["s1", 2], color: "teal" })).toEqual({
+      projectId: "p1",
+      ids: ["s1"],
+      color: "teal",
+    })
+  })
+
+  // An empty color is cards handed back to the theme, not a missing field.
+  it("keeps an empty color", () => {
+    expect(toColoredSessions({ projectId: "p1", ids: ["s1"], color: "" })?.color).toBe("")
+  })
+
+  it("rejects a payload with no project, no ids or no color", () => {
+    expect(toColoredSessions({ ids: ["s1"], color: "teal" })).toBeNull()
+    expect(toColoredSessions({ projectId: "", ids: ["s1"], color: "teal" })).toBeNull()
+    expect(toColoredSessions({ projectId: "p1", color: "teal" })).toBeNull()
+    expect(toColoredSessions({ projectId: "p1", ids: ["s1"] })).toBeNull()
+    expect(toColoredSessions(null)).toBeNull()
   })
 })

@@ -138,6 +138,13 @@ var commands = []command{
 			"merges the two. Prints every session that moved.",
 	},
 	{
+		name: "color-folder",
+		args: "[--project <name-or-path>] [--json] <folder> <color>",
+		about: "Paint every session filed under a sidebar folder: red, orange, amber,\n" +
+			"green, teal, blue, violet or pink. An empty color ('') hands them back\n" +
+			"to the theme. Prints every session painted.",
+	},
+	{
 		name: "cost",
 		args: "[--project <name>] [--provider <provider>] [--since <window>]\n" +
 			"            [--json|--csv]",
