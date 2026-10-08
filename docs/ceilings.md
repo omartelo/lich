@@ -524,15 +524,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (`store.SubagentCards`), which reaches the mod as `LICH_SUBAGENT_CARDS=off` at spawn, so a session already
   running keeps the value it started with.
 - **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`,
-  `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that
+  `resolveLichBinary`): Crush's, oh-my-pi's, Cursor's, Antigravity's and Kiro's registrations name the absolute path of the lich that
   wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and
   deletes when the run ends, so writing it gives a registration that works for the rest of that session and then
   fails silently forever. lich writes `lich` from PATH instead, recognising the cache by shape
   (`go-build*/b*/exe/*`) since the toolchain exports no marker. The trap is that a dev install then points at
   whatever version is installed on the machine — harmless, because the registration is only the transport and a
   session reaches the lich its PTY's coordinates name, but not what the file appears to say. With no lich on
-  PATH at all, a dev install registers nothing: Crush and oh-my-pi still get their hooks, and Cursor's install
-  refuses outright.
+  PATH at all, a dev install registers nothing: Crush, oh-my-pi, Antigravity and Kiro still get their hooks, and Cursor's
+  install refuses outright.
 - **A plugin install is pinned, so the harness never updates it on its own** (`internal/agentplugin/compat.go`,
   `claude.go` `claudePinMarketplace`, `codex.go` `codexPinMarketplace`): lich installs the newest plugin release inside the range it
   speaks and declares Claude Code's and Codex's marketplace at that release's tag, so a plugin release this lich
