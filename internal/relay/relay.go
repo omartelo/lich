@@ -185,8 +185,8 @@ type RelayEvent struct {
 type Sessions interface {
 	LoadState() ([]store.Project, error)
 	// SetSessionSchedule clears a scheduled prompt once it has been typed at its
-	// session (see deliverDue). Only ever called to clear here: the window is
-	// what parks one.
+	// session (see deliverDue), and parks or drops the continuation of a turn a
+	// usage limit ended (resume.go). Every other prompt is parked by the window.
 	SetSessionSchedule(sessionID string, at int64, prompt string) error
 	// SessionBranch is the branch of the checkout a session runs in, "" when
 	// git cannot name one. A subagent's report names it (subagentReport).
@@ -460,6 +460,9 @@ type Service struct {
 	// reportedWorkers is the sessions that answered a subagent errand in the
 	// turn running now; the turn ending finishes them (finishedWorkerLocked).
 	reportedWorkers map[string]bool
+	// resumes is the sessions holding a continuation lich parked after a usage
+	// limit (resume.go), so a turn starting there can drop it.
+	resumes map[string]bool
 	// workerFinished is told about a worker that finished. Nil leaves every
 	// worker running, the state a test that does not care is in.
 	workerFinished func(workerID string) error
@@ -489,6 +492,7 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 		held:            make(map[string]*inboxEntry),
 		lapsed:          make(map[string]*ticket),
 		reportedWorkers: make(map[string]bool),
+		resumes:         make(map[string]bool),
 		collectors:      make(map[string][]chan struct{}),
 		nudgeTimer:      make(map[string]*time.Timer),
 		nudging:         make(map[string]*sync.Mutex),

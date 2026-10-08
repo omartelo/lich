@@ -283,6 +283,9 @@ type Service struct {
 	// its process dies: the relay ends a closed worker's errand there, ahead of
 	// the SessionEnd the dying CLI reports. Guarded by mu like onState.
 	onClosed func(id string)
+	// onLimit, when set, is told about every turn a usage limit ended that names
+	// its reset (limit.go). Guarded by mu like onState.
+	onLimit func(id string, resetsAt int64)
 	// spawns is how each live session's PTY was started — what it runs and where
 	// — keyed by session id. Read by providerKind, which is what stops a
 	// session-start report from repainting a card lich itself chose the provider
@@ -518,6 +521,10 @@ func (s *Service) onHookState(req hookRequest) {
 	// and the read is off-thread for the same reason the usage one is.
 	if req.State == statusDone {
 		go s.applyKiroTitle(req.SessionID)
+		// Claude Code ends a turn a usage limit stopped with StopFailure, which
+		// the plugin reports as `done`; whether it was a limit is in the
+		// transcript, off-thread like every other read of it.
+		go s.noteLimit(req.SessionID)
 	}
 }
 
@@ -622,8 +629,10 @@ func (s *Service) MountPublic(pattern string, handler http.Handler) {
 // and turnLog.interrupt). It is the fallback for the three providers that raise
 // no event of their own when a turn is interrupted — Claude Code, Codex and
 // oh-my-pi all skip the hook that would end it, so without this the card spins
-// until some later turn finishes. It publishes "interrupted" rather than "done"
-// because stopping a turn is not finishing one, and it never opens a turn, so
+// until some later turn finishes. A Codex turn a usage limit ended is closed
+// here too (watchCodexLimits): Codex skips that hook for it as well. It
+// publishes "interrupted" rather than "done" because stopping a turn is not
+// finishing one, and it never opens a turn, so
 // nothing is invented for a session lich never heard start. Whatever the
 // provider reports next overwrites it: an event from inside the session always
 // outranks a guess made from its keystrokes.

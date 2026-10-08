@@ -44,6 +44,7 @@ import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useSessionRelay } from "@/lib/session/use-session-relay"
 import { useSessionInbox } from "@/lib/session/use-session-inbox"
+import { useSessionLimit } from "@/lib/session/use-session-limit"
 import { useSessionTool } from "@/lib/session/use-session-tool"
 import { useSessionTodo } from "@/lib/session/use-session-todo"
 import { useHandoffHeld } from "@/lib/terminal/handoff-store"
@@ -88,6 +89,7 @@ import { timeUntil } from "@/lib/session/schedule"
 import { SessionTargetPicker } from "./SessionTargetPicker"
 import { EntrypointDialog } from "./EntrypointDialog"
 import { SchedulePromptDialog } from "./SchedulePromptDialog"
+import { SessionLimitRung } from "./SessionLimitRung"
 
 interface SessionCardProps {
   session: Session
@@ -247,6 +249,7 @@ export function SessionCard({
   // How many results this session has waiting in the relay's inbox: results of
   // tasks it delegated, uncollected. Zero — the usual case — draws nothing.
   const inbox = useSessionInbox(session.id)
+  const limit = useSessionLimit(session.id)
   // How far the agent got through the task list it wrote for itself. null for
   // most sessions: no list, a finished one, or a provider whose list lich
   // cannot read (terminal.todoReaderFor).
@@ -512,9 +515,9 @@ export function SessionCard({
                   </span>
                 </span>
               )}
-              {/* One line, eight rungs: an open request, then a session blocked
-                  on the user, then a handoff waiting for this prompt, then
-                  results waiting to be collected, then how far
+              {/* One line, nine rungs: an open request, then a session blocked
+                  on the user, then a handoff waiting for this prompt, then a
+                  usage limit the turn stopped on, then results waiting to be collected, then how far
                   a quiet card got through its task list, then the
                   tool, then a prompt scheduled for later, then where the session
                   came from. A request in flight
@@ -526,7 +529,9 @@ export function SessionCard({
                   session wants an answer. A held handoff sits under the block
                   and over the rest: text was handed to this session and is not
                   at its prompt, which without a rung is indistinguishable from a
-                  click that did nothing. The inbox sits under those and over
+                  click that did nothing. A usage limit sits there too, and for
+                  the same reason: the card is stopped on something, and only
+                  the rung says what and until when. The inbox sits under those and over
                   the tool: mid-turn the live tool is the news, and the count
                   takes the rung when the card goes quiet — the same rule the
                   relay's own nudge follows. Task-list progress answers to that
@@ -578,6 +583,8 @@ export function SessionCard({
                   <Hourglass className="size-3 shrink-0" />
                   <span className="truncate">Something is waiting for this prompt</span>
                 </span>
+              ) : limit ? (
+                <SessionLimitRung limit={limit} scheduledAt={session.scheduledAt ?? 0} />
               ) : status !== "busy" && inbox > 0 ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
                   <Inbox className="size-3 shrink-0" />

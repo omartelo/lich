@@ -165,15 +165,16 @@ export function useSessionEvents({
     return () => off()
   }, [])
 
-  // A scheduled prompt has been typed at its session, so the mark comes off the
-  // card at that moment rather than at the next reload. The row is already
-  // cleared on the backend's side of it, so this never writes back.
+  // A scheduled prompt changed on the backend's side — typed at its session,
+  // or parked and dropped around a usage limit — so the mark follows at that
+  // moment rather than at the next reload. The row is already written there,
+  // so this never writes back.
   useEffect(() => {
     const off = onAppEvent(SCHEDULE_EVENT, (data) => {
       if (!isScheduleEvent(data)) {
         return
       }
-      const next = setSessionSchedule(sessionsRef.current, data.id, data.at, "")
+      const next = setSessionSchedule(sessionsRef.current, data.id, data.at, data.prompt ?? "")
       if (next !== sessionsRef.current) {
         commit(next)
       }

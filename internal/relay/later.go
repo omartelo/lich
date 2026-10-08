@@ -24,21 +24,20 @@ import (
 // that can be asked for, and it costs one read of the open sessions.
 const scheduleTick = 30 * time.Second
 
-// ScheduleEventName is emitted when a session's scheduled prompt is delivered,
-// so the card drops its mark at the moment the prompt is typed rather than at
-// the next reload. Payload: ScheduleEvent. The window is the only other writer
-// of that row, and it already knows what it wrote — this event says what the
-// clock did.
+// ScheduleEventName is emitted when a session's scheduled prompt changes
+// without the window having written it: delivered, so the card drops its mark
+// at the moment the prompt is typed rather than at the next reload, or parked
+// and dropped by lich itself around a usage limit (resume.go). Payload:
+// ScheduleEvent.
 const ScheduleEventName = "session-schedule"
 
 // ScheduleEvent is the payload of ScheduleEventName: the session whose mark
-// changed, and when its prompt is now due. At is 0 for every event this package
-// emits — the prompt has just been typed and nothing is waiting — and is in the
-// payload anyway because the mark is a time, and an event that only ever means
-// "clear" would have to be replaced the first time anything else moves one.
+// changed, when its prompt is now due, and the prompt. At is 0 and Prompt empty
+// when nothing is waiting anymore.
 type ScheduleEvent struct {
-	ID string `json:"id"`
-	At int64  `json:"at"`
+	ID     string `json:"id"`
+	At     int64  `json:"at"`
+	Prompt string `json:"prompt,omitempty"`
 }
 
 // RunSchedules types due prompts at their sessions until the process ends.
@@ -74,7 +73,15 @@ func (s *Service) deliverDue() {
 	now := s.now().Unix()
 	for _, p := range projects {
 		for _, sess := range p.Sessions {
-			if sess.ScheduledPrompt == "" || sess.ScheduledAt == 0 || sess.ScheduledAt > now {
+			if sess.ScheduledPrompt == "" || sess.ScheduledAt == 0 {
+				continue
+			}
+			// Learned here as well as when parked: a continuation parked before
+			// a restart is still lich's to drop when its session moves on.
+			if sess.ScheduledPrompt == resumePrompt {
+				s.markResume(sess.ID)
+			}
+			if sess.ScheduledAt > now {
 				continue
 			}
 			if !s.takesDelivery(sess.ID) {

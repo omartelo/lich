@@ -30,11 +30,14 @@ var denied = map[string]reflect.Type{
 	"drop.SetPicker":                  reflect.TypeFor[*drop.Service](),
 	"relay.Observe":                   reflect.TypeFor[*relay.Service](),
 	"relay.RunSchedules":              reflect.TypeFor[*relay.Service](),
+	"relay.ParkResume":                reflect.TypeFor[*relay.Service](),
 	"agentplugin.RepairRegistrations": reflect.TypeFor[*agentplugin.Service](),
 	"relay.SetPlugins":                reflect.TypeFor[*relay.Service](),
 	"project.SetAccounts":             reflect.TypeFor[*project.Service](),
 	"project.SetProjects":             reflect.TypeFor[*project.Service](),
 	"terminal.SetDropDir":             reflect.TypeFor[*terminal.Service](),
+	"terminal.SetUsageLimit":          reflect.TypeFor[*terminal.Service](),
+	"terminal.RunLimitWatch":          reflect.TypeFor[*terminal.Service](),
 	"terminal.EnqueueModCommand":      reflect.TypeFor[*terminal.Service](),
 	"terminal.RunModCommand":          reflect.TypeFor[*terminal.Service](),
 	"terminal.SubmitPrompt":           reflect.TypeFor[*terminal.Service](),
@@ -53,6 +56,9 @@ func (stubService) Purge() error               { return nil }
 func (stubService) SetPicker() error           { return nil }
 func (stubService) Observe() error             { return nil }
 func (stubService) RunSchedules() error        { return nil }
+func (stubService) ParkResume() error          { return nil }
+func (stubService) SetUsageLimit() error       { return nil }
+func (stubService) RunLimitWatch() error       { return nil }
 func (stubService) RepairRegistrations() error { return nil }
 func (stubService) SetPlugins() error          { return nil }
 func (stubService) SetAccounts() error         { return nil }

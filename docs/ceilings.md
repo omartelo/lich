@@ -580,6 +580,21 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   those logins and never writes them: it does not refresh the token, so an expired one reads as signed out until
   the provider's own CLI rotates it. A reading is cached for five minutes because both endpoints rate-limit hard —
   the number on screen is up to that old, and nothing on it says so.
+- **A turn a usage limit stopped is picked back up on two providers only** (`internal/terminal/limit.go`,
+  `internal/relay/resume.go`): Claude Code and Codex are the two that write the limit down with its reset. On
+  Antigravity, Crush, Cursor CLI and Kiro CLI nothing marks a limit at all, so the card keeps spinning until the
+  next prompt; opencode and oh-my-pi retry by themselves and lich adds nothing on top. Claude Code's end arrives
+  only as `StopFailure`, which an older lich-plugin does not report. Codex raises no hook for it, so an open
+  Codex turn is read off its rollout every 30 seconds, and the limit is *inferred*: a turn completing with
+  nothing said right after a window shows 100% spent (measured on `codex exec` 0.144.5, never on the TUI) — a
+  change to that shape stops the read without a word. The continuation is a scheduled prompt told apart from a
+  person's by its exact text, so someone parking those same words has them dropped on the session's next turn.
+  Nothing is parked for a reset already past or more than 24 hours out (Claude Code's own auto-continue gives up
+  at the same horizon), nor over a prompt already parked there. Any turn starting before it is due drops it,
+  which is also what keeps it from landing behind Claude Code's own `autoContinueAtUsageLimit` — a setting the
+  server enables per account, which is why the prompt is due two minutes after the reset rather than at it. The
+  card's limit rung lives in the window alone: a reload drops it, while the parked prompt stays on the card as a
+  plain scheduled one.
 - **The pace marker is borrowed calibration, and it is silent far more often than it is wrong**
   (`internal/quota/pace.go`): the two numbers that decide when a weekly window is marked as spending ahead —
   fifteen percentage points past the elapsed share, and no marking at all in the first twenty-four hours after
