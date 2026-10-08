@@ -48,8 +48,10 @@ export function CardTransition({
     >
       {/* What the collapse hides. Never while a card is being dragged: the drag
           carries it out of this box, and a clipped card is a card that vanishes
-          mid-drag. */}
-      <div className={cn("min-h-0 pb-1.5", !dragging && "overflow-hidden")}>{children}</div>
+          mid-drag. min-w-0 keeps the card its own width then: a grid item with
+          no overflow clip is as wide as its widest unbreakable line, and a
+          worktree path is one. */}
+      <div className={cn("min-h-0 min-w-0 pb-1.5", !dragging && "overflow-hidden")}>{children}</div>
     </div>
   )
 }

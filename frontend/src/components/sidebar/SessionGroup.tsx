@@ -299,7 +299,10 @@ export function SessionGroup({
             : "grid-rows-[1fr] opacity-100",
         )}
       >
-        <div className={cn("flex min-h-0 flex-col gap-1.5", !dragging && "overflow-hidden")}>
+        {/* min-w-0 for the reason CardTransition's inner box carries it. */}
+        <div
+          className={cn("flex min-h-0 min-w-0 flex-col gap-1.5", !dragging && "overflow-hidden")}
+        >
           <DndContext
             sensors={sensors}
             collisionDetection={fileAwareCollision}

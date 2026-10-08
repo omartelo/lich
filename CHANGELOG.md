@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Collapsing and expanding the sidebar animates.** Each session's icon slides
   between the rail and its card, and the terminals follow the sidebar's edge.
 
+### Fixed
+
+- **Dragging a session card in a worktree keeps the card its own size.** The
+  worktree's long path no longer stretches the cards wider than the sidebar and
+  pushes the rest of the list sideways while the drag is in flight.
+
 ## [0.61.0] - 2026-10-07
 
 ### Added
