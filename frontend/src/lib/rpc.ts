@@ -12,6 +12,7 @@ import type {
   BinaryCheck,
   BranchRules,
   ClosedHistory,
+  ExternalSession,
   LastSaid,
   LastTurn,
   Branches,
@@ -445,6 +446,27 @@ export const Store = {
    * is the plain history. The search runs in the query, so it reaches past the
    * page this answers with. */
   ClosedSessions: (term: string) => call<ClosedHistory | null>("store.ClosedSessions", [term]),
+  /** Conversations started outside lich in a checkout of a known project, newest
+   * first. Leaves out what lich holds a session for or deleted one for. */
+  ExternalSessions: () => call<ExternalSession[] | null>("store.ExternalSessions", []),
+  /** File an external conversation as a parked session under sessionID, which
+   * ReopenSession then resumes. Fails when a session already holds it. */
+  AdoptExternalSession: (
+    projectID: string,
+    sessionID: string,
+    kind: string,
+    path: string,
+    providerSessionID: string,
+    label: string,
+  ) =>
+    call<null>("store.AdoptExternalSession", [
+      projectID,
+      sessionID,
+      kind,
+      path,
+      providerSessionID,
+      label,
+    ]),
   /** Resume one parked session by its own id, or null when it is no longer
    * parked — another window resumed it, or its worktree was removed. */
   ReopenSession: (sessionID: string, newSessionID: string) =>

@@ -733,6 +733,25 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   says `checkout gone` and offers to forget
   itself, which is the only way such a row is ever collected — `PurgeWorktreeSessions` never ran for it,
   because the removal never went through the app.
+- **The history's external conversations are told from lich's own by a stone, and stones only start at schema
+  version 8** (`internal/store/external.go`, `internal/terminal/conversations.go`): a provider keeps its
+  transcript after lich deletes the session row, so the listing leaves out ids a row holds and ids a deleted row
+  held (`provider_session_tombstones`, kept by triggers). A row deleted before that table existed left no stone.
+  Claude Code covers the gap with the name lich spawns it under (`relay.IsRosterName` on the first
+  `custom-title`): measured on a real workspace, it marked 490 of the 539 Claude conversations lich held no row
+  for, and the 49 left had no title at all, which is a plain `claude` run. The other seven providers write no
+  such mark, so their conversations from before the stones list once, as if started outside lich. Kiro CLI
+  writes `session_created_reason: "subagent"` on every conversation (2.21.0, measured on 15), so it is no
+  sub-agent filter and is not read.
+- **An external conversation matches a project only in a checkout's own directory** (`store.ExternalSessions`):
+  a conversation started in a subdirectory of a project is not offered, because a session lich opens runs in
+  the project's directory or a worktree and nowhere below it. Checkouts come from `git worktree list`, run for
+  every project with a `.git` on each listing (about 300 ms over 30 projects); a project that is not a
+  repository owns only its own directory. Search reaches an external conversation by its title, project and
+  path; what was said in it is indexed only after it is adopted and closed, the same as any session. Crush's
+  project index is read at `$XDG_DATA_HOME/crush/projects.json` (else `~/.local/share`), measured on Linux
+  only; where Crush keeps it on Windows and macOS is not measured, and a miss there lists no Crush
+  conversation.
 - **A filed backend answer outlives the screen that asked, under a key its caller writes by hand**
   (`frontend/src/lib/remote-cache.ts`): a `useRemoteResource` caller that passes `cache` has its answers kept
   in module memory until the page reloads, under exactly the string it composed. Two callers that compose the

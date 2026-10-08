@@ -44,13 +44,7 @@ func RosterNameOf(recorded, cwd, id string) string {
 // than resolving one: internal/spawn, which reports the name it opened a
 // session under.
 func RosterName(cwd, id string) string {
-	dir := filepath.Base(strings.TrimRight(strings.ReplaceAll(cwd, "\\", "/"), "/"))
-	// filepath.Base answers "." for an empty path and "/" for a bare root;
-	// neither names anything, and Claude Code's own fallback is the app name.
-	if dir == "" || dir == "." || dir == "/" {
-		dir = "lich"
-	}
-
+	dir := rosterDir(cwd)
 	tail := make([]rune, 0, rosterIDChars)
 	for _, r := range id {
 		if len(tail) == rosterIDChars {
@@ -64,6 +58,34 @@ func RosterName(cwd, id string) string {
 		return dir
 	}
 	return dir + "-" + string(tail)
+}
+
+// IsRosterName reports whether name has the shape RosterName gives a session
+// born in cwd, whatever its id: how a Claude Code conversation lich opened is
+// told from one somebody started by hand, after lich has lost the row
+// (terminal.Conversations). A name the user typed into `/rename` matches only
+// by coincidence.
+func IsRosterName(name, cwd string) bool {
+	tail, ok := strings.CutPrefix(name, rosterDir(cwd)+"-")
+	if !ok || len(tail) != rosterIDChars {
+		return false
+	}
+	for _, r := range tail {
+		if !isRosterChar(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func rosterDir(cwd string) string {
+	dir := filepath.Base(strings.TrimRight(strings.ReplaceAll(cwd, "\\", "/"), "/"))
+	// filepath.Base answers "." for an empty path and "/" for a bare root;
+	// neither names anything, and Claude Code's own fallback is the app name.
+	if dir == "" || dir == "." || dir == "/" {
+		return "lich"
+	}
+	return dir
 }
 
 func isRosterChar(r rune) bool {
