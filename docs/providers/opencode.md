@@ -44,8 +44,8 @@ discovery that lags, which is the whole reason the tools exist.
 
 ## Account
 
-opencode runs on the user's own API keys, so there is no plan account to name (`internal/quota`, `Plan.Account`),
-which is the same reason it has no gauge.
+opencode runs on the user's own API keys unless an OpenCode Go key is stored; that subscription gets a gauge
+(`internal/quota`, `opencodePlan`) but names no account (`Plan.Account`), since its usage route returns none.
 
 ## Sandbox
 

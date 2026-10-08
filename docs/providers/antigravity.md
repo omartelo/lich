@@ -45,9 +45,8 @@ Nothing provider-specific.
 ## Account
 
 `~/.gemini/oauth_creds.json` carries the same `email` claim Codex's id token does, and it is deliberately not
-read (`internal/quota`, `Plan.Account`): there is no `antigravityPlan`, so a `Plan` naming an account with no
-window in it renders nothing at all (`PlanQuota` draws only a reading with a window). The name arrives with the
-gauge or not at all.
+read (`internal/quota`, `Plan.Account`): the gauge comes from asking `agy` for `/usage` (`antigravityPlan`),
+whose reply names no account, so the Antigravity gauge carries no name.
 
 ## Sandbox
 

@@ -49,10 +49,9 @@ from an `mcpServers` document its install writes under `~/.cursor`.
 
 ## Account
 
-Cursor CLI carries no claim naming the account, measured on 2026-09-04 (`internal/quota`, `Plan.Account`):
-`~/.config/cursor/auth.json`'s token is a JWT whose `sub` is an opaque `github|user_…` and whose claims contain
-no email, so there is nothing a person recognises as their account. Naming it would take a network call against
-an unmeasured route, for a provider that has no gauge to hang the name under.
+The plan gauge names the account a session spends (`internal/quota`, `Plan.Account`): `~/.config/cursor/auth.json`'s
+token is a JWT whose `sub` is an opaque `github|user_…` and whose claims contain no email, so lich reads
+`authInfo.email` from `cli-config.json` beside it.
 
 ## Sandbox
 
