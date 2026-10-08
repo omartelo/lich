@@ -203,6 +203,11 @@ type session struct {
 	// call and reported in the same event.
 	confined     bool
 	sandboxLinks []string
+	// awaitsStart is whether Ready holds this session until its provider
+	// reports session-start, and started whether it has. Both guarded by the
+	// service's mu. See startgate.go.
+	awaitsStart bool
+	started     bool
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
@@ -279,6 +284,9 @@ type Service struct {
 	// without answering (internal/relay). Guarded by mu: wired after the
 	// transport is already serving.
 	onState func(id, state string)
+	// startReports answers whether a provider's sessions run lich's hooks, so
+	// whether a session-start report can be waited for (startgate.go).
+	startReports func(provider string) bool
 	// onClosed, when set, is told about every session Close takes down, before
 	// its process dies: the relay ends a closed worker's errand there, ahead of
 	// the SessionEnd the dying CLI reports. Guarded by mu like onState.
@@ -559,6 +567,7 @@ func (s *Service) onSessionStart(sessionID, providerSessionID, provider string) 
 	// tool call — measured 2026.09.03 against Crush 0.88.0 — and is the
 	// only proof a Crush turn is running.
 	s.beatHandsOn(sessionID, 0)
+	s.markStarted(sessionID)
 	if err := s.store.SetProviderSession(sessionID, providerSessionID); err != nil {
 		return err
 	}

@@ -305,6 +305,10 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// report at all, and whether they can answer with a tool — are about what
 	// the plugin put there.
 	rl.SetPlugins(plugins)
+	// A session whose provider runs lich's hooks is held until its session-start
+	// report, which comes only from the agent's own prompt, past a trust
+	// question that a quiet screen cannot be told apart from.
+	term.SetStartReports(plugins.Installed)
 	// The scheduled prompts are the relay's other clock: nobody calls in for
 	// them, they come due.
 	go rl.RunSchedules()
@@ -367,8 +371,8 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //     quota.SetSessions, store.SetSessionGone, store.SetScheduleForfeited,
 //     store.SetBranchOf, store.SetTranscriptOf, store.SetConversationsOf,
 //     store.SetCheckoutsOf, terminal.SetDropDir,
-//     terminal.SetRateLimitReports, terminal.SetUsageLimit, terminal.SetWorkerAnswer and
-//     terminal.SetSessionClosed are startup wiring. Called with [null] they silently
+//     terminal.SetRateLimitReports, terminal.SetUsageLimit, terminal.SetWorkerAnswer,
+//     terminal.SetStartReports and terminal.SetSessionClosed are startup wiring. Called with [null] they silently
 //     nil what they wired (encoding/json leaves a func or pointer alone on
 //     null), and the write races the readers already serving — nilling
 //     SetProjects also disarms the guard that keeps two projects off the same
@@ -416,6 +420,7 @@ func denyInternal(d *rpc.Handler) {
 		"terminal.RunLimitWatch",
 		"terminal.SetWorkerAnswer",
 		"terminal.SetSessionClosed",
+		"terminal.SetStartReports",
 		"terminal.EnqueueModCommand",
 		"terminal.RunModCommand",
 		"terminal.SubmitPrompt",
