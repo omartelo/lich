@@ -156,7 +156,7 @@ X-Lich-Plugin: <plugin release>
   refused.
 
 The body is held to 64 KiB, the room an answer needs, where every other hook
-endpoint takes 4 KiB.
+endpoint but `/mod/answer` takes 4 KiB.
 
 Responses: `204` ok · `401` invalid token · `400` invalid body.
 
