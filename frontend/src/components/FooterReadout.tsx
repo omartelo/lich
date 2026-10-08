@@ -28,7 +28,7 @@ export function FooterReadout({
           <button
             type="button"
             className={cn(
-              "flex min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm py-0.5 tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "flex h-8 min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 tabular-nums outline-none transition-colors hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring",
               className,
             )}
           />

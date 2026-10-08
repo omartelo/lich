@@ -27,7 +27,7 @@ export function SessionModel({ sessionId, kind }: SessionModelProps) {
   }
   return (
     <span
-      className="flex min-w-0 max-w-64 items-center gap-1.5"
+      className="flex min-w-0 max-w-64 items-center gap-1.5 px-2"
       title={`${usage.model}${usage.effort ? ` · ${usage.effort}` : ""}`}
     >
       <ProviderIcon kind={provider} size={14} />

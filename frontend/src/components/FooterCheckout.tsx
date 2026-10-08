@@ -27,7 +27,7 @@ export function FooterCheckout({
   return (
     <span
       title={host || display !== "path" ? label : path}
-      className="flex min-w-0 max-w-56 items-center gap-1.5 select-text"
+      className="flex min-w-0 max-w-56 items-center gap-1.5 px-2 select-text"
     >
       <Icon className="size-3.5 shrink-0" aria-hidden="true" />
       <span className="truncate">{label}</span>
