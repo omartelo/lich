@@ -194,11 +194,10 @@ needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
   Global Settings › Providers. Project Settings › Providers can override that
   choice for one project; **Use default** removes the override, so later changes
   to the global default flow through automatically. A provider's section opens
-  with how much of your plan is left, when lich can read it, and the Claude Code
-  and Codex sections carry the ladder for what
-  the footer says about a session — the context ring, plus the cost readout for
-  Claude Code, that last rung off by default since the figure only means
-  something when you are billed per token.
+  with how much of your plan is left, when lich can read it. What the footer
+  shows is set in Settings › Appearance by dragging its items; the cost
+  readout starts hidden, since the figure only means something when you are
+  billed per token.
 - **Worktrees** — `.lich/setup-worktree.sh` in the project checkout runs in a
   new worktree's terminal ahead of the agent; the New worktree dialog shows it
   and offers a detected suggestion when the repo ships none. A
