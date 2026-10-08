@@ -87,6 +87,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   unread finished turn, else nothing. It is a dot rather than a count, so a folder hiding four unread turns and
   one hiding one read the same, and it speaks only for the cards in that block — a folder whose members are all
   busy says nothing, exactly like a block whose cards have never reported.
+- **The sidebar's state chips read the ring, nothing more** (`frontend/src/lib/session/session-filter.ts`):
+  Waiting, Running and Unread are the card's amber, spinning and unread green ring, and Idle is everything
+  else, a read turn included. A provider that cannot raise a state cannot be filtered into it: Crush and
+  Cursor CLI report no turn at all and always sit under Idle; Antigravity, oh-my-pi and Kiro CLI raise no
+  permission event, so they never reach Waiting (a Kiro session blocked on a confirmation counts as Running).
+  There is no error chip: no provider reports one, and a process that exited is known only to its terminal,
+  not to a store the sidebar reads. The chips are not persisted and drop on a project switch, like the query.
 - **The Run card is never started for you** (`frontend/src/components/sidebar/SessionSidebar.tsx`): a fresh
   worktree's setup script is still installing dependencies in the agent's card when the checkout appears, and
   lich has no "setup finished" signal to hang an automatic start on — `terminal.Ready` answers a different

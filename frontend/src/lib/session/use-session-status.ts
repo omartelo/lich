@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { onAppEvent } from "@/lib/app-events"
 import { Store } from "@/lib/rpc"
 import { STATUS_EVENT, type SessionStatus } from "./session-events"
@@ -6,6 +6,7 @@ import { createSessionStatusStore, type PendingStatus } from "./session-status-s
 import { formatAge, subscribeAge } from "./session-age"
 import { useKeyedStore } from "@/lib/use-keyed-store"
 import { collapsedMark } from "./sidebar-groups"
+import { phaseOf, type SessionPhase } from "./session-filter"
 
 // Subscribed at import rather than on first use: that opens the /events socket
 // at page load, so a status reported before any card mounts still lands.
@@ -133,6 +134,41 @@ export function useProjectStatus(sessionIds: readonly string[]): SessionStatus |
   )
   const snapshot = useCallback(() => store.pendingOf(sessionIds), [key])
   return useSyncExternalStore(subscribe, snapshot)
+}
+
+// useSessionPhases answers which filter chip each of these sessions sits under
+// (phaseOf), for the sidebar's state filter. It subscribes only while
+// `watching`: the filter is closed nearly all day, and a sidebar re-rendering on
+// every report from every card to feed chips nobody can see would be the whole
+// list paying for a lens that is not held.
+//
+// The snapshot is the phases joined into one string, so React compares them by
+// value and a report that leaves every session in its phase (a busy repeating
+// busy, a new tool) re-renders nothing. It only marks the change: the lookup it
+// hands back reads the store itself.
+export function useSessionPhases(
+  sessionIds: readonly string[],
+  watching: boolean,
+): (id: string) => SessionPhase {
+  const key = sessionIds.join(",")
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      if (!watching) {
+        return () => {}
+      }
+      const offs = sessionIds.map((id) => store.subscribe(id, onChange))
+      return () => {
+        for (const off of offs) {
+          off()
+        }
+      }
+    },
+    [key, watching],
+  )
+  const phases = useSyncExternalStore(subscribe, () =>
+    watching ? sessionIds.map((id) => phaseOf(store.get(id), store.unread(id))).join(",") : "",
+  )
+  return useMemo(() => (id: string) => phaseOf(store.get(id), store.unread(id)), [phases])
 }
 
 // runningSessions returns which of these sessions are mid-turn right now (see
