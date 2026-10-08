@@ -396,7 +396,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   a right-click menu of its own: editing items in a text field, nothing outside one, and no Inspect
   (Ctrl+Shift+I still opens DevTools). The frontend uses none of the refused ones today. The trap is the
   next feature that does: `navigator.clipboard.readText()`, a blob download or a popup works in a browser tab
-  (`--no-window`, an Intel Mac whose window died) and fails silently in the bundled window until
+  (a Mac whose window is missing or died at startup, `openWithoutWindow` in `main.go`) and fails silently in the bundled window until
   `shell/src/main.rs` answers the matching hook (`on_permission`, `on_download`, `on_new_window`,
   `on_navigation`). A second one: kurogane reports through `tracing` and the window installs no subscriber, so
   a window CEF could not create after startup says nothing on the stderr lich reads; a failure to start still
@@ -430,10 +430,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the running one, which raises the window it has (the kurogane fork's relaunch hook; without it CEF opened a
   second browser that kept lich alive after the window closed, #470), reports the forward as a failed
   initialise, the duplicate exits 1, and `focusRunning` logs one Warn per duplicate launch. Raising is
-  best-effort: a Wayland compositor may only mark the window urgent. Focus never climbs the ladder — a
-  fallback there would open lich a second time, in a system browser, on the profile the window owns — so a
-  lich already running in the fallback browser is not focused by it either, and what a system browser does
-  with the forwarded command line is its own.
+  best-effort: a Wayland compositor may only mark the window urgent. On an install with no window of its
+  own, a duplicate launch cannot focus the running lich's tab; it opens one more tab pointed at it
+  (`focusRunning`, `system.OpenURL`).
 - **A prompt in use is recognised from the bytes going in, never from the line itself**
   (`internal/terminal/draft.go`; typed deliveries only, a Claude Code session with its mod is handed the message, see below): a relayed message pastes at the prompt and sends an Enter behind it, so lich
   holds the delivery back while the user has unsent input there. What it counts is printable input since the last
@@ -863,17 +862,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   pull request's file on the next one's tree. The re-read is held in state and never in a ref, for the replay
   reason `use-remote-resource.ts` documents, and `use-active-file.test.tsx` pins it by moving the pull
   request on a live component — a probe that remounted instead would call the ref version green.
-- **A profile belongs to one browser, so changing browsers opens lich at its defaults**
+- **A profile belongs to one window build, so pinning another opens lich at its defaults**
   (`internal/chromium/profiledir.go`): every `lich.*` UI setting lives in the localStorage of the profile keyed
-  by the browser that opened it, and nothing copies between profiles. Pin a different browser, or fall back to
-  a system one when the bundled window dies, and lich comes up factory-fresh; the settings are still under the
-  other key. A browser pinned at a path carrying its own version (an AppImage) is a new browser on every update.
+  by the path of the window that opened it, and nothing copies between profiles. A `LICH_SHELL` pin, or the
+  macOS tab a dead window falls back to, comes up factory-fresh; the settings are still under the other key. A
+  window pinned at a path carrying its own version (an AppImage) is a new profile on every update.
 - **Every package ships lich's own window, and only macOS falls back to a system browser**
   (`internal/chromium/shell.go`, `shell/`): the Linux packages, the Windows installer and both `Lich.app`
-  bundles ship an embedded Chromium (CEF through kurogane) beside the binary, and the ladder takes it above
-  the desktop's default and every scan. The trap: the four launch paths are one, so a window-side change (a
+  bundles ship an embedded Chromium (CEF through kurogane) beside the binary, and nothing but a `LICH_SHELL` pin
+  outranks it. The trap: the four launch paths are one, so a window-side change (a
   flag in `Args`, a prefs write, the restart signal) lands on lich's own Chromium everywhere but on a Mac
-  whose window died, where it lands on a system browser, and the Go side cannot tell which it got. Windows
+  whose window died, where lich serves a plain tab and the change reaches nothing. Windows
   and macOS have one more: both were built and smoke-tested on a CI runner only (`release.yml` opens the
   window and reads a page over CDP), never on a desk, so the taskbar icon and AppUserModelID grouping on
   Windows, the Dock tile, Cmd-Tab and menu bar name on macOS, and the graceful close on restart on both are
@@ -942,8 +941,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **Opened as a tab there is no window lifecycle** (`main.go`, `openWithoutWindow`, macOS only): lich opens a
   plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on. Closing
   the tab leaves lich serving.
-- **The tab fallback cannot tell "opened" from "nothing happened"** (`internal/system.OpenURL`): `xdg-open`,
-  `open` and `rundll32` are started and never waited on — waiting would block for the life of the browser they
+- **The tab fallback cannot tell "opened" from "nothing happened"** (`internal/system.OpenURL`): `open` is
+  started and never waited on — waiting would block for the life of the browser they
   hand off to. A desktop with a URL handler installed but no browser behind it therefore looks like success:
   lich stays up with a notification and nothing on screen. Only a machine missing the opener itself reaches
   the dialog that carries the URL.
