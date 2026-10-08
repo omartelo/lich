@@ -30,10 +30,16 @@ import (
 // the per-project transcripts and the CLI state — and a caller that needs the
 // whole picture binds both (internal/sandbox).
 func CursorConfigDir(home string) string {
-	if dir := os.Getenv("CURSOR_CONFIG_DIR"); filepath.IsAbs(dir) {
+	return CursorConfigDirIn(os.Getenv, home)
+}
+
+// CursorConfigDirIn is CursorConfigDir answered against another process's
+// environment: internal/quota reads the login a session's own process sees.
+func CursorConfigDirIn(getenv func(string) string, home string) string {
+	if dir := getenv("CURSOR_CONFIG_DIR"); filepath.IsAbs(dir) {
 		return dir
 	}
-	if base := os.Getenv("XDG_CONFIG_HOME"); filepath.IsAbs(base) {
+	if base := getenv("XDG_CONFIG_HOME"); filepath.IsAbs(base) {
 		return filepath.Join(base, "cursor")
 	}
 	return filepath.Join(home, ".cursor")

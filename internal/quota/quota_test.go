@@ -42,6 +42,10 @@ func writeCreds(t *testing.T, claude, codex string) {
 	}
 	t.Setenv("CLAUDE_CONFIG_DIR", claudeDir)
 	t.Setenv("CODEX_HOME", codexDir)
+	// Cursor and opencode resolve their logins from these; empty directories
+	// keep the developer's own logins out of every reading below.
+	t.Setenv(cursorConfigDirVar, t.TempDir())
+	t.Setenv(dataHomeVar, t.TempDir())
 	unsetTestEnv(t, claudeSecureDirVar)
 	t.Setenv(claudeTokenVar, "")
 	// A developer machine that exports one of these bills an API key, and every
@@ -397,12 +401,18 @@ func TestPlansServesEveryMeteredProviderFromOneReading(t *testing.T) {
 	now := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
 	s := newService(claudeURL, codexURL, now)
 
+	// Cursor has no login here and still answers, signed out; opencode has no
+	// Go key and Antigravity no CLI, so neither has a plan to answer with.
 	plans := s.Plans("")
-	if len(plans) != 2 {
+	if len(plans) != 3 {
 		t.Fatalf("plans = %+v, want one per metered provider", plans)
 	}
-	if plans[0].Provider != "claude" || plans[1].Provider != "codex" {
-		t.Errorf("order = %q/%q, want claude/codex", plans[0].Provider, plans[1].Provider)
+	if plans[0].Provider != "claude" || plans[1].Provider != "codex" || plans[2].Provider != "cursor" {
+		t.Errorf("order = %q/%q/%q, want claude/codex/cursor",
+			plans[0].Provider, plans[1].Provider, plans[2].Provider)
+	}
+	if plans[2].Status != StatusSignedOut {
+		t.Errorf("cursor = %+v, want signed out", plans[2])
 	}
 
 	// Inside the TTL the endpoints are not asked again.
@@ -430,6 +440,15 @@ func TestNewPointsAtTheLiveEndpoints(t *testing.T) {
 	}
 	if s.probeURL != "https://api.anthropic.com/v1/messages" {
 		t.Errorf("probeURL = %q", s.probeURL)
+	}
+	if s.cursorURL != "https://cursor.com/api/usage-summary" {
+		t.Errorf("cursorURL = %q", s.cursorURL)
+	}
+	if s.opencodeURL != "https://opencode.ai/zen/go/v1/usage" {
+		t.Errorf("opencodeURL = %q", s.opencodeURL)
+	}
+	if s.runAgy == nil || s.cursorKeychain == nil {
+		t.Error("New must wire the agy runner and the Cursor Keychain reader")
 	}
 	if s.now == nil || s.http == nil {
 		t.Error("New must wire a clock and an HTTP client")

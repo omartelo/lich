@@ -17,9 +17,9 @@ export function usePlanQuota(sessionId: string): QuotaPlan[] {
 }
 
 // usePlanQuotaFor is one provider's reading, by its provider id — null for a
-// provider lich reads no plan from (opencode, oh-my-pi and Crush run on the
-// user's own API keys; Antigravity meters a Google account lich does not ask)
-// and while the first reading is in flight.
+// provider lich reads no plan from (oh-my-pi, Crush and Kiro CLI; Antigravity
+// without agy on PATH; opencode without a Go subscription key) and while the
+// first reading is in flight.
 export function usePlanQuotaFor(provider: string | undefined, sessionId = ""): QuotaPlan | null {
   const plans = usePlanQuota(sessionId)
   if (!provider) {

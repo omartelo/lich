@@ -572,14 +572,29 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   by the mod, so the status line lags an errand by up to its read interval, and an errand sent privately (a
   subagent or workflow step inside the session) never shows there, since the session's own collect never
   reaches it.
-- **The plan gauge answers to two undocumented endpoints, and only two providers have one**
-  (`internal/quota`): Claude Code's and Codex's usage routes are what their own CLIs poll, not published API. A
-  field renamed upstream drops the window it fed rather than raising anything — an entry lich has no name for is
-  skipped in silence, so a new kind of limit is invisible instead of wrong. The other three providers run on the
-  user's own API keys and can never report a plan, so the readout is provider-asymmetric by design. lich reads
-  those logins and never writes them: it does not refresh the token, so an expired one reads as signed out until
-  the provider's own CLI rotates it. A reading is cached for five minutes because both endpoints rate-limit hard —
-  the number on screen is up to that old, and nothing on it says so.
+- **The plan gauge answers to undocumented routes, and three providers have none** (`internal/quota`): Claude
+  Code's and Codex's usage routes are what their own CLIs poll, Cursor CLI's is the cursor.com dashboard's own
+  (`/api/usage-summary`, sent the CLI's token as the dashboard's session cookie with the dashboard's Origin and
+  Referer, which its CSRF check demands), opencode's is the OpenCode Go console's, and Antigravity's is a slash
+  command of its CLI. None is published API. A field renamed upstream drops the window it fed rather than raising
+  anything, so a new kind of limit is invisible instead of wrong. oh-my-pi, Crush and Kiro CLI report no plan
+  lich can read, and opencode reports one only for an OpenCode Go subscription: its key is read from the
+  `opencode-go` entry of opencode's `auth.json`, so a key given only through `OPENCODE_API_KEY` or
+  `OPENCODE_AUTH_CONTENT` is not read (the first is shared with Zen keys, which have no plan). The 200 shape of
+  that route was ported from the opencode console as the Orca project parses it, never measured here: only its
+  401 and 403 were. A 403 there means the key has no Go subscription, and reads as signed out. Cursor reads only
+  the CLI's own login (`auth.json` under its config dir, and on macOS the Keychain item cursor-agent 2026.06+
+  writes), never the Cursor editor's session, which lives in another app's SQLite database. Cursor accounts still
+  on request-quota billing (the dashboard's older `/api/usage` route) show their plan with no windows.
+  Antigravity keeps its Google login in the OS keyring and mints its own token, so lich runs `agy -p /usage
+  --output-format json` (measured on agy 1.2.5: no turn, no tokens, no conversation) with the session's own
+  environment and the `agy` on lich's PATH, never a configured binary that may be a wrapper. An agy older than
+  1.1.11 answers that as a prompt and spends a turn, so it is never asked; a newer one that answers with a turn
+  anyway stops being asked until lich restarts. A machine with no `agy` shows no Antigravity plan at all. That
+  run takes two to three seconds per reading. lich reads those logins and never writes them: it does not refresh a
+  token, so an expired one reads as signed out until the provider's own CLI rotates it. A reading is cached for
+  five minutes because the endpoints rate-limit hard; the number on screen is up to that old, and nothing on it
+  says so.
 - **A turn a usage limit stopped is picked back up on two providers only** (`internal/terminal/limit.go`,
   `internal/relay/resume.go`): Claude Code and Codex are the two that write the limit down with its reset. On
   Antigravity, Crush, Cursor CLI and Kiro CLI nothing marks a limit at all, so the card keeps spinning until the
