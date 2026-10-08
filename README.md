@@ -65,7 +65,9 @@ lich lets you:
 - **Branch off a worktree without the setup.** Spin one up from any base
   branch and lich seeds it with your gitignored `.env*` files, hands it a
   dev-server port no other checkout and no process on the machine is using, and
-  runs your per-project setup script before the agent starts.
+  runs your per-project setup script before the agent starts. Start it from the
+  checkout's uncommitted work and those changes come along, untracked files
+  included.
 - **Run a session confined.** An agent can open inside an OS sandbox: a fresh
   empty home holding only that provider's own state, the rest of the machine
   read-only, and write access to the checkout it was opened for. Your ssh keys,
@@ -74,11 +76,16 @@ lich lets you:
   runs bubblewrap and macOS `sandbox-exec`; it is not a boundary against hostile
   code, and [`docs/ceilings.md`](docs/ceilings.md) says what it does not stop.
 - **Review the diff where you read it.** A CodeMirror dock shows the working
-  changes beside a live file tree. Right-click a selection to comment against
-  those lines; the batch is pasted into the session as a single prompt, unsent.
+  changes beside a live file tree, folds the ones that only moved whitespace when
+  you ask it to, and shows a changed image or PDF before and after. Right-click a
+  selection to comment against those lines; the batch is pasted into the session
+  as a single prompt, unsent. Its Code tab browses the checkout and searches the
+  text of its files.
 - **Ship the pull request from here.** List the repository's open pull requests,
   check one out into a worktree of its own, then read the diff, review it inline
-  and merge it — with the methods the base branch actually accepts.
+  and merge it — with the methods the base branch actually accepts. On a branch
+  with no pull request yet, **Create with agent** asks that branch's session to
+  open one, and nothing is sent until you press Enter.
 
 Plus: [themes](docs/themes.md) you import as JSON or install from a git
 repository, a `Ctrl`/`Cmd`+`K` palette that jumps by name or by what was said in
