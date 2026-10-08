@@ -200,3 +200,20 @@ func TestServeBlobStatuses(t *testing.T) {
 		})
 	}
 }
+
+// The page prints these bodies verbatim, so their words are the contract.
+func TestServeBlobRefusalWording(t *testing.T) {
+	repo, _ := initRepo(t)
+	write(t, repo, "big.png", strings.Repeat("\x00", maxPreviewBytes+1))
+
+	tests := []struct{ rel, want string }{
+		{"big.png", "20.0 MB, above the 20 MB preview limit\n"},
+		{"a.txt", "this file type can't be previewed\n"},
+	}
+	for _, tt := range tests {
+		rec := serveBlob(t, http.MethodGet, url.Values{"path": {repo}, "rel": {tt.rel}}, nil)
+		if rec.Body.String() != tt.want {
+			t.Errorf("%s: body = %q, want %q", tt.rel, rec.Body, tt.want)
+		}
+	}
+}

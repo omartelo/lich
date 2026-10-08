@@ -10,6 +10,7 @@ import { readDiffSource, writeDiffSource, type DiffSource } from "@/lib/dock-pre
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/git/diff"
 import { revertStat } from "@/lib/git/diff-blocks"
 import { SPLIT_MIN_WIDTH_PX } from "@/lib/git/diff-layout"
+import type { BlobSides } from "@/lib/git/preview"
 import { splitPath } from "@/lib/git/lang-badge"
 import {
   lastTurnNotice,
@@ -103,6 +104,9 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   // expander reads unchanged lines from: "" is the working tree, and a turn
   // carries the snapshot tree it ended on.
   const [ref, setRef] = useState("")
+  // The turn's opening tree, the old side an image preview reads; "" outside a
+  // turn, whose old side is HEAD.
+  const [turnBefore, setTurnBefore] = useState("")
   const [pendingDiscard, setPendingDiscard] = useState<DiffFile | null>(null)
 
   // The text behind what is on screen, and the id of the newest read — a reply
@@ -148,6 +152,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
       setEndedAt(turn.endedAt ?? null)
       setSaid(words)
       setRef(source === "turn" ? (turn.after ?? "") : "")
+      setTurnBefore(source === "turn" ? (turn.before ?? "") : "")
       const text = turn.diff ?? ""
       if (text === lastText.current) {
         return
@@ -162,6 +167,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
       setFiles([])
       setFailed(true)
       setRef("")
+      setTurnBefore("")
     }
   }, [path, sessionId, source])
 
@@ -176,6 +182,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
     setEndedAt(null)
     setSaid("")
     setRef("")
+    setTurnBefore("")
   }, [source, path, sessionId])
 
   // Two signals feeding one read: the status counts move the instant a file is
@@ -208,6 +215,15 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
     (rel: string, from: number, to: number) => ProjectService.FileLines(path, rel, ref, from, to),
     [path, ref],
   )
+
+  // A turn's images are readable only once both snapshot trees have arrived;
+  // "" would read the working tree, which is not either side of the turn.
+  const sides: BlobSides | undefined =
+    source === "worktree"
+      ? { path, before: "HEAD", after: "" }
+      : ref !== "" && turnBefore !== ""
+        ? { path, before: turnBefore, after: ref }
+        : undefined
 
   // Reverting a rename touches both paths (new removed, old restored); the
   // panel refreshes immediately instead of waiting for the next poll tick.
@@ -280,6 +296,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
             source === "worktree" ? (file, lines) => void revertLines(file, lines) : undefined
           }
           onExpand={expandable ? expand : undefined}
+          sides={sides}
           bulk={bulk}
         />
       </div>
@@ -406,6 +423,8 @@ interface PanelBodyProps {
   /** Read a file's unchanged lines at the revision this source shows. */
   onExpand?: (path: string, from: number, to: number) => Promise<string[] | null>
   bulk: DiffBulk
+  /** Where a binary file's image or PDF is read; absent while unknown. */
+  sides?: BlobSides
 }
 
 function PanelBody({
@@ -419,6 +438,7 @@ function PanelBody({
   onRevertLines,
   onExpand,
   bulk,
+  sides,
 }: PanelBodyProps) {
   if (failed) {
     // The two sources fail for different reasons, and the working tree's answer
@@ -477,6 +497,7 @@ function PanelBody({
           onRevertLines={onRevertLines && ((lines) => onRevertLines(file, lines))}
           onExpand={onExpand}
           bulk={bulk}
+          sides={sides}
         />
       ))}
     </FileList>

@@ -224,6 +224,12 @@
   box-shadow: inset 3px 0 0 0 var(--color-red-500);
 }
 
+/* The ground behind an image preview: a checkerboard, so a transparent pixel
+   reads as transparent rather than as the panel's own colour. */
+.preview-checker {
+  background: repeating-conic-gradient(var(--muted) 0 25%, var(--card) 0 50%) 0 0 / 0.75rem 0.75rem;
+}
+
 /* Hunk separator: an empty doc line drawing a thin centered rule (a gradient
    doesn't change the line height, which CodeMirror measures from the DOM). */
 .cm-diff-sep {

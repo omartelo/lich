@@ -30,6 +30,10 @@ export interface DiffFile {
   newPath: string
   status: DiffFileStatus
   binary: boolean
+  /** The "old..new" blob ids off git's index line, "" when it printed none.
+   * Either side's content moving changes it, which is what an image preview
+   * keys its fetch on. */
+  blobIds: string
   added: number
   deleted: number
   hunks: DiffHunk[]
@@ -44,6 +48,7 @@ function newFile(oldPath: string, newPath: string): DiffFile {
     newPath,
     status: "modified",
     binary: false,
+    blobIds: "",
     added: 0,
     deleted: 0,
     hunks: [],
@@ -99,8 +104,9 @@ function applyFileHeader(file: DiffFile, line: string): boolean {
     } else if (file.status !== "renamed") {
       file.newPath = path
     }
+  } else if (line.startsWith("index ")) {
+    file.blobIds = line.slice("index ".length).split(" ")[0]
   } else if (
-    !line.startsWith("index ") &&
     !line.startsWith("similarity index ") &&
     !line.startsWith("dissimilarity index ") &&
     !line.startsWith("old mode ") &&

@@ -250,7 +250,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   origin, so rendering it needs a `Content-Security-Policy: sandbox` response and a test of its own. One side
   is capped at `maxPreviewBytes` (20 MiB) and held whole in memory; the formats are what Chromium decodes in an
   `<img>`, so HEIC, TIFF and PSD fall back to the "can't be previewed" line, and a Git LFS file shows the
-  pointer's text diff, never the image.
+  pointer's text diff, never the image. Previews are not deferred the way a text diff's editor is
+  (`LazyDiffBody`): every image or PDF in an open Review panel is fetched as the panel opens, and a working
+  tree side is fetched again whenever its blob id in the diff changes.
 - **A line revert rebuilds its patch, and some of it cannot be done** (`internal/project/revertlines.go`): the
   panel sends line numbers and the text it drew, never a patch, so a file that moved since the draw is refused
   instead of reverting whatever those numbers point at now. The index is reverted with the working tree when it

@@ -36,9 +36,11 @@ var previewTypes = map[string]string{
 	".webp": "image/webp",
 }
 
+// The two refusals a reader meets are worded for the page, which prints the
+// response body as it is after "Binary file · ".
 var (
 	errPreviewUnsupported = errors.New("this file type can't be previewed")
-	errPreviewTooLarge    = errors.New("above the preview limit")
+	errPreviewTooLarge    = fmt.Errorf("above the %d MB preview limit", maxPreviewBytes>>20)
 	errBlobRequest        = errors.New("invalid preview request")
 )
 
@@ -64,7 +66,7 @@ func (s *Service) Blob(dir, rel, ref string) (Blob, error) {
 	}
 	contentType, ok := previewTypes[strings.ToLower(path.Ext(rel))]
 	if !ok {
-		return Blob{}, fmt.Errorf("%s: %w", rel, errPreviewUnsupported)
+		return Blob{}, errPreviewUnsupported
 	}
 	var data []byte
 	var err error
@@ -93,7 +95,7 @@ func workTreeBlob(dir, rel string) ([]byte, error) {
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("%w: %s is not a regular file", errBlobRequest, rel)
 	}
-	if err := checkPreviewSize(rel, info.Size()); err != nil {
+	if err := checkPreviewSize(info.Size()); err != nil {
 		return nil, err
 	}
 	data, err := os.ReadFile(full)
@@ -124,7 +126,7 @@ func objectBlob(dir, rel, ref string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("size of %s at %s: %w", rel, ref, err)
 	}
-	if err := checkPreviewSize(rel, size); err != nil {
+	if err := checkPreviewSize(size); err != nil {
 		return nil, err
 	}
 	out, err := runGit(dir, "cat-file", "blob", object)
@@ -134,9 +136,9 @@ func objectBlob(dir, rel, ref string) ([]byte, error) {
 	return []byte(out), nil
 }
 
-func checkPreviewSize(rel string, size int64) error {
+func checkPreviewSize(size int64) error {
 	if size > maxPreviewBytes {
-		return fmt.Errorf("%s is %d bytes, %w of %d bytes", rel, size, errPreviewTooLarge, maxPreviewBytes)
+		return fmt.Errorf("%.1f MB, %w", float64(size)/(1<<20), errPreviewTooLarge)
 	}
 	return nil
 }

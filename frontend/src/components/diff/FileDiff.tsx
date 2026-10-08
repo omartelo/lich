@@ -13,12 +13,14 @@ import {
   type Expansions,
 } from "@/lib/git/diff"
 import { shownLayout, SPLIT_MIN_WIDTH_PX } from "@/lib/git/diff-layout"
+import { type BlobSides, previewKind } from "@/lib/git/preview"
 import { hideWhitespace, whitespaceOnly } from "@/lib/git/whitespace"
 import { languageAbbr, splitPath } from "@/lib/git/lang-badge"
 import { isAnchored } from "@/lib/pulls/review-slots"
 import { useWidthAtLeast } from "@/lib/use-width-at-least"
 import { cn, errorText } from "@/lib/utils"
 import { useSettings } from "@/providers/settings"
+import { BinaryDiffBody } from "./BinaryPreview"
 import { DiffBody, type DiffBodyProps } from "./DiffBody"
 import type { DiffBulk } from "./diff-bulk"
 import type { DiffReview } from "./ReviewSlots"
@@ -68,6 +70,9 @@ interface FileDiffProps {
   /** Put changed lines of this file back to HEAD. Absent wherever the diff is
    * not the working tree's own: a finished turn, a pull request. */
   onRevertLines?: (lines: RevertLine[]) => void
+  /** The revisions a binary file's image or PDF is read at. Absent where lich
+   * cannot read them (a pull request), which keeps the "Binary file" line. */
+  sides?: BlobSides
 }
 
 // The card must not clip overflow — a clipping ancestor would break the
@@ -83,6 +88,7 @@ export function FileDiff({
   review,
   onExpand,
   onRevertLines,
+  sides,
 }: FileDiffProps) {
   // What the reader has pulled into this file's gaps. Held here, above the
   // editor, because the document is built from it: an expanded gap is context
@@ -105,7 +111,9 @@ export function FileDiff({
     () => (expansions.size === 0 ? printed : buildFileDoc(shown, expansions)),
     [shown, printed, expansions],
   )
-  const openByDefault = !file.binary && printed.lineMeta.length <= LARGE_FILE_LINES
+  const openByDefault = file.binary
+    ? sides !== undefined && previewKind(file.newPath) !== null
+    : printed.lineMeta.length <= LARGE_FILE_LINES
   const [expanded, setExpanded] = useState(openByDefault)
   // The card outlives its content: the panel keys files by path, so a refetch
   // that rewrites this file reuses this component. Without the re-sync, a file
@@ -226,13 +234,16 @@ export function FileDiff({
             <span className="tabular-nums">{talking}</span>
           </span>
         )}
-        <span className="flex shrink-0 items-center gap-1.5">
-          {onlyWhitespace ? (
-            <span className="text-muted-foreground">Whitespace only</span>
-          ) : (
-            <DiffStat added={shown.added} deleted={shown.deleted} />
-          )}
-        </span>
+        {/* git counts no lines in a binary, so its +0 -0 would be a claim. */}
+        {!file.binary && (
+          <span className="flex shrink-0 items-center gap-1.5">
+            {onlyWhitespace ? (
+              <span className="text-muted-foreground">Whitespace only</span>
+            ) : (
+              <DiffStat added={shown.added} deleted={shown.deleted} />
+            )}
+          </span>
+        )}
         <IconAction label="Add file as context" onClick={() => onInject(`@${file.newPath} `)}>
           <Paperclip className="size-3.5" />
         </IconAction>
@@ -261,10 +272,10 @@ export function FileDiff({
         )}
       </div>
       {expanded &&
-        (file.binary || onlyWhitespace ? (
-          <p className="px-9 py-2 text-xs text-muted-foreground">
-            {file.binary ? "Binary file" : "Only whitespace changed"}
-          </p>
+        (file.binary ? (
+          <BinaryDiffBody file={file} sides={sides} />
+        ) : onlyWhitespace ? (
+          <p className="px-9 py-2 text-xs text-muted-foreground">Only whitespace changed</p>
         ) : (
           <LazyDiffBody
             key={layout}

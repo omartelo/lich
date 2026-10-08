@@ -37,6 +37,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Crush and Cursor CLI sessions always count as Idle, and only Claude Code, Codex
   and opencode sessions can be Waiting.
 
+- **See images and PDFs in Review and Code.** A changed image in the Review tab
+  shows Before and After side by side, with each side's dimensions and size; an
+  added or deleted one shows the side it has. A changed PDF opens in Chromium's
+  own viewer, with a Before / After switch. Clicking an image or PDF in the Code
+  tab previews it instead of refusing it as binary. PNG, JPEG, GIF, WebP, AVIF,
+  BMP, ICO and PDF up to 20 MB per side; the Pulls screen still says "Binary
+  file".
+
 ### Changed
 
 - **The window is laid out as islands.** The session sidebar, the terminals and
