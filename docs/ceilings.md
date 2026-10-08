@@ -799,8 +799,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The Review tab's remembered source is a wish, not what is on screen** (`ReviewPanel`,
   `frontend/src/lib/dock-prefs.ts`): the pref is global and holds what the user picked, while what the
   panel shows is that choice put through `turnSwitchable` — a session whose provider never reports and
-  holds no last-turn record has no turn to bracket, so it is shown the working tree and offered no
-  switch. Nothing writes the guard's answer back, and that is the whole design: a session with neither is
+  holds no last-turn record has no turn to bracket, so it is shown the working tree, with no switch or, on Crush and Cursor
+  CLI, a disabled one naming why. Nothing writes the guard's answer back, and that is the whole design: a session with neither is
   unswitchable after a reload until it next reports, so a panel that reset the pref instead of overriding
   it would erase the choice before the switch had a chance to appear. The two halves of that guard read
   different sources — the record rides the session's hydration, the diff behind it is seeded when the
