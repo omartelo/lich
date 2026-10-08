@@ -15,7 +15,7 @@ has no per-spawn append flag, so the point the briefing makes exists only in lic
 ## Hooks
 
 An Antigravity card sends no reason with a `waiting` and keeps the generic "Waiting on you"
-(`frontend/src/components/sidebar/SessionCard.tsx`; the mapping table is in
+(`frontend/src/components/sidebar/SessionStatusRung.tsx`; the mapping table is in
 [`../hooks/session-state.md`](../hooks/session-state.md)). It does not report `waiting` in the first place: its
 permission prompt raises no lifecycle event that has been measured, so there is nothing to hang a reason on. A
 bare card there means the harness never spoke, not that the block is trivial.
