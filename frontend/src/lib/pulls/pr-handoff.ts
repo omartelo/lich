@@ -58,3 +58,13 @@ function checksPrompt(detail: PullRequestDetail): string {
       : ""
   return `${head} Fix these checks:\n\n${lines.join("\n")}${tail}`
 }
+
+// createPullRequestPrompt hands the writing of a branch's first pull request to
+// the agent that made the commits, the way the problems above are handed over.
+// The base, draft or not, and the template are left to it and to gh: the text
+// sits at the prompt unsent, so a reader who wants otherwise edits it there.
+export function createPullRequestPrompt(branch: string): string {
+  return bracketedPaste(
+    `Branch ${branch} has no pull request yet. Open one with \`gh pr create\`: push the branch first if it is not on the remote, write the title and body from the commits and the diff against the base branch, and follow the repository's pull request template if it has one.`,
+  )
+}

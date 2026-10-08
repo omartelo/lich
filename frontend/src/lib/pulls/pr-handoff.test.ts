@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { pullRequestHandoff } from "./pr-handoff"
+import { createPullRequestPrompt, pullRequestHandoff } from "./pr-handoff"
 import type { CheckItem, PullRequestDetail } from "@/lib/api-types"
 
 const detail = (over: Partial<PullRequestDetail> = {}): PullRequestDetail => ({
@@ -98,6 +98,16 @@ describe("pullRequestHandoff", () => {
 
   it("wraps the prompt as one paste, so a newline is not a send", () => {
     const prompt = pullRequestHandoff(detail(red(["build"])))?.prompt ?? ""
+    expect(prompt.startsWith("\x1b[200~")).toBe(true)
+    expect(prompt.endsWith("\x1b[201~")).toBe(true)
+  })
+})
+
+describe("createPullRequestPrompt", () => {
+  it("names the branch and asks for gh pr create, as one unsent paste", () => {
+    const prompt = createPullRequestPrompt("quiet-willow")
+    expect(prompt).toContain("Branch quiet-willow has no pull request yet")
+    expect(prompt).toContain("`gh pr create`")
     expect(prompt.startsWith("\x1b[200~")).toBe(true)
     expect(prompt.endsWith("\x1b[201~")).toBe(true)
   })

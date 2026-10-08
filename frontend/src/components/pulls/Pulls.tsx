@@ -20,6 +20,7 @@ import { useGitStatus } from "@/lib/git/use-git-status"
 import { useCheckouts } from "@/lib/git/use-checkouts"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
 import { sweepDrafts } from "@/lib/pulls/draft-store"
+import { createPullRequestPrompt } from "@/lib/pulls/pr-handoff"
 import { PULLS_PAGE_LIMIT, parsePullsQuery } from "@/lib/pulls/pull-request-list"
 import {
   readLastPull,
@@ -334,6 +335,18 @@ export function Pulls({ list = false }: PullsProps) {
     }
   }
 
+  // The branch with no pull request is the active session's own, so that
+  // session is the one that writes it: no checkout to find or open, only the
+  // screen to leave so the prompt is in view.
+  const createWithAgent = async () => {
+    navigate(`/projects/${projectId}`)
+    try {
+      await writeAtPrompt(sessionId, createPullRequestPrompt(branch))
+    } catch (err: unknown) {
+      toast.error(`Couldn’t hand this to the session: ${errorText(err)}`)
+    }
+  }
+
   const session: SessionAction = {
     label:
       checkedOut && sessionsOf(sessions, projectId ?? "").some((s) => s.path === checkedOut.path)
@@ -379,7 +392,15 @@ export function Pulls({ list = false }: PullsProps) {
   } else if (loading) {
     body = <PullSkeleton />
   } else {
-    body = <PullsEmptyState path={path} branch={branch} onOpened={reload} />
+    body = (
+      <PullsEmptyState
+        path={path}
+        branch={branch}
+        onOpened={reload}
+        onHandOff={createWithAgent}
+        handOffBlocked={handOffBlocked(sessionId, branch)}
+      />
+    )
   }
 
   return (
@@ -411,4 +432,17 @@ function CentredNotice({ children }: { children: ReactNode }) {
       <Notice className="p-0 text-sm">{children}</Notice>
     </div>
   )
+}
+
+// Why the empty state cannot hand its pull request to an agent: a checkout with
+// no session has nobody to write it, and a detached HEAD has no branch for a
+// pull request to come from.
+function handOffBlocked(sessionId: string, branch: string): string | null {
+  if (!sessionId) {
+    return "No session on this checkout to hand it to"
+  }
+  if (!branch) {
+    return "HEAD is not on a branch"
+  }
+  return null
 }
