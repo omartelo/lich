@@ -24,6 +24,23 @@ type FiledEvent struct {
 	Folder    string   `json:"folder"`
 }
 
+// ColoredEventName carries sessions painted outside the window, so their cards
+// take the colour without a reload (sessions.ts, setSessionsColor).
+const ColoredEventName = "sessions-colored"
+
+// ColoredEvent is ColoredEventName's payload. Color is "" when the cards went
+// back to the theme.
+type ColoredEvent struct {
+	ProjectID string   `json:"projectId"`
+	IDs       []string `json:"ids"`
+	Color     string   `json:"color"`
+}
+
+// cardColors are the names a card can be painted with, in the order the
+// window's menu offers them: CARD_COLORS in frontend/src/lib/session/card-color.ts,
+// which owns the values and draws any other name as no colour at all.
+var cardColors = []string{"red", "orange", "amber", "green", "teal", "blue", "violet", "pink"}
+
 // Folder is one of a project's folders as a caller outside the window sees it:
 // its name, which is its whole identity (store.SetSessionFolder), and the
 // sessions filed under it, by label.
@@ -142,16 +159,9 @@ func (s *Service) RenameFolder(fromID, projectName, from, to string) (Refiled, e
 		return Refiled{}, errors.New("no folder was named to rename")
 	}
 
-	projects, err := s.sessions.LoadState()
-	if err != nil {
-		return Refiled{}, fmt.Errorf("read the workspace: %w", err)
-	}
-	target, err := resolveProject(projects, fromID, projectName)
+	target, err := s.projectHolding(fromID, projectName, from)
 	if err != nil {
 		return Refiled{}, err
-	}
-	if !slices.ContainsFunc(target.Sessions, func(sess store.Session) bool { return sess.Folder == from }) {
-		return Refiled{}, fmt.Errorf("no folder named %q in %s. %s", from, target.Name, knownFolders(target))
 	}
 
 	moved, err := s.sessions.RenameFolder(target.ID, from, to)
@@ -161,13 +171,81 @@ func (s *Service) RenameFolder(fromID, projectName, from, to string) (Refiled, e
 	if s.events != nil {
 		s.events.Emit(FiledEventName, FiledEvent{ProjectID: target.ID, IDs: moved, Folder: to})
 	}
+	return Refiled{Project: target.Name, From: from, To: to, Sessions: labelsOf(target, moved)}, nil
+}
+
+// Colored is what a caller is told about a folder it painted: the sessions that
+// took the colour, by label.
+type Colored struct {
+	Project  string   `json:"project"`
+	Folder   string   `json:"folder"`
+	Color    string   `json:"color"`
+	Sessions []string `json:"sessions"`
+}
+
+// ColorFolder paints every session filed under one of a project's folders, the
+// window's folder "Color" from outside it; an empty colour hands them back to
+// the theme. project names it; empty takes the caller's own.
+//
+// The folder is matched exactly and refused when no session carries it, for the
+// reason RenameFolder gives. The colour is one of the window's palette names,
+// in any case; a name outside it is refused, since the window would draw it as
+// no colour and the caller would be told otherwise.
+func (s *Service) ColorFolder(fromID, projectName, folder, color string) (Colored, error) {
+	folder, color = strings.TrimSpace(folder), strings.ToLower(strings.TrimSpace(color))
+	if folder == "" {
+		return Colored{}, errors.New("no folder was named to color")
+	}
+	if color != "" && !slices.Contains(cardColors, color) {
+		return Colored{}, fmt.Errorf(
+			"%q is not a card color: pick one of %s, or an empty one to clear it",
+			color, relay.QuotedList(cardColors),
+		)
+	}
+
+	target, err := s.projectHolding(fromID, projectName, folder)
+	if err != nil {
+		return Colored{}, err
+	}
+
+	painted, err := s.sessions.ColorFolder(target.ID, folder, color)
+	if err != nil {
+		return Colored{}, err
+	}
+	if s.events != nil {
+		s.events.Emit(ColoredEventName, ColoredEvent{ProjectID: target.ID, IDs: painted, Color: color})
+	}
+	return Colored{Project: target.Name, Folder: folder, Color: color, Sessions: labelsOf(target, painted)}, nil
+}
+
+// projectHolding resolves the project a folder-wide write is aimed at (project
+// names it; empty takes the caller's own) and refuses a folder no session in it
+// carries: the store would match no row and answer success.
+func (s *Service) projectHolding(fromID, projectName, folder string) (store.Project, error) {
+	projects, err := s.sessions.LoadState()
+	if err != nil {
+		return store.Project{}, fmt.Errorf("read the workspace: %w", err)
+	}
+	target, err := resolveProject(projects, fromID, projectName)
+	if err != nil {
+		return store.Project{}, err
+	}
+	if !slices.ContainsFunc(target.Sessions, func(sess store.Session) bool { return sess.Folder == folder }) {
+		return store.Project{}, fmt.Errorf("no folder named %q in %s. %s", folder, target.Name, knownFolders(target))
+	}
+	return target, nil
+}
+
+// labelsOf names the open sessions among ids a folder-wide write reported.
+// Parked ones are rewritten too but have no card, so they go unnamed.
+func labelsOf(p store.Project, ids []string) []string {
 	labels := []string{}
-	for _, sess := range target.Sessions {
-		if slices.Contains(moved, sess.ID) {
+	for _, sess := range p.Sessions {
+		if slices.Contains(ids, sess.ID) {
 			labels = append(labels, sess.Label)
 		}
 	}
-	return Refiled{Project: target.Name, From: from, To: to, Sessions: labels}, nil
+	return labels
 }
 
 func knownFolders(p store.Project) string {

@@ -481,7 +481,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `docs/agent-cards.md`): the plugin's mod takes the model's general-purpose `Agent` call and runs it as a lich
   session with `lich open --subagent --prompt`, in the background. The card opens in the asking session's checkout
   (`spawn.OpenSubagent`), unless the call asked for worktree isolation, which opens a worktree of its own; it is
-  filed under a folder named after the asker, its errand is kept past `ticketTTL` for as long as the worker runs,
+  filed with the asker (in the asker's folder, or one named after it that the asker is filed under too), its
+  errand is kept past `ticketTTL` for as long as the worker runs,
   the asker hears once per block when the worker waits on a permission, and the report comes back whole in a
   `[lich]` note through the asker's mod. The worker's own mod answers for it (docs/hooks/mod-answer.md), so it is
   handed the task with no ticket and its last message is its report; a worker whose mod had not polled when the

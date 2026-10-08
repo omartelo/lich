@@ -94,6 +94,7 @@ type Sessions interface {
 	RenameSession(sessionID, label string) error
 	SetSessionFolder(sessionID, folder string) error
 	RenameFolder(projectID, from, to string) ([]string, error)
+	ColorFolder(projectID, folder, color string) ([]string, error)
 	DeleteSession(projectID, sessionID, activeID string) error
 	CloseSession(projectID, sessionID, activeID string) error
 	PurgeWorktreeSessions(projectID, path string) error
@@ -229,8 +230,9 @@ func (s *Service) Open(
 //   - without a worktree it opens in the caller's checkout — its worktree, or
 //     the project directory it runs in — rather than the project's own
 //     directory, so the worker edits what the caller sees;
-//   - it is filed under a folder named after the caller's label, so workers sit
-//     under whoever asked for them;
+//   - it is filed with the caller, so workers sit under whoever asked for them:
+//     in the caller's folder, or one named after the caller's label that the
+//     caller is filed under too (subagentFolder);
 //   - it is marked on its row (SetSessionSubagent), so every spawn of it keeps
 //     its own subagents native: a card does not open cards.
 //
@@ -296,8 +298,9 @@ func (s *Service) openSession(req request) (Session, error) {
 	if err != nil {
 		return Session{}, err
 	}
+	callerToFile := ""
 	if req.subagent {
-		folder = originLabel
+		folder, callerToFile = subagentFolder(target, req.fromID, originLabel)
 		if req.worktree == "" {
 			at = besideCaller(target, req.fromID, at)
 		}
@@ -340,12 +343,13 @@ func (s *Service) openSession(req request) (Session, error) {
 	// which is the state this package exists to prevent; the spawn below reads
 	// the model back from the row, so the session starts on the provider's own
 	// default and the failure is reported once it is running.
+	callerErr := s.fileCaller(target.ID, callerToFile, folder)
 	overrideErr := s.recordOverrides(id, label, model, effort, req.ultracode)
 	markErr := s.markSubagent(id, label, req.subagent)
 	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, false, at.setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)
 	}
-	if err := errors.Join(folderErr, overrideErr, markErr); err != nil {
+	if err := errors.Join(folderErr, callerErr, overrideErr, markErr); err != nil {
 		return Session{}, err
 	}
 	return opened, nil
@@ -367,6 +371,36 @@ func besideCaller(target store.Project, fromID string, at placement) placement {
 		return placement{cwd: cwd, stored: sess.Path, label: fmt.Sprintf("Session %d", target.NextSeq)}
 	}
 	return at
+}
+
+// subagentFolder is the folder a subagent is filed under, and the caller's id
+// when the caller has to be filed there too. A caller already in a folder keeps
+// it and its workers join it, since moving it out would undo the user's own
+// grouping; one in none goes into a folder named after its label, beside them.
+func subagentFolder(target store.Project, fromID, originLabel string) (string, string) {
+	for _, sess := range target.Sessions {
+		if sess.ID == fromID && sess.Folder != "" {
+			return sess.Folder, ""
+		}
+	}
+	return originLabel, fromID
+}
+
+// fileCaller files the session that asked for a subagent under its workers'
+// folder and tells the window, after the worker's card so the caller's move is
+// never what hides it. A write that fails is reported once the worker is
+// running, for the reason recordOverrides gives.
+func (s *Service) fileCaller(projectID, callerID, folder string) error {
+	if callerID == "" {
+		return nil
+	}
+	if err := s.sessions.SetSessionFolder(callerID, folder); err != nil {
+		return fmt.Errorf("the subagent is open, but its caller could not be filed under %q: %w", folder, err)
+	}
+	if s.events != nil {
+		s.events.Emit(FiledEventName, FiledEvent{ProjectID: projectID, IDs: []string{callerID}, Folder: folder})
+	}
+	return nil
 }
 
 // markSubagent records a subagent's mark on its row before its terminal starts,

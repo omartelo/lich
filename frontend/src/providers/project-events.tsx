@@ -19,12 +19,14 @@ import {
   setSessionMCPServers,
   setSessionSandboxed,
   setSessionSchedule,
+  setSessionsColor,
   setSessionsFolder,
   type Session,
   type SessionState,
 } from "@/lib/session/sessions"
 import {
   CLOSED_EVENT,
+  COLORED_EVENT,
   FILED_EVENT,
   OPENED_EVENT,
   PROJECT_OPENED_EVENT,
@@ -48,6 +50,7 @@ import {
   shouldToastAttention,
   statusReason,
   toClosedSession,
+  toColoredSessions,
   toFiledSessions,
   toOpenedProject,
   toOpenedSession,
@@ -288,6 +291,27 @@ export function useSessionEvents({
         return
       }
       const next = setSessionsFolder(sessionsRef.current, filed.projectId, filed.ids, filed.folder)
+      if (next !== sessionsRef.current) {
+        commit(next)
+      }
+    })
+    return () => off()
+  }, [])
+
+  // A folder an agent painted through the CLI or its MCP tool: the rows are
+  // already written, so this only paints the cards and never writes back.
+  useEffect(() => {
+    const off = onAppEvent(COLORED_EVENT, (data) => {
+      const colored = toColoredSessions(data)
+      if (!colored) {
+        return
+      }
+      const next = setSessionsColor(
+        sessionsRef.current,
+        colored.projectId,
+        colored.ids,
+        colored.color,
+      )
       if (next !== sessionsRef.current) {
         commit(next)
       }

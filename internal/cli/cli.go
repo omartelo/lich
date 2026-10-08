@@ -162,6 +162,8 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.file, args[1:])
 	case "rename-folder":
 		return c.run(c.renameFolder, args[1:])
+	case "color-folder":
+		return c.run(c.colorFolder, args[1:])
 	case "cost":
 		return c.run(c.cost, args[1:])
 	case "mcp":

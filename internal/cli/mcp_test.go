@@ -229,6 +229,7 @@ func TestMCPListsEveryTool(t *testing.T) {
 		"list_folders":     {},
 		"file_session":     {"folder"},
 		"rename_folder":    {"folder", "to"},
+		"color_folder":     {"folder", "color"},
 		"control_session":  {"session", "action"},
 		"ask_session":      {"session", "question"},
 	}

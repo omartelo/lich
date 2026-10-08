@@ -81,6 +81,47 @@ func TestOpenSubagentFilesTheWorkerUnderTheCallersLabel(t *testing.T) {
 	}
 }
 
+// The caller sits in the folder with its workers, and the window hears it move.
+func TestOpenSubagentFilesTheCallerBesideItsWorkers(t *testing.T) {
+	svc, sessions, _, _, events := newService(t)
+
+	if _, err := svc.OpenSubagent("s1", "", "", "", "", "", false); err != nil {
+		t.Fatalf("OpenSubagent: %v", err)
+	}
+	if sessions.folders["s1"] != "Session 3" {
+		t.Errorf("caller filed under %q, want %q", sessions.folders["s1"], "Session 3")
+	}
+	last := events.events[len(events.events)-1]
+	filed, ok := last.data.(FiledEvent)
+	if last.name != FiledEventName || !ok || filed.Folder != "Session 3" ||
+		len(filed.IDs) != 1 || filed.IDs[0] != "s1" || filed.ProjectID != "p1" {
+		t.Errorf("last event %+v, want the caller announced into its folder", last)
+	}
+}
+
+// A caller the user already filed keeps its folder, and its workers join it:
+// moving it out would undo the user's own grouping.
+func TestOpenSubagentFilesTheWorkerUnderTheCallersFolder(t *testing.T) {
+	svc, sessions, _, _, events := newService(t)
+	sessions.projects[0].Sessions[0].Folder = "Auth"
+
+	opened, err := svc.OpenSubagent("s1", "", "", "", "", "", false)
+	if err != nil {
+		t.Fatalf("OpenSubagent: %v", err)
+	}
+	if opened.Folder != "Auth" || sessions.folders[opened.ID] != "Auth" {
+		t.Errorf("worker folder %q, rows %v; want the caller's folder", opened.Folder, sessions.folders)
+	}
+	if _, moved := sessions.folders["s1"]; moved {
+		t.Errorf("caller was refiled: %v", sessions.folders)
+	}
+	for _, e := range events.events {
+		if e.name == FiledEventName {
+			t.Errorf("caller announced as moved: %+v", e)
+		}
+	}
+}
+
 func TestOpenSubagentPassesTheOverridesThrough(t *testing.T) {
 	svc, sessions, _, term, _ := newService(t)
 

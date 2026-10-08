@@ -141,6 +141,12 @@ export const CLOSED_EVENT = "session-closed"
 // set these cards' folder.
 export const FILED_EVENT = "sessions-filed"
 
+// Global event the backend emits when the cards of a folder were painted outside
+// the window: an agent running `lich color-folder` or its MCP tool (see
+// spawn.ColoredEventName). Payload: { projectId, ids, color }, color "" for
+// cards handed back to the theme.
+export const COLORED_EVENT = "sessions-colored"
+
 // Global event the backend emits when a request's target ended its turn without
 // answering through lich (see relay.StalledEventName). Payload:
 // { id, targetId, target } — who asked ("" when it was the command line rather
@@ -561,6 +567,34 @@ export function toFiledSessions(data: unknown): FiledSessions | null {
     return null
   }
   return { projectId, ids: ids.filter((id): id is string => typeof id === "string"), folder }
+}
+
+// Sessions painted outside the window, or handed back to the theme.
+export interface ColoredSessions {
+  projectId: string
+  ids: string[]
+  color: string
+}
+
+// toColoredSessions narrows a sessions-colored payload, or null when it names no
+// project or no color to set, dropping ids that are not strings as
+// toFiledSessions does.
+export function toColoredSessions(data: unknown): ColoredSessions | null {
+  if (typeof data !== "object" || data === null) {
+    return null
+  }
+  const { projectId, ids, color } = data as {
+    projectId?: unknown
+    ids?: unknown
+    color?: unknown
+  }
+  if (typeof projectId !== "string" || projectId === "" || typeof color !== "string") {
+    return null
+  }
+  if (!Array.isArray(ids)) {
+    return null
+  }
+  return { projectId, ids: ids.filter((id): id is string => typeof id === "string"), color }
 }
 
 export function isTitleEvent(data: unknown): data is { id: string; label: string } {

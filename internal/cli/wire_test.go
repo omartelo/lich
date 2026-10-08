@@ -221,10 +221,12 @@ type spawnStore struct {
 	subagent  bool
 	// renamed is the session id and label the last rename wrote.
 	renamed [2]string
-	// filed is the session id and folder the last filing wrote, and refolded
-	// the project, old name and new name of the last folder rename.
+	// filed is the session id and folder the last filing wrote, refolded the
+	// project, old name and new name of the last folder rename, and colored the
+	// project, folder and color of the last folder painted.
 	filed    [2]string
 	refolded [3]string
+	colored  [3]string
 	// confines is what the sandbox rung answers a caller with nobody to ask.
 	confines bool
 }
@@ -304,6 +306,13 @@ func (s *spawnStore) RenameFolder(projectID, from, to string) ([]string, error) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.refolded = [3]string{projectID, from, to}
+	return []string{"s2"}, nil
+}
+
+func (s *spawnStore) ColorFolder(projectID, folder, color string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.colored = [3]string{projectID, folder, color}
 	return []string{"s2"}, nil
 }
 
@@ -656,5 +665,24 @@ func TestRenameFolderOverTheRealDispatcher(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), `"auth-fix" from folder "Apps" to "Applications"`) {
 		t.Errorf("stdout = %q, want every session that moved", stdout.String())
+	}
+}
+
+// TestColorFolderOverTheRealDispatcher proves the four arguments
+// `lich color-folder` posts land on spawn.ColorFolder in the order it declares
+// them: the folder and the color swapped would be refused as no such folder.
+func TestColorFolderOverTheRealDispatcher(t *testing.T) {
+	env, rows, _ := wiredSpawn(t, &spawnGit{})
+
+	var stdout, stderr bytes.Buffer
+	args := []string{"color-folder", "--project", "lich", "Apps", "teal"}
+	if code := Run(args, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if rows.colored != [3]string{"p1", "Apps", "teal"} {
+		t.Errorf("colored = %v, want the project's folder painted teal", rows.colored)
+	}
+	if !strings.Contains(stdout.String(), `Painted "auth-fix" in folder "Apps" teal.`) {
+		t.Errorf("stdout = %q, want every session painted", stdout.String())
 	}
 }

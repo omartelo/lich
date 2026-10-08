@@ -130,7 +130,7 @@ Arguments the app itself takes still do: bare `lich`, and `lich --` with the
 Chromium flags behind it.
 
 `--json` on `sessions`, `send`, `wait`, `open`, `close`, `control`, `ask`, `worktrees`, `folders`, `file`,
-`rename-folder`, `cost` and `version`
+`rename-folder`, `color-folder`, `cost` and `version`
 replaces the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
 `null` — a script should not have to tell those apart. One line is the contract:
@@ -349,7 +349,7 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   shell at all. A bare word with no separator in it is always read as a project
   name, never as a path.
   Every other `--project` — `close`, `rename`, `worktrees`, `folders`, `file`,
-  `rename-folder` — takes a path in the
+  `rename-folder`, `color-folder` — takes a path in the
   same spelling, but only narrows with it: opening a project is something only
   `open` does.
 - `--kind` is what the session runs: any provider id (`claude`, `codex`,
@@ -427,8 +427,10 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
     it runs in — so it edits what the caller sees, and takes the project's
     counter for its label. With `--worktree` it opens that worktree exactly as
     without the flag.
-  - is filed under a **folder named after the caller's label**, created if
-    none is, so workers sit under whoever asked for them.
+  - is filed **with the caller**, so workers sit under whoever asked for them:
+    in the caller's folder when the caller is in one, otherwise in a folder
+    named after the caller's label, created if none is, and the caller is
+    filed there too.
   - hands its **report back whole**: when it answers and nobody is holding the
     line, the note that reaches the caller through its Claude Code mod carries
     the worker's label, its branch, the ticket and the full report, so the
@@ -711,6 +713,23 @@ Moved "auth-fix", "login-tests" from folder "Auth" to "Login".
 - Parked sessions follow the rename, so a resumed one comes back into the
   folder under its new name.
 
+### `lich color-folder [--project <name>] [--json] <folder> <color>`
+
+Paints every session filed under a folder: the window's folder "Color". The
+color is one of `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet` or
+`pink`; an empty one (`''`) hands the cards back to the theme.
+
+```
+$ lich color-folder Auth teal
+Painted "auth-fix", "login-tests" in folder "Auth" teal.
+```
+
+- **A folder has no color of its own**: the color is written on each card in
+  it, as the window does, so a card filed there later keeps its own.
+- **The folder has to be one a session carries**, for `rename-folder`'s
+  reason, and a color outside the palette is refused with the palette listed.
+- `--json` prints `{"project","folder","color","sessions"}`.
+
 ### `lich cost [--project <name>] [--provider <provider>] [--since <window>] [--json|--csv]`
 
 What the sessions lich still remembers have cost, at API prices, one row per
@@ -828,6 +847,7 @@ at lich.
 | `list_folders` | optional `project`: the folders and the sessions in each, as JSON. `lich folders`. |
 | `file_session` | `folder` (`""` takes the session out), optional `session` (omitted files the caller's own) and `project`. `lich file`. |
 | `rename_folder` | `folder`, `to` (`""` takes the folder apart), optional `project`. `lich rename-folder`. |
+| `color_folder` | `folder`, `color` (`""` clears it), optional `project`. `lich color-folder`. |
 
 A tool that fails answers with `isError` and the reason as text, not a JSON-RPC
 error: the agent should read what went wrong and act on it, not lose the turn.
@@ -839,10 +859,10 @@ the tool descriptions each only explain their own door. `list_sessions`,
 `list_worktrees` and `list_folders` are annotated `readOnlyHint`, so a client
 may auto-allow them.
 
-`file_session` and `rename_folder` refuse a call that leaves out `folder` or
-`to`, rather than reading the missing field as empty: an empty name takes a
-session out of its folder, or a folder apart, and a model that forgot the field
-did not ask for that.
+`file_session`, `rename_folder` and `color_folder` refuse a call that leaves out
+`folder`, `to` or `color`, rather than reading the missing field as empty: an
+empty name takes a session out of its folder, or a folder apart, an empty color
+clears a folder's, and a model that forgot the field did not ask for that.
 
 ### `lich rage [--output <path>]`
 

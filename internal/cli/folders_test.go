@@ -111,6 +111,64 @@ func TestMCPRenameFolderWithoutANewNameIsRefused(t *testing.T) {
 	}
 }
 
+func TestMCPColorFolderPostsItsArgumentsInOrder(t *testing.T) {
+	f := newFakeLich(t, `{"project":"lich","folder":"Apps","color":"teal","sessions":["a","b"]}`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"color_folder","arguments":{"folder":"Apps","color":"teal"}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	call := f.only(t)
+	want := []any{"s1", "", "Apps", "teal"}
+	if call.method != "spawn.ColorFolder" || len(call.args) != len(want) {
+		t.Fatalf("call = %s %v, want spawn.ColorFolder %v", call.method, call.args, want)
+	}
+	for i := range want {
+		if call.args[i] != want[i] {
+			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
+		}
+	}
+	if !strings.Contains(text, `"a", "b"`) {
+		t.Errorf("result = %q, want every session painted", text)
+	}
+}
+
+// An empty color clears the folder's, so a call that left the color out must
+// not be read as one.
+func TestMCPColorFolderWithoutAColorIsRefused(t *testing.T) {
+	f := newFakeLich(t, `null`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"color_folder","arguments":{"folder":"Apps"}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if !failed || !strings.Contains(text, "name the color") {
+		t.Errorf("result = %q (failed %v), want the missing color refused", text, failed)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("calls = %+v, want nothing sent to lich", f.calls)
+	}
+}
+
+func TestColorFolderNeedsAFolderAndAColor(t *testing.T) {
+	f := newFakeLich(t, `null`)
+
+	code, _, stderr := run(t, f, "color-folder", "Apps")
+	if code == 0 || !strings.Contains(stderr, "usage: lich color-folder") {
+		t.Errorf("exit = %d, stderr = %q, want the usage line", code, stderr)
+	}
+}
+
+func TestColoredTextClearingSaysSo(t *testing.T) {
+	got := coloredText(spawn.Colored{Folder: "Apps", Sessions: []string{"a", "b"}})
+	if !strings.Contains(got, `Cleared the color of "a", "b" in folder "Apps".`) {
+		t.Errorf("coloredText = %q", got)
+	}
+}
+
 func TestMCPListFoldersReturnsThemAsJSON(t *testing.T) {
 	f := newFakeLich(t, `null`)
 
@@ -221,10 +279,15 @@ func TestFileAndRenameFolderPrintJSON(t *testing.T) {
 			`{"project":"lich","from":"Apps","to":"Applications","sessions":["auth-fix"]}`,
 			[]string{"rename-folder", "--json", "Apps", "Applications"}, &spawn.Refiled{},
 		},
+		"color-folder": {
+			`{"project":"lich","folder":"Apps","color":"teal","sessions":["auth-fix"]}`,
+			[]string{"color-folder", "--json", "Apps", "teal"}, &spawn.Colored{},
+		},
 	}
 	want := map[string]any{
 		"file":          &spawn.Filed{ID: "s2", Project: "lich", Label: "auth-fix", Folder: "Apps", Previous: "Infra"},
 		"rename-folder": &spawn.Refiled{Project: "lich", From: "Apps", To: "Applications", Sessions: []string{"auth-fix"}},
+		"color-folder":  &spawn.Colored{Project: "lich", Folder: "Apps", Color: "teal", Sessions: []string{"auth-fix"}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -251,6 +314,7 @@ func TestFolderCommandsReportWhatLichRefused(t *testing.T) {
 		{"folders"},
 		{"file", "Apps"},
 		{"rename-folder", "Apps", "Applications"},
+		{"color-folder", "Apps", "teal"},
 	} {
 		t.Run(args[0], func(t *testing.T) {
 			f := newFakeLich(t, `{"error":"no folder named \"Apps\" in lich"}`)
@@ -271,6 +335,7 @@ func TestMCPFolderToolsReportWhatLichRefused(t *testing.T) {
 		"list_folders":  `{}`,
 		"file_session":  `{"folder":"Apps"}`,
 		"rename_folder": `{"folder":"Apps","to":"Applications"}`,
+		"color_folder":  `{"folder":"Apps","color":"teal"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFakeLich(t, `{"error":"no folder named \"Apps\" in lich"}`)

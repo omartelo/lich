@@ -2,6 +2,8 @@ package spawn
 
 import (
 	"errors"
+	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -350,5 +352,103 @@ func TestFolderCallsReportAWorkspaceThatCannotBeRead(t *testing.T) {
 	}
 	if len(sessions.folders) != 0 || len(sessions.refolded) != 0 || len(events.events) != 0 {
 		t.Error("wrote something without having read the workspace")
+	}
+}
+
+// Painting a folder paints each card filed under it, in that project alone, and
+// the window hears which cards took the colour.
+func TestColorFolderPaintsEverySessionInIt(t *testing.T) {
+	svc, sessions, events := filer(t)
+
+	colored, err := svc.ColorFolder("s1", "", " Apps ", " Teal ")
+	if err != nil {
+		t.Fatalf("ColorFolder: %v", err)
+	}
+	if !slices.Equal(sessions.colored, [][3]string{{"p1", "Apps", "teal"}}) {
+		t.Errorf("colored = %v, want the one project's folder painted teal", sessions.colored)
+	}
+	if !slices.Equal(colored.Sessions, []string{"shared-a", "alone"}) || colored.Color != "teal" {
+		t.Errorf("colored = %+v, want every painted card named", colored)
+	}
+	if len(events.events) != 1 || events.events[0].name != ColoredEventName {
+		t.Fatalf("events = %+v, want one %s", events.events, ColoredEventName)
+	}
+	got := events.events[0].data.(ColoredEvent)
+	if got.ProjectID != "p1" || !slices.Equal(got.IDs, []string{"s2", "s4"}) || got.Color != "teal" {
+		t.Errorf("event = %+v, want both cards painted and none of revu's", got)
+	}
+}
+
+// An empty colour hands the folder's cards back to the theme.
+func TestColorFolderWithNoColorClearsIt(t *testing.T) {
+	svc, sessions, _ := filer(t)
+
+	if _, err := svc.ColorFolder("s1", "", "Infra", ""); err != nil {
+		t.Fatalf("ColorFolder: %v", err)
+	}
+	if !slices.Equal(sessions.colored, [][3]string{{"p1", "Infra", ""}}) {
+		t.Errorf("colored = %v, want the folder cleared", sessions.colored)
+	}
+}
+
+// The window draws a name outside its palette as no colour at all, so a caller
+// told its paint landed would be wrong: the refusal lists the palette instead.
+func TestColorFolderRefusesAColorOutsideThePalette(t *testing.T) {
+	svc, sessions, events := filer(t)
+
+	_, err := svc.ColorFolder("s1", "", "Apps", "purple")
+	if err == nil {
+		t.Fatal("painted a folder with a colour the window cannot draw")
+	}
+	for _, phrase := range []string{`"purple"`, "violet", "teal"} {
+		if !strings.Contains(err.Error(), phrase) {
+			t.Errorf("error = %q, want it to mention %s", err, phrase)
+		}
+	}
+	if len(sessions.colored) != 0 || len(events.events) != 0 {
+		t.Error("wrote something for a colour that was refused")
+	}
+}
+
+// A name no session carries is refused for RenameFolder's reason: the write
+// would match nothing and answer success.
+func TestColorFolderRefusesANameNoSessionCarries(t *testing.T) {
+	svc, sessions, events := filer(t)
+
+	_, err := svc.ColorFolder("s1", "", "apps", "red")
+	if err == nil || !strings.Contains(err.Error(), "Apps") {
+		t.Fatalf("err = %v, want a refusal naming the folders there are", err)
+	}
+	if len(sessions.colored) != 0 || len(events.events) != 0 {
+		t.Error("wrote something for a folder that is not there")
+	}
+}
+
+func TestColorFolderThatCannotBeWrittenAnnouncesNothing(t *testing.T) {
+	svc, sessions, events := filer(t)
+	sessions.folderErr = errors.New("disk full")
+
+	if _, err := svc.ColorFolder("s1", "", "Apps", "red"); err == nil {
+		t.Fatal("ColorFolder = nil, want the write's error")
+	}
+	if len(events.events) != 0 {
+		t.Errorf("events = %+v, want nothing announced", events.events)
+	}
+}
+
+// The palette's values live in the window; this list only has to name the same
+// colours, or a name the window offers would be refused here and one it lacks
+// accepted and drawn as nothing.
+func TestCardColorsNameTheWindowsPalette(t *testing.T) {
+	src, err := os.ReadFile("../../frontend/src/lib/session/card-color.ts")
+	if err != nil {
+		t.Fatalf("read the window's palette: %v", err)
+	}
+	var names []string
+	for _, m := range regexp.MustCompile(`(?m)^\s+(\w+): "oklch\(`).FindAllStringSubmatch(string(src), -1) {
+		names = append(names, m[1])
+	}
+	if !slices.Equal(names, cardColors) {
+		t.Errorf("window palette %v, cardColors %v", names, cardColors)
 	}
 }
