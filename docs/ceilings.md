@@ -115,7 +115,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The cost readout bills per `(session, transcript)`** (`internal/pricing`, `internal/terminal/usage_cost.go`): a
   conversation forked inside the PTY bills its copied history twice — lich's own resume continues the same
   transcript and is unaffected — and each sub-agent's own transcript is counted in, so one unreadable or
-  unpriceable sub-agent withholds the whole session's number. A withheld number is marked `$—` on the footer
+  unpriceable sub-agent withholds the whole session's number. A Claude Code session whose mod reports a cost
+  is not scanned at all: the report replaces the transcript, sub-agents included. A withheld number is marked `$—` on the footer
   only when the reason is standing (`costMiss.spoken` in `internal/terminal/usage_cost.go`): a transcript that
   merely could not be read this turn says nothing and keeps the last figure, so a reader cannot tell that
   absence from a session still on its first turn.
