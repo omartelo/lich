@@ -888,7 +888,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (`internal/chromium.Run`): `go run` with no `LICH_SHELL` pin, a binary copied out of the package it shipped in, a
   package missing `lib/lich/shell`, a window that exits on a missing system library or a glibc older than 2.34
   (Debian 11, RHEL 8, which `lich-shell` will not load on) — each ends in the error dialog with the log path,
-  never in a browser on the machine; the dialog names the release page. Only macOS keeps a fallback, and only to a plain tab: a window that exits
+  never in a browser on the machine; a missing window's dialog names the release page, a crashed one's
+  quotes its FATAL lines. Only macOS keeps a fallback, and only to a plain tab: a window that exits
   with an error inside `startupGrace` (30 s, because a segfault is reported only after its core dump is
   written) hands the URL to the default browser instead.
   `lich doctor` names the window a launch would open.
