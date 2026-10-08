@@ -20,6 +20,7 @@ var migrations = []func(*sql.Tx) error{
 	addSessionSubagent,
 	addCostReported,
 	addSessionColor,
+	addProviderSessionTombstones,
 }
 
 // addSessionEffort is version 2: the reasoning effort a session was opened at,
@@ -80,6 +81,34 @@ func addCostReported(tx *sql.Tx) error {
 // with, "" for one that follows the theme (SetSessionColor).
 func addSessionColor(tx *sql.Tx) error {
 	_, err := tx.Exec(`ALTER TABLE sessions ADD COLUMN color TEXT NOT NULL DEFAULT ''`)
+	return err
+}
+
+// addProviderSessionTombstones is version 8: the provider conversation ids
+// whose session row lich deleted for good (ForgottenProviderSessions). A
+// provider keeps its transcript after lich drops the row, so without this a
+// listing of the conversations on disk cannot tell one the user threw away from
+// one started outside lich.
+//
+// Triggers rather than a write beside each DELETE: a row goes through five
+// paths, one of them a project's ON DELETE CASCADE that no Go code runs. A
+// resume deletes and reinserts the same id inside one transaction, which is
+// why an insert or a new id clears the stone: the set holds ids no row holds.
+func addProviderSessionTombstones(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+CREATE TABLE provider_session_tombstones (
+    provider_session_id TEXT NOT NULL PRIMARY KEY
+);
+CREATE TRIGGER sessions_tombstone_ad AFTER DELETE ON sessions
+WHEN old.provider_session_id <> '' BEGIN
+    INSERT OR IGNORE INTO provider_session_tombstones VALUES (old.provider_session_id);
+END;
+CREATE TRIGGER sessions_tombstone_ai AFTER INSERT ON sessions BEGIN
+    DELETE FROM provider_session_tombstones WHERE provider_session_id = new.provider_session_id;
+END;
+CREATE TRIGGER sessions_tombstone_au AFTER UPDATE OF provider_session_id ON sessions BEGIN
+    DELETE FROM provider_session_tombstones WHERE provider_session_id = new.provider_session_id;
+END;`)
 	return err
 }
 
