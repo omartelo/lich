@@ -812,13 +812,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   it. A future route that reuses `Pulls` across two projects would keep the first one's box and its selection,
   and nothing in the component would say so.
 - **The settings screen remembers nothing per project, on purpose** (`frontend/src/lib/settings-prefs.ts`):
-  the pane that was open and the search box are stored under one key each, so opening Settings in project B
+  the pane that was open, the search box and the provider picked are stored under one key each, so opening Settings in project B
   lands on the pane project A was reading. That is the rule pulls-prefs states, landing on the other side —
   the nav is the same list of panes in every project, so neither is about a repository — and it is a decision
   rather than an oversight: the *values* those panes read and write are project-scoped already, in the
   workspace database under the project's own id. The trap is for whoever adds a pane that is genuinely about
   one repository's content. Its remembered state belongs on the per-project side, which means a new key with
-  the project id in it, not another global one beside these two.
+  the project id in it, not another global one beside these three.
 - **The settings search reads names, and its index is written by hand** (`frontend/src/lib/settings-index.ts`):
   every control is listed there with the section and group it lives in, because the panes are React components
   whose blocks exist only once rendered and the suite runs in node. Two things follow. A block added without
