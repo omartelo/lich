@@ -140,7 +140,7 @@ reports what Claude Code measured about itself; every other CLI's footer, and a
 Claude Code session without it, shows what lich reads from what the CLI wrote down.
 The History tab's **Outside lich** group lists conversations that ran in one of
 your projects' checkouts and that lich does not hold. A session lich opened and you
-closed for good stays out of it, except one closed before this release: lich tells
+closed for good stays out of it, except one closed before 0.62.0: lich tells
 its own Claude Code conversations apart by the name it starts them under, and the
 other seven CLIs write down nothing that could tell them apart, so theirs show up
 there once.
