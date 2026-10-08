@@ -300,7 +300,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `frontend/src/lib/git/last-turn.ts`): the two disagree, and the panel names a provider that has since started
   reporting, until that list is moved with the contract.
 - **A finished turn is unread until its own card is watched** (`frontend/src/lib/session/session-status-store.ts`,
-  `frontend/src/providers/projects.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
+  `frontend/src/providers/project-events.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
   fades only for the session whose terminal is on screen **while the window has focus**. A card left focused in a
   background window keeps its ring solid until the window is touched again, which is the point, but it also means
   a browser that reports focus oddly never fades one.
@@ -531,7 +531,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   PATH at all, a dev install registers nothing: Crush and oh-my-pi still get their hooks, and Cursor's install
   refuses outright.
 - **A plugin install is pinned, so the harness never updates it on its own** (`internal/agentplugin/compat.go`,
-  `claudePinMarketplace`, `codexPinMarketplace`): lich installs the newest plugin release inside the range it
+  `claude.go` `claudePinMarketplace`, `codex.go` `codexPinMarketplace`): lich installs the newest plugin release inside the range it
   speaks and declares Claude Code's and Codex's marketplace at that release's tag, so a plugin release this lich
   would not parse never arrives behind its back. The price is that a newer compatible release only lands through
   lich's own update prompt, and a marketplace the user pointed somewhere else is re-pointed on the next install.
@@ -696,7 +696,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   connects to. Read-only, so a host the user has never connected to *outside* the sandbox still fails inside
   it and cannot be learned there — blind trust-on-first-use is not a thing to grant an unattended agent. And a
   `known_hosts` symlinked out of a dotfiles repository is dropped like every other link in the home
-  (`internal/sandbox`'s `existing`), which takes the whole grant down with it. That is why Settings lists what
+  (`internal/sandbox`, `mounts.keep`; the card names it from `SkippedLinks`), which takes the whole grant down with it. That is why Settings lists what
   is in the agent, and re-reads the list every time the window regains focus: `ssh-add` is run in a terminal
   outside lich, so the tab back is the frame where a key loaded a moment ago has to already be named by the
   switch that hands it over. The GitHub token is one account's, the project's own (`vcs.account`), and it
