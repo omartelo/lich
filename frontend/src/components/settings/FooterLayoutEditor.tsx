@@ -46,7 +46,7 @@ import {
   type FooterZone,
 } from "@/lib/footer-layout"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 
 const ICONS: Record<FooterItem, LucideIcon> = {
   attach: Paperclip,
@@ -191,7 +191,14 @@ export function FooterLayoutEditor({ layout, disabled, onChange }: FooterLayoutE
       </div>
       <DragOverlay>
         {dragging && (
-          <span className="flex items-center gap-1.5 rounded-md bg-popover px-2.5 py-1.5 text-xs shadow-md">
+          // dnd-kit sizes the overlay to the chip it lifted, so it wears the
+          // chip's own button metrics; any other padding or glyph wraps the reading.
+          <span
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "xs" }),
+              "rounded-md bg-popover tabular-nums shadow-md ring-1 ring-inset ring-border",
+            )}
+          >
             <ItemReading id={dragging} />
           </span>
         )}
