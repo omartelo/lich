@@ -1,11 +1,11 @@
 # Decision: move the shell from WebKitGTK to Chromium
 
 **Status: option 1 shipped in v0.4.0 (2026-07-15). Option 2 shipped on Linux
-on 2026-09-05, then on Windows and Apple Silicon: lich bundles its own
+on 2026-09-05, then on Windows and macOS (Apple Silicon and Intel): lich bundles its own
 Chromium (CEF, through kurogane) and no browser is required — see the section
 at the end. The system-browser ladder option 1 built was removed once the
-window shipped everywhere; only a Mac whose window dies at startup still
-opens lich as a plain tab in the default browser.**
+window shipped everywhere; only a Mac whose window is missing or dies at
+startup still opens lich as a plain tab in the default browser.**
 
 ## Why
 
@@ -137,7 +137,7 @@ above. Files to delete when the decision lands: `cmd/spike/`,
 `frontend/spike.html`, `frontend/src/spike/`, the `spike` input in
 `frontend/vite.config.ts`.
 
-## Option 2 — embedded CEF (shipped on Linux 2026-09-05, Windows next)
+## Option 2 — embedded CEF (shipped on Linux 2026-09-05, then Windows and macOS)
 
 Chromium shipped with the app (CEF). No dependency on a system browser, the
 Chromium version pinned per release, and a window that is lich's own: its
@@ -212,8 +212,8 @@ the CI runner only.
 
 macOS ships the same window inside `Lich.app`, one bundle per architecture,
 each built and run end to end on a release runner of that architecture
-(`macos-latest` for Apple Silicon, `macos-15-intel` for Intel); a window
-that dies at startup falls back to a plain tab in the default browser
+(`macos-latest` for Apple Silicon, `macos-15-intel` for Intel); a missing
+window, or one that dies at startup, falls back to a plain tab in the default browser
 (`main.go`, `openWithoutWindow`). `lich-shell` sits beside `lich` in
 `Contents/MacOS`, because macOS reads a process's bundle off its executable's
 path and only a process inside the bundle is `Lich.app` to the Dock, to
