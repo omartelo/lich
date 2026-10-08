@@ -36,7 +36,7 @@ failed to persist.
 
 Both sides test against the payloads in
 [`fixtures/session-start.jsonl`](fixtures/session-start.jsonl), including the
-deprecated alias and the defaulted `provider`.
+defaulted `provider`.
 
 ## Event → action mapping
 

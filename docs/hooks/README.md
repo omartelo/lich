@@ -144,7 +144,7 @@ read these fixtures at a lich release tag, not from `main`.
 
 - [session-state.md](session-state.md) — a session's processing state
   (`busy`/`done`/`waiting`/`idle`) shown on its card.
-- [session-start.md](session-start.md) — the Claude session id, persisted
+- [session-start.md](session-start.md) — the provider's conversation id, persisted
   against the lich session for later features.
 - [session-title.md](session-title.md) — Claude's auto-generated `ai-title`,
   applied as the session card's label.
