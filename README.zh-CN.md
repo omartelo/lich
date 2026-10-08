@@ -198,8 +198,9 @@ Releases 发一次版本查询。Windows 安装程序装的版本会就地更新
 WebSocket）伺服内嵌的 React 18 / TypeScript / Vite 前端。终端是 xterm.js 配 WebGL
 插件；代码和 diff 界面是 CodeMirror 6。Chromium 外壳有一份决策记录：
 [`docs/chromium-shell.md`](docs/chromium-shell.md)。前置条件是 **Go 1.27.0+**、
-**Node + pnpm** 和 **[Task](https://taskfile.dev)** —— 不需要 C 工具链，也不需要
-系统开发库。
+**Node + pnpm** 和 **[Task](https://taskfile.dev)** —— Go 二进制文件不需要 C 工具链。
+窗口（`shell/`，基于 CEF 的 Rust）另外需要 Rust 工具链、CMake 和 Ninja，Linux 上还要
+Chromium 的开发库，Windows 上还要 MSVC；[CONTRIBUTING.md](CONTRIBUTING.md) 列出了它们。
 
 ```bash
 task dev      # 热重载开发模式（Vite 跑在 :9245）
