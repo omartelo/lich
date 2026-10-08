@@ -13,7 +13,7 @@ import { createKeyedStore } from "@/lib/keyed-store"
 //
 // `empty` is both the idle value and what a consumed request resets to, so it
 // is the one value a request may not carry.
-function createIntent<T>(empty: T) {
+export function createIntent<T>(empty: T) {
   const store = createKeyedStore<T>(empty)
   return {
     request: (key: string, value: T) => store.set(key, value),

@@ -18,7 +18,14 @@ beforeEach(() => {
 
 describe("a checkout's browse", () => {
   it("is all defaults for one never browsed", () => {
-    expect(fileBrowse(a)).toEqual({ query: "", open: "", selected: "", toggled: new Set() })
+    expect(fileBrowse(a)).toEqual({
+      query: "",
+      mode: "name",
+      open: "",
+      line: 0,
+      selected: "",
+      toggled: new Set(),
+    })
   })
 
   // The point of the store: a tab switch unmounts the panel, so each half of
@@ -35,7 +42,9 @@ describe("a checkout's browse", () => {
 
     expect(fileBrowse(a)).toEqual({
       query: "store",
+      mode: "name",
       open: "",
+      line: 0,
       selected: "src/lib/git-status-store.ts",
       toggled: new Set(["src", "src/lib"]),
     })
@@ -45,17 +54,45 @@ describe("a checkout's browse", () => {
   // filter and folds must never narrow another worktree's tree.
   it("belongs to one checkout and never to the next", () => {
     updateFileBrowse(a, { query: "store", selected: "src/lib/rpc.ts" })
-    expect(fileBrowse(b)).toEqual({ query: "", open: "", selected: "", toggled: new Set() })
+    expect(fileBrowse(b)).toEqual({
+      query: "",
+      mode: "name",
+      open: "",
+      line: 0,
+      selected: "",
+      toggled: new Set(),
+    })
 
     updateFileBrowse(b, { query: "panel" })
     expect(fileBrowse(a).query).toBe("store")
     expect(fileBrowse(b).selected).toBe("")
   })
 
+  // A search hit opens the preview on its line, and flipping the box between
+  // name and text keeps what was typed in it.
+  it("holds the mode and the line a hit opened on beside the query", () => {
+    updateFileBrowse(a, { query: "useRemoteResource" })
+    updateFileBrowse(a, { mode: "text" })
+    updateFileBrowse(a, { open: "src/App.tsx", line: 57 })
+    expect(fileBrowse(a)).toMatchObject({
+      query: "useRemoteResource",
+      mode: "text",
+      open: "src/App.tsx",
+      line: 57,
+    })
+  })
+
   // A panel with no session yet has no checkout to file this under, and one
   // shared empty key would hand the next checkout the last one's browse.
   it("writes nothing for a panel with no checkout", () => {
     updateFileBrowse("", { query: "store" })
-    expect(fileBrowse("")).toEqual({ query: "", open: "", selected: "", toggled: new Set() })
+    expect(fileBrowse("")).toEqual({
+      query: "",
+      mode: "name",
+      open: "",
+      line: 0,
+      selected: "",
+      toggled: new Set(),
+    })
   })
 })

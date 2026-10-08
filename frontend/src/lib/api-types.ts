@@ -284,6 +284,24 @@ export interface FileListing {
   hidden: string[] | null
 }
 
+/** internal/project.SearchMatch: one line of one file holding the query. */
+export interface SearchMatch {
+  path: string
+  /** 1-based, the preview gutter's numbering. */
+  line: number
+  /** The line without its indentation, cut to an excerpt around the first
+   * occurrence (marked with "…") when long. */
+  text: string
+}
+
+/** internal/project.SearchResult; `cut` means it stopped at the backend's cap. */
+export interface SearchResult {
+  matches: SearchMatch[]
+  cut: boolean
+  /** Listed files skipped for being over the preview's 1 MB cap. */
+  tooLarge: number
+}
+
 /** internal/project.Worktree — a git worktree checkout: branch and path. */
 export interface Worktree {
   name: string

@@ -30,6 +30,7 @@ import type {
   PluginStatus,
   Project,
   PullRequest,
+  SearchResult,
   PullRequestConversation,
   PullRequestDetail,
   PullRequestSummary,
@@ -225,6 +226,9 @@ export const ProjectService = {
    * reports the walk stopped at its cap. */
   Tree: (path: string) => call<FileListing>("project.Tree", [path]),
   ReadFile: (path: string, rel: string) => call<string>("project.ReadFile", [path, rel]),
+  /** The lines holding query, case-insensitive and literal, across the files
+   * Tree lists; files the preview refuses are skipped. */
+  Search: (path: string, query: string) => call<SearchResult>("project.Search", [path, query]),
   /** Lines from..to (1-based, inclusive) of one file for the diff's context
    * expander. ref is the revision the diff's new side stands at: "" for the
    * working tree, otherwise a git oid — a local object when the checkout has

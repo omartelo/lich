@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whole, so a revert never puts back one line without its neighbours. The choice
   is remembered and applies to every diff.
 
+- **The Code tab searches inside files.** Flip the box over the file tree from
+  Name to Text and it finds the lines holding what you typed, across the files
+  the tree lists, grouped by file. A hit opens the preview on its line, already
+  selected, so it is one right-click from the session. Binaries are skipped,
+  and so are files over 1 MB, which the list counts under it. "Search in files"
+  in Settings › Hotkeys opens it from anywhere; it has no key until you give it
+  one.
+
 ### Changed
 
 - **The window is laid out as islands.** The session sidebar, the terminals and
