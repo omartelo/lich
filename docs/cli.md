@@ -127,8 +127,8 @@ none answered.
 
 A word that names no subcommand is refused with `lich: unknown command "…"`, a
 guess at the one it resembles, and exit 1 — a typo does not open a window.
-Arguments the app itself takes still do: bare `lich`, and `lich --` with the
-Chromium flags behind it.
+Arguments the app itself takes still do: bare `lich`, `lich --shell <path>`, and
+`lich --` with the Chromium flags behind it.
 
 `--json` on `sessions`, `send`, `wait`, `open`, `close`, `control`, `ask`, `worktrees`, `folders`, `file`,
 `rename-folder`, `color-folder`, `cost` and `version`
