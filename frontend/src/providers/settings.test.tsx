@@ -156,3 +156,31 @@ describe("the diff layout", () => {
     expect(localStorage.getItem("lich.diff.layout")).toBe("split")
   })
 })
+
+describe("hiding whitespace changes", () => {
+  async function hiddenAfter(change?: boolean): Promise<boolean> {
+    let seen = false
+    let choose: (() => void) | undefined
+    function Probe() {
+      const { hideWhitespace, setHideWhitespace } = useSettings()
+      seen = hideWhitespace
+      choose = () => change !== undefined && setHideWhitespace(change)
+      return null
+    }
+    const mounted = await mountBudget(createElement(SettingsProvider, null, createElement(Probe)))
+    await mounted.act(() => {})
+    await mounted.act(() => choose?.())
+    await mounted.unmount()
+    return seen
+  }
+
+  it("is off for an install that never chose, so an update changes no diff", async () => {
+    expect(await hiddenAfter()).toBe(false)
+  })
+
+  it("persists a change under its own key", async () => {
+    expect(await hiddenAfter(true)).toBe(true)
+    expect(localStorage.getItem("lich.diff.hideWhitespace")).toBe("true")
+    expect(await hiddenAfter()).toBe(true)
+  })
+})

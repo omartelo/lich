@@ -15,17 +15,7 @@ import type { DiffFile, DiffHunk, DiffLine } from "./diff"
 // A hunk left with no change is dropped, which is what git -w does too: the
 // unchanged lines either side of it become part of a wider gap, pulled in by
 // the expanders like any other. The counts are recounted from what is left.
-export function hideWhitespace(files: DiffFile[]): DiffFile[] {
-  return files.map(hideInFile)
-}
-
-/** True for a file every change of which was whitespace. Its card says so
- * instead of drawing an empty body. */
-export function whitespaceOnly(shown: DiffFile, original: DiffFile): boolean {
-  return shown.hunks.length === 0 && original.hunks.length > 0
-}
-
-function hideInFile(file: DiffFile): DiffFile {
+export function hideWhitespace(file: DiffFile): DiffFile {
   if (file.binary) {
     return file
   }
@@ -37,6 +27,12 @@ function hideInFile(file: DiffFile): DiffFile {
     added: lines.filter((line) => line.kind === "add").length,
     deleted: lines.filter((line) => line.kind === "del").length,
   }
+}
+
+/** True for a file every change of which was whitespace. Its card says so
+ * instead of drawing an empty body. */
+export function whitespaceOnly(shown: DiffFile, original: DiffFile): boolean {
+  return shown.hunks.length === 0 && original.hunks.length > 0
 }
 
 function foldHunk(hunk: DiffHunk): DiffHunk {

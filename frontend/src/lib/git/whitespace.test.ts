@@ -35,7 +35,7 @@ const reindentThenRealChange = `${header}@@ -1,3 +1,3 @@
 
 function hidden(text: string) {
   const [original] = parseDiff(text)
-  const [shown] = hideWhitespace([original])
+  const shown = hideWhitespace(original)
   return { original, shown }
 }
 
@@ -98,6 +98,6 @@ describe("hideWhitespace", () => {
     const [binary] = parseDiff(`diff --git a/logo.png b/logo.png
 index 1111111..2222222 100644
 Binary files a/logo.png and b/logo.png differ`)
-    expect(hideWhitespace([binary])).toEqual([binary])
+    expect(hideWhitespace(binary)).toBe(binary)
   })
 })
