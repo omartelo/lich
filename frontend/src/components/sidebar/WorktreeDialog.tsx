@@ -57,15 +57,17 @@ interface WorktreeDialogProps {
   /** The session whose conversation this worktree's session will carry, when
    * the dialog was opened by a fork rather than by the + button: its label for
    * the sentence, and its checkout, which is both the base the fork opens on
-   * and the source of the working-tree row. */
+   * and the source of the working-tree row. The + button's row reads the
+   * project's own checkout instead. */
   forkOf?: { label: string; path: string } | null
 }
 
-// The forked session's checkout as a base: its branch at the same commit, plus
-// the work it has not committed. A fork is usually made at the moment there is
-// uncommitted work to take two ways, so this is the row the dialog opens on —
-// the branch itself stays right below it, and is that same branch at its last
-// commit.
+// A checkout as a base: its branch at the same commit, plus the work it has not
+// committed. The checkout is the forked session's, or the project's own for the
+// + button. A fork is usually made at the moment there is uncommitted work to
+// take two ways, so a fork opens on this row; the + button is usually a new
+// task, so it opens on the branch and leaves the row one pick away. Either way
+// the branch itself is that same branch at its last commit.
 interface WorkingTree {
   path: string
   branch: string
@@ -173,16 +175,15 @@ export function WorktreeDialog({
   const listRef = useRef<HTMLDivElement>(null)
   // A worktree is always the linked checkout, so the rung is read on that side.
   const sandbox = useSandboxChoice(providerId, projectId, true, open)
-  // The forked session's checkout, polled by the shared store the card behind
-  // this dialog is already subscribed to. An empty path subscribes to nothing,
-  // which is what the + button's dialog passes.
-  const source = useGitStatus(forkOf?.path ?? "")
+  // The checkout the working-tree row copies from, polled by the shared store
+  // the sidebar is already subscribed to for that path.
+  const source = useGitStatus(forkOf?.path ?? projectPath)
   // The branch has to be one git will take as a base: a checkout sitting on a
   // detached HEAD reports something that names no branch, and offering it would
   // buy a git refusal at the end of a dialog the user already filled in.
   const tree: WorkingTree | null =
-    forkOf && source && source.files > 0 && (branches?.local ?? []).includes(source.branch)
-      ? { path: forkOf.path, branch: source.branch, files: source.files }
+    source && source.files > 0 && (branches?.local ?? []).includes(source.branch)
+      ? { path: forkOf?.path ?? projectPath, branch: source.branch, files: source.files }
       : null
 
   const vis = filterBranches(branches, filter, tree)
@@ -271,8 +272,8 @@ export function WorktreeDialog({
     }
   }, [open, projectPath])
 
-  // The row the dialog opens on, applied while nothing is selected yet: the
-  // forked session's working tree when it has work to carry, then the branch
+  // The row the dialog opens on, applied while nothing is selected yet: a
+  // fork's working tree when it has work to carry, then the branch
   // that session is on, then the repository's own branch. A fork waits for its
   // source's git status instead of preselecting a branch it would have to move
   // off a tick later — the card behind the dialog is polling that path already,
@@ -289,7 +290,7 @@ export function WorktreeDialog({
     if (!open || base !== "" || branches === null || (forkOf && source === null)) {
       return
     }
-    if (tree) {
+    if (forkOf && tree) {
       setBase(rowValue("tree", tree.path))
       return
     }
@@ -451,14 +452,14 @@ export function WorktreeDialog({
             className="min-h-0 flex-1 overflow-y-auto rounded-md border border-input p-1"
           >
             <Group
-              title="This session"
+              title={forkOf ? "This session" : "This checkout"}
               items={
                 vis.tree
                   ? [
                       {
                         value: rowValue("tree", vis.tree.path),
                         label: `${vis.tree.branch} · working tree`,
-                        note: `Same commit, plus the ${count(vis.tree.files, "file")} this session has not committed.`,
+                        note: `Same commit, plus the ${count(vis.tree.files, "file")} this ${forkOf ? "session" : "checkout"} has not committed.`,
                       },
                     ]
                   : []

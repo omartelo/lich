@@ -3,14 +3,15 @@ import { ProjectService } from "@/lib/rpc"
 import type { Worktree } from "@/lib/api-types"
 import { errorText } from "@/lib/utils"
 
-// carryInto copies a forked session's uncommitted work into the worktree that
-// was just created for it, and says out loud when it cannot. It never throws:
+// carryInto copies a checkout's uncommitted work (a forked session's, or the
+// project's own picked from the + dialog) into the worktree that was just
+// created for it, and says out loud when it cannot. It never throws:
 // the worktree exists either way, and the session opening on it is worth more
-// than the copy — the work it was carrying is still sitting in the card it came
-// from.
+// than the copy — the work it was carrying is still sitting in the checkout it
+// came from.
 //
-// from is "" for every worktree that is not a fork of a working tree, which is
-// most of them.
+// from is "" for every worktree that was not based on a working-tree row, which
+// is most of them.
 export async function carryInto(from: string, wt: Worktree): Promise<void> {
   if (!from) {
     return

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Take uncommitted work into a new worktree.** When the project's checkout has
+  changes it has not committed, the **+** dialog lists it as a base of its own,
+  `<branch> · working tree`. Pick it and the new worktree starts on the same
+  commit with those changes copied in, untracked files included. The checkout
+  you took them from keeps its copy.
+
 ### Changed
 
 - **The window is laid out as islands.** The session sidebar, the terminals and

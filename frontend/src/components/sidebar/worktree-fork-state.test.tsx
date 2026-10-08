@@ -15,7 +15,7 @@ import { WorktreeDialog } from "./WorktreeDialog"
 const source = vi.hoisted(() => ({ status: null as GitStatus | null }))
 
 vi.mock("@/lib/git/use-git-status", () => ({
-  // Only the forked session's checkout is polled; the + button passes "".
+  // Every suite here forks, so the only checkout polled is the forked session's.
   useGitStatus: (path: string) => (path ? source.status : null),
 }))
 

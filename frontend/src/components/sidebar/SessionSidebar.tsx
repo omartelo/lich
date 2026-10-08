@@ -308,7 +308,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     const wt = await ProjectService.CreateWorktree(path, projectId, name, base, baseIsRemote)
     if (wt) {
       // Before the session opens, so the agent's first look at the checkout is
-      // the state it was forked from.
+      // the working tree it was based on.
       await carryInto(carryFrom, wt)
       const opened = newWorktreeSession(projectId, wt, sandbox, forking)
       // Queued before the card mounts, so the first spawn branches the parent's
