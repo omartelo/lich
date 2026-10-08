@@ -908,9 +908,11 @@ lich v0.25.0 — linux/amd64
   ok    log          <1ms  /home/u/.config/lich/lich.log
   ok    listener     <1ms  port 47821 is held by the running lich (pid 4242)
   skip  store        <1ms  held by the running lich (pid 4242)
-  ok    browser       2ms  /usr/bin/chromium
+  ok    browser       2ms  /usr/lib/lich/shell/lich-shell
   ok    providers     3ms  4 of 8 on PATH: claude, codex, opencode, crush
   ok    sandbox      11ms  bubblewrap confines a session here
+  ok    git          <1ms  /usr/bin/git
+  ok    gh           <1ms  /usr/bin/gh
         total        17ms
 
 lich starts here — nothing is in the way.
@@ -927,6 +929,8 @@ The checks are in boot order, and each carries its own verdict:
 | `browser` | No window resolves — neither one beside the binary nor a `LICH_SHELL` pin. lich would run and show nothing. | — |
 | `providers` | — | None on PATH: the window opens, but no session can spawn. |
 | `sandbox` | — | The backend will not start (an AppArmor policy denying user namespaces, say), so a session opened with the sandbox on will not start either; or it starts and confines nothing, so a session marked confined runs on the machine. Skipped where the platform has no backend at all. |
+| `git` | Never. | Not on PATH: branches, diffs and worktrees stay empty. |
+| `gh` | Never. | Not on PATH: pull requests, checks and PR checkouts are unavailable. |
 
 A `fail` exits 1 and a clean run exits 0, which is the automation surface here —
 there is no `--json`. It needs no TTY, no running instance and no network.
