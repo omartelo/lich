@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The window is laid out as islands.** The session sidebar, the terminals and
+  the side panel are rounded panels floating on a darker ground, separated by a
+  gap instead of a line; the tab bar and the footer sit on that ground. Custom
+  themes get it without changes: the ground is derived from the theme's own
+  background.
+
+- **Collapsing and expanding the sidebar animates.** Each session's icon slides
+  between the rail and its card, and the terminals follow the sidebar's edge.
+
 ### Fixed
 
 - **Dragging a session card in a worktree keeps the card its own size.** The

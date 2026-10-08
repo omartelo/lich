@@ -58,8 +58,8 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
       aria-label={tab === "files" ? "File browser" : "Review changes"}
       className={
         fullscreen
-          ? "absolute inset-0 z-20 flex flex-col bg-sidebar"
-          : "relative flex shrink-0 flex-col border-l border-border bg-sidebar"
+          ? "absolute inset-0 z-20 flex flex-col rounded-lg bg-sidebar"
+          : "relative flex shrink-0 flex-col rounded-lg bg-sidebar"
       }
       style={fullscreen ? undefined : { width: `${width}rem` }}
     >

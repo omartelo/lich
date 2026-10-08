@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import type { KeyboardEvent } from "react"
+import { SIDEBAR_MORPH } from "@/lib/view-transition"
 import { useMatch, useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
@@ -468,8 +469,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
 
   return (
     <aside
-      className="relative flex shrink-0 flex-col border-r border-border bg-sidebar p-2"
-      style={{ width: `${width}rem` }}
+      className="relative mb-1.5 flex shrink-0 flex-col rounded-lg bg-sidebar p-2"
+      style={{ width: `${width}rem`, viewTransitionName: SIDEBAR_MORPH.panel }}
     >
       <div className="mb-2 flex items-center gap-1">
         <DropdownMenu>
@@ -483,7 +484,10 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
               />
             }
           >
-            <Plus className="size-4 text-muted-foreground" />
+            <Plus
+              className="size-4 text-muted-foreground"
+              style={{ viewTransitionName: SIDEBAR_MORPH.newSession }}
+            />
             New Session
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="max-w-56">
@@ -519,7 +523,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
           onClick={onCollapse}
           className="size-8 shrink-0 justify-center px-0 text-muted-foreground hover:bg-accent hover:text-foreground"
         >
-          <PanelLeftClose className="size-4" />
+          <PanelLeftClose className="size-4" style={{ viewTransitionName: SIDEBAR_MORPH.toggle }} />
         </Button>
       </div>
       {/* Revealed rather than resident: 36px is half a session card off a list

@@ -13,9 +13,11 @@ import { computeGrid } from "./term-fit"
 // any size, and the terminal's real size is the terminalFontSize setting.
 const FONT_PROBE_SIZE = 14
 
-// Left gutter so the first column doesn't sit flush against the sidebar/panel
-// seam. Subtracted before the grid fit below so it doesn't cost a column.
-export const TERMINAL_PADDING_LEFT = 4
+// Inset that keeps the grid clear of the stage island's rounded corners
+// (rounded-lg, 8px): at 6px the corner's arc has left the cell, and the left
+// side takes a little more so the first column doesn't read as flush. Subtracted
+// before the grid fit below so it doesn't cost a column.
+export const TERMINAL_PADDING = { top: 6, right: 6, bottom: 6, left: 10 }
 
 // cellDimensions reads the renderer's measured cell size — the same private
 // API FitAddon relies on ("TODO: Remove reliance" upstream). Null before the
@@ -73,8 +75,8 @@ export function cursorShape(term: Terminal): { style?: string; blink?: boolean }
 }
 
 // fitTerminal resizes the grid to fill the container edge to edge on the
-// right/bottom (replacing xterm's FitAddon, which reserves a scrollbar
-// gutter on the right — see term-fit.ts), minus the fixed left gutter above.
+// inside the padding above (replacing xterm's FitAddon, which reserves a
+// scrollbar gutter on the right — see term-fit.ts).
 // No-op when metrics or size aren't ready, or the grid already fits.
 export function fitTerminal(term: Terminal, container: HTMLElement): void {
   const cell = cellDimensions(term)
@@ -82,8 +84,8 @@ export function fitTerminal(term: Terminal, container: HTMLElement): void {
     return
   }
   const grid = computeGrid(
-    container.clientWidth - TERMINAL_PADDING_LEFT,
-    container.clientHeight,
+    container.clientWidth - TERMINAL_PADDING.left - TERMINAL_PADDING.right,
+    container.clientHeight - TERMINAL_PADDING.top - TERMINAL_PADDING.bottom,
     cell,
   )
   if (grid && (grid.cols !== term.cols || grid.rows !== term.rows)) {
