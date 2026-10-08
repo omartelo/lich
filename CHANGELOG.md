@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in Settings › Hotkeys opens it from anywhere; it has no key until you give it
   one.
 
+- **Filter the sidebar by state.** The sidebar's search now has chips under the
+  field: **Waiting**, **Running**, **Unread** and **Idle**, each with a count. Pick
+  one or several to see only those sessions, alone or together with the text you
+  typed; **All** clears them. The session on screen always stays in the list.
+  Crush and Cursor CLI sessions always count as Idle, and only Claude Code, Codex
+  and opencode sessions can be Waiting.
+
 ### Changed
 
 - **The window is laid out as islands.** The session sidebar, the terminals and

@@ -35,7 +35,13 @@ import { useProjects } from "@/providers/projects"
 import { queueFork } from "@/lib/terminal/fork-queue"
 import { queueSetup } from "@/lib/terminal/setup-queue"
 import { writeAtPrompt } from "@/lib/terminal/write-at-prompt"
-import { filterSessions } from "@/lib/session/session-filter"
+import {
+  filterSessions,
+  noMatchNotice,
+  phaseCounts,
+  type SessionPhase,
+} from "@/lib/session/session-filter"
+import { useSessionPhases } from "@/lib/session/use-session-status"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { activeSessionId, foldersOf, sessionsOf, type Session } from "@/lib/session/sessions"
 import {
@@ -51,6 +57,7 @@ import { moveGroupCollapsed } from "@/lib/session/group-prefs"
 import { NewFolderDialog } from "./NewFolderDialog"
 import { WorktreeCloseDialogs } from "./WorktreeCloseDialogs"
 import { SessionGroup } from "./SessionGroup"
+import { SessionPhaseChips } from "./SessionPhaseChips"
 import { WorktreeDialog } from "./WorktreeDialog"
 import { useWorktreeClose } from "./useWorktreeClose"
 import { carryInto } from "@/lib/git/carry"
@@ -161,9 +168,11 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // the list underneath is a different set of sessions entirely.
   const [filterOpen, setFilterOpen] = useState(false)
   const [query, setQuery] = useState("")
+  const [phases, setPhases] = useState<ReadonlySet<SessionPhase>>(new Set())
   useEffect(() => {
     setFilterOpen(false)
     setQuery("")
+    setPhases(new Set())
   }, [projectId])
   // The shortcut's half of the New session menu's Worktree item. Ungated where
   // the menu item is disabled without a branch: git status may still be loading
@@ -204,8 +213,19 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // The query narrows the flat list before the groups are built from it, so
   // grouping, the pinned block and the stored order all keep working on the
   // survivors without knowing a filter exists.
-  const filtering = query.trim() !== ""
-  const { sessions: visible, matched } = filterSessions(list, query, path, realActiveId)
+  const filtering = query.trim() !== "" || phases.size > 0
+  const phaseOfSession = useSessionPhases(
+    list.map((session) => session.id),
+    filterOpen,
+  )
+  const { sessions: visible, matched } = filterSessions(
+    list,
+    query,
+    path,
+    realActiveId,
+    phases,
+    phaseOfSession,
+  )
   // The split's own block is built from the members, not from what is on screen:
   // a parked wall is exactly the case the user could not see before.
   const groups = sidebarGroups(visible, panes.groups)
@@ -237,11 +257,12 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     [projects, sessions, realActiveId],
   )
 
-  // Closing clears the query: a filter outliving its own field would be hiding
+  // Closing clears the query and the chips: a filter outliving its own field would be hiding
   // cards with nothing on screen to say why. Same reason the collapsed rail
   // never filters — unmounting this sidebar drops the query with it.
   const toggleFilter = () => {
     setQuery("")
+    setPhases(new Set())
     setFilterOpen((open) => !open)
   }
 
@@ -256,6 +277,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
       setQuery("")
       return
     }
+    setPhases(new Set())
     setFilterOpen(false)
     if (realActiveId) {
       requestTerminalFocus(realActiveId)
@@ -531,7 +553,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
           to find something — the sidebar is watched all day and opened for
           nothing. */}
       {filterOpen && (
-        <div className="mb-2">
+        <div className="mb-2 flex flex-col gap-1.5">
           <SearchInput
             // The field exists only once the magnifier is pressed, and that press
             // is the request for it.
@@ -543,6 +565,11 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             aria-label="Filter sessions"
             spellCheck={false}
             className="h-7 text-xs"
+          />
+          <SessionPhaseChips
+            picked={phases}
+            counts={phaseCounts(list, query, path, phaseOfSession)}
+            onChange={setPhases}
           />
         </div>
       )}
@@ -585,9 +612,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             query says, so the list is rarely empty and the sentence has to
             explain the one card that is still there. */}
         {filtering && !matched && (
-          <Notice className="px-2 py-3">
-            No sessions match “{query.trim()}”. The active session stays.
-          </Notice>
+          <Notice className="px-2 py-3">{noMatchNotice(query, phases)}</Notice>
         )}
         {/* Every block in one list, in the order sidebarGroups drew them: the
             pinned one first and fixed, the rest — walls and checkouts alike —

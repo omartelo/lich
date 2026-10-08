@@ -102,6 +102,7 @@ reads what each CLI writes down and no two of them write down the same things.
 | How much of your plan is left | yes | yes | no | no | no | no | no | no |
 | Spinner while a turn runs, ring when it ends | yes | yes | yes | yes | yes | no | no | yes |
 | Bell when the agent is blocked on you | yes | yes | no | yes | no | no | no | no |
+| Sidebar filter by state: Waiting, Running, Unread | yes | yes | no Waiting | yes | no Waiting | no, always Idle | no, always Idle | no Waiting |
 | Machine kept out of idle sleep while a turn runs | yes | yes | yes | yes | yes | no | no | yes |
 | Review tab's **Last turn**, with the agent's recap | yes | yes | yes | yes | yes | no | no | yes |
 | Search the conversation from the palette | yes | yes | yes | yes | yes | yes | no | yes |
