@@ -3,9 +3,9 @@
 lich observes and drives provider sessions through **hooks**. Each hook runs
 inside a session (shipped by the companion plugin
 [`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin), which installs
-on Claude Code, Codex, Antigravity, opencode, oh-my-pi and Crush) and talks to
-lich over a shared local transport. On Claude Code, Codex, Antigravity and Crush
-it is a small script the harness runs; opencode and oh-my-pi load a JavaScript
+on Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush and Kiro CLI) and
+talks to lich over a shared local transport. On Claude Code, Codex, Antigravity,
+Crush and Kiro CLI it is a small script the harness runs; opencode and oh-my-pi load a JavaScript
 module instead, which is a difference in packaging, not in what a report is.
 
 The contracts are provider-agnostic: lich injects the same variables into every
