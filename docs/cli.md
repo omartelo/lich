@@ -837,7 +837,7 @@ at lich.
 |------|--------------|
 | `list_sessions` | The live sessions that can be given work, as JSON — each with the state it last reported, `waiting` among them. |
 | `send_to_session` | `session`, `prompt`, optional `project`, `timeout_seconds` and `private` (`lich send --private`). |
-| `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
+| `wait_for_answer` | optional `ticket`, `timeout_seconds` and `no_wait` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. `no_wait` is `lich wait --no-wait` and takes no ticket. |
 | `reply_to_session` | `answer`, optional `ticket` — what a relayed message asks for; without a ticket, the one request open against the calling session, and a refusal naming each open ticket when there are two. |
 | `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model`, `effort`, `ultracode`, `folder` — `lich open` — plus optional `prompt` and `private` — `lich open --prompt [--private]`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
@@ -1088,7 +1088,7 @@ distinction is the point: the receiving agent must not read either as its user
 speaking, and the two are not the same kind of "not your user".
 
 A target that **has** lich's tools is offered one first — Claude Code and Codex
-always, Antigravity, opencode, oh-my-pi and Crush once the installed plugin is
+always, Antigravity, opencode, oh-my-pi, Crush and Kiro once the installed plugin is
 new enough to carry them
 (`agentplugin.HasTools`) — Cursor among them, whose tools come from the document
 its install writes rather than from the plugin it borrows from Claude Code. A session pointed at a tool it does not have loses the
@@ -1221,7 +1221,7 @@ whoever asked.
   every tool it has. This does not widen lich's trust boundary (`LICH_TOKEN` is
   already in every PTY, and any process in one can already write to any
   session), but it is the first feature that uses it, and there is no switch.
-- **The tools cost context in every session, used or not.** Eight tool
+- **The tools cost context in every session, used or not.** Fourteen tool
   definitions are in the prompt of every Claude Code and Codex session lich
   spawns, whether or not that session ever talks to another one. The command
   line costs nothing until it is called; the tools are what buy discovery, and
