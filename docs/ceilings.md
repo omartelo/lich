@@ -96,7 +96,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   not to a store the sidebar reads. The chips are not persisted and drop on a project switch, like the query.
 - **The Run card is never started for you** (`frontend/src/components/sidebar/SessionSidebar.tsx`): a fresh
   worktree's setup script is still installing dependencies in the agent's card when the checkout appears, and
-  lich has no "setup finished" signal to hang an automatic start on — `terminal.Ready` answers a different
+  the setup-finished marker (`setupDone`, `internal/terminal/setup.go`) never reaches the window, so there is
+  nothing there to hang an automatic start on — `terminal.Ready` answers a different
   question, going false again for every turn the agent takes. So the card is one gesture, which is also what
   keeps eight worktrees from meaning eight dev servers.
 - **A session is ready for work only once its agent reports from its own prompt, where it can**
