@@ -46,10 +46,10 @@ lich lets you:
   you share it with; write your dev server into `.lich/run-worktree.sh` and every
   checkout gets a **Run** card for it, on the port lich reserved for that
   worktree. The footer follows `cd` and names the branch — and, for a
-  Claude Code or Codex session, the model and the context window in use; for
-  those two, Antigravity, Cursor CLI and an OpenCode Go subscription, how much
-  of your plan's rolling window is left; for Claude Code, if you ask, what the
-  session has spent.
+  Claude Code, Codex or Kiro CLI session, the model and the context window in
+  use; for Claude Code, Codex, Antigravity, Cursor CLI and an OpenCode Go
+  subscription, how much of your plan's rolling window is left; if you ask, what
+  the session has spent, on the providers that record it.
 - **Put one session to work for another.** Hand a task to another card and its
   own agent writes the answer back, whatever runs in either end: the agent
   reaches the other sessions through tools handed at spawn — MCP for Claude
