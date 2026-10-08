@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Search the terminal font list by name.** Settings › Appearance › Terminal
+  font opens with a search field: type part of a name to narrow fontconfig's
+  list, then pick with the arrow keys and Enter. Long family names no longer
+  run under the checkmark.
+
 ## [0.62.1] - 2026-10-08
 
 ### Fixed

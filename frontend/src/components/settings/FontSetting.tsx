@@ -3,13 +3,16 @@ import { Fonts as FontService } from "@/lib/rpc"
 import { useRemoteResource } from "@/lib/use-remote-resource"
 import { DEFAULT_FONT, useSettings } from "@/providers/settings"
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+} from "@/components/ui/combobox"
+import { Button } from "@/components/ui/button"
 import { SettingRow } from "./SettingBlock"
 
 // A module-level constant, as every array `empty` has to be: a fresh one per
@@ -43,20 +46,27 @@ export function FontSetting() {
         <span style={{ fontFamily: font }}>the quick brown fox 0O1lI</span>
       }
     >
-      <Select value={font} onValueChange={(value) => value && setFont(value)}>
-        <SelectTrigger className="w-56">
-          <SelectValue placeholder="Select a font" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {options.map((family) => (
-              <SelectItem key={family} value={family}>
-                {family}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+      <Combobox items={options} value={font} onValueChange={(value) => value && setFont(value)}>
+        <ComboboxTrigger
+          render={<Button variant="outline" className="w-64 justify-between font-normal" />}
+          aria-label="Terminal font"
+        >
+          <span className="truncate">
+            <ComboboxValue />
+          </span>
+        </ComboboxTrigger>
+        <ComboboxContent>
+          <ComboboxInput showTrigger={false} placeholder="Search fonts" />
+          <ComboboxEmpty>No font matches.</ComboboxEmpty>
+          <ComboboxList>
+            {(family: string) => (
+              <ComboboxItem key={family} value={family} title={family}>
+                <span className="truncate">{family}</span>
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
     </SettingRow>
   )
 }
