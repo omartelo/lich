@@ -166,7 +166,7 @@ cat > lich-theme.json <<'EOF'
 EOF
 ```
 
-Put a theme beside it. Settings › Appearance › **Save template** writes a valid
+Put a theme beside it. Settings › Appearance › **Import** › **Download template** writes a valid
 starter naming every supported color — save it into the repository, then set its
 `id`, `name` and `scheme`. File names inside the repository are yours; lich
 stores each theme as `<id>.json` under its own directory on install.
