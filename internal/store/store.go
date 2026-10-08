@@ -251,6 +251,11 @@ type Service struct {
 	// transcriptOf, when set, reads a conversation as searchable prose and says
 	// whether the cap dropped the oldest of it. See SetTranscriptOf.
 	transcriptOf func(providerSessionID, cwd string) (text string, cut bool)
+	// conversationsOf, when set, lists the conversations providers keep on
+	// disk. See SetConversationsOf.
+	conversationsOf func() []Conversation
+	// checkoutsOf, when set, lists a repository's checkouts. See SetCheckoutsOf.
+	checkoutsOf func(projectPath string) ([]string, error)
 	// backfilling guards the lazy index backfill, so every search that arrives
 	// while one is running starts nothing. See backfill.
 	backfilling atomic.Bool

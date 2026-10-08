@@ -24,6 +24,8 @@ import (
 var denied = map[string]reflect.Type{
 	"store.Close":                     reflect.TypeFor[*store.Service](),
 	"store.SetSessionGone":            reflect.TypeFor[*store.Service](),
+	"store.SetConversationsOf":        reflect.TypeFor[*store.Service](),
+	"store.SetCheckoutsOf":            reflect.TypeFor[*store.Service](),
 	"drop.Upload":                     reflect.TypeFor[*drop.Service](),
 	"drop.Save":                       reflect.TypeFor[*drop.Service](),
 	"drop.Purge":                      reflect.TypeFor[*drop.Service](),
@@ -64,6 +66,8 @@ func (stubService) SetPlugins() error          { return nil }
 func (stubService) SetAccounts() error         { return nil }
 func (stubService) SetProjects() error         { return nil }
 func (stubService) SetDropDir() error          { return nil }
+func (stubService) SetConversationsOf() error  { return nil }
+func (stubService) SetCheckoutsOf() error      { return nil }
 func (stubService) EnqueueModCommand() error   { return nil }
 func (stubService) RunModCommand() error       { return nil }
 func (stubService) SubmitPrompt() error        { return nil }

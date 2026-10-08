@@ -104,3 +104,24 @@ func TestRosterNameSeparatesSessionsSharingACheckout(t *testing.T) {
 		t.Fatalf("two sessions in one checkout share the name %q", first)
 	}
 }
+
+// TestIsRosterNameRecognisesEveryBirthName pins the inverse: whatever id lich
+// mints a session under, the name RosterName gives it is recognised as one, and
+// a name the user typed is not.
+func TestIsRosterNameRecognisesEveryBirthName(t *testing.T) {
+	for _, tc := range []struct{ cwd, id string }{
+		{"/home/u/try/skipo", "3c5bd823-ad2f"},
+		{"/home/u/try/skipo/", "a-b-c-d-e"},
+		{"", "0118880a"},
+		{`C:\work\alpha`, "ffff0000"},
+	} {
+		if name := RosterName(tc.cwd, tc.id); !IsRosterName(name, tc.cwd) {
+			t.Errorf("IsRosterName(%q, %q) = false, want true for RosterName's own output", name, tc.cwd)
+		}
+	}
+	for _, name := range []string{"", "skipo", "skipo-3c5", "skipo-3c5bd", "skipo-3c_b", "fix login", "other-3c5b"} {
+		if IsRosterName(name, "/home/u/try/skipo") {
+			t.Errorf("IsRosterName(%q) = true, want false", name)
+		}
+	}
+}

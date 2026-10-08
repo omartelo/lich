@@ -179,6 +179,26 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// conversation and not only the names around it.
 	db.SetBranchOf(proj.Branch)
 	db.SetTranscriptOf(terminal.TranscriptText)
+	// The history offers conversations started outside lich in a project's
+	// checkouts (store.ExternalSessions): the providers' stores list them, git
+	// says which directories are the project's.
+	db.SetConversationsOf(terminal.Conversations)
+	db.SetCheckoutsOf(func(path string) ([]string, error) {
+		// Asked for every project on each listing: one that is not a repository,
+		// or whose directory is gone, would log a git failure every time.
+		if _, err := os.Stat(filepath.Join(path, ".git")); err != nil {
+			return nil, err
+		}
+		checkouts, err := proj.ListCheckouts(path)
+		if err != nil {
+			return nil, err
+		}
+		paths := make([]string, len(checkouts))
+		for i, c := range checkouts {
+			paths[i] = c.Path
+		}
+		return paths, nil
+	})
 
 	// Every service the frontend uses goes through the loopback RPC
 	// (internal/rpc). store.Close manages the DB lifecycle and stays Go-only.
@@ -345,7 +365,8 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //     checks; the relay calls it for a worker that reported back.
 //   - relay.SetPlugins, relay.SetWorkerFinished, project.SetAccounts, project.SetProjects,
 //     quota.SetSessions, store.SetSessionGone, store.SetScheduleForfeited,
-//     store.SetBranchOf, store.SetTranscriptOf, terminal.SetDropDir,
+//     store.SetBranchOf, store.SetTranscriptOf, store.SetConversationsOf,
+//     store.SetCheckoutsOf, terminal.SetDropDir,
 //     terminal.SetRateLimitReports, terminal.SetUsageLimit, terminal.SetWorkerAnswer and
 //     terminal.SetSessionClosed are startup wiring. Called with [null] they silently
 //     nil what they wired (encoding/json leaves a func or pointer alone on
@@ -369,6 +390,8 @@ func denyInternal(d *rpc.Handler) {
 		"store.SetScheduleForfeited",
 		"store.SetBranchOf",
 		"store.SetTranscriptOf",
+		"store.SetConversationsOf",
+		"store.SetCheckoutsOf",
 		"drop.Upload",
 		"drop.Save",
 		"drop.Purge",

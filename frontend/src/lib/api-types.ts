@@ -469,6 +469,21 @@ export interface ClosedHistory {
   indexing: number
 }
 
+/** internal/store.ExternalSession: a conversation started outside lich in one
+ * of a project's checkouts, which the history can adopt and resume. `path` is
+ * what the adopted session carries: "" for the project's own directory. */
+export interface ExternalSession {
+  kind: string
+  providerSessionId: string
+  title: string
+  path: string
+  projectId: string
+  projectName: string
+  projectPath: string
+  /** Unix seconds of the provider's last recorded activity. */
+  updatedAt: number
+}
+
 /** internal/terminal.TranscriptMatch — a session whose conversation mentions a
  * search query, with its newest matching message. */
 export interface TranscriptMatch {

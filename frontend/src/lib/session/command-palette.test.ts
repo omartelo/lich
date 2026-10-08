@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
+  adoptedSession,
+  externalLabel,
   filterPalette,
   historyAction,
   historyIndexNote,
@@ -14,7 +16,7 @@ import {
   rankSessions,
   rowKey,
 } from "./command-palette"
-import type { ClosedSession, Project } from "@/lib/api-types"
+import type { ClosedSession, ExternalSession, Project } from "@/lib/api-types"
 import type { SessionState } from "./sessions"
 
 const projects: Project[] = [
@@ -504,5 +506,88 @@ describe("historyAction", () => {
   it("resumes a row whose checkout is still there and forgets one whose is not", () => {
     expect(historyAction(rows[0] as PaletteHistory)).toBe("resume")
     expect(historyAction(rows[2] as PaletteHistory)).toBe("forget")
+  })
+})
+
+const outside: ExternalSession[] = [
+  {
+    kind: "codex",
+    providerSessionId: "c1",
+    title: "Port the theme loader",
+    path: "/wt/theme-port",
+    projectId: "p1",
+    projectName: "lich",
+    projectPath: "/src/lich",
+    updatedAt: 1788532932,
+  },
+  {
+    kind: "kiro",
+    providerSessionId: "k1",
+    title: "",
+    path: "",
+    projectId: "p2",
+    projectName: "sop",
+    projectPath: "/src/sop",
+    updatedAt: 1788000000,
+  },
+]
+
+describe("conversations started outside lich", () => {
+  const rows = historyRows(parked, parkedBranches, new Set())
+  const results = filterPalette("", [], projects, closed, rows, 0, outside)
+
+  it("lists them on the History tab under their own group, after the closed sessions", () => {
+    const groups = paletteGroups("History", results, [])
+    expect(groups.map((g) => g.label)).toEqual(["Closed sessions", "Outside lich"])
+    expect(groups[1]?.rows.map((r) => rowKey(r))).toEqual(["external:c1", "external:k1"])
+  })
+
+  it("keeps them out of All, like the closed sessions", () => {
+    const kinds = paletteGroups("All", results, []).flatMap((g) => g.rows.map((r) => r.kind))
+    expect(kinds).not.toContain("external")
+  })
+
+  it("counts them with the closed sessions on the History tab", () => {
+    expect(paletteTabCount("History", results, [])).toBe(rows.length + outside.length)
+  })
+
+  it("narrows on the title, the project and the directory, the project's own when the row has none", () => {
+    const by = (q: string) =>
+      filterPalette(q, [], [], [], [], 0, outside).external.map((e) => e.providerSessionId)
+    expect(by("theme")).toEqual(["c1"])
+    expect(by("sop")).toEqual(["k1"])
+    expect(by("/src/sop")).toEqual(["k1"])
+    expect(by("wt theme-port")).toEqual(["c1"])
+    expect(by("nothing")).toEqual([])
+  })
+
+  it("draws no group when there are none", () => {
+    const none = filterPalette("", [], projects, closed, rows)
+    expect(paletteGroups("History", none, []).map((g) => g.label)).toEqual(["Closed sessions"])
+  })
+
+  it("names an untitled conversation rather than drawing an empty row", () => {
+    expect(externalLabel(outside[0] as ExternalSession)).toBe("Port the theme loader")
+    expect(externalLabel(outside[1] as ExternalSession)).toBe("Untitled conversation")
+    expect(externalLabel({ ...(outside[0] as ExternalSession), title: "   " })).toBe(
+      "Untitled conversation",
+    )
+  })
+
+  it("is adopted as the parked row the history resumes", () => {
+    expect(adoptedSession(outside[0] as ExternalSession, "s1")).toEqual({
+      id: "s1",
+      projectId: "p1",
+      projectName: "lich",
+      projectPath: "/src/lich",
+      label: "Port the theme loader",
+      kind: "codex",
+      path: "/wt/theme-port",
+      parkedBranch: "",
+      closedAt: 0,
+      matchedConversation: false,
+      snippet: "",
+      truncated: false,
+    })
   })
 })

@@ -2,7 +2,7 @@
 // flat, filterable list the palette lists and routes to. Kept pure (no React,
 // no stores) so the flatten and filter are testable without a render.
 
-import type { ClosedSession, Project, TranscriptMatch } from "@/lib/api-types"
+import type { ClosedSession, ExternalSession, Project, TranscriptMatch } from "@/lib/api-types"
 import type { SessionKind, SessionState } from "./sessions"
 
 // PaletteSession is one session flattened with the project it belongs to — what
@@ -97,6 +97,9 @@ export interface PaletteResults {
   // The parked sessions — what the History tab lists, and the only group whose
   // rows are not in the workspace at all.
   history: PaletteHistory[]
+  // Conversations started outside lich in a known project's checkouts, which
+  // the History tab lists under its own group.
+  external: ExternalSession[]
 }
 
 export function filterPalette(
@@ -106,9 +109,13 @@ export function filterPalette(
   closed: readonly Project[] = [],
   history: readonly PaletteHistory[] = [],
   closedTotal = 0,
+  external: readonly ExternalSession[] = [],
 ): PaletteResults {
   return {
     closedTotal,
+    external: external.filter((e) =>
+      matchesQuery(`${e.title} ${e.projectName} ${e.path || e.projectPath}`, query),
+    ),
     sessions: allSessions.filter((s) =>
       matchesQuery(`${s.label} ${s.projectName} ${s.path}`, query),
     ),
@@ -210,6 +217,7 @@ export type PaletteRow =
   | { kind: "closed"; project: Project }
   | { kind: "message"; message: PaletteMessage }
   | { kind: "history"; session: PaletteHistory }
+  | { kind: "external"; session: ExternalSession }
 
 export interface PaletteGroup {
   label: string
@@ -232,6 +240,8 @@ export function rowKey(row: PaletteRow): string {
       return row.message.sessionId
     case "history":
       return row.session.id
+    case "external":
+      return `external:${row.session.providerSessionId}`
     default:
       return row.project.id
   }
@@ -258,6 +268,32 @@ export function historyIndexNote(row: PaletteHistory): string | undefined {
 // through lich — so the only honest action left is to drop it.
 export function historyAction(row: PaletteHistory): "resume" | "forget" {
   return row.gone ? "forget" : "resume"
+}
+
+// externalLabel is what an external conversation is called on its row and on
+// the card it becomes. A provider that never titled it (a Kiro or Antigravity
+// conversation, a Claude Code run with no prompt yet) still needs a name.
+export function externalLabel(external: ExternalSession): string {
+  return external.title.trim() || "Untitled conversation"
+}
+
+// adoptedSession is the parked row AdoptExternalSession files, as the history's
+// resume takes it: the same door a closed session goes back through.
+export function adoptedSession(external: ExternalSession, id: string): ClosedSession {
+  return {
+    id,
+    projectId: external.projectId,
+    projectName: external.projectName,
+    projectPath: external.projectPath,
+    label: externalLabel(external),
+    kind: external.kind,
+    path: external.path,
+    parkedBranch: "",
+    closedAt: 0,
+    matchedConversation: false,
+    snippet: "",
+    truncated: false,
+  }
 }
 
 // cap of 0 means no cap: the tab that names one kind lists all of it. `total`
@@ -287,6 +323,7 @@ export function paletteGroups(
   const closed = results.closed.map((project): PaletteRow => ({ kind: "closed", project }))
   const said = messages.map((message): PaletteRow => ({ kind: "message", message }))
   const history = results.history.map((session): PaletteRow => ({ kind: "history", session }))
+  const external = results.external.map((session): PaletteRow => ({ kind: "external", session }))
 
   const groups = ((): PaletteGroup[] => {
     switch (tab) {
@@ -309,6 +346,7 @@ export function paletteGroups(
             note:
               indexing > 0 ? `indexing ${indexing} session${indexing === 1 ? "" : "s"}` : undefined,
           },
+          group("Outside lich", external, 0),
         ]
       // No closed projects or closed sessions here: bringing one back is not
       // what the palette is reached for mid-work, and the rows it costs are
@@ -340,7 +378,7 @@ export function paletteTabCount(
     case "Messages":
       return messages.length
     case "History":
-      return results.history.length
+      return results.history.length + results.external.length
     default:
       return null
   }
