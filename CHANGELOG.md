@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   list, then pick with the arrow keys and Enter. Long family names no longer
   run under the checkmark.
 
+### Fixed
+
+- **Dragging a footer item in Settings keeps its shape.** The chip under the pointer
+  stays on one line at its own size instead of wrapping into a taller, narrower block.
+
 ## [0.62.1] - 2026-10-08
 
 ### Fixed
