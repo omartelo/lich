@@ -42,7 +42,10 @@
   [各智能体支持到什么程度](#各智能体支持到什么程度)是那张表。
 - **留住一个真正的终端。** 由 PTY 支撑的 shell，每个项目可以开好几个，在 GPU 上渲染
   —— 滚动缓冲区可以搜索，还能挺过整页刷新。给其中一个设一个入口命令 —— `lazygit`、
-  `k9s`、`pnpm dev` —— 它每次启动都会直接进到那个工具里。底栏跟随 `cd` 并标明分支
+  `k9s`、`pnpm dev` —— 它每次启动都会直接进到那个工具里，在 Linux、macOS 和 Windows
+  上都一样：不会先加载 shell rc 或 PowerShell profile，所以对你管用的入口命令，对你分享给
+  的人也一样管用；把开发服务器写进 `.lich/run-worktree.sh`，每个检出目录都会为它多出一张
+  **Run** 卡片，跑在 lich 为那个 worktree 预留的端口上。底栏跟随 `cd` 并标明分支
   —— 对于 Claude Code、Codex 或 Kiro CLI 会话，还有模型和已占用的上下文窗口；对于
   Claude Code、Codex、Antigravity、Cursor CLI 和 OpenCode Go 订阅，还有你的套餐额度还剩
   多少；如果你要求的话，还有会话花了多少钱，只要该智能体记下了这个数。
