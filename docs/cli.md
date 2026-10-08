@@ -130,7 +130,7 @@ guess at the one it resembles, and exit 1 — a typo does not open a window.
 Arguments the app itself takes still do: bare `lich`, `lich --shell <path>`, and
 `lich --` with the Chromium flags behind it.
 
-`--json` on `sessions`, `send`, `wait`, `open`, `close`, `control`, `ask`, `worktrees`, `folders`, `file`,
+`--json` on `sessions`, `send`, `wait`, `open`, `close`, `rename`, `control`, `ask`, `worktrees`, `folders`, `file`,
 `rename-folder`, `color-folder`, `cost` and `version`
 replaces the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
@@ -174,7 +174,7 @@ hook (`docs/hooks/session-state.md`), and it is the same thing its card shows:
   Claude Code, and a session that has not had a turn yet has said nothing
   either), so an empty state says nothing about whether that session is free.
 
-### `lich send [--project <name>] [--timeout <seconds>] [--private] <session> <prompt>`
+### `lich send [--project <name>] [--timeout <seconds>] [--private] [--json] <session> <prompt>`
 
 Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
 
@@ -267,7 +267,7 @@ expire. `internal/terminal` tells the setup script and the agent apart by a
 marker the setup wrapper prints between them (`setupDone`): the PTY and the pid
 are the same across the `exec`, so nothing else can.
 
-### `lich wait [--timeout <seconds>] [--no-wait] [<ticket>]`
+### `lich wait [--timeout <seconds>] [--no-wait] [--json] [<ticket>]`
 
 With a ticket: waits again on that errand. Same output and exit codes as `send`. A result that
 already came back unattended is handed over on the spot — it sits in the
@@ -324,7 +324,7 @@ lich: 2 requests are open against this session, and an answer that names no tick
 Outside a session, or with nothing open, it is an error rather than a guess, and
 the ticket is still the way to name a specific errand.
 
-### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--ultracode] [--folder <name>] [--prompt <task> [--private | --subagent]]`
+### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--ultracode] [--folder <name>] [--prompt <task> [--private | --subagent]] [--json]`
 
 Opens a new session, starts it, and prints the two names it is addressed by:
 
@@ -518,7 +518,7 @@ reach the send exits 0 whatever its status, a ticket included: a session opened
 seconds ago is expected to hand one back, and the open is what this command
 does. `delivery.status` is where a script reads the rest.
 
-### `lich close [--project <name>] [--worktree keep|remove] [--force] [--json] <session>`
+### `lich close [--project <name-or-path>] [--worktree keep|remove] [--force] [--json] <session>`
 
 Closes a session, addressed by either of its names, and settles what happens to
 the checkout it was the last one in.
@@ -546,7 +546,7 @@ conversation back up.
 - Unlike `sessions`, this reaches a card whose terminal was never opened: it is
   still a session, and closing it is the one thing you can do with it.
 
-### `lich rename [--project <name>] [--json] [<session>] <label>`
+### `lich rename [--project <name-or-path>] [--json] [<session>] <label>`
 
 Renames a session — the name on its card, which is also the name it is addressed
 by. The window's rename, from outside the window.
@@ -569,7 +569,7 @@ Renamed "auth-fix" to "the login bug".
 - The provider's own idea of the session's name is untouched: nothing here runs
   `/rename` inside the terminal, exactly as the window's rename does not.
 
-### `lich control [--project <name>] [--json] <session> <action> [<value>] [<args>]`
+### `lich control [--project <name-or-path>] [--json] <session> <action> [<value>] [<args>]`
 
 Drives a running Claude Code session from outside its terminal, through the
 lich-plugin mod inside it (`docs/hooks/mod-control.md`).
@@ -617,7 +617,7 @@ $ lich control auth-fix command compact "keep the test plan"
 `{"id","project","label","action","value","command_id","state"}`, `value` absent
 when the action carried none; `state` is `done`, `delivered` or `ended`.
 
-### `lich ask [--project <name>] [--json] <session> <question...>`
+### `lich ask [--project <name-or-path>] [--json] <session> <question...>`
 
 Asks a running Claude Code session a side question and prints its answer. The
 session answers from its own conversation while its turn goes on, through the
@@ -644,7 +644,7 @@ Fixing the flaky login test: the fixture user expires before the assertion.
 
 `--json` prints `{"id","project","label","answer"}`.
 
-### `lich worktrees [--project <name>] [--json]`
+### `lich worktrees [--project <name-or-path>] [--json]`
 
 Lists a project's git worktrees — what each is called, whether it holds
 uncommitted work, and which sessions are open in it:
@@ -660,7 +660,7 @@ one whose fate that session's close decides, and a checkout with none is one
 nobody is working in. The project's own directory is not listed — it is the
 checkout every project has and the one that cannot be removed.
 
-### `lich folders [--project <name>] [--json]`
+### `lich folders [--project <name-or-path>] [--json]`
 
 Lists a project's sidebar folders and the sessions filed under each, in the
 order the sidebar draws the folders:
@@ -675,7 +675,7 @@ A folder is a name on a session and nothing else, so a folder with no session
 in it does not exist and is never listed. `--json` prints
 `[{"name":"Auth","sessions":["auth-fix","login-tests"]}]`.
 
-### `lich file [--project <name>] [--json] [<session>] <folder>`
+### `lich file [--project <name-or-path>] [--json] [<session>] <folder>`
 
 Moves a session into a sidebar folder: the window's "Move to folder", from
 outside the window.
@@ -696,7 +696,7 @@ Filed "auth-fix" under "Auth".
 - `--json` prints `{"id","project","label","folder","previous"}`, `previous`
   being the folder it left (`""` for none).
 
-### `lich rename-folder [--project <name>] [--json] <folder> <new-name>`
+### `lich rename-folder [--project <name-or-path>] [--json] <folder> <new-name>`
 
 Renames a folder across every session filed under it: the window's "Rename
 folder". An empty new name (`''`) takes the folder apart, the window's
@@ -715,7 +715,7 @@ Moved "auth-fix", "login-tests" from folder "Auth" to "Login".
 - Parked sessions follow the rename, so a resumed one comes back into the
   folder under its new name.
 
-### `lich color-folder [--project <name>] [--json] <folder> <color>`
+### `lich color-folder [--project <name-or-path>] [--json] <folder> <color>`
 
 Paints every session filed under a folder: the window's folder "Color". The
 color is one of `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet` or
