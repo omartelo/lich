@@ -219,7 +219,7 @@ collected is typed as usual.
   session's mod is never typed again: one its mod collected and the session never
   started on is reported here too.
 - **Never delivered**: the task was held for a session that never reached a
-  prompt — it ended, or whatever had its terminal outlasted the queue (10
+  prompt — it ended, or whatever had its terminal outlasted the queue (5
   minutes). The ticket is dropped rather than left to expire, and the output
   says the task is gone rather than waiting anywhere: it has to be sent again
   once that card shows what happened. Exit 3. A sender that had already stopped
@@ -260,7 +260,7 @@ ticket comes back at once and the message goes in when that session's agent is
 the program reading its PTY — a fresh worktree installs its dependencies before
 its agent, which routinely outlasts the caller's own `--timeout`, and losing the
 task there is exactly what a fan-out cannot afford. `send` never blocks past
-what was asked. A queue that can never end — the session dies, or 10 minutes
+what was asked. A queue that can never end — the session dies, or 5 minutes
 pass — is reported as a failure the sender can act on, never a ticket left to
 expire. `internal/terminal` tells the setup script and the agent apart by a
 marker the setup wrapper prints between them (`setupDone`): the PTY and the pid
