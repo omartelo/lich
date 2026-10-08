@@ -171,10 +171,9 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
 - **智能体** —— 在全局设置 › Providers 里为每个 provider 设定二进制文件路径，并选定
   全局默认。项目设置 › Providers 可以为单个项目覆盖这个选择；**Use default** 会移除
   这层覆盖，之后全局默认的变化便会自动流过来。
-  lich 能读到套餐的 provider，其一节的开头是你的套餐还剩多少；Claude Code 和 Codex 两节
-  往下是底栏会说些什么的那一档梯子
-  —— 上下文圆环，以及 Claude Code 才有的费用读数；费用那一档默认关闭，因为只有当你按
-  token 计费时这个数字才有意义。
+  lich 能读到套餐的 provider，其一节的开头是你的套餐还剩多少。底栏显示什么，在设置 ›
+  Appearance 里拖动它的各项来设定；费用读数一开始是隐藏的，因为只有当你按 token 计费时
+  这个数字才有意义。
 - **Worktree** —— 项目仓库里的 `.lich/setup-worktree.sh` 会在新 worktree 的终端里
   先于智能体运行；New worktree 对话框会展示这个脚本，若仓库没有则给出检测到的建议。
   `.worktreeinclude` 文件用来调整哪些被 gitignore 的文件会被复制过去。
