@@ -9,10 +9,11 @@ import (
 	"strings"
 )
 
-// CarryUncommitted copies the work src has not committed onto dst, so a fork
-// starts from the checkout as it stands rather than from its last commit — the
-// moment a fork is worth making is usually the moment there is uncommitted work
-// to take two ways.
+// CarryUncommitted copies the work src has not committed onto dst, so a new
+// worktree starts from a checkout as it stands rather than from its last
+// commit. src is a forked session's checkout, or the project's own checkout
+// when the + dialog's working-tree row was picked. Either way src is only read:
+// the work stays where it was.
 //
 // Both checkouts must sit on the same commit, which is what the caller picking
 // src's own branch as the base guarantees: the patch is read against src's HEAD
@@ -27,7 +28,8 @@ import (
 // seedWorktree copies the ignored files the project names (`.env*` by default)
 // out of the *main* checkout into every new worktree, and the setup script
 // builds the rest. So an ignored file the forked session edited arrives as the
-// main checkout's copy of it.
+// main checkout's copy of it. When src is the main checkout the two agree,
+// because both copies are read from the same place.
 func (s *Service) CarryUncommitted(src, dst string) error {
 	// --binary, so an edited image or any other non-text file comes over as
 	// bytes instead of as an unappliable "Binary files differ" line.
