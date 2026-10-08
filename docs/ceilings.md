@@ -316,7 +316,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The worktree setup script answers to the main checkout, never the new branch**
   (`internal/project/setup.go`): improve `.lich/setup-worktree.sh` on a feature branch and fresh worktrees keep
   running the old one until the change reaches the checkout the project points at.
-- **A fork's working-tree row carries what git can name, and nothing else**
+- **A working-tree row carries what git can name, and nothing else**
   (`internal/project/carry.go`): the copy is `git diff HEAD --binary` applied to the new checkout plus the
   untracked files `--exclude-standard` lists. What `.gitignore` covers is not carried from the forked
   session at all — and the fork is not without it either, which is the trap: `seedWorktree` copies the
@@ -329,6 +329,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   checkout's HEAD; picking any other base branches off it at its last commit, the way every fork did before.
   And it rides on the fork entry itself, so the five providers whose CLI only resumes (README's provider
   table) cannot reach it either.
+  The **+** dialog offers the same row for the project's own checkout, never preselected. The ignored-file
+  trap does not apply there, because `seedWorktree` reads the same checkout the copy does, and no provider is
+  out, because the worktree exists before any session opens on it. What it adds is a snapshot that is not
+  atomic: a session still writing in that checkout while the diff is read and the untracked files are copied
+  can leave the new worktree with a mix of two moments. The source is only ever read, never cleaned, so
+  nothing is lost there.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
 - **The status badge has a single source** (`internal/project/status.go`): the branch, the HEAD commit and the
