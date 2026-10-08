@@ -477,8 +477,9 @@ words `send` words it with, ticket included:
 ```
 Opened session "auth-fix" (claude) in project "lich", in worktree /home/you/.local/share/lich/worktrees/1a2b/auth-fix.
 It answers to "auth-fix" and to "auth-fix-9f8e". …
-auth-fix is still working. The message was delivered; a note will be typed at the
-sending session's prompt when its result is ready. To hold the line for it instead:
+auth-fix is still working. The errand is open — a message that session was not ready
+for is held until it is — and a note will be typed at the sending session's
+prompt when its result is ready. To hold the line for it instead:
   lich wait a1b2c3d4
 ```
 
@@ -488,7 +489,7 @@ absent without `--prompt`, so a reader that branches on it is never handed an
 empty one to interpret:
 
 ```json
-{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix","name":"auth-fix-9f8e","kind":"claude","path":"/wt/auth-fix","nextSeq":5,"originSessionId":"3c4d","originLabel":"planner","delivery":{"ticket":"a1b2c3d4","target":"auth-fix","status":"pending","answer":""}}
+{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix","name":"auth-fix-9f8e","kind":"claude","path":"/wt/auth-fix","nextSeq":5,"originSessionId":"3c4d","originLabel":"planner","confined":false,"folder":"","run":false,"delivery":{"ticket":"a1b2c3d4","target":"auth-fix","status":"pending","answer":""}}
 ```
 
 `originSessionId` and `originLabel` name the session this one was opened from —
@@ -1113,7 +1114,7 @@ receiving agent only because this text describes it.
   `frontend/src/providers/projects.tsx`, in its own order.
 - **The card** — `session-opened` carries the whole session
   (`{id, projectId, project, label, name, kind, path, nextSeq, originSessionId,
-  originLabel}`) rather than an
+  originLabel, confined, folder, run}`) rather than an
   id to look up: the row is already written and the PTY is already running, so
   the window has nothing to fetch and nothing to spawn. `adoptSession`
   (`frontend/src/lib/session/sessions.ts`) appends it **without focusing it** —
