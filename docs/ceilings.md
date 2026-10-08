@@ -60,13 +60,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   pointer and never reaches a header either: the menu is its path too. A card on a wall or in the pinned block
   starts no filing drag, because both outrank the folder and the drop would land with nothing moving on
   screen; for the same reason a card drawn on a wall is offered no folder in its menu. A filtered block
-  offers no "Move group to folder", because the cards it drew are the ones that survived the query and filing
+  offers no "Move group to folder", because the cards it drew are the ones that survived the filter and filing
   "the group" would file part of it.
 - **A folder's + opens only where its cards already live**
   (`frontend/src/components/sidebar/FolderLaunchMenuItems.tsx`): a folder has no directory of its own, so its
   + lists the checkouts of the cards it holds and opens the session in the one picked. A worktree none of its
   cards is in is not offered: open the session there and drag it in. Under a filter the list is read off the
-  cards the query left, so it can name fewer checkouts than the folder holds. The folder is written by a
+  cards the filter (query or state chips) left, so it can name fewer checkouts than the folder holds. The folder is written by a
   second call chained after the session's insert (`newSession`), so a lich that dies between the two brings
   the session back unfiled.
 - **Renaming a folder remounts its block** (`frontend/src/lib/session/group-prefs.ts`): the block is keyed by
