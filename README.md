@@ -213,7 +213,9 @@ needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
 Everything runs on your machine. No account, no sign-in, no telemetry — the
 backend is a token-authenticated loopback listener, and nothing leaves
 `localhost` except the update check: a version ping to GitHub Releases at startup
-and hourly. Updates apply in place on Windows/macOS and through the AUR on Arch.
+and hourly. The Windows installer's build updates in place; a Homebrew, Scoop,
+AUR or Linux package install updates through its package manager, and lich
+hands you the command.
 Settings › Help says what the log file carries — paths, project and branch names,
 your gh login, never a session token — before you attach it to a bug report, and
 `lich rage` collects that report into one archive without uploading any of it.
