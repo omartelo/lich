@@ -18,6 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Headless runs and sub-agents are left out, and so is a session lich opened and
   you closed for good.
 
+- **Race one task across several agents, then consolidate the best of them.**
+  **Race agents…** in the New session menu takes a task and two or more agents,
+  makes a worktree for each off one base, files them in a folder named after the
+  race, and puts every agent side by side in a split. Each agent gets the task
+  once it is at its own prompt, so a trust question on its first start in the
+  worktree is yours to answer on its card first. When they are done,
+  **Consolidate…** on the folder opens one more agent in a new worktree with a
+  prompt listing every raced branch, asking it to combine the best of each and
+  say what it took from where. Once that agent finishes its turn, the folder
+  offers **Remove the race**, which removes the raced worktrees in one
+  confirmation that lists what each one never committed; their branches stay.
+  **Keep this, remove the others** on a card does the same when one agent simply
+  won. Antigravity, opencode and Crush cannot race yet.
+
 - **Take uncommitted work into a new worktree.** When the project's checkout has
   changes it has not committed, the **+** dialog lists it as a base of its own,
   `<branch> · working tree`. Pick it and the new worktree starts on the same

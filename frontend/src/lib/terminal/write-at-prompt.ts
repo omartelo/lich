@@ -1,4 +1,5 @@
-import { Terminal } from "@/lib/rpc"
+import { Relay, Terminal } from "@/lib/rpc"
+import { sessionAgentOf } from "@/lib/session/use-session-agent"
 import { handoffHolds } from "./handoff-store"
 
 // Text written into a session the moment its card exists lands wherever that
@@ -41,17 +42,46 @@ const LIMIT_MS = 5 * 60 * 1000
  * when no prompt appears in time — the caller is the one who knows what was
  * being handed over, so it words what was lost.
  */
-export async function writeAtPrompt(sessionId: string, text: string): Promise<void> {
+export function writeAtPrompt(sessionId: string, text: string): Promise<void> {
+  return atPrompt(
+    sessionId,
+    () => Terminal.Write(sessionId, text),
+    () => Terminal.Ready(sessionId),
+  )
+}
+
+/**
+ * Send text to a session as its prompt, written and submitted (Relay.Prompt)
+ * where writeAtPrompt leaves it for the user to send, once the provider has
+ * reported session-start and the prompt is free. The report is the wait that
+ * matters: its hook sends it only from the agent's own prompt, while Ready also
+ * answers yes to a trust question shown first in a new directory, and the
+ * Enter that sends the text would answer that question instead (agent-race,
+ * canRace). Rejects like writeAtPrompt, and with the backend's refusal.
+ */
+export function sendWhenStarted(sessionId: string, text: string): Promise<void> {
+  return atPrompt(
+    sessionId,
+    () => Relay.Prompt(sessionId, text),
+    async () => sessionAgentOf(sessionId) !== null && (await Terminal.Ready(sessionId)),
+  )
+}
+
+async function atPrompt(
+  sessionId: string,
+  deliver: () => Promise<unknown>,
+  ready: () => Promise<boolean>,
+): Promise<void> {
   const deadline = Date.now() + LIMIT_MS
   try {
-    while (!(await Terminal.Ready(sessionId))) {
+    while (!(await ready())) {
       handoffHolds.set(sessionId, true)
       if (Date.now() >= deadline) {
         throw new Error("the session never reached a prompt")
       }
       await new Promise((resolve) => setTimeout(resolve, POLL_MS))
     }
-    await Terminal.Write(sessionId, text)
+    await deliver()
   } finally {
     // Whatever became of it: the mark is about text still waiting, and a
     // handoff that landed, failed or timed out is not waiting anymore.

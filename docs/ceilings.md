@@ -99,6 +99,27 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   lich has no "setup finished" signal to hang an automatic start on — `terminal.Ready` answers a different
   question, going false again for every turn the agent takes. So the card is one gesture, which is also what
   keeps eight worktrees from meaning eight dev servers.
+- **A race's task waits for proof of the agent's own prompt, and three providers cannot race**
+  (`frontend/src/lib/session/agent-race.ts`, `RACES`): in a fresh worktree Claude Code, Codex,
+  Cursor CLI and Antigravity ask whether the folder is trusted and Crush asks whether to initialize the
+  project, and `terminal.Ready` reads that quiet screen as a prompt. The Enter that sends the task answers the
+  question instead: Claude Code and Cursor CLI exit, Codex and Antigravity lose the task to a second screen,
+  Crush runs an init turn (measured 2026-10-08). So a race waits for the provider's session-start report,
+  which its hook sends only from the agent's own prompt. Antigravity, Crush and opencode report nothing before
+  their first turn, so they are drawn dead in the race and consolidate dialogs. opencode asks no question, but
+  under the load of a race it goes quiet mid-boot, `Ready` latches there, and the task lands on the terminal
+  before its TUI does (measured in the same run). The wait is the handoff's five minutes: a trust question left
+  unanswered that long, or a provider without lich-plugin's hooks, gets the task never and a toast instead.
+  `lich open --worktree --prompt` still types after `Ready` alone and falls into the same question.
+- **A race is remembered by the window that started it** (`agent-race.ts`, `rememberRaceTask`): nothing about
+  a race is stored beyond its folder. The task the consolidation prompt quotes and the consolidating session
+  the folder offers to keep live in memory, so after a reload the prompt has a line to fill in, and the
+  folder's "Consolidated in" banner is gone; "Keep this, remove the others" on the consolidation's card is
+  the same removal. The consolidation's base is preselected as the project's current branch, not the base
+  the race used.
+- **A race's agents share one sandbox answer and run the setup script at once**
+  (`frontend/src/components/sidebar/RaceAgentsDialog.tsx`): the confinement box is read off the first agent's
+  rung and recorded on every racer, and `.lich/setup-worktree.sh` starts in all K worktrees together.
 - **The cost readout bills per `(session, transcript)`** (`internal/pricing`, `internal/terminal/usage_cost.go`): a
   conversation forked inside the PTY bills its copied history twice — lich's own resume continues the same
   transcript and is unaffected — and each sub-agent's own transcript is counted in, so one unreadable or

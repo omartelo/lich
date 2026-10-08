@@ -44,6 +44,7 @@ import { SessionEntrypointItem } from "./SessionEntrypointItem"
 import { CardColorContextSub } from "./CardColorMenu"
 import { type CardColor, CARD_COLORS, isCardColor, TINTED_FILL } from "@/lib/session/card-color"
 import { SessionForkItem } from "./SessionForkItem"
+import { SessionKeepItem } from "./SessionKeepItem"
 import { SessionStatusIcon } from "./SessionStatusIcon"
 import { SIDEBAR_MORPH } from "@/lib/view-transition"
 import { SessionTooltip } from "./SessionTooltip"
@@ -102,6 +103,10 @@ interface SessionCardProps {
   // whether the conversation is still on disk, which is the fork flow's own
   // first question.
   onFork: () => void
+  // How many other worktrees filed with this card "keep this, remove the
+  // others" would remove, and the ask itself (useWorktreeClose).
+  rivals: number
+  onKeepWinner: () => void
   onSelect: () => void
   onClose: () => void
   onRename: (label: string) => void
@@ -164,6 +169,8 @@ export function SessionCard({
   delegateCount,
   onGroupDelegates,
   onFork,
+  rivals,
+  onKeepWinner,
   onSelect,
   onClose,
   onRename,
@@ -670,6 +677,16 @@ export function SessionCard({
             <GitPullRequestArrow />
             Pull request
           </ContextMenuItem>
+          {rivals > 0 && (
+            <>
+              <ContextMenuSeparator />
+              <SessionKeepItem
+                folder={session.folder ?? ""}
+                rivals={rivals}
+                onKeep={onKeepWinner}
+              />
+            </>
+          )}
           {!pinned && (
             <>
               <ContextMenuSeparator />

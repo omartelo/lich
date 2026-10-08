@@ -42,7 +42,13 @@ export function issueName(issue: Issue): string {
  * request handoff follows too: lich writes the prompt, the user sends it.
  */
 export function issueBrief(issue: Issue): string {
+  return bracketedPaste(issueText(issue))
+}
+
+/** The issue as plain text: number, title and link, then the body if it has one.
+ * What a race hands each of its agents as the task, which the relay pastes. */
+export function issueText(issue: Issue): string {
   const head = `GitHub issue #${issue.number} — ${issue.title}\n${issue.url}`
   const body = issue.body.trim()
-  return bracketedPaste(body ? `${head}\n\n${body}` : head)
+  return body ? `${head}\n\n${body}` : head
 }

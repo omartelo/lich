@@ -10,6 +10,7 @@ import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { fileAwareCollision, hangBelowTarget } from "@/lib/session/file-drag-store"
 import { readGroupCollapsed, writeGroupCollapsed } from "@/lib/session/group-prefs"
 import { checkoutsOf } from "@/lib/session/sidebar-groups"
+import { sharedFolder } from "@/lib/session/agent-race"
 import { useFileDrop } from "@/lib/session/use-file-drop"
 import { useCollapsedMark } from "@/lib/session/use-session-status"
 import type { PaneGroup } from "@/lib/session/panes"
@@ -23,6 +24,7 @@ import { SessionCard } from "./SessionCard"
 import { PullRequestCard } from "./PullRequestCard"
 import { isPullsOpen, subscribePullsCard } from "@/lib/pulls-card-store"
 import { SessionGroupHeader } from "./SessionGroupHeader"
+import { RaceDoneBanner } from "./RaceDoneBanner"
 import type { RunMenuAction } from "./SessionLaunchMenuItems"
 
 interface SessionGroupProps {
@@ -68,6 +70,15 @@ interface SessionGroupProps {
   onGroupDelegates: (sessionId: string, delegateIds: string[]) => void
   /** Branch this session's conversation into a checkout of its own. */
   onFork: (session: Session) => void
+  /** How many checkouts keeping this session would remove, and the ask. */
+  rivalCount: (session: Session) => number
+  onKeepWinner: (session: Session) => void
+  /** A folder's race endings: open the consolidation, or remove its worktrees.
+   * raceSizeOf counts the folder's worktrees across the whole project, since a
+   * race's cards can be drawn in its wall rather than in this block. */
+  raceSizeOf: (folder: string) => number
+  onConsolidate: (folder: string) => void
+  onRemoveRace: (folder: string) => void
   // A divider label is drawn only when the sidebar holds more than one group; a
   // lone project with no worktrees keeps its old flat, header-less list. The
   // header doubles as the group's drag handle, so a lone group is also the case
@@ -133,6 +144,11 @@ export function SessionGroup({
   onStageToggle,
   onGroupDelegates,
   onFork,
+  rivalCount,
+  onKeepWinner,
+  raceSizeOf,
+  onConsolidate,
+  onRemoveRace,
   showHeader,
   sortable,
   onReorder,
@@ -183,6 +199,10 @@ export function SessionGroup({
   // Whether this block can be filed as a whole: a checkout's, and only while the
   // list on screen is the whole list.
   const filable = sortable && !fixed && !stage && !folder
+  // The race this block can end: its folder's, or, for a wall, the folder all of
+  // its cards share, which is what a race's own wall is.
+  const raceFolder = folder || (stage ? sharedFolder(sessions) : "")
+  const raceSize = raceFolder ? raceSizeOf(raceFolder) : 0
   // Whether a card dropped on this block's header is filed by it, and a card
   // dragged out of it can be filed elsewhere: a folder, or a checkout taking one
   // of its own cards back out of a folder. The pinned block and a wall outrank
@@ -273,6 +293,14 @@ export function SessionGroup({
           // A folder's own, and withheld under a filter for the reason
           // onFileAll is: the cards drawn are only the ones that matched.
           onColor={folder && sortable ? (color) => colorSessions(projectId, ids, color) : undefined}
+          // Withheld under a filter like onColor: a race is its whole folder,
+          // and a filtered block draws only part of it.
+          onConsolidate={
+            raceFolder && sortable && raceSize >= 2 ? () => onConsolidate(raceFolder) : undefined
+          }
+          onRemoveRace={
+            raceFolder && sortable && raceSize >= 1 ? () => onRemoveRace(raceFolder) : undefined
+          }
           collapsed={collapsed}
           isDragging={group.isDragging}
           providers={providers}
@@ -287,6 +315,15 @@ export function SessionGroup({
             newSession(projectId, kind, at, sandbox, folder)
           }
           run={run}
+        />
+      )}
+      {folder && sortable && !collapsed && (
+        <RaceDoneBanner
+          projectId={projectId}
+          folder={folder}
+          sessions={sessions}
+          rivals={raceSize - 1}
+          onRemove={onKeepWinner}
         />
       )}
       <div
@@ -344,6 +381,8 @@ export function SessionGroup({
                         onStageToggle={() => onStageToggle(session.id)}
                         delegateCount={delegates.length}
                         onFork={() => onFork(session)}
+                        rivals={rivalCount(session)}
+                        onKeepWinner={() => onKeepWinner(session)}
                         onGroupDelegates={() =>
                           onGroupDelegates(
                             session.id,

@@ -30,6 +30,11 @@ function dialogs(adopted: boolean, onRemove: () => void = () => {}) {
     keep: () => {},
     remove: onRemove,
     forceRemove: () => {},
+    rivalsOf: () => [],
+    requestKeepWinner: () => {},
+    requestRemoveRace: () => {},
+    pendingKeep: null,
+    keepWinner: () => {},
   }
   return createElement(WorktreeCloseDialogs, { close })
 }

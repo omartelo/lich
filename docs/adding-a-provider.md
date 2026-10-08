@@ -83,6 +83,7 @@ everything on the id (`provider.<id>.bin`, `.enabled`, `.sandbox`,
 | `frontend/src/components/ProviderIcon.tsx` | a brand path, or a lucide fallback |
 | `frontend/src/lib/session/delegate-prompt.ts` | `TOOL_KINDS` only if it is handed lich's tools at spawn |
 | `frontend/src/lib/session/tool-label.ts` | a rule only if it spells MCP tool names in a shape not already handled |
+| `frontend/src/lib/session/agent-race.ts` | its `RACES` entry: `true` only if its hook reports session-start from the agent's own prompt before the first turn, which is what a race's task waits for; `false` keeps it out of races. Measure it in a fresh worktree; the record is exhaustive over `ProviderKind` |
 | `frontend/src/lib/session/hands-on.ts` | a rung in `RUNG`: whether the hands-on clock hears that provider through a turn its hooks open, or only through its tool calls. The record is exhaustive over `ProviderKind`, so `tsc` refuses a provider that has not picked a side |
 | `frontend/src/lib/api-types.ts` | nothing, unless the change moves a JSON tag — the `DetectedProvider` mirror is hand-owned and moves in the same commit |
 

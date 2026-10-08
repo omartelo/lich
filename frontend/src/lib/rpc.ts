@@ -621,6 +621,16 @@ export const Quota = {
   Plans: (sessionId: string) => call<QuotaPlan[]>("quota.Plans", [sessionId]),
 }
 
+export const Relay = {
+  /** Send text to a session as its next prompt: pasted and submitted, or
+   * handed to its mod, with nothing wrapped around it. Waits for a free prompt
+   * on the backend, so call it once Terminal.Ready says yes
+   * (lib/terminal/write-at-prompt) rather than to hold a request open through a
+   * setup script. Rejects an empty prompt, one over the relay's size limit, and
+   * a session that stopped. */
+  Prompt: (sessionId: string, text: string) => call<null>("relay.Prompt", [sessionId, text]),
+}
+
 export const Spawn = {
   /** Open the project's Run card in the checkout at cwd: a terminal session
    * whose entrypoint is .lich/run-worktree.sh, its PTY started by the backend

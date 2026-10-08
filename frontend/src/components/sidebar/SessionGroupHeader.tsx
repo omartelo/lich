@@ -1,6 +1,15 @@
 import { useState } from "react"
 import type { ComponentPropsWithoutRef, KeyboardEvent } from "react"
-import { ChevronRight, Folder, MoreHorizontal, Pencil, Plus, Ungroup } from "lucide-react"
+import {
+  ChevronRight,
+  Combine,
+  Folder,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+  Ungroup,
+} from "lucide-react"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import {
@@ -55,6 +64,10 @@ interface SessionGroupHeaderProps {
   // paint them all at once. Present on a folder's header alone.
   color?: CardColor
   onColor?: (color: string) => void
+  // A race's two endings, on a folder holding worktrees: combine them in a new
+  // one (two or more), or remove them all.
+  onConsolidate?: () => void
+  onRemoveRace?: () => void
   // What a folded block says about the cards it hides (collapsedMark).
   mark: "wait" | "done" | null
   // How the header answers a card being dragged (file-drag-store), and what it
@@ -175,6 +188,8 @@ export function SessionGroupHeader({
   onNewFolder,
   color,
   onColor,
+  onConsolidate,
+  onRemoveRace,
   mark,
   drop,
   dropFolder,
@@ -285,7 +300,7 @@ export function SessionGroupHeader({
           its own action, so a menu reachable only by right-click is one nobody
           finds. A checkout's block earns one too — filing its whole list at once
           is what makes a folder worth making with forty cards on screen. */}
-      {(onRename || onDissolve || onFileAll || onColor) && (
+      {(onRename || onDissolve || onFileAll || onColor || onRemoveRace) && (
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label={`Options for ${name}`}
@@ -308,6 +323,18 @@ export function SessionGroupHeader({
               </DropdownMenuItem>
             )}
             {onColor && <CardColorDropdownSub current={color} onPick={onColor} />}
+            {onConsolidate && (
+              <DropdownMenuItem onClick={onConsolidate}>
+                <Combine />
+                Consolidate…
+              </DropdownMenuItem>
+            )}
+            {onRemoveRace && (
+              <DropdownMenuItem variant="destructive" onClick={onRemoveRace}>
+                <Trash2 />
+                Remove the race…
+              </DropdownMenuItem>
+            )}
             {onFileAll && onNewFolder && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>

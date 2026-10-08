@@ -3,15 +3,24 @@
 // is that the write did not happen until Ready said so.
 import { describe, expect, it, vi } from "vitest"
 import { handoffHolds } from "./handoff-store"
-import { writeAtPrompt } from "./write-at-prompt"
+import { sendWhenStarted, writeAtPrompt } from "./write-at-prompt"
 
 const ready = vi.fn()
 const write = vi.fn()
+const prompt = vi.fn()
+const agent = vi.fn()
+
+vi.mock("@/lib/session/use-session-agent", () => ({
+  sessionAgentOf: (id: string) => agent(id),
+}))
 
 vi.mock("@/lib/rpc", () => ({
   Terminal: {
     Ready: (id: string) => ready(id),
     Write: (id: string, data: string) => write(id, data),
+  },
+  Relay: {
+    Prompt: (id: string, text: string) => prompt(id, text),
   },
 }))
 
@@ -71,5 +80,51 @@ describe("writeAtPrompt", () => {
 
     expect(ready).toHaveBeenCalledTimes(1)
     expect(write).toHaveBeenCalledWith("s2", "fix CI")
+  })
+})
+
+describe("sendWhenStarted", () => {
+  // A trust question on screen is as quiet as a prompt, so Ready says yes to
+  // it; only the provider's session-start says the agent is at its own prompt.
+  it("waits for the session-start even while the screen is quiet", async () => {
+    ready.mockReset()
+    prompt.mockReset()
+    agent.mockReset()
+    ready.mockResolvedValue(true)
+    agent.mockReturnValueOnce(null).mockReturnValueOnce(null).mockReturnValue("claude")
+    prompt.mockResolvedValue(null)
+
+    await sendWhenStarted("s7", "fix the redirect")
+
+    expect(agent).toHaveBeenCalledTimes(3)
+    expect(prompt).toHaveBeenCalledWith("s7", "fix the redirect")
+  })
+
+  it("still waits for Ready once the session has started", async () => {
+    ready.mockReset()
+    prompt.mockReset()
+    agent.mockReset()
+    agent.mockReturnValue("codex")
+    ready.mockResolvedValueOnce(false).mockResolvedValue(true)
+    prompt.mockResolvedValue(null)
+
+    await sendWhenStarted("s8", "fix CI")
+
+    expect(ready).toHaveBeenCalledTimes(2)
+    expect(prompt).toHaveBeenCalledWith("s8", "fix CI")
+  })
+})
+
+describe("sendWhenStarted refusals", () => {
+  it("rejects with the backend's refusal and clears the mark", async () => {
+    ready.mockReset()
+    prompt.mockReset()
+    agent.mockReset()
+    agent.mockReturnValue("claude")
+    ready.mockResolvedValue(true)
+    prompt.mockRejectedValue(new Error("session stopped before its prompt was free"))
+
+    await expect(sendWhenStarted("s6", "fix CI")).rejects.toThrow("session stopped")
+    expect(handoffHolds.get("s6")).toBe(false)
   })
 })

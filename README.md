@@ -110,6 +110,7 @@ reads what each CLI writes down and no two of them write down the same things.
 | Search the conversation from the palette | yes | yes | yes | yes | yes | yes | no | yes |
 | Resume a conversation started outside lich, from the palette's History tab | yes | yes | yes | yes | yes | Linux; macOS and Windows untested | yes | yes |
 | Fork a conversation into a new worktree | yes | yes | no | yes | no | no | no | no |
+| Race one task across several agents, a worktree each, and consolidate the best of them | yes | yes | no | no | yes | no | yes | yes |
 | Open a session at a chosen reasoning effort | yes | yes | yes | no | yes | no | in the model name | yes |
 | Open a session with ultracode on | yes | no | no | no | no | no | no | no |
 | Drive a running session from `lich control` or an agent: prompt, stop, model, effort, slash command | yes | no | no | no | no | no | no | no |
@@ -144,6 +145,10 @@ closed for good stays out of it, except one closed before this release: lich tel
 its own Claude Code conversations apart by the name it starts them under, and the
 other seven CLIs write down nothing that could tell them apart, so theirs show up
 there once.
+Antigravity, opencode and Crush sit out a race: a racer gets its task once it tells
+lich it is at its own prompt, and none of the three says so before its first turn.
+Antigravity and Crush ask a question first in a new worktree, which the task would
+answer, and opencode goes quiet mid-boot, where a task typed then never reaches it.
 
 Every gap is deliberate, none of them is lich withholding something the CLI
 reports, and [`docs/ceilings.md`](docs/ceilings.md) says what was measured behind

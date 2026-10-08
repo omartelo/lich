@@ -23,6 +23,7 @@ import {
   setSessionPinned,
   setSessionsColor,
   setSessionSchedule,
+  type ProviderKind,
   type Session,
   type SessionKind,
   type SessionState,
@@ -309,25 +310,38 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // the provider the new card runs — a fork has to spawn the CLI that wrote the
   // conversation it carries, not whatever the project defaults to — and records
   // the lineage the sidebar already draws for a delegate ("from <parent>").
+  //
+  // kind and folder are a race's: each of its checkouts runs the agent picked
+  // for it, filed under the race's folder from its first frame. A fork ignores
+  // both, since its provider is the conversation's and it opens on its own.
   const newWorktreeSession = useCallback(
     (
       projectId: string,
       wt: { name: string; path: string },
       sandbox = "",
       from: Session | null = null,
+      kind?: ProviderKind,
+      folder = "",
     ) => {
       const sessionId = newSessionId()
-      const kind = from?.kind ?? projectNewSessionKind(projectId)
-      const next = addSession(sessionsRef.current, projectId, sessionId, kind, wt.path, wt.name)
-      const project = next[projectId]
+      const resolvedKind = from?.kind ?? kind ?? projectNewSessionKind(projectId)
+      const added = addSession(
+        sessionsRef.current,
+        projectId,
+        sessionId,
+        resolvedKind,
+        wt.path,
+        wt.name,
+      )
+      const project = added[projectId]
       const created = project.sessions[project.sessions.length - 1]
-      commit(next)
       if (from) {
+        commit(added)
         void Store.AddSessionFrom(
           projectId,
           sessionId,
           created.label,
-          kind,
+          resolvedKind,
           wt.path,
           project.nextSeq,
           from.id,
@@ -335,15 +349,17 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         )
         return sessionId
       }
-      void Store.AddSession(
+      commit(folder ? setSessionsFolder(added, projectId, [sessionId], folder) : added)
+      const inserted = Store.AddSession(
         projectId,
         sessionId,
         created.label,
-        kind,
+        resolvedKind,
         wt.path,
         project.nextSeq,
         sandbox,
       )
+      void fileAfterInsert(inserted, sessionId, folder)
       return sessionId
     },
     [],
