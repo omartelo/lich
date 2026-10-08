@@ -226,7 +226,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **An interrupted turn is read off the keystrokes, not from the provider** (`internal/terminal/draft.go`,
   `hookstate.go`, `Service.noteInterrupt`): Claude Code, Codex and oh-my-pi all skip the hook that ends a turn
   when the user stops one, so lich publishes `interrupted` itself when a lone Ctrl+C or Escape reaches a session
-  it knows is mid-turn. It is a guess made from bytes, and it has three edges. A provider session running a tool
+  it knows is mid-turn. It is also raised with no keystroke, when a Claude Code mod acks an abort sent from
+  lich and when a usage limit ends a Codex turn (`internal/terminal/limit.go`). It is a guess made from bytes, and it has three edges. A provider session running a tool
   that owns the terminal — an editor opened through a shell command — takes Escape as the interrupt and clears
   the ring while the turn is still running; the next report from the provider puts it back. opencode does report
   its own abort, and reports it as the turn *finishing* (`session.status idle`), so an interrupted opencode card
