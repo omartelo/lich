@@ -196,7 +196,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   gated on the provider having reported `busy`, because a `tail -f`, a dev server or a TUI
   repainting would otherwise bill hours nobody worked. **Which turns get counted therefore
   depends on what a provider's hooks report at all**, and there are two rungs. On the top one —
-  Claude Code, Codex, Antigravity, opencode, oh-my-pi — the turn opens, so a turn nobody
+  Claude Code, Codex, Antigravity, opencode, oh-my-pi, Kiro CLI — the turn opens, so a turn nobody
   touches is counted from its own output. On the lower one — **Crush and Cursor CLI** — no turn
   ever opens (`docs/hooks/session-state.md`), and the turn is counted through the reports its
   tool calls fire: Cursor's `PreToolUse`/`PostToolUse` state reports, which beat even though
