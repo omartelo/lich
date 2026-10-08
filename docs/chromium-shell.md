@@ -101,9 +101,7 @@ Migration progress:
    untouched.
 
 **The migration is complete.** This document remains as the decision record;
-option 2 (embedded CEF via `energye/energy`) stays deferred with the same
-trigger — the project growing distribution needs a system-browser dependency
-can't serve.
+option 2 later shipped, through kurogane rather than `energye/energy` (below).
 
 What dies with WebKitGTK (all "Known Ceilings" entries): forced
 `GDK_BACKEND=x11`, the sandbox-disabled AppImage, the contenteditable DOM
