@@ -46,6 +46,13 @@ deprecated alias and the defaulted `provider`.
 |                  |                |                  |                    |                 |               |                 |               | session row, and mark the card as running |
 |                  |                |                  |                    |                 |               |                 |               | `provider` (the `session-agent` app event)|
 
+For Claude Code, Cursor CLI, oh-my-pi and Kiro CLI the report is also
+what makes a session ready for work: lich holds anything it would type at the
+session (a relayed task, a scheduled prompt, a handoff) until the first report
+of its PTY, because these hooks run only from the agent's own prompt, past the
+trust question a fresh directory raises (`internal/terminal/startgate.go`). A
+hook that stops reporting leaves those sessions unable to take typed work.
+
 `SessionStart` fires on startup, resume, `/clear` and compaction. A resume
 reports the resumed session's id and overwrites the stored value — lich always
 holds the id of the provider session currently in the card.

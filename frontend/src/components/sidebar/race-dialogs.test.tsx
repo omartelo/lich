@@ -42,7 +42,7 @@ const provider = (id: ProviderKind, name: string): ProviderState => ({
 
 const providers = [
   provider("claude", "Claude Code"),
-  provider("codex", "Codex"),
+  provider("kiro", "Kiro CLI"),
   provider("crush", "Crush"),
 ]
 
@@ -96,7 +96,7 @@ test("a race waits for a second agent and a task, then names a branch per agent"
   expect(button("Start 2 agents")?.disabled).toBe(true)
   expect(document.body.textContent).toContain("Pick at least two agents.")
 
-  await mounted.act(() => agentBox("Codex")?.click())
+  await mounted.act(() => agentBox("Kiro CLI")?.click())
   const task = document.querySelector<HTMLTextAreaElement>("#race-task")
   if (!task) {
     throw new Error("task field not rendered")
@@ -104,7 +104,7 @@ test("a race waits for a second agent and a task, then names a branch per agent"
   expect(button("Start 2 agents")?.disabled).toBe(true)
   await mounted.act(() => type(task, "Fix the auth redirect"))
   expect(document.body.textContent).toContain(
-    "Branches: fix-the-auth-redirect-claude, fix-the-auth-redirect-codex",
+    "Branches: fix-the-auth-redirect-claude, fix-the-auth-redirect-kiro",
   )
   await mounted.act(() => button("Start 2 agents")?.click())
 
@@ -113,7 +113,7 @@ test("a race waits for a second agent and a task, then names a branch per agent"
       name: "fix-the-auth-redirect",
       base: "main",
       task: "Fix the auth redirect",
-      agents: ["claude", "codex"],
+      agents: ["claude", "kiro"],
     },
   ])
   await mounted.unmount()
@@ -157,12 +157,12 @@ test("a consolidation opens on a prompt naming every raced branch", async () => 
   expect(prompt?.value).toContain("fix the redirect")
   expect(document.body.textContent).toContain("Branch: fix-consolidated")
 
-  await mounted.act(() => agentBox("Codex")?.click())
+  await mounted.act(() => agentBox("Kiro CLI")?.click())
   await mounted.act(() => button("Consolidate")?.click())
 
   expect(consolidated).toHaveLength(1)
   expect(consolidated[0].name).toBe("fix-consolidated")
-  expect(consolidated[0].agent).toBe("codex")
+  expect(consolidated[0].agent).toBe("kiro")
   expect(consolidated[0].prompt).toContain("git diff main...<branch>")
   await mounted.unmount()
 })

@@ -18,9 +18,3 @@ const store = createSessionAgentStore(
 export function useSessionAgent(sessionId: string): SessionKind | null {
   return useKeyedStore(store, sessionId)
 }
-
-/** The provider whose session-start a session's PTY last reported, or null:
- * read once, for a caller outside React waiting on the report. */
-export function sessionAgentOf(sessionId: string): SessionKind | null {
-  return store.get(sessionId)
-}

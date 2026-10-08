@@ -11,14 +11,16 @@ import { mountBudget } from "@/test/render-budget"
 import { createElement } from "react"
 import { beforeEach, expect, test, vi } from "vitest"
 import type { Session } from "@/lib/session/sessions"
+import { rememberConsolidator } from "@/lib/session/agent-race"
 import { useAgentRace } from "./useAgentRace"
+import { WorktreeCloseDialogs } from "./WorktreeCloseDialogs"
 import { type WorktreeClose, useWorktreeClose } from "./useWorktreeClose"
 
 const calls = vi.hoisted(() => ({
   created: [] as string[],
   failOn: "",
   opened: [] as { name: string; kind: string; folder: string }[],
-  started: [] as [string, string][],
+  sent: [] as [string, string][],
   discarded: [] as string[],
   removed: [] as [string, boolean][],
   filed: [] as [string[], string][],
@@ -67,8 +69,8 @@ vi.mock("@/providers/projects", () => ({
 vi.mock("@/lib/git/carry", () => ({ carryInto: () => Promise.resolve() }))
 vi.mock("@/lib/terminal/setup-queue", () => ({ queueSetup: () => {} }))
 vi.mock("@/lib/terminal/write-at-prompt", () => ({
-  sendWhenStarted: (id: string, text: string) => {
-    calls.started.push([id, text])
+  sendAtPrompt: (id: string, text: string) => {
+    calls.sent.push([id, text])
     return Promise.resolve()
   },
 }))
@@ -80,7 +82,7 @@ beforeEach(() => {
   calls.created = []
   calls.failOn = ""
   calls.opened = []
-  calls.started = []
+  calls.sent = []
   calls.discarded = []
   calls.removed = []
   calls.filed = []
@@ -103,7 +105,7 @@ test("a race makes one worktree and one filed session per agent, and sends each 
     { name: "fix-auth-claude", kind: "claude", folder: "fix-auth" },
     { name: "fix-auth-kiro", kind: "kiro", folder: "fix-auth" },
   ])
-  expect(calls.started).toEqual([
+  expect(calls.sent).toEqual([
     ["s-fix-auth-claude", "fix the redirect"],
     ["s-fix-auth-kiro", "fix the redirect"],
   ])
@@ -125,7 +127,7 @@ test("a consolidation opens one worktree in the race's folder and sends it the p
   expect(calls.opened).toEqual([
     { name: "fix-auth-consolidated", kind: "codex", folder: "fix-auth" },
   ])
-  expect(calls.started).toEqual([["s-fix-auth-consolidated", "combine"]])
+  expect(calls.sent).toEqual([["s-fix-auth-consolidated", "combine"]])
 })
 
 test("a refusal halfway names the agent and keeps the ones already started", async () => {
@@ -136,7 +138,7 @@ test("a refusal halfway names the agent and keeps the ones already started", asy
     race.start("fix-auth", main, "", "fix it", ["claude", "codex", "kiro"]),
   ).rejects.toThrow("Started 1 of 3 agents; fix-auth-codex failed: branch already checked out")
   expect(calls.created).toEqual(["fix-auth-claude"])
-  expect(calls.started).toEqual([["s-fix-auth-claude", "fix it"]])
+  expect(calls.sent).toEqual([["s-fix-auth-claude", "fix it"]])
 })
 
 const winner: Session = { id: "w", label: "a-claude", kind: "claude", path: "/wt/a", folder: "a" }
@@ -161,6 +163,7 @@ test("keeping the winner removes every other checkout forced and unfiles what is
   expect(out.close?.pendingKeep).toEqual({
     folder: "a",
     winner,
+    consolidated: false,
     rivals: [{ path: "/wt/b", sessions: [codex, shell] }],
     running: ["c"],
   })
@@ -211,4 +214,26 @@ test("removing the race takes every worktree in the folder and keeps none", asyn
   ])
   expect(calls.filed).toEqual([[[], ""]])
   await mounted.unmount()
+})
+
+// Keeping the consolidation is the end of the race, and the confirmation says
+// so rather than reading as one agent beating the others.
+test("keeping the race's consolidation asks to remove the race", async () => {
+  rememberConsolidator("p1", "a", "w")
+  const out: { close: WorktreeClose | null } = { close: null }
+  const mounted = await mountBudget(harness([winner, codex], out))
+
+  await mounted.act(() => out.close?.requestKeepWinner(winner))
+  expect(out.close?.pendingKeep?.consolidated).toBe(true)
+  await mounted.unmount()
+
+  const close = out.close
+  if (!close) {
+    throw new Error("close flow not captured")
+  }
+  const dialogs = await mountBudget(createElement(WorktreeCloseDialogs, { close }))
+  await dialogs.act(async () => {})
+  expect(document.body.textContent).toContain("Remove the a race?")
+  expect(document.body.textContent).toContain("a-claude is kept.")
+  await dialogs.unmount()
 })

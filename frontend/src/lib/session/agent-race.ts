@@ -9,18 +9,18 @@ import type { ProviderKind, Session } from "./sessions"
 
 /**
  * Whether a provider can race: whether its hook reports session-start from the
- * agent's own prompt before the first turn, which is what a race's task waits
- * for (sendWhenStarted). Measured in a fresh worktree (docs/ceilings.md):
+ * agent's own prompt before the first turn, which is what terminal.Ready waits
+ * for before a race's task is sent (internal/terminal, startgate.go). Measured in a fresh worktree (docs/ceilings.md):
  * terminal.Ready only hears the screen go quiet, five providers open a
  * first-run question there that is just as quiet, and the Enter that sends the
- * task answers it; Claude Code and Cursor CLI exit on it. Antigravity and Crush
- * ask first and report nothing until their first turn. opencode asks nothing,
+ * task answers it; Claude Code and Cursor CLI exit on it. Codex, Antigravity
+ * and Crush ask first and report nothing until their first turn. opencode asks nothing,
  * but goes quiet mid-boot under the load of a race, and a task typed then lands
  * on the terminal before its TUI does.
  */
 const RACES: Record<ProviderKind, boolean> = {
   claude: true,
-  codex: true,
+  codex: false,
   antigravity: false,
   opencode: false,
   omp: true,

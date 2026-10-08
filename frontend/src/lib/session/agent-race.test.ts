@@ -107,13 +107,14 @@ describe("folderCheckouts", () => {
 })
 
 describe("canRace", () => {
-  // Measured in a fresh worktree (docs/ceilings.md): none of the three reports
-  // session-start from its own prompt before its first turn.
+  // Measured (docs/ceilings.md): none of the four reports session-start from
+  // its own prompt before its first turn.
   it("leaves out the providers with no signal from their own prompt", () => {
+    expect(canRace("codex")).toBe(false)
     expect(canRace("antigravity")).toBe(false)
     expect(canRace("crush")).toBe(false)
     expect(canRace("opencode")).toBe(false)
-    for (const kind of ["claude", "codex", "omp", "cursor", "kiro"] as const) {
+    for (const kind of ["claude", "omp", "cursor", "kiro"] as const) {
       expect(canRace(kind)).toBe(true)
     }
   })

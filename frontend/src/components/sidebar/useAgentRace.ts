@@ -5,7 +5,7 @@ import { ProjectService } from "@/lib/rpc"
 import { planRace, rememberConsolidator, rememberRaceTask } from "@/lib/session/agent-race"
 import type { ProviderKind } from "@/lib/session/sessions"
 import { queueSetup } from "@/lib/terminal/setup-queue"
-import { sendWhenStarted } from "@/lib/terminal/write-at-prompt"
+import { sendAtPrompt } from "@/lib/terminal/write-at-prompt"
 import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { errorText } from "@/lib/utils"
 import { useProjects } from "@/providers/projects"
@@ -43,7 +43,7 @@ export interface AgentRace {
 
 // useAgentRace opens the worktrees of a race and of its consolidation: the
 // new-worktree dialog's create, once per agent, with the task sent to each once
-// that agent reports it is at its own prompt (sendWhenStarted, canRace).
+// that agent is at its own prompt (sendAtPrompt, canRace).
 //
 // A race's worktrees are made one at a time. git takes a lock on the repository
 // for each, and a refusal halfway is easier to report as "this one, after
@@ -77,7 +77,7 @@ export function useAgentRace(projectId: string, projectPath: string): AgentRace 
     // Not awaited, like the issue handoff: the wait is the setup script, the
     // provider's boot and any trust question the user has to answer on the
     // card, and the dialog closes on worktrees that exist.
-    void sendWhenStarted(opened, text).catch((err: unknown) => {
+    void sendAtPrompt(opened, text).catch((err: unknown) => {
       toast.error(`Couldn’t send the task to ${branch}: ${errorText(err)}`)
     })
     return opened

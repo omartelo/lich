@@ -187,12 +187,17 @@ function KeepWinnerDialog({ keep, onCancel, onConfirm }: KeepWinnerDialogProps) 
     <ConfirmDialog
       open={keep !== null}
       onCancel={onCancel}
-      title={keep?.winner ? `Keep ${keep.winner.label}?` : `Remove the ${keep?.folder} race?`}
+      title={
+        keep?.winner && !keep.consolidated
+          ? `Keep ${keep.winner.label}?`
+          : `Remove the ${keep?.folder} race?`
+      }
       description={
         <>
           Removes {keep?.winner ? "the other" : "the"} {count(total, "worktree")} in{" "}
           <span className="font-medium">{keep?.folder}</span>, with their sessions. Branches stay;
           uncommitted work in them is discarded and exists nowhere else.
+          {keep?.consolidated && <> {keep.winner?.label} is kept.</>}
           <span className="mt-3 flex flex-col gap-1">
             {keep?.rivals.map((rival) => (
               <RivalLine

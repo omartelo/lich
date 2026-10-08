@@ -1,7 +1,12 @@
 import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { ProjectService, Store } from "@/lib/rpc"
-import { folderCheckouts, raceRivals, type RaceRival } from "@/lib/session/agent-race"
+import {
+  consolidatorOf,
+  folderCheckouts,
+  raceRivals,
+  type RaceRival,
+} from "@/lib/session/agent-race"
 import { closeIntent } from "@/lib/session/close-intent"
 import { runningSessions } from "@/lib/session/use-session-status"
 import type { Session } from "@/lib/session/sessions"
@@ -54,6 +59,9 @@ export interface WorktreeClose {
 export interface KeepWinner {
   folder: string
   winner: Session | null
+  /** Whether winner is the race's consolidation, which makes this the end of
+   * the race rather than one agent beating the others. */
+  consolidated: boolean
   rivals: RaceRival[]
   running: string[]
 }
@@ -138,7 +146,13 @@ export function useWorktreeClose(
       return
     }
     const ids = rivals.flatMap((rival) => rival.sessions.map((session) => session.id))
-    setPendingKeep({ folder, winner, rivals, running: runningSessions(ids) })
+    setPendingKeep({
+      folder,
+      winner,
+      consolidated: winner !== null && consolidatorOf(projectId, folder) === winner.id,
+      rivals,
+      running: runningSessions(ids),
+    })
   }
 
   return {

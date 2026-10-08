@@ -1,5 +1,4 @@
 import { Relay, Terminal } from "@/lib/rpc"
-import { sessionAgentOf } from "@/lib/session/use-session-agent"
 import { handoffHolds } from "./handoff-store"
 
 // Text written into a session the moment its card exists lands wherever that
@@ -51,19 +50,18 @@ export function writeAtPrompt(sessionId: string, text: string): Promise<void> {
 }
 
 /**
- * Send text to a session as its prompt, written and submitted (Relay.Prompt)
- * where writeAtPrompt leaves it for the user to send, once the provider has
- * reported session-start and the prompt is free. The report is the wait that
- * matters: its hook sends it only from the agent's own prompt, while Ready also
- * answers yes to a trust question shown first in a new directory, and the
- * Enter that sends the text would answer that question instead (agent-race,
- * canRace). Rejects like writeAtPrompt, and with the backend's refusal.
+ * Send text to a session as its prompt once it has one: written and submitted
+ * (Relay.Prompt), where writeAtPrompt leaves it at the prompt for the user to
+ * send. Ready already holds a session whose provider asks a trust question
+ * first until the agent reports from its own prompt (internal/terminal,
+ * startgate.go), so the Enter never answers that question. Rejects like
+ * writeAtPrompt, and with the backend's refusal.
  */
-export function sendWhenStarted(sessionId: string, text: string): Promise<void> {
+export function sendAtPrompt(sessionId: string, text: string): Promise<void> {
   return atPrompt(
     sessionId,
     () => Relay.Prompt(sessionId, text),
-    async () => sessionAgentOf(sessionId) !== null && (await Terminal.Ready(sessionId)),
+    () => Terminal.Ready(sessionId),
   )
 }
 

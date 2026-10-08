@@ -99,18 +99,20 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   lich has no "setup finished" signal to hang an automatic start on — `terminal.Ready` answers a different
   question, going false again for every turn the agent takes. So the card is one gesture, which is also what
   keeps eight worktrees from meaning eight dev servers.
-- **A race's task waits for proof of the agent's own prompt, and three providers cannot race**
-  (`frontend/src/lib/session/agent-race.ts`, `RACES`): in a fresh worktree Claude Code, Codex,
-  Cursor CLI and Antigravity ask whether the folder is trusted and Crush asks whether to initialize the
-  project, and `terminal.Ready` reads that quiet screen as a prompt. The Enter that sends the task answers the
-  question instead: Claude Code and Cursor CLI exit, Codex and Antigravity lose the task to a second screen,
-  Crush runs an init turn (measured 2026-10-08). So a race waits for the provider's session-start report,
-  which its hook sends only from the agent's own prompt. Antigravity, Crush and opencode report nothing before
-  their first turn, so they are drawn dead in the race and consolidate dialogs. opencode asks no question, but
-  under the load of a race it goes quiet mid-boot, `Ready` latches there, and the task lands on the terminal
-  before its TUI does (measured in the same run). The wait is the handoff's five minutes: a trust question left
-  unanswered that long, or a provider without lich-plugin's hooks, gets the task never and a toast instead.
-  `lich open --worktree --prompt` still types after `Ready` alone and falls into the same question.
+- **A session is ready for work only once its agent reports from its own prompt, where it can**
+  (`internal/terminal/startgate.go`): in a fresh worktree Claude Code, Codex, Cursor CLI and Antigravity ask
+  whether the folder is trusted and Crush asks whether to initialize the project, and a quiet screen is all
+  `terminal.Ready` used to read. Anything typed then (a relayed task, `lich open --prompt`, a scheduled
+  prompt, an issue or pull request handed over, a race's task) went into the question, and the Enter behind
+  it answered it: Claude Code and Cursor CLI exit, Codex and Antigravity lose the text to a second screen,
+  Crush runs an init turn (measured 2026-10-08). Claude Code, Cursor CLI, oh-my-pi and Kiro CLI now stay
+  unready until their session-start report, which their hooks send only from the agent's prompt. That hold
+  needs lich-plugin's hooks in the provider: without them nothing would ever release it, so nothing is held
+  and the old trap is back. Codex (0.161.0), Antigravity, Crush and opencode report nothing before their
+  first turn, Codex not even at its prompt in a trusted folder, so a quiet screen is still all lich has for
+  them, a trust, hooks or init question included; opencode asks nothing, but under load it goes quiet
+  mid-boot and text typed then lands before its TUI does. All four are left out of races
+  (`frontend/src/lib/session/agent-race.ts`, `RACES`).
 - **A race is remembered by the window that started it** (`agent-race.ts`, `rememberRaceTask`): nothing about
   a race is stored beyond its folder. The task the consolidation prompt quotes and the consolidating session
   the folder offers to keep live in memory, so after a reload the prompt has a line to fill in, and the
