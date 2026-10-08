@@ -18,6 +18,7 @@ import { DiffStat } from "./DiffStat"
 import { FooterCheckout } from "./FooterCheckout"
 import { FooterSession } from "./FooterSession"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { SIDEBAR_MORPH } from "@/lib/view-transition"
 
 interface FooterButtonProps {
   /** Both the tooltip and the accessible name — one string, one meaning. */
@@ -48,7 +49,7 @@ function FooterButton({ label, onClick, pressed, disabled, wide, children }: Foo
             aria-label={label}
             className={cn(
               "flex shrink-0 items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40",
-              wide ? "gap-1.5 px-1.5 py-1" : "justify-center p-1",
+              wide ? "h-8 gap-1.5 px-2" : "size-8 justify-center",
               pressed && "bg-accent text-accent-foreground",
             )}
           />
@@ -154,7 +155,10 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
     ),
   }
   return (
-    <footer className="flex min-h-9 min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border bg-sidebar px-3 py-1 text-xs text-muted-foreground">
+    <footer
+      className="flex min-h-11 min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 py-1.5 text-xs text-muted-foreground"
+      style={{ viewTransitionName: SIDEBAR_MORPH.footer }}
+    >
       {(["left", "right"] as const).map((side) => (
         <section
           key={side}

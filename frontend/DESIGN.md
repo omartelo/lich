@@ -10,13 +10,19 @@ Working rules (commands, state, shadcn workflow) live in `CLAUDE.md`; the tokens
 
 The default shadcn look nests bordered boxes — a card with a `border` inside a panel, a filled pill inside the
 card, a bordered chip inside the toolbar. lich rejects that. Elements are defined by **space, hover and
-hairline seams**, not by enclosure.
+islands**, not by enclosure.
 
 - **Rows, not cards.** A list item has no border and no `bg-card`. It reads as a row; hover and selection
   paint it, nothing encloses it.
-- **Borders are structural seams only.** A hairline (`--border`) separates a panel from its neighbour (sidebar
-  edge, top tab bar, footer, dock divider). It never wraps an individual list item, badge, or a button at rest.
-  Inputs and numeric fields are the one exception — a field needs an edge to read as editable.
+- **Panels are islands.** The window's regions (session sidebar, stage, dock) are `rounded-lg` surfaces
+  floating on `--canvas`, a step darker than every surface, separated by a `1.5` (6px) gap instead of a
+  hairline. The tab bar, the footer and the collapsed rail sit on the canvas itself, unboxed, as bands
+  of one thickness (`11`, 44px): the 6px window edge, a 32px control, the 6px gap. A control on a band
+  lines up with the island edge beside it. The active
+  project tab is a pill in the island colour (`bg-sidebar`), as if it were part of the island below it.
+- **Hairlines are seams inside an island.** A hairline (`--border`) splits a panel's own parts (the dock's
+  header, two split panes). It never wraps an individual list item, badge, or a button at rest. Inputs and
+  numeric fields are the one exception — a field needs an edge to read as editable.
 - **Badges are text + glyph.** A count or branch is a lucide glyph next to text. No filled pill capsule.
 - **State is fill, not chrome.** Selection is a flat `bg-accent` fill. No left accent bar, no ring, no shadow.
 
@@ -36,8 +42,9 @@ Surface roles (dark values shown; light is the mirror):
 
 | Token | Role |
 | --- | --- |
-| `--background` | app ground, terminal-adjacent panes |
-| `--sidebar` / `--card` / `--popover` | raised chrome: session sidebar, tabs, footer, dock, menus, dialogs |
+| `--canvas` | the ground islands float on; derived in `index.css` from `--background`, never a theme token |
+| `--background` | screens inside the stage island (settings, pulls, empty states) |
+| `--sidebar` / `--card` / `--popover` | islands and raised chrome: session sidebar, dock, active tab, menus, dialogs |
 | `--accent` | hover and selection fill (the workhorse) |
 | `--muted` / `--muted-foreground` | secondary text, icons at rest, paths, meta |
 | `--border` | hairline seams (`oklch(1 0 0 / 10%)` in dark) and input edges |
@@ -132,7 +139,8 @@ Short specs; the code is the detail. All follow the idiom above.
   appears on hover only.
 - **New session** — a full-width action at the top of the sidebar (dropdown trigger), `bg-accent/55`,
   brightening to `bg-accent` on hover.
-- **Project tab** (`ProjectTab`) — text tab, no chip border; inactive tabs badge busy/done/waiting.
+- **Project tab** (`ProjectTab`) — text tab on the canvas, no chip border; active is a `bg-sidebar` pill;
+  inactive tabs badge busy/done/waiting.
 - **Diff file** (`FileDiff`) — **borderless section**, not a card. Header is a hover row: chevron, language
   badge, filename, muted dir, diff-stat, ghost actions (attach / discard). Files separated by gap. Added/
   removed lines keep the emerald/red gutter strip — that is meaning.

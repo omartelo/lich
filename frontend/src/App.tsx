@@ -8,6 +8,7 @@ import { activeSessionId, sessionsOf } from "@/lib/session/sessions"
 import { usePanes } from "@/lib/session/use-panes"
 import { Terminal as TerminalService } from "@/lib/rpc"
 import { reapTerminals } from "@/lib/terminal/terminal-registry"
+import { morph, SIDEBAR_MORPH } from "@/lib/view-transition"
 import {
   requestSessionIntent,
   requestWorktreeDialog,
@@ -54,7 +55,7 @@ function Layout() {
     setSidebar(open)
     writePref(SIDEBAR_KEY, open)
   }
-  const toggleSidebar = () => showSidebar(!sidebar)
+  const toggleSidebar = () => morph(() => showSidebar(!sidebar))
   useHotkey(hotkeys.toggleSidebar, toggleSidebar)
   // A session's PTY and terminal end when the session leaves the workspace,
   // decided here and not in the view that drew it: that view is gone while
@@ -115,9 +116,9 @@ function Layout() {
   })
   useHotkey(hotkeys.otherPane, () => panes.split && panes.focusStep(1))
   return (
-    <div className="flex h-screen w-screen flex-col bg-background">
+    <div className="flex h-screen w-screen flex-col bg-canvas">
       <ProjectTabs />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 gap-1.5 overflow-hidden pl-1.5">
         {/* Collapsed is a rail, never nothing: the status rings are what a list
             of running agents is read for, and hiding them to win 12rem of
             terminal is a trade the width alone does not pay for. */}
@@ -126,10 +127,13 @@ function Layout() {
         ) : (
           <SidebarRail onExpand={toggleSidebar} />
         )}
-        <main className="flex flex-1 flex-col overflow-hidden">
+        <main className="flex flex-1 flex-col overflow-hidden pr-1.5">
           {/* relative: RightDock overlays this area when in full screen. */}
-          <div className="relative flex flex-1 overflow-hidden">
-            <div className="relative flex-1 overflow-hidden">
+          <div className="relative flex flex-1 gap-1.5 overflow-hidden">
+            <div
+              className="relative flex-1 overflow-hidden rounded-lg"
+              style={{ viewTransitionName: SIDEBAR_MORPH.stage }}
+            >
               {/* The stage's own chrome — the grid, the seams, the dialogs it
                   owns. A pane's throw is caught closer, inside TerminalHost,
                   so this fallback is for the layout around them. Retrying
@@ -152,7 +156,7 @@ function Layout() {
               </ErrorBoundary>
             </div>
             {dock && (
-              <ErrorBoundary label="The panel" className="w-80 shrink-0 border-l border-border">
+              <ErrorBoundary label="The panel" className="w-80 shrink-0 rounded-lg bg-sidebar">
                 <RightDock tab={dock} onTab={setDock} onClose={() => setDock(null)} />
               </ErrorBoundary>
             )}

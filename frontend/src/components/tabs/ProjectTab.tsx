@@ -41,7 +41,7 @@ export function ProjectTab({ project, sessionIds, to, active, onClose }: Project
         title={project.path}
         className={cn(
           "group flex h-8 max-w-52 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:text-foreground",
-          active && "bg-accent font-medium text-accent-foreground",
+          active && "bg-sidebar font-medium text-foreground",
         )}
       >
         {badge === "busy" && <LoaderCircle className="size-3 shrink-0 animate-spin" />}

@@ -1,6 +1,7 @@
 import { useMatch, useNavigate } from "react-router-dom"
 import { PanelLeft, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { SIDEBAR_MORPH } from "@/lib/view-transition"
 import { useProjects } from "@/providers/projects"
 import { activeSessionId, sessionsOf, type Session } from "@/lib/session/sessions"
 import { sidebarGroups } from "@/lib/session/sidebar-groups"
@@ -48,7 +49,12 @@ function RailSession({ session, projectPath, projectId, active, onSelect }: Rail
           />
         }
       >
-        <SessionStatusIcon kind={agent ?? session.kind} status={status} unread={unread} />
+        <SessionStatusIcon
+          kind={agent ?? session.kind}
+          status={status}
+          unread={unread}
+          morphName={SIDEBAR_MORPH.session(session.id)}
+        />
       </TooltipTrigger>
       <SessionTooltip session={session} path={projectPath} projectId={projectId} />
     </Tooltip>
@@ -101,7 +107,10 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
   }
 
   return (
-    <aside className="flex w-12 shrink-0 flex-col items-center gap-1 border-r border-border bg-sidebar py-2">
+    <aside
+      className="flex w-8 shrink-0 flex-col items-center gap-1 pb-1.5"
+      style={{ viewTransitionName: SIDEBAR_MORPH.panel }}
+    >
       <Tooltip>
         <TooltipTrigger
           render={
@@ -113,7 +122,7 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
             />
           }
         >
-          <PanelLeft className="size-4" />
+          <PanelLeft className="size-4" style={{ viewTransitionName: SIDEBAR_MORPH.toggle }} />
         </TooltipTrigger>
         <TooltipContent side="right">Expand sidebar</TooltipContent>
       </Tooltip>
@@ -128,7 +137,7 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
             />
           }
         >
-          <Plus className="size-4" />
+          <Plus className="size-4" style={{ viewTransitionName: SIDEBAR_MORPH.newSession }} />
         </TooltipTrigger>
         {/* No provider menu at this width: the plus spawns the default provider,
             the same session the New session shortcut makes. */}

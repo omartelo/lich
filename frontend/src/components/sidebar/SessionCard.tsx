@@ -59,6 +59,7 @@ import { CardColorContextSub } from "./CardColorMenu"
 import { type CardColor, CARD_COLORS, isCardColor, TINTED_FILL } from "@/lib/session/card-color"
 import { SessionForkItem } from "./SessionForkItem"
 import { SessionStatusIcon } from "./SessionStatusIcon"
+import { SIDEBAR_MORPH } from "@/lib/view-transition"
 import { SessionTooltip } from "./SessionTooltip"
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -472,7 +473,12 @@ export function SessionCard({
                     pinned ? "pr-6" : "pr-11",
                   )}
                 >
-                  <SessionStatusIcon kind={agent ?? session.kind} status={status} unread={unread} />
+                  <SessionStatusIcon
+                    kind={agent ?? session.kind}
+                    status={status}
+                    unread={unread}
+                    morphName={SIDEBAR_MORPH.session(session.id)}
+                  />
                   {age && (
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       {age}

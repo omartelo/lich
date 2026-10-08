@@ -28,7 +28,7 @@ import {
   showEntry,
   terminalEntry,
 } from "@/lib/terminal/terminal-registry"
-import { ensureFontLoaded, fitTerminal, TERMINAL_PADDING_LEFT } from "@/lib/terminal/term-view"
+import { ensureFontLoaded, fitTerminal, TERMINAL_PADDING } from "@/lib/terminal/term-view"
 import { exitMarker, readSessionExit, type SessionExit } from "@/lib/terminal/session-exit"
 import { TerminalExitBanner } from "./TerminalExitBanner"
 import { TerminalDropHint } from "./TerminalDropHint"
@@ -355,8 +355,8 @@ export function TerminalView({
       webgl.dispose()
     })
     term.loadAddon(webgl)
-    // Against the React container, not the host: the left gutter is padding on
-    // the container, and the fit subtracts it (term-view.ts). A terminal built
+    // Against the React container, not the host: the inset is padding on the
+    // container, and the fit subtracts it (term-view.ts). A terminal built
     // while nothing is mounted has no container to measure and no size worth
     // measuring — the next visibility pass refits it.
     fitTerminal(term, containerRef.current ?? host)
@@ -739,7 +739,10 @@ export function TerminalView({
         className="h-full w-full"
         style={{
           backgroundColor: terminalColors.background,
-          paddingLeft: TERMINAL_PADDING_LEFT,
+          paddingTop: TERMINAL_PADDING.top,
+          paddingRight: TERMINAL_PADDING.right,
+          paddingBottom: TERMINAL_PADDING.bottom,
+          paddingLeft: TERMINAL_PADDING.left,
         }}
       />
       {dropping && <TerminalDropHint label={label} confined={sandboxed} />}

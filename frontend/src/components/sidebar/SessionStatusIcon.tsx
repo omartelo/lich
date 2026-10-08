@@ -27,12 +27,17 @@ interface SessionStatusIconProps {
   // Whether that state is a finished turn still waiting to be read. Only "done"
   // is ever unread (see useSessionUnread).
   unread: boolean
+  // Shared with the other sidebar shape so the icon flies between them (SIDEBAR_MORPH).
+  morphName?: string
 }
 
 // The slot is a fixed size so the icon never shifts as the state changes.
-export function SessionStatusIcon({ kind, status, unread }: SessionStatusIconProps) {
+export function SessionStatusIcon({ kind, status, unread, morphName }: SessionStatusIconProps) {
   return (
-    <span className="relative flex size-[1.375rem] shrink-0 items-center justify-center text-muted-foreground">
+    <span
+      className="relative flex size-[1.375rem] shrink-0 items-center justify-center text-muted-foreground"
+      style={morphName ? { viewTransitionName: morphName } : undefined}
+    >
       {status && (
         <span
           className={cn(
