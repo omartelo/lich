@@ -14,7 +14,7 @@ file that fails the rules below, is named anything but its own `<id>.json`, or
 carries a newer `formatVersion`) is not dropped: Settings › Appearance lists it
 as a theme that can't load, with the reason, and it can be removed from there. A
 file whose name is not a valid theme id is not one lich could have written, and
-is skipped with a warning in the log.
+is skipped silently.
 
 The theme format and the pack manifest are covered by lich's semver promise; see
 [stability.md](stability.md).
