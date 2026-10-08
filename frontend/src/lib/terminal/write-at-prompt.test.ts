@@ -3,15 +3,19 @@
 // is that the write did not happen until Ready said so.
 import { describe, expect, it, vi } from "vitest"
 import { handoffHolds } from "./handoff-store"
-import { writeAtPrompt } from "./write-at-prompt"
+import { sendAtPrompt, writeAtPrompt } from "./write-at-prompt"
 
 const ready = vi.fn()
 const write = vi.fn()
+const prompt = vi.fn()
 
 vi.mock("@/lib/rpc", () => ({
   Terminal: {
     Ready: (id: string) => ready(id),
     Write: (id: string, data: string) => write(id, data),
+  },
+  Relay: {
+    Prompt: (id: string, text: string) => prompt(id, text),
   },
 }))
 
@@ -71,5 +75,31 @@ describe("writeAtPrompt", () => {
 
     expect(ready).toHaveBeenCalledTimes(1)
     expect(write).toHaveBeenCalledWith("s2", "fix CI")
+  })
+})
+
+describe("sendAtPrompt", () => {
+  it("sends the prompt only once the session has one, and never just writes it", async () => {
+    ready.mockReset()
+    write.mockReset()
+    prompt.mockReset()
+    ready.mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    prompt.mockResolvedValue(null)
+
+    await sendAtPrompt("s5", "fix the auth redirect")
+
+    expect(ready).toHaveBeenCalledTimes(2)
+    expect(prompt).toHaveBeenCalledWith("s5", "fix the auth redirect")
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it("rejects with the backend's refusal and clears the mark", async () => {
+    ready.mockReset()
+    prompt.mockReset()
+    ready.mockResolvedValue(true)
+    prompt.mockRejectedValue(new Error("session stopped before its prompt was free"))
+
+    await expect(sendAtPrompt("s6", "fix CI")).rejects.toThrow("session stopped")
+    expect(handoffHolds.get("s6")).toBe(false)
   })
 })

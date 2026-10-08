@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { issueBrief, issueName, parseIssueRef } from "@/lib/issue"
+import { issueBrief, issueName, issueText, parseIssueRef } from "@/lib/issue"
 import { toBranchName } from "@/lib/git/branch-name"
 
 describe("parseIssueRef", () => {
@@ -80,5 +80,13 @@ describe("issueBrief", () => {
       "\x1b[200~GitHub issue #381 — Sandbox backend for Windows\n" +
         "https://github.com/omartelo/lich/issues/381\x1b[201~",
     )
+  })
+})
+
+describe("issueText", () => {
+  it("is the brief's text with no paste around it, for the relay to paste", () => {
+    const issue = { number: 7, title: "Crash on start", body: "Steps below.", url: "https://x/7" }
+    expect(issueText(issue)).toBe("GitHub issue #7 — Crash on start\nhttps://x/7\n\nSteps below.")
+    expect(issueBrief(issue)).toBe(`\x1b[200~${issueText(issue)}\x1b[201~`)
   })
 })

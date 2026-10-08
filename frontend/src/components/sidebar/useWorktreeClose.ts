@@ -1,6 +1,12 @@
 import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { ProjectService, Store } from "@/lib/rpc"
+import {
+  consolidatorOf,
+  folderCheckouts,
+  raceRivals,
+  type RaceRival,
+} from "@/lib/session/agent-race"
 import { closeIntent } from "@/lib/session/close-intent"
 import { runningSessions } from "@/lib/session/use-session-status"
 import type { Session } from "@/lib/session/sessions"
@@ -33,6 +39,31 @@ export interface WorktreeClose {
   remove: () => void
   /** Confirmed: remove the dirty checkout, discarding what was never committed. */
   forceRemove: () => void
+  /** The checkouts a "keep this, remove the others" would remove for a session:
+   * the other worktrees filed in its folder (raceRivals). */
+  rivalsOf: (winner: Session) => RaceRival[]
+  /** Ask to keep winner and remove its rivals; one confirmation covers them all. */
+  requestKeepWinner: (winner: Session) => void
+  /** Ask to remove every worktree filed in folder, keeping none. */
+  requestRemoveRace: (folder: string) => void
+  /** The keep-and-remove confirmation that is open, or null. */
+  pendingKeep: KeepWinner | null
+  /** Confirmed: remove every rival checkout, dirty or mid-turn, and unfile what is left. */
+  keepWinner: () => void
+}
+
+/** A keep-and-remove waiting on its confirmation: the session kept, or null
+ * when the whole race goes. running is the rivals' sessions that had a turn in
+ * flight when it was asked, which the dialog names because removing the
+ * checkout stops them too. */
+export interface KeepWinner {
+  folder: string
+  winner: Session | null
+  /** Whether winner is the race's consolidation, which makes this the end of
+   * the race rather than one agent beating the others. */
+  consolidated: boolean
+  rivals: RaceRival[]
+  running: string[]
 }
 
 // useWorktreeClose owns every question a close raises — is a turn still running
@@ -47,11 +78,12 @@ export function useWorktreeClose(
   projectPath: string,
   sessions: Session[],
 ): WorktreeClose {
-  const { closeSession, discardSession, keepSession } = useProjects()
+  const { closeSession, discardSession, keepSession, fileSessions } = useProjects()
   const [pendingRunning, setPendingRunning] = useState<Session | null>(null)
   const [pendingClose, setPendingClose] = useState<Session | null>(null)
   const [pendingAdopted, setPendingAdopted] = useState(true)
   const [pendingForce, setPendingForce] = useState<Session | null>(null)
+  const [pendingKeep, setPendingKeep] = useState<KeepWinner | null>(null)
   const adoptedProbe = useRef(0)
 
   // Close first so the PTY running inside the worktree dies before git tries
@@ -61,19 +93,21 @@ export function useWorktreeClose(
   // discardSession, not closeSession: the checkout is going away in the same
   // breath, so an undo would restore a card rooted in a directory that no
   // longer exists.
-  const closeAndRemove = (session: Session, force: boolean) => {
-    discardSession(projectId, session.id)
+  const removeCheckout = (path: string, inside: Session[], force: boolean) => {
+    for (const session of inside) {
+      discardSession(projectId, session.id)
+    }
     // The checkout is going away, so no parked row for it may linger — one would
     // otherwise resurface a resume against a worktree that no longer exists.
-    void Store.PurgeWorktreeSessions(projectId, session.path ?? "")
+    void Store.PurgeWorktreeSessions(projectId, path)
     // Acknowledged: every path into here has gone through a dialog naming the
     // directory, and for an adopted one that dialog says lich did not make it.
-    ProjectService.RemoveWorktree(projectPath, session.path ?? "", force, true).catch(
-      (err: unknown) => {
-        toast.error(`Failed to remove worktree: ${errorText(err)}`)
-      },
-    )
+    ProjectService.RemoveWorktree(projectPath, path, force, true).catch((err: unknown) => {
+      toast.error(`Failed to remove worktree: ${errorText(err)}`)
+    })
   }
+  const closeAndRemove = (session: Session, force: boolean) =>
+    removeCheckout(session.path ?? "", [session], force)
 
   // Each step of the close, taken as closeIntent decides it. The card hides
   // every close affordance while pinned; the refusal here is the contract behind
@@ -107,11 +141,26 @@ export function useWorktreeClose(
     }
   }
 
+  const askRemoval = (folder: string, winner: Session | null, rivals: RaceRival[]) => {
+    if (rivals.length === 0) {
+      return
+    }
+    const ids = rivals.flatMap((rival) => rival.sessions.map((session) => session.id))
+    setPendingKeep({
+      folder,
+      winner,
+      consolidated: winner !== null && consolidatorOf(projectId, folder) === winner.id,
+      rivals,
+      running: runningSessions(ids),
+    })
+  }
+
   return {
     pendingRunning,
     pendingClose,
     pendingAdopted,
     pendingForce,
+    pendingKeep,
 
     requestClose(session) {
       // Read at the click rather than subscribed to: what matters is whether a
@@ -132,6 +181,7 @@ export function useWorktreeClose(
       setPendingRunning(null)
       setPendingClose(null)
       setPendingForce(null)
+      setPendingKeep(null)
     },
 
     keep() {
@@ -167,6 +217,39 @@ export function useWorktreeClose(
       if (session?.path) {
         closeAndRemove(session, true)
       }
+    },
+
+    rivalsOf: (winner) => raceRivals(sessions, winner),
+
+    requestKeepWinner(winner) {
+      askRemoval(winner.folder ?? "", winner, raceRivals(sessions, winner))
+    },
+
+    requestRemoveRace(folder) {
+      askRemoval(folder, null, folderCheckouts(sessions, folder))
+    },
+
+    // Forced, dirty or not: the confirmation listed the uncommitted work in each
+    // checkout, so a second question per dirty one would ask what was answered.
+    // What stays in the folder is unfiled, which ends the folder: with the
+    // rivals gone it is a set of one, and the winner goes back to its checkout.
+    keepWinner() {
+      const keep = pendingKeep
+      setPendingKeep(null)
+      if (!keep) {
+        return
+      }
+      const removed = new Set<string>()
+      for (const rival of keep.rivals) {
+        removeCheckout(rival.path, rival.sessions, true)
+        for (const session of rival.sessions) {
+          removed.add(session.id)
+        }
+      }
+      const left = sessions
+        .filter((session) => session.folder === keep.folder && !removed.has(session.id))
+        .map((session) => session.id)
+      fileSessions(projectId, left, "")
     },
   }
 }

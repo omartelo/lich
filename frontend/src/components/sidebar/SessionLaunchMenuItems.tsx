@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ChevronLeft, GitBranch, Play, Terminal } from "lucide-react"
+import { ChevronLeft, Flag, GitBranch, Play, Terminal } from "lucide-react"
 import { ProviderIcon } from "@/components/ProviderIcon"
 import {
   DropdownMenuCheckboxItem,
@@ -38,6 +38,9 @@ interface SessionLaunchMenuItemsProps {
    * the rung asked for one, "" when it answered by itself. */
   onNewSession: (kind: ProviderKind | "shell", sandbox: SandboxAnswer) => void
   worktree?: WorktreeMenuAction
+  /** "Race agents…": one task, a worktree per agent. Offered wherever a
+   * worktree is, since every racer gets one. */
+  race?: WorktreeMenuAction
   /** The checkout's Run entry. Absent when the project ships no
    * .lich/run-worktree.sh — there would be no command to run. */
   run?: RunMenuAction
@@ -131,6 +134,7 @@ export function SessionLaunchMenuItems({
   projectId,
   onNewSession,
   worktree,
+  race,
   run,
 }: SessionLaunchMenuItemsProps) {
   const asking = useSandboxAsk(
@@ -185,6 +189,12 @@ export function SessionLaunchMenuItems({
           <DropdownMenuItem disabled={worktree.disabled} onClick={worktree.onSelect}>
             <GitBranch />
             Worktree
+          </DropdownMenuItem>
+        )}
+        {race && (
+          <DropdownMenuItem disabled={race.disabled} onClick={race.onSelect}>
+            <Flag />
+            Race agents…
           </DropdownMenuItem>
         )}
       </DropdownMenuGroup>

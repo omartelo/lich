@@ -74,10 +74,16 @@ func (s *Service) Start(
 		name = recorded
 	}
 	name = relay.RosterNameOf(name, cwd, id)
+	awaits := s.awaitsStart(kind)
 	sess, cwd, err := s.spawnSession(id, projectID, cwd, kind, resume, name, fork, setup, cols, rows)
 	if err != nil || sess == nil {
 		return err
 	}
+	// Set a moment after the spawn rather than inside it, since awaitsStart
+	// may run the provider's CLI and the spawn holds s.mu. The gap is far
+	// shorter than readySettle, and Ready asks for the report before it
+	// trusts a quiet it latched, so nothing gets through it.
+	s.holdForStart(id, sess, awaits)
 	// Emitted outside s.mu: Emit blocks on a stalled /events client, which
 	// would freeze every session's I/O. Both are unconditional so a respawn
 	// overwrites whatever the previous PTY left in the frontend's stores.

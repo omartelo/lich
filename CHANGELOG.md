@@ -18,6 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Headless runs and sub-agents are left out, and so is a session lich opened and
   you closed for good.
 
+- **Race one task across several agents, then consolidate the best of them.**
+  **Race agents…** in the New session menu takes a task and two or more agents,
+  makes a worktree for each off one base, files them in a folder named after the
+  race, and puts every agent side by side in a split. Each agent gets the task
+  once it is at its own prompt, so a trust question on its first start in the
+  worktree is yours to answer on its card first. When they are done,
+  **Consolidate…** on the folder opens one more agent in a new worktree with a
+  prompt listing every raced branch, asking it to combine the best of each and
+  say what it took from where. Once that agent finishes its turn, the folder
+  offers **Remove the race**, which removes the raced worktrees in one
+  confirmation that lists what each one never committed; their branches stay.
+  **Keep this, remove the others** on a card does the same when one agent simply
+  won. Codex, Antigravity, opencode and Crush cannot race yet.
+
 - **Take uncommitted work into a new worktree.** When the project's checkout has
   changes it has not committed, the **+** dialog lists it as a base of its own,
   `<branch> · working tree`. Pick it and the new worktree starts on the same
@@ -94,6 +108,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   between the rail and its card, and the terminals follow the sidebar's edge.
 
 ### Fixed
+
+- **Work handed to a new Claude Code or Cursor CLI session no longer answers its
+  trust question.** In a fresh worktree both first ask whether to trust the
+  folder, and a task sent then (from `lich open --prompt`, another agent, a
+  scheduled prompt, an issue or pull request handed over) used to land on that
+  question and quit the session. lich now waits until the agent itself reports
+  it is at its prompt, so the task arrives once you have answered the question
+  on its card. oh-my-pi and Kiro CLI get the same wait. Codex, Antigravity, Crush
+  and opencode still can't tell lich when they are ready, so text sent to their
+  first start in a worktree can still be lost to a question.
 
 - **Dragging a session card in a worktree keeps the card its own size.** The
   worktree's long path no longer stretches the cards wider than the sidebar and

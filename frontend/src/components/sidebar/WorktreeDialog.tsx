@@ -1,8 +1,4 @@
-import { useEffect, useRef, useState } from "react"
-import type { KeyboardEvent } from "react"
-import { ProjectService } from "@/lib/rpc"
-import type { Branches, Issue, Worktree } from "@/lib/api-types"
-import { SearchInput } from "@/components/common/SearchInput"
+import { useEffect, useState } from "react"
 import { WorktreeSandboxRow } from "@/components/sidebar/WorktreeSandboxRow"
 import { WorktreeScriptRows } from "@/components/sidebar/WorktreeScriptRows"
 import { Button } from "@/components/ui/button"
@@ -15,18 +11,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { toBranchName } from "@/lib/git/branch-name"
-import { useGitStatus } from "@/lib/git/use-git-status"
-import { issueBrief, issueName, parseIssueRef } from "@/lib/issue"
+import { issueBrief } from "@/lib/issue"
 import { useSandboxChoice, type SandboxAnswer } from "@/lib/use-sandbox-choice"
-import { cn, count, errorText } from "@/lib/utils"
-
-// How long the field has to settle before the issue behind a reference is
-// looked up. Every keystroke of "#381" is a valid reference on its way to the
-// one that was meant, so without this one issue costs three gh calls.
-const ISSUE_LOOKUP_MS = 400
+import { cn, errorText } from "@/lib/utils"
+import { BaseBranchPicker } from "./BaseBranchPicker"
+import { useBaseBranch } from "./useBaseBranch"
+import { WorktreeNameField } from "./WorktreeNameField"
+import { useWorktreeName } from "./useWorktreeName"
 
 interface WorktreeDialogProps {
   open: boolean
@@ -62,92 +53,6 @@ interface WorktreeDialogProps {
   forkOf?: { label: string; path: string } | null
 }
 
-// A checkout as a base: its branch at the same commit, plus the work it has not
-// committed. The checkout is the forked session's, or the project's own for the
-// + button. A fork is usually made at the moment there is uncommitted work to
-// take two ways, so a fork opens on this row; the + button is usually a new
-// task, so it opens on the branch and leaves the row one pick away. Either way
-// the branch itself is that same branch at its last commit.
-interface WorkingTree {
-  path: string
-  branch: string
-  files: number
-}
-
-// Row values carry their group so one string identifies the selection:
-// "local:main", "remote:origin/main", "worktree:/path/to/checkout".
-const rowValue = (group: string, id: string): string => `${group}:${id}`
-
-const splitValue = (value: string): [string, string] => {
-  const sep = value.indexOf(":")
-  return [value.slice(0, sep), value.slice(sep + 1)]
-}
-
-// filterBranches narrows every group to the rows matching the search, so a repo
-// with dozens of remote branches collapses to the one being looked for. The
-// working-tree row answers to its branch name, which is the only name it has.
-function filterBranches(branches: Branches | null, query: string, tree: WorkingTree | null) {
-  const needle = query.trim().toLowerCase()
-  const match = (name: string) => name.toLowerCase().includes(needle)
-  return {
-    tree: tree && match(tree.branch) ? tree : null,
-    worktrees: (branches?.worktrees ?? []).filter((w) => match(w.name)),
-    local: (branches?.local ?? []).filter(match),
-    remote: (branches?.remote ?? []).filter(match),
-  }
-}
-
-// flatValues is the visible rows in display order, so arrow keys and the
-// filter's auto-select can walk them without caring which group they sit in.
-function flatValues(vis: ReturnType<typeof filterBranches>): string[] {
-  return [
-    ...(vis.tree ? [rowValue("tree", vis.tree.path)] : []),
-    ...vis.worktrees.map((w) => rowValue("worktree", w.path)),
-    ...vis.local.map((b) => rowValue("local", b)),
-    ...vis.remote.map((b) => rowValue("remote", b)),
-  ]
-}
-
-interface GroupProps {
-  title: string
-  items: ReadonlyArray<{ value: string; label: string; note?: string }>
-  base: string
-  onSelect: (value: string) => void
-}
-
-function Group({ title, items, base, onSelect }: GroupProps) {
-  if (items.length === 0) {
-    return null
-  }
-  return (
-    <div>
-      <div className="px-2 pb-1 pt-2 text-2xs font-semibold tracking-wider text-muted-foreground uppercase">
-        {title} <span className="font-normal">({items.length})</span>
-      </div>
-      {items.map((item) => (
-        <button
-          key={item.value}
-          type="button"
-          role="option"
-          aria-selected={base === item.value}
-          onClick={() => onSelect(item.value)}
-          className={cn(
-            "flex w-full flex-col items-start rounded-md px-2 py-1.5 text-left font-mono text-xs outline-none transition-colors",
-            base === item.value ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
-          )}
-        >
-          <span className="w-full truncate">{item.label}</span>
-          {item.note && (
-            <span className="w-full truncate font-sans text-2xs text-muted-foreground">
-              {item.note}
-            </span>
-          )}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 // WorktreeDialog collects a worktree name (blank = random adjective-noun, plain
 // words = a slug of them) and a base picked from a searchable list — existing
 // worktrees to resume, then local and remote branches (remote bases are fetched
@@ -163,202 +68,52 @@ export function WorktreeDialog({
   onResume,
   forkOf = null,
 }: WorktreeDialogProps) {
-  const [branches, setBranches] = useState<Branches | null>(null)
-  const [name, setName] = useState("")
-  const [issue, setIssue] = useState<Issue | null>(null)
-  const [issueError, setIssueError] = useState("")
-  const [base, setBase] = useState("")
-  const [filter, setFilter] = useState("")
-  const [loadError, setLoadError] = useState("")
   const [submitError, setSubmitError] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const listRef = useRef<HTMLDivElement>(null)
   // A worktree is always the linked checkout, so the rung is read on that side.
   const sandbox = useSandboxChoice(providerId, projectId, true, open)
-  // The checkout the working-tree row copies from, polled by the shared store
-  // the sidebar is already subscribed to for that path.
-  const source = useGitStatus(forkOf?.path ?? projectPath)
-  // The branch has to be one git will take as a base: a checkout sitting on a
-  // detached HEAD reports something that names no branch, and offering it would
-  // buy a git refusal at the end of a dialog the user already filled in.
-  const tree: WorkingTree | null =
-    source && source.files > 0 && (branches?.local ?? []).includes(source.branch)
-      ? { path: forkOf?.path ?? projectPath, branch: source.branch, files: source.files }
-      : null
-
-  const vis = filterBranches(branches, filter, tree)
-  const flat = flatValues(vis)
-  const noMatches = branches !== null && flat.length === 0
-  // The issue the field names, if it names one. The reference is what was
-  // typed; the issue is what GitHub answered for it, and only that carries the
-  // title the branch is named after.
-  const issueRef = parseIssueRef(name)
-  const lookingUp = issueRef !== null && !issue && !issueError
-  // What the typed name creates: itself when git takes it, a slug of the first
-  // few words when it is a phrase, blank when nothing usable was typed.
-  //
-  // A reference is never named by the "#381" that was typed, resolved or not.
-  // git accepts "#381" as a branch name, and most shells read the "#" as the
-  // start of a comment — `git checkout #381` is `git checkout`. So the issue
-  // names it once GitHub has answered, and its bare number until then, which is
-  // also what is left when the lookup fails and the worktree is made anyway.
-  const newBranch = toBranchName(
-    issue ? issueName(issue) : issueRef !== null ? String(issueRef) : name,
-  )
-  const isResume = base.startsWith("worktree:")
-
-  // Keep the selected base in view as it changes — the preselected current
-  // branch after load, or the row arrow keys walk to.
-  useEffect(() => {
-    listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" })
-  }, [base, branches])
-
-  // The issue behind the typed reference, looked up while the field is still
-  // being typed in. A failure is shown but never blocks: the branch under the
-  // field is still a branch, and creating the worktree without the issue's text
-  // is a worse outcome than not creating it at all only if lich decides so.
-  useEffect(() => {
-    setIssue(null)
-    setIssueError("")
-    if (issueRef === null) {
-      return
-    }
-    let stale = false
-    const timer = setTimeout(() => {
-      ProjectService.Issue(projectPath, issueRef)
-        .then((found) => {
-          if (!stale) {
-            setIssue(found)
-          }
-        })
-        .catch((err: unknown) => {
-          if (!stale) {
-            setIssueError(errorText(err))
-          }
-        })
-    }, ISSUE_LOOKUP_MS)
-    return () => {
-      stale = true
-      clearTimeout(timer)
-    }
-  }, [issueRef, projectPath])
-
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    setBranches(null)
-    setName("")
-    setBase("")
-    setFilter("")
-    setLoadError("")
-    setSubmitError("")
-    setSubmitting(false)
-    let stale = false
-    ProjectService.ListBranches(projectPath)
-      .then((loaded) => {
-        if (stale) {
-          return
-        }
-        setBranches(loaded)
-      })
-      .catch((err: unknown) => {
-        if (!stale) {
-          setLoadError(errorText(err))
-        }
-      })
-    return () => {
-      stale = true
-    }
-  }, [open, projectPath])
-
-  // The row the dialog opens on, applied while nothing is selected yet: a
-  // fork's working tree when it has work to carry, then the branch
-  // that session is on, then the repository's own branch. A fork waits for its
-  // source's git status instead of preselecting a branch it would have to move
-  // off a tick later — the card behind the dialog is polling that path already,
-  // so the wait is usually no wait at all.
-  useEffect(() => {
-    // A working-tree row that is gone takes its selection with it: the source
-    // session committing while this dialog is open drops the row, and a base
-    // still naming it would reach git as no base at all. Clearing it re-runs
-    // this effect on the branch below, which is that same branch.
-    if (base.startsWith("tree:") && tree === null) {
-      setBase("")
-      return
-    }
-    if (!open || base !== "" || branches === null || (forkOf && source === null)) {
-      return
-    }
-    if (forkOf && tree) {
-      setBase(rowValue("tree", tree.path))
-      return
-    }
-    const local = branches.local ?? []
-    const preferred =
-      [source?.branch ?? "", currentBranch].find((branch) => local.includes(branch)) ?? local[0]
-    if (preferred) {
-      setBase(rowValue("local", preferred))
-    }
-  }, [open, base, branches, forkOf, source, tree, currentBranch])
-
-  // Typing a filter drops the current base only when it scrolls out of view, so
-  // "type develop, press Enter" lands on the top match without a click.
-  const onFilter = (value: string) => {
-    setFilter(value)
-    const next = flatValues(filterBranches(branches, value, tree))
-    if (next.length > 0 && !next.includes(base)) {
-      setBase(next[0])
-    }
-  }
-
-  const move = (delta: number) => {
-    if (flat.length === 0) {
-      return
-    }
-    const idx = flat.indexOf(base)
-    const next = Math.min(Math.max((idx < 0 ? 0 : idx) + delta, 0), flat.length - 1)
-    setBase(flat[next])
-  }
-
-  const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault()
-      move(1)
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault()
-      move(-1)
-    } else if (event.key === "Enter") {
-      event.preventDefault()
-      if (base && !submitting) {
+  const naming = useWorktreeName(projectPath, open)
+  const picker = useBaseBranch({
+    open,
+    projectPath,
+    currentBranch,
+    forkOf,
+    // A fork carries a conversation into a new checkout, so reopening one that
+    // exists is not what it can do.
+    offerResume: !forkOf,
+    onEnter: () => {
+      if (picker.base && !submitting) {
         void submit()
       }
+    },
+  })
+
+  useEffect(() => {
+    if (open) {
+      setSubmitError("")
+      setSubmitting(false)
     }
-  }
+  }, [open])
 
   const submit = async () => {
-    const [group, id] = splitValue(base)
-    if (group === "worktree") {
-      const wt =
-        vis.worktrees.find((w: Worktree) => w.path === id) ??
-        branches?.worktrees?.find((w: Worktree) => w.path === id)
-      if (wt) {
-        onResume({ name: wt.name, path: wt.path })
-      }
+    const choice = picker.choice()
+    if (!choice) {
+      return
+    }
+    if (choice.resume) {
+      onResume({ name: choice.resume.name, path: choice.resume.path })
       return
     }
     setSubmitting(true)
     setSubmitError("")
     try {
-      // The working-tree row branches off the same branch every other row would
-      // have named; what makes it different is the checkout it copies after.
       await onCreate(
-        newBranch,
-        group === "tree" ? (tree?.branch ?? "") : id,
-        group === "remote",
+        naming.newBranch,
+        choice.branch,
+        choice.remote,
         sandbox.answer,
-        issue ? issueBrief(issue) : "",
-        group === "tree" ? id : "",
+        naming.issue ? issueBrief(naming.issue) : "",
+        choice.carryFrom,
       )
     } catch (err) {
       setSubmitError(errorText(err))
@@ -397,136 +152,31 @@ export function WorktreeDialog({
           </div>
         )}
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="worktree-name" className="text-xs uppercase tracking-wide">
-            Worktree name
-          </Label>
-          <Input
-            id="worktree-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="A branch name, an issue (#128), or the task in plain words"
-            disabled={isResume}
-            autoFocus
-          />
-          <div className="flex flex-col font-mono text-xs text-muted-foreground">
-            {isResume ? (
-              <span>Opens the selected worktree</span>
-            ) : lookingUp ? (
-              <span>Looking up #{issueRef}…</span>
-            ) : (
-              <>
-                {issue && (
-                  <span className="text-foreground">
-                    #{issue.number} {issue.title}
-                  </span>
-                )}
-                {issueError && <span className="font-sans text-destructive">{issueError}</span>}
-                <span>Branch: {newBranch || "<auto-generated>"}</span>
-              </>
-            )}
-          </div>
-        </div>
+        <WorktreeNameField
+          field={naming}
+          placeholder="A branch name, an issue (#128), or the task in plain words"
+          disabledNote={picker.isResume ? "Opens the selected worktree" : undefined}
+          creates={<span>Branch: {naming.newBranch || "<auto-generated>"}</span>}
+        />
 
-        <div className="flex min-h-0 flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs uppercase tracking-wide">Base branch</Label>
-            {!branches && !loadError && (
-              <span className="text-xs text-muted-foreground">Loading branches…</span>
-            )}
-          </div>
-          <SearchInput
-            value={filter}
-            onChange={(e) => onFilter(e.target.value)}
-            onKeyDown={onSearchKeyDown}
-            placeholder="Search branches…"
-            aria-label="Search base branches"
-            autoComplete="off"
-            spellCheck={false}
-            className="font-mono"
-          />
-          <div
-            ref={listRef}
-            role="listbox"
-            aria-label="Base branch"
-            className="min-h-0 flex-1 overflow-y-auto rounded-md border border-input p-1"
-          >
-            <Group
-              title={forkOf ? "This session" : "This checkout"}
-              items={
-                vis.tree
-                  ? [
-                      {
-                        value: rowValue("tree", vis.tree.path),
-                        label: `${vis.tree.branch} · working tree`,
-                        note: `Same commit, plus the ${count(vis.tree.files, "file")} this ${forkOf ? "session" : "checkout"} has not committed.`,
-                      },
-                    ]
-                  : []
-              }
-              base={base}
-              onSelect={setBase}
-            />
-            <Group
-              title="Worktrees"
-              items={
-                forkOf
-                  ? []
-                  : vis.worktrees.map((wt) => ({
-                      value: rowValue("worktree", wt.path),
-                      label: wt.name,
-                    }))
-              }
-              base={base}
-              onSelect={setBase}
-            />
-            <Group
-              title="Local branches"
-              items={vis.local.map((branch) => ({
-                value: rowValue("local", branch),
-                label: branch,
-              }))}
-              base={base}
-              onSelect={setBase}
-            />
-            <Group
-              title="Remote branches"
-              items={vis.remote.map((branch) => ({
-                value: rowValue("remote", branch),
-                label: branch,
-              }))}
-              base={base}
-              onSelect={setBase}
-            />
-            {noMatches && (
-              <div className="px-2 py-6 text-center text-xs text-muted-foreground">
-                {filter.trim() ? (
-                  <>
-                    No branches match{" "}
-                    <span className="font-mono text-foreground/80">{filter.trim()}</span>
-                  </>
-                ) : (
-                  "No branches found"
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        <BaseBranchPicker picker={picker} sourceNoun={forkOf ? "session" : "checkout"} />
 
         <WorktreeScriptRows projectPath={projectPath} />
 
         <WorktreeSandboxRow choice={sandbox} />
 
-        {(loadError || submitError) && (
-          <span className="text-xs break-words text-destructive">{loadError || submitError}</span>
+        {(picker.loadError || submitError) && (
+          <span className="text-xs break-words text-destructive">
+            {picker.loadError || submitError}
+          </span>
         )}
 
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
-          <Button onClick={() => void submit()} disabled={!base || submitting}>
+          <Button onClick={() => void submit()} disabled={!picker.base || submitting}>
             {submitting
               ? "Creating…"
-              : isResume
+              : picker.isResume
                 ? "Open worktree"
                 : forkOf
                   ? "Fork"

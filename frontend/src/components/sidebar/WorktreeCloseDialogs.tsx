@@ -1,7 +1,12 @@
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
+import { useGitStatus } from "@/lib/git/use-git-status"
+import { ProjectService } from "@/lib/rpc"
+import type { RaceRival } from "@/lib/session/agent-race"
 import type { Session } from "@/lib/session/sessions"
-import type { WorktreeClose } from "./useWorktreeClose"
+import { count } from "@/lib/utils"
+import type { KeepWinner, WorktreeClose } from "./useWorktreeClose"
 
 interface RunningSessionDialogProps {
   /** The session with a turn still in flight, or null when the dialog is hidden. */
@@ -127,6 +132,91 @@ function ForceRemoveWorktreeDialog({
   )
 }
 
+interface RivalLineProps {
+  rival: RaceRival
+  running: boolean
+}
+
+// One checkout the keep removes, with what is lost with it: a turn in flight,
+// the work it never committed, and whose directory it is when lich did not
+// make it. The adopted probe reads as adopted until answered, for the reason
+// useWorktreeClose gives: the sentence that says more goes up first.
+function RivalLine({ rival, running }: RivalLineProps) {
+  const status = useGitStatus(rival.path)
+  const [adopted, setAdopted] = useState(true)
+  useEffect(() => {
+    let stale = false
+    void ProjectService.WorktreeAdopted(rival.path)
+      .catch(() => true)
+      .then((answer) => {
+        if (!stale) {
+          setAdopted(answer)
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [rival.path])
+  const lost = [
+    running ? "turn running" : "",
+    status && status.files > 0 ? `${count(status.files, "file")} uncommitted` : "",
+    adopted ? "not created by lich" : "",
+  ].filter(Boolean)
+  return (
+    <span className="flex flex-col rounded-md bg-accent/50 px-2 py-1.5">
+      <span className="break-all font-mono text-xs text-foreground">{rival.path}</span>
+      {lost.length > 0 && <span className="text-xs text-tone-wait">{lost.join(" · ")}</span>}
+    </span>
+  )
+}
+
+interface KeepWinnerDialogProps {
+  keep: KeepWinner | null
+  onCancel: () => void
+  onConfirm: () => void
+}
+
+// KeepWinnerDialog is the one confirmation behind "keep this, remove the
+// others": every rival checkout is named with what goes with it, and the
+// button removes them all, forced. A dirty checkout gets no second question
+// here, unlike a single close, because this list is that question for all of
+// them at once.
+function KeepWinnerDialog({ keep, onCancel, onConfirm }: KeepWinnerDialogProps) {
+  const total = keep?.rivals.length ?? 0
+  return (
+    <ConfirmDialog
+      open={keep !== null}
+      onCancel={onCancel}
+      title={
+        keep?.winner && !keep.consolidated
+          ? `Keep ${keep.winner.label}?`
+          : `Remove the ${keep?.folder} race?`
+      }
+      description={
+        <>
+          Removes {keep?.winner ? "the other" : "the"} {count(total, "worktree")} in{" "}
+          <span className="font-medium">{keep?.folder}</span>, with their sessions. Branches stay;
+          uncommitted work in them is discarded and exists nowhere else.
+          {keep?.consolidated && <> {keep.winner?.label} is kept.</>}
+          <span className="mt-3 flex flex-col gap-1">
+            {keep?.rivals.map((rival) => (
+              <RivalLine
+                key={rival.path}
+                rival={rival}
+                running={rival.sessions.some((session) => keep.running.includes(session.id))}
+              />
+            ))}
+          </span>
+        </>
+      }
+    >
+      <Button variant="destructive" onClick={onConfirm}>
+        Remove {count(total, "worktree")}
+      </Button>
+    </ConfirmDialog>
+  )
+}
+
 // WorktreeCloseDialogs mounts every question one close flow can raise. It is a
 // component rather than three tags at each call site because the flow now has
 // two entry points — the sidebar card's × and the exit banner inside the
@@ -151,6 +241,16 @@ export function WorktreeCloseDialogs({ close }: { close: WorktreeClose }) {
         onCancel={close.cancel}
         onForceRemove={close.forceRemove}
       />
+      {/* Mounted only while asked, unlike the three above: it is the one with
+          a probe and a git status per row, and a closed one would still repaint
+          on every project switch (render-budget.test.tsx). */}
+      {close.pendingKeep && (
+        <KeepWinnerDialog
+          keep={close.pendingKeep}
+          onCancel={close.cancel}
+          onConfirm={close.keepWinner}
+        />
+      )}
     </>
   )
 }

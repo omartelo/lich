@@ -1,4 +1,4 @@
-import { Terminal } from "@/lib/rpc"
+import { Relay, Terminal } from "@/lib/rpc"
 import { handoffHolds } from "./handoff-store"
 
 // Text written into a session the moment its card exists lands wherever that
@@ -41,17 +41,45 @@ const LIMIT_MS = 5 * 60 * 1000
  * when no prompt appears in time — the caller is the one who knows what was
  * being handed over, so it words what was lost.
  */
-export async function writeAtPrompt(sessionId: string, text: string): Promise<void> {
+export function writeAtPrompt(sessionId: string, text: string): Promise<void> {
+  return atPrompt(
+    sessionId,
+    () => Terminal.Write(sessionId, text),
+    () => Terminal.Ready(sessionId),
+  )
+}
+
+/**
+ * Send text to a session as its prompt once it has one: written and submitted
+ * (Relay.Prompt), where writeAtPrompt leaves it at the prompt for the user to
+ * send. Ready already holds a session whose provider asks a trust question
+ * first until the agent reports from its own prompt (internal/terminal,
+ * startgate.go), so the Enter never answers that question. Rejects like
+ * writeAtPrompt, and with the backend's refusal.
+ */
+export function sendAtPrompt(sessionId: string, text: string): Promise<void> {
+  return atPrompt(
+    sessionId,
+    () => Relay.Prompt(sessionId, text),
+    () => Terminal.Ready(sessionId),
+  )
+}
+
+async function atPrompt(
+  sessionId: string,
+  deliver: () => Promise<unknown>,
+  ready: () => Promise<boolean>,
+): Promise<void> {
   const deadline = Date.now() + LIMIT_MS
   try {
-    while (!(await Terminal.Ready(sessionId))) {
+    while (!(await ready())) {
       handoffHolds.set(sessionId, true)
       if (Date.now() >= deadline) {
         throw new Error("the session never reached a prompt")
       }
       await new Promise((resolve) => setTimeout(resolve, POLL_MS))
     }
-    await Terminal.Write(sessionId, text)
+    await deliver()
   } finally {
     // Whatever became of it: the mark is about text still waiting, and a
     // handoff that landed, failed or timed out is not waiting anymore.

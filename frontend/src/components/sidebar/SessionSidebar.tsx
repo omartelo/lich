@@ -44,6 +44,7 @@ import {
 import { useSessionPhases } from "@/lib/session/use-session-status"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { activeSessionId, foldersOf, sessionsOf, type Session } from "@/lib/session/sessions"
+import { folderCheckouts } from "@/lib/session/agent-race"
 import {
   dragOrder,
   folderKey,
@@ -59,6 +60,8 @@ import { WorktreeCloseDialogs } from "./WorktreeCloseDialogs"
 import { SessionGroup } from "./SessionGroup"
 import { SessionPhaseChips } from "./SessionPhaseChips"
 import { WorktreeDialog } from "./WorktreeDialog"
+import { RaceDialogs } from "./RaceDialogs"
+import { useRaceFlow } from "./useRaceFlow"
 import { useWorktreeClose } from "./useWorktreeClose"
 import { carryInto } from "@/lib/git/carry"
 import { useGitStatus } from "@/lib/git/use-git-status"
@@ -187,6 +190,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   const worktreeClose = useWorktreeClose(projectId ?? "", path, list)
   const realActiveId = activeSessionId(sessions, projectId ?? "")
   const panes = usePanes(projectId ?? "")
+  const raceFlow = useRaceFlow(projectId ?? "", path, list, panes)
   // The menu entry is a toggle on one card: a session already on the stage takes
   // itself off it, any other joins it. Adding is refused — quietly, the way the
   // shortcut is — when one more pane would leave them all too small to read.
@@ -451,6 +455,11 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         onStageToggle={toggleStage}
         onGroupDelegates={groupDelegates}
         onFork={(session) => void forkSession(session)}
+        rivalCount={(session) => worktreeClose.rivalsOf(session).length}
+        onKeepWinner={worktreeClose.requestKeepWinner}
+        raceSizeOf={(folder) => folderCheckouts(list, folder).length}
+        onConsolidate={raceFlow.setConsolidating}
+        onRemoveRace={worktreeClose.requestRemoveRace}
         // The divider only earns its place once a worktree — or a pin
         // — splits the list; a lone group keeps the old flat,
         // header-less look. A filter is the exception: which checkout
@@ -525,6 +534,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
                   setWorktreeOpen(true)
                 },
               }}
+              race={{ disabled: !git?.branch, onSelect: () => raceFlow.setRaceOpen(true) }}
             />
           </DropdownMenuContent>
         </DropdownMenu>
@@ -641,6 +651,14 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         forkOf={forking && { label: forking.label, path: forking.path || path }}
       />
       <WorktreeCloseDialogs close={worktreeClose} />
+      <RaceDialogs
+        flow={raceFlow}
+        projectId={projectId}
+        projectPath={path}
+        providers={enabled}
+        defaultProvider={projectDefaultProviderKind(projectId)}
+        currentBranch={git?.branch ?? ""}
+      />
       <NewFolderDialog
         open={!!naming}
         onOpenChange={(open) => !open && setNaming(null)}

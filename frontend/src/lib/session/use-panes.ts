@@ -53,8 +53,10 @@ export interface Panes {
   /** Build a wall out of a session and the ones it delegated to. Answers how
    * many of them were left where they were, which is what the caller says out
    * loud — a delegate the user had already put on another wall is theirs, and
-   * taking it is the destructive reading of "group these". */
-  groupWith: (sessionId: string, delegateIds: readonly string[]) => number
+   * taking it is the destructive reading of "group these". name titles the
+   * wall in place of the session's own, which is how a race's wall is named
+   * after its folder. */
+  groupWith: (sessionId: string, delegateIds: readonly string[], name?: string) => number
   rename: (groupId: string, name: string) => void
   dissolve: (groupId: string) => void
   /** Persist a wall's dragged column or row shares, against the grid shape they
@@ -160,7 +162,7 @@ export function usePanes(projectId: string): Panes {
     reorderCells(groupId, ids) {
       commit(reorderCells(groups, groupId, ids))
     },
-    groupWith(sessionId, delegateIds) {
+    groupWith(sessionId, delegateIds, name) {
       const free = delegateIds.filter((id) => !groupOf(groups, id))
       const { width, height } = stageSize()
       const firstOverflow = free.findIndex((_, index) => !fits(index + 2, width, height))
@@ -170,7 +172,7 @@ export function usePanes(projectId: string): Panes {
       }
       const born: PaneGroup = {
         id: newGroupId(),
-        name: defaultName(list, sessionId),
+        name: name ?? defaultName(list, sessionId),
         cells: [sessionId, ...shown],
         tracks: {},
       }
