@@ -148,7 +148,7 @@ being debugged.
   off the `done` report and handed to the same guarded write.
 - **Live update** — `internal/terminal/terminal.go`: when the label changed,
   emits the global app event `session-title` (`{id, label}`);
-  `frontend/src/providers/projects.tsx` mirrors it into session state so the card
+  `frontend/src/providers/project-events.tsx` mirrors it into session state so the card
   updates without a reload.
 
 ## Known ceilings
