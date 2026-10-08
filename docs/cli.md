@@ -67,7 +67,8 @@ POST http://127.0.0.1:${LICH_PORT}/rpc/spawn.<Method>?token=${LICH_TOKEN}
 on its own: it reads the coordinates from `runtime.json` (`internal/singleton`,
 mode 0600), the same file `install.sh` reads to reach a running lich for
 `/restart`. `LICH_DEV` selects the dev instance's file, as everywhere else. With
-no lich running at all, every command exits 1 with `lich: no lich is running`.
+no lich running at all, every command exits 1 with `lich: no lich is running — open lich, or run this
+inside one of its sessions`.
 
 The environment wins over the runtime file, and that order is load-bearing: a
 session belongs to the lich that spawned it, and on a machine running a daily
