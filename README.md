@@ -178,9 +178,9 @@ needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
 2. **Open a project** — the `+` in the tab strip lists what you closed recently
    and opens your OS folder picker; point it at a git repository.
 3. **Point lich at your agent** — the first launch lists the agents it found on
-   your machine; in Global Settings › Providers you can set each binary path and
-   choose the default. A project can inherit it or choose a different provider
-   in Project Settings › Providers.
+   your machine; in Settings › Providers you can set each binary path and
+   choose the default. A project can follow it or choose a different provider
+   on the same screen.
 4. **Start a session** — *New Session* spawns a terminal running your agent in
    the project. Each checkout header also has a `+` menu for opening any enabled
    provider or a plain terminal in that exact checkout; click the header itself
@@ -190,10 +190,10 @@ needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
 
 ## Configuration
 
-- **Providers** — set each provider's binary path and the global default in
-  Global Settings › Providers. Project Settings › Providers can override that
-  choice for one project; **Use default** removes the override, so later changes
-  to the global default flow through automatically. A provider's section opens
+- **Providers** — set each provider's binary path and the default for all
+  projects in Settings › Providers. The open project's row there can override
+  that choice; **Clear** removes the override, so later changes to the default
+  flow through automatically. A provider's section opens
   with how much of your plan is left, when lich can read it. What the footer
   shows is set in Settings › Appearance by dragging its items; the cost
   readout starts hidden, since the figure only means something when you are
