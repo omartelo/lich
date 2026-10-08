@@ -150,7 +150,8 @@ git's `user@host:path` shorthand. Everything else is rejected before git runs:
 `ext::` resolves through a remote helper that executes a shell command, and an
 argument starting with `-` would be read as a flag. Credential prompts are
 disabled, so a private repository fails instead of hanging — authentication
-rides the ssh key or credential helper git already has.
+rides the ssh key git already has; credential helpers are switched off for the
+clone.
 
 ### Start a repository
 
