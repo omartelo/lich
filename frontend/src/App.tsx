@@ -20,6 +20,7 @@ import { SidebarRail } from "@/components/sidebar/SidebarRail"
 import { TerminalHost } from "@/components/TerminalHost"
 import { ErrorBoundary } from "@/components/common/ErrorBoundary"
 import { RightDock, type DockTab } from "@/components/dock/RightDock"
+import { requestFileSearch } from "@/lib/file-browse"
 import { FooterBar } from "@/components/FooterBar"
 import { Home } from "@/components/Home"
 import { EmptySessions } from "@/components/EmptySessions"
@@ -105,6 +106,11 @@ function Layout() {
     }
   }, [dock])
   useHotkey(hotkeys.toggleDock, () => setDock((cur) => (cur ? null : lastTab.current)))
+  useHotkey(hotkeys.searchInFiles, () => {
+    if (!projectId) return false
+    setDock("files")
+    requestFileSearch()
+  })
   // Nothing left to show, no room left to show it in, or no second pane to move
   // the cursor to: each declines rather than being swallowed for nothing, the
   // rule every card shortcut above follows.

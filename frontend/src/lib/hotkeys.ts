@@ -22,6 +22,7 @@ export type HotkeyId =
   | "prevProject"
   | "toggleSidebar"
   | "toggleDock"
+  | "searchInFiles"
   | "splitBeside"
   | "otherPane"
   | "settings"
@@ -174,6 +175,14 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     label: "Toggle the right dock",
     group: "view",
     combo: { mod: true, shift: true, alt: false, key: "d" },
+  },
+  // Unassigned by default: Ctrl+Shift+F, the editors' chord, is otherPane, and
+  // O, the free letter that reads as "open", is Chromium's own.
+  {
+    id: "searchInFiles",
+    label: "Search in files",
+    group: "view",
+    combo: UNASSIGNED,
   },
   // G for the grid the stage lays out, F for the focus moving along it. Letters
   // on purpose: the family note above is measured for Ctrl+Shift+*letter*, and

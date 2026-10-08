@@ -1,4 +1,5 @@
 import { createKeyedStore } from "@/lib/keyed-store"
+import { createIntent } from "@/lib/use-sidebar-intent"
 import { useKeyedStore } from "@/lib/use-keyed-store"
 
 // Where the Code tab's browse was left: the filter box, the folders opened to
@@ -21,8 +22,13 @@ import { useKeyedStore } from "@/lib/use-keyed-store"
 export interface FileBrowse {
   /** The filter box, verbatim — it is free text, so anything held is valid. */
   query: string
+  /** What the box reads as: a filter over file names, or a search through
+   * their text. One box for both, so flipping keeps what was typed. */
+  mode: "name" | "text"
   /** The file the preview covers the tree with, or "" for the tree itself. */
   open: string
+  /** The line the preview lands on, set by a search hit; 0 opens at the top. */
+  line: number
   /** The row that reads as current. It outlives the preview: after Back the
    * tree still marks the file just read, which is where the eye left off. */
   selected: string
@@ -30,7 +36,14 @@ export interface FileBrowse {
   toggled: ReadonlySet<string>
 }
 
-const NO_BROWSE: FileBrowse = { query: "", open: "", selected: "", toggled: new Set() }
+const NO_BROWSE: FileBrowse = {
+  query: "",
+  mode: "name",
+  open: "",
+  line: 0,
+  selected: "",
+  toggled: new Set(),
+}
 
 const store = createKeyedStore<FileBrowse>(NO_BROWSE)
 
@@ -54,3 +67,16 @@ export function fileBrowse(path: string): FileBrowse {
 export function useFileBrowse(path: string): FileBrowse {
   return useKeyedStore(store, path)
 }
+
+// "Search in files", raised by its hotkey before the dock may even be open, so
+// the panel that answers it can mount a render later. One key: the request is
+// for whichever checkout the dock shows when it lands.
+const SEARCH_KEY = "search"
+const searchRequest = createIntent(false)
+
+/** Ask the Code tab to switch to text search and focus its box. */
+export const requestFileSearch = () => searchRequest.request(SEARCH_KEY, true)
+
+/** Run `onRequest` once per requestFileSearch, from the panel that owns the box. */
+export const useFileSearchRequest = (onRequest: () => void) =>
+  searchRequest.useIntent(SEARCH_KEY, onRequest)

@@ -1,5 +1,6 @@
 import { ChevronLeft } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { EditorView } from "@codemirror/view"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { createPortal } from "react-dom"
 import { Notice } from "@/components/common/Notice"
 import { SearchInput } from "@/components/common/SearchInput"
@@ -7,10 +8,16 @@ import { CommentBatch } from "@/components/diff/CommentBatch"
 import { InjectMenu } from "@/components/diff/InjectMenu"
 import { type Composer, ReviewSlot } from "@/components/diff/ReviewSlots"
 import { FileTree } from "@/components/FileTree"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { NO_SLOTS, threadSlots, type SlotElements } from "@/lib/codemirror-threads"
 import { formatLineRef, parseDiff, type DiffFile } from "@/lib/git/diff"
 import { buildTree, treeFootnote, type TreeNode } from "@/lib/git/file-tree"
-import { updateFileBrowse, useFileBrowse } from "@/lib/file-browse"
+import {
+  updateFileBrowse,
+  useFileBrowse,
+  useFileSearchRequest,
+  type FileBrowse,
+} from "@/lib/file-browse"
 import { COMPOSER_KEY } from "@/lib/pulls/review-slots"
 import { matchesQuery } from "@/lib/session/command-palette"
 import { addReviewComment } from "@/lib/review-comments"
@@ -21,6 +28,7 @@ import { useActiveSession } from "@/lib/session/use-active-session"
 import { GIT_POLL, useGitStatus } from "@/lib/git/use-git-status"
 import { useInject } from "@/lib/use-inject"
 import { useRemoteResource } from "@/lib/use-remote-resource"
+import { HIT_SELECTOR, SearchResults } from "./SearchResults"
 import { useFileEditor } from "./useFileEditor"
 
 // FilesPanel is the Files tab of the right dock: a read-only tree of the active
@@ -78,10 +86,19 @@ export function FilesPanel() {
 
   // The filter reads the whole repo-relative path, so a directory name narrows
   // the tree to what is under it — one field for both halves of "find a file".
+  const nameQuery = browse.mode === "name" ? browse.query : ""
   const tree = useMemo(
-    () => buildTree(data.files.filter((file) => matchesQuery(file, browse.query))),
-    [data.files, browse.query],
+    () => buildTree(data.files.filter((file) => matchesQuery(file, nameQuery))),
+    [data.files, nameQuery],
   )
+
+  const rootRef = useRef<HTMLDivElement>(null)
+  useFileSearchRequest(() => {
+    updateFileBrowse(path, { mode: "text", open: "" })
+    const box = rootRef.current?.querySelector("input")
+    box?.focus()
+    box?.select()
+  })
 
   if (!projectId) {
     return null
@@ -108,42 +125,52 @@ export function FilesPanel() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div ref={rootRef} className="flex h-full flex-col">
       {/* The preview covers the tree instead of replacing it: the scroll that
           reached a file is the tree's own, and nothing outside restores it, so
           unmounting the tree would throw it away on every Back. */}
       <div className="relative flex flex-1 flex-col overflow-hidden">
         <div className="flex h-full flex-col overflow-hidden">
-          <div className="shrink-0 border-b border-border p-1.5">
-            <SearchInput
-              value={browse.query}
-              onChange={(event) => updateFileBrowse(path, { query: event.target.value })}
-              placeholder="Filter by name"
-              aria-label="Filter files by name"
-              spellCheck={false}
-              className="h-7 text-xs"
-            />
-          </div>
-          <TreeBody
-            tree={tree}
-            query={browse.query}
-            active={browse.selected}
-            toggled={browse.toggled}
-            onToggled={(toggled) => updateFileBrowse(path, { toggled })}
-            stats={data.stats}
-            cut={data.cut}
-            hidden={data.hidden}
-            loading={loading}
-            failed={error !== null}
-            onOpen={(rel) => updateFileBrowse(path, { open: rel, selected: rel })}
-            onEditor={openInEditor}
+          <BrowseBox
+            path={path}
+            browse={browse}
+            onFocusList={() => {
+              const first = rootRef.current?.querySelector<HTMLElement>(HIT_SELECTOR)
+              first?.focus()
+              return first !== undefined && first !== null
+            }}
           />
+          {browse.mode === "text" ? (
+            <SearchResults
+              path={path}
+              query={browse.query}
+              refreshKey={key}
+              listingNote={treeFootnote(data.cut, data.hidden)}
+              onOpen={(rel, line) => updateFileBrowse(path, { open: rel, selected: rel, line })}
+            />
+          ) : (
+            <TreeBody
+              tree={tree}
+              query={nameQuery}
+              active={browse.selected}
+              toggled={browse.toggled}
+              onToggled={(toggled) => updateFileBrowse(path, { toggled })}
+              stats={data.stats}
+              cut={data.cut}
+              hidden={data.hidden}
+              loading={loading}
+              failed={error !== null}
+              onOpen={(rel) => updateFileBrowse(path, { open: rel, selected: rel, line: 0 })}
+              onEditor={openInEditor}
+            />
+          )}
         </div>
         {browse.open !== "" && (
           <div className="absolute inset-0 z-10 bg-sidebar">
             <FilePreview
               path={path}
               rel={browse.open}
+              line={browse.line}
               onBack={() => updateFileBrowse(path, { open: "" })}
               onInject={inject}
               onComment={(lines, text) => addReviewComment(path, browse.open, lines, text)}
@@ -154,6 +181,60 @@ export function FilesPanel() {
       {/* Below the tree as well as the preview: a batch written file by file
           must not vanish on the way back to pick the next one. */}
       <CommentBatch target={path} onInject={inject} />
+    </div>
+  )
+}
+
+interface BrowseBoxProps {
+  path: string
+  browse: FileBrowse
+  /** Move focus to the first search hit; false when there is none. */
+  onFocusList: () => boolean
+}
+
+// BrowseBox is the one field over the Code tab and the switch that says how it
+// reads: a filter over the tree's names, or a search through the files' text.
+function BrowseBox({ path, browse, onFocusList }: BrowseBoxProps) {
+  const text = browse.mode === "text"
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape" && browse.query !== "") {
+      event.preventDefault()
+      updateFileBrowse(path, { query: "" })
+      return
+    }
+    if (text && event.key === "ArrowDown" && onFocusList()) {
+      event.preventDefault()
+    }
+  }
+  return (
+    <div className="flex shrink-0 items-center gap-1.5 border-b border-border p-1.5">
+      <div className="min-w-0 flex-1">
+        <SearchInput
+          value={browse.query}
+          onChange={(event) => updateFileBrowse(path, { query: event.target.value })}
+          onKeyDown={onKeyDown}
+          placeholder={text ? "Search in files" : "Filter by name"}
+          aria-label={text ? "Search in files" : "Filter files by name"}
+          spellCheck={false}
+          className="h-7 text-xs"
+        />
+      </div>
+      <ToggleGroup
+        value={[browse.mode]}
+        onValueChange={(next) =>
+          next[0] && updateFileBrowse(path, { mode: next[0] as FileBrowse["mode"] })
+        }
+        spacing={1}
+        aria-label="What the field matches"
+        className="shrink-0 border border-border p-[0.1875rem]"
+      >
+        <ToggleGroupItem value="name" size="sm" className="h-5 px-2 text-xs">
+          Name
+        </ToggleGroupItem>
+        <ToggleGroupItem value="text" size="sm" className="h-5 px-2 text-xs">
+          Text
+        </ToggleGroupItem>
+      </ToggleGroup>
     </div>
   )
 }
@@ -285,13 +366,15 @@ export function TreeBody({
 interface FilePreviewProps {
   path: string
   rel: string
+  /** The line to land on, or 0 for the top of the file. */
+  line: number
   onBack: () => void
   onInject: (text: string) => void
   /** Hold a comment on these file lines for the checkout's batch. */
   onComment: (lines: string, text: string) => void
 }
 
-function FilePreview({ path, rel, onBack, onInject, onComment }: FilePreviewProps) {
+function FilePreview({ path, rel, line, onBack, onInject, onComment }: FilePreviewProps) {
   // Filed like the tree above it: a preview left open is restored on the way
   // back from the Review tab, and painting it from a skeleton every time would
   // undo half of what restoring it was for. resetOn keeps one file's text from
@@ -330,7 +413,13 @@ function FilePreview({ path, rel, onBack, onInject, onComment }: FilePreviewProp
         ) : loading ? (
           <Notice>Loading…</Notice>
         ) : (
-          <PreviewBody text={text} rel={rel} onInject={onInject} onComment={onComment} />
+          <PreviewBody
+            text={text}
+            rel={rel}
+            line={line}
+            onInject={onInject}
+            onComment={onComment}
+          />
         )}
       </div>
     </div>
@@ -340,6 +429,7 @@ function FilePreview({ path, rel, onBack, onInject, onComment }: FilePreviewProp
 interface PreviewBodyProps {
   text: string
   rel: string
+  line: number
   onInject: (text: string) => void
   onComment: (lines: string, text: string) => void
 }
@@ -352,7 +442,7 @@ interface PreviewBodyProps {
 // Only the comment for the session is offered. The other one is a review
 // comment on a pull request, which GitHub anchors to a line of *its* diff: a
 // line of the whole file is not that, even when the file is one the PR touched.
-function PreviewBody({ text, rel, onInject, onComment }: PreviewBodyProps) {
+function PreviewBody({ text, rel, line, onInject, onComment }: PreviewBodyProps) {
   const [elements, setElements] = useState<SlotElements>(NO_SLOTS)
   // Memoised because it is part of the view's identity: a new one would rebuild
   // the editor on every render.
@@ -360,6 +450,22 @@ function PreviewBody({ text, rel, onInject, onComment }: PreviewBodyProps) {
   const { containerRef, getSelectedLines, view } = useFileEditor(text, rel, slots.extension)
   const [selection, setSelection] = useState<Composer | null>(null)
   const [composer, setComposer] = useState<Composer | null>(null)
+
+  // A search hit opens on its line, selected: the selection is what the inject
+  // menu and the comment read, so the line found is one right-click from both.
+  // Focused too, because the viewer draws the native selection, which an
+  // unfocused editor does not show.
+  useEffect(() => {
+    if (!view || line < 1 || line > view.state.doc.lines) {
+      return
+    }
+    const target = view.state.doc.line(line)
+    view.dispatch({
+      selection: { anchor: target.from, head: target.to },
+      effects: EditorView.scrollIntoView(target.from, { y: "center" }),
+    })
+    view.focus()
+  }, [view, line])
 
   // Keyed off the composer's line rather than the composer, so typing into it
   // does not re-dispatch the gap on every keystroke.
