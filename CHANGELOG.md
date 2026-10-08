@@ -45,6 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   BMP, ICO and PDF up to 20 MB per side; the Pulls screen still says "Binary
   file".
 
+- **A turn your plan's usage limit stopped picks up again once the limit
+  resets.** On Claude Code and Codex, the card says which limit stopped the
+  session and when it lifts, and lich types a prompt asking the agent to
+  continue two minutes after the reset. Any turn that starts before then, yours
+  or the provider's own, cancels it, and so does **Scheduled…** › **Cancel it**
+  in the card's menu. Nothing is parked for a limit that resets more than a day
+  out. Claude Code needs the lich-plugin release that reports `StopFailure`.
+
 ### Changed
 
 - **The window is laid out as islands.** The session sidebar, the terminals and
@@ -61,6 +69,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dragging a session card in a worktree keeps the card its own size.** The
   worktree's long path no longer stretches the cards wider than the sidebar and
   pushes the rest of the list sideways while the drag is in flight.
+
+- **A Codex card no longer spins forever after a usage limit ends its turn.**
+  Codex reports no end for that turn, so lich now reads it off the session's own
+  record.
 
 ## [0.61.0] - 2026-10-07
 

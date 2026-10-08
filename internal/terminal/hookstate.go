@@ -1,6 +1,10 @@
 package terminal
 
-import "sync"
+import (
+	"maps"
+	"slices"
+	"sync"
+)
 
 // turnLog is the memory behind the one distinction the session-state contract
 // cannot make on its own (docs/hooks/session-state.md): Claude Code raises the
@@ -97,4 +101,11 @@ func (l *turnLog) interrupt(id string) bool {
 	}
 	delete(l.open, id)
 	return true
+}
+
+// openIDs is every session with a turn open right now, in no order.
+func (l *turnLog) openIDs() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Collect(maps.Keys(l.open))
 }

@@ -288,6 +288,11 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// The scheduled prompts are the relay's other clock: nobody calls in for
 	// them, they come due.
 	go rl.RunSchedules()
+	// A turn a usage limit ended is picked up again once it resets, through
+	// the same scheduled prompt. Codex reports no end for that turn, so the
+	// terminal watches its open turns for one.
+	term.SetUsageLimit(rl.ParkResume)
+	go term.RunLimitWatch()
 	dispatcher.Register("relay", rl)
 	// Its caller is not the window either: opening a session for an agent starts
 	// the PTY here rather than waiting for someone to click the card.
@@ -332,13 +337,16 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //   - relay.RunSchedules is the scheduled-prompt loop, started once at launch
 //     and never returning: called over /rpc/ it holds that request open for the
 //     life of the process and starts a second loop racing the first for every
-//     due prompt.
+//     due prompt. terminal.RunLimitWatch is the same kind of loop, for the
+//     Codex turns a usage limit ended.
+//   - relay.ParkResume parks a prompt that types itself at a session; the
+//     terminal calls it for a turn a usage limit ended, with the reset it read.
 //   - spawn.CloseFinishedWorker closes a session with none of spawn.Close's
 //     checks; the relay calls it for a worker that reported back.
 //   - relay.SetPlugins, relay.SetWorkerFinished, project.SetAccounts, project.SetProjects,
 //     quota.SetSessions, store.SetSessionGone, store.SetScheduleForfeited,
 //     store.SetBranchOf, store.SetTranscriptOf, terminal.SetDropDir,
-//     terminal.SetRateLimitReports, terminal.SetWorkerAnswer and
+//     terminal.SetRateLimitReports, terminal.SetUsageLimit, terminal.SetWorkerAnswer and
 //     terminal.SetSessionClosed are startup wiring. Called with [null] they silently
 //     nil what they wired (encoding/json leaves a func or pointer alone on
 //     null), and the write races the readers already serving — nilling
@@ -369,6 +377,7 @@ func denyInternal(d *rpc.Handler) {
 		"relay.WorkerAnswered",
 		"relay.SessionClosed",
 		"relay.RunSchedules",
+		"relay.ParkResume",
 		"agentplugin.RepairRegistrations",
 		"relay.SetPlugins",
 		"relay.SetWorkerFinished",
@@ -380,6 +389,8 @@ func denyInternal(d *rpc.Handler) {
 		"terminal.SessionAccount",
 		"terminal.SetDropDir",
 		"terminal.SetRateLimitReports",
+		"terminal.SetUsageLimit",
+		"terminal.RunLimitWatch",
 		"terminal.SetWorkerAnswer",
 		"terminal.SetSessionClosed",
 		"terminal.EnqueueModCommand",

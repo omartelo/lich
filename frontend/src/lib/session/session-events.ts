@@ -83,12 +83,19 @@ export const MCP_EVENT = "session-mcp"
 // to draw the cost without a ring (docs/ceilings.md).
 export const USAGE_EVENT = "session-usage"
 
-// Global event the backend emits when a session's scheduled prompt has been
-// typed at it (see relay.ScheduleEventName). Payload: { id, at } — at is 0,
-// because the prompt has just been delivered and nothing is waiting anymore.
-// The window is the only other writer of that row and already knows what it
-// wrote; this is what the clock did.
+// Global event the backend emits when a session's scheduled prompt changed
+// without the window writing it (see relay.ScheduleEventName): typed at its
+// session, or parked and dropped by lich around a usage limit. Payload:
+// { id, at, prompt? }; at is 0 and prompt absent when nothing is waiting
+// anymore.
 export const SCHEDULE_EVENT = "session-schedule"
+
+// Global event the backend emits when a plan's usage limit ended a session's
+// turn (see terminal.limitEventName). Payload: { id, window, resetsAt }.
+// window is "session", "weekly" or "" for one the card has no name for, and
+// resetsAt is unix seconds, 0 when the provider did not say. Nothing clears it
+// but the session's next turn (session-limit-store).
+export const LIMIT_EVENT = "session-limit"
 
 // Global event the backend emits when a scheduled prompt was lost with the
 // session it was parked on — deleted, forgotten, purged with its worktree, or
@@ -299,8 +306,35 @@ export function isIdEvent(data: unknown): data is { id: string } {
   )
 }
 
-export function isScheduleEvent(data: unknown): data is { id: string; at: number } {
-  return isIdEvent(data) && typeof (data as { at?: unknown }).at === "number"
+export function isScheduleEvent(
+  data: unknown,
+): data is { id: string; at: number; prompt?: string } {
+  if (!isIdEvent(data) || typeof (data as { at?: unknown }).at !== "number") {
+    return false
+  }
+  const prompt = (data as { prompt?: unknown }).prompt
+  return prompt === undefined || typeof prompt === "string"
+}
+
+const LIMIT_WINDOWS = ["session", "weekly", ""] as const
+
+// The usage limit a session's last turn ended on: which window ran out, and
+// when it resets in unix seconds (0 when the provider did not say).
+export interface SessionLimit {
+  window: (typeof LIMIT_WINDOWS)[number]
+  resetsAt: number
+}
+
+// toSessionLimit narrows a limit payload, or null for one this build cannot
+// read. A window from a newer backend reads as the unnamed one: the limit is
+// still a limit, only its name is new.
+export function toSessionLimit(data: unknown): SessionLimit | null {
+  const { window, resetsAt } = (data ?? {}) as { window?: unknown; resetsAt?: unknown }
+  if (typeof resetsAt !== "number") {
+    return null
+  }
+  const named = (LIMIT_WINDOWS as readonly unknown[]).includes(window)
+  return { window: named ? (window as SessionLimit["window"]) : "", resetsAt }
 }
 
 // session-schedule-forfeited names a session that is already gone, so the label

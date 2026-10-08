@@ -238,10 +238,11 @@ async function mountSidebar() {
   return budget
 }
 
-// What one card drags along when it repaints: its own chrome, and the base-ui
-// context-menu and tooltip parts wrapped around it. The unnamed pair are
-// base-ui's own anonymous render functions.
+// What one card drags along when it repaints: its own chrome, its status line,
+// and the base-ui context-menu and tooltip parts wrapped around it. The unnamed
+// pair are base-ui's own anonymous render functions.
 const CARD_CHROME = {
+  SessionStatusRung: 1,
   ContextMenu: 1,
   ContextMenuRoot: 1,
   ContextMenuTrigger: 2,
@@ -285,10 +286,12 @@ test("a finished turn repaints that session's card and no other block", async ()
   await budget.unmount()
 })
 
-test("a todo event repaints that session's card and nothing else", async () => {
+// The task list is read by the status line alone, so its count moving repaints
+// that line and leaves the card around it, and its menus and tooltip, alone.
+test("a todo event repaints that session's status line and nothing else", async () => {
   const budget = await mountSidebar()
   await budget.act(() => bus.emit(TODO_EVENT, { id: "s2", done: 3, total: 7 }))
-  expect(budget.take()).toEqual({ "SessionCard#s2": 1, ...CARD_CHROME })
+  expect(budget.take()).toEqual({ SessionStatusRung: 1 })
   await budget.unmount()
 })
 

@@ -48,7 +48,7 @@ Both sides test against the payloads in
 | `PreToolUse`       | `PreToolUse`        | `PreToolUse`     | `tool.execute.before`    | `tool_call`    | —          | dropped            | `preToolUse`       | `busy` + `tool` |
 | `PostToolUse`      | `PostToolUse`       | —                | `tool.execute.after`     | `turn_start`   | —          | dropped            | `postToolUse`      | `busy`    |
 | `Notification`     | `PermissionRequest` | —                | any `*.asked`            | —              | —          | —                  | —                  | `waiting` + `reason` |
-| `Stop`             | `Stop`              | `Stop`           | `session.status` (`idle`) | `session_stop` | —          | —                  | `stop`             | `done`    |
+| `Stop`, `StopFailure` | `Stop`              | `Stop`           | `session.status` (`idle`) | `session_stop` | —          | —                  | `stop`             | `done`    |
 | `SessionEnd`       | —                   | —                | —                        | —              | —          | `SessionEnd`       | —                  | `idle`    |
 
 **Kiro closes four of the six rows and neither of the other two.** It has no
@@ -68,6 +68,20 @@ opencode is the one harness that reports a state rather than an event: its
 same payload. Its `idle` means the turn ended, which is lich's `done` — not
 lich's `idle`, which says the CLI itself has left. Nothing in opencode's event
 list says that, so like Codex it never reports `idle`.
+
+**Claude Code ends a turn an API error stopped with `StopFailure`, not `Stop`.**
+It fires instead of `Stop` when a usage limit, an overload or a failed login ends
+the turn (2.1.293), and a client that registers only `Stop` leaves the card
+spinning until the next prompt. It reports `done` like `Stop`: the turn is over
+either way. Which error it was is not in the report: lich reads it off the
+transcript on every `done`, and a usage limit it finds there parks the turn's
+continuation for when the limit resets (docs/ceilings.md).
+
+**Codex reports no end at all for a turn a usage limit stopped**: measured on
+0.144.5, `UserPromptSubmit` fires and `Stop` never does. lich ends that turn
+itself, reading the rollout of every open Codex turn, and publishes it as
+`interrupted`, the state it already raises for a turn that ended without the
+provider saying so.
 
 **oh-my-pi carries `busy` on `turn_start` rather than after a tool.** Its
 non-interactive runs never emit `input` at all, so the turn boundary is the one
