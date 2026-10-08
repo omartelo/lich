@@ -969,7 +969,7 @@ func TestOpenDropsTheTerminalThemeSetting(t *testing.T) {
 	_ = before.SetSetting("appearance.terminalTheme", "p1", "emerald")
 	_ = before.SetSetting("appearance.theme", "", "rose-pine")
 	_ = before.Close()
-	seedDB(t, path, `ALTER TABLE sessions DROP COLUMN effort; ALTER TABLE sessions DROP COLUMN ultracode; ALTER TABLE sessions DROP COLUMN subagent; ALTER TABLE session_costs DROP COLUMN reported; ALTER TABLE sessions DROP COLUMN color; PRAGMA user_version = 0`)
+	seedDB(t, path, `ALTER TABLE sessions DROP COLUMN effort; ALTER TABLE sessions DROP COLUMN ultracode; ALTER TABLE sessions DROP COLUMN subagent; ALTER TABLE session_costs DROP COLUMN reported; ALTER TABLE sessions DROP COLUMN color; DROP TABLE provider_session_tombstones; DROP TRIGGER sessions_tombstone_ad; DROP TRIGGER sessions_tombstone_ai; DROP TRIGGER sessions_tombstone_au; PRAGMA user_version = 0`)
 
 	after, err := open(path)
 	if err != nil {
