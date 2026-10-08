@@ -711,6 +711,9 @@ export interface LastTurn {
    * expands unchanged lines against (ProjectService.FileLines). Present only
    * with a diff. */
   after?: string
+  /** The snapshot tree the diff's old side stands at: what an image preview
+   * reads as the file before the turn. Present with `after`. */
+  before?: string
 }
 
 /** internal/terminal.LastSaid — the prose the agent ended its last turn with,

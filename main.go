@@ -300,6 +300,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	denyInternal(dispatcher)
 	term.Mount("/rpc/", dispatcher)
 	term.Mount("/drop", http.HandlerFunc(drops.Upload))
+	term.Mount("/blob", http.HandlerFunc(proj.ServeBlob))
 	term.Mount("/events", hub)
 	return coord
 }

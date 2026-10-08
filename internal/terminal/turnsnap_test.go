@@ -125,6 +125,14 @@ func TestLastTurnDiffRendersTheWindow(t *testing.T) {
 	if turn.EndedAt == 0 {
 		t.Error("a closed window carried no time")
 	}
+	// The two trees are the two sides an image preview reads: the file the
+	// turn created exists on one and not the other.
+	if err := exec.Command("git", "-C", repo, "cat-file", "-e", turn.Before+":b.txt").Run(); err == nil {
+		t.Errorf("b.txt exists at Before %q, the tree from before the turn", turn.Before)
+	}
+	if err := exec.Command("git", "-C", repo, "cat-file", "-e", turn.After+":b.txt").Run(); err != nil {
+		t.Errorf("b.txt missing at After %q: %v", turn.After, err)
+	}
 }
 
 // The distinction the whole contract exists for: a turn that ran and touched
