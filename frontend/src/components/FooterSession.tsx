@@ -142,7 +142,7 @@ function HandsOnReadout({ sessionId, kind }: FooterSessionProps) {
 function FooterClock() {
   const now = useNow()
   return (
-    <time dateTime={now.toISOString()} className="whitespace-nowrap tabular-nums">
+    <time dateTime={now.toISOString()} className="whitespace-nowrap px-2 tabular-nums">
       {now.toDateString()} · {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
     </time>
   )
