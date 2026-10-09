@@ -426,6 +426,11 @@ type Service struct {
 	// that hands its work to the background ends its turn before the work is
 	// done, and its answer arrives later on the same ticket.
 	lapsed map[string]*ticket
+	// expired is the tickets sweep dropped unanswered, open, lapsed or held,
+	// so a Wait on one says it expired instead of "unknown ticket", which reads
+	// as a ticket the caller mistyped. Only that Wait hears of it: nothing is
+	// announced or collected. Kept for ticketTTL, then dropped like the rest.
+	expired map[string]expiredTicket
 	// collectors is who is blocked in Collect right now, per sender. A result
 	// stashed while one is registered wakes it instead of arming a nudge.
 	collectors map[string][]chan struct{}
@@ -502,6 +507,7 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 		ready:           make(map[string]*inboxEntry),
 		held:            make(map[string]*inboxEntry),
 		lapsed:          make(map[string]*ticket),
+		expired:         make(map[string]expiredTicket),
 		reportedWorkers: make(map[string]bool),
 		resumes:         make(map[string]bool),
 		collectors:      make(map[string][]chan struct{}),
@@ -801,6 +807,13 @@ func waitFor(seconds int) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
+// expiredTicket is what a Wait on a ticket sweep dropped answers with.
+type expiredTicket struct {
+	target  string
+	private bool
+	at      time.Time
+}
+
 // lastActive is the latest moment a ticket was known to be wanted: when it was
 // created, or when a caller last stopped waiting on it.
 func lastActive(t *ticket) time.Time {
@@ -832,6 +845,8 @@ func (s *Service) sweep() ([]*ticket, []string) {
 			if !t.private && s.owesSubagentAnswerLocked(t.fromID) {
 				s.stashLocked(id, t, StatusExpired, "")
 				touched[t.fromID] = true
+			} else {
+				s.expired[id] = expiredTicket{target: t.target, private: t.private, at: s.now()}
 			}
 		}
 	}
@@ -846,13 +861,20 @@ func (s *Service) sweep() ([]*ticket, []string) {
 	for id, t := range s.lapsed {
 		if t.lapsed.Before(cutoff) && !s.workerHolds(t.subagent, t.targetID) {
 			delete(s.lapsed, id)
+			s.expired[id] = expiredTicket{target: t.target, private: t.private, at: s.now()}
 		}
 	}
-	// A held outcome expires on the same clock, and silently: nobody was ever
-	// told it was there.
+	// A held outcome expires on the same clock, announced nowhere: nobody was
+	// ever told it was there.
 	for id, e := range s.held {
 		if e.ready.Before(cutoff) {
 			delete(s.held, id)
+			s.expired[id] = expiredTicket{target: e.target, private: e.private, at: s.now()}
+		}
+	}
+	for id, e := range s.expired {
+		if e.at.Before(cutoff) {
+			delete(s.expired, id)
 		}
 	}
 	senders := make([]string, 0, len(touched))

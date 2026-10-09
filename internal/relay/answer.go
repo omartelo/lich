@@ -37,6 +37,12 @@ func (s *Service) Wait(ctx context.Context, ticketID string, waitSeconds int) (R
 		s.announceInboxAll(senders)
 		return Result{Ticket: ticketID, Target: late.target, Status: late.lapsedAs, Answer: late.why, Private: late.private}, nil
 	}
+	if gone, ok := s.expired[ticketID]; ok {
+		s.mu.Unlock()
+		s.clearAll(expired)
+		s.announceInboxAll(senders)
+		return Result{Ticket: ticketID, Target: gone.target, Status: StatusExpired, Private: gone.private}, nil
+	}
 	t, ok := s.tickets[ticketID]
 	// Attending is claimed under the lock that found the ticket, so an answer
 	// landing before await runs is carried out by this caller rather than filed

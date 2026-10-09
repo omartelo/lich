@@ -168,3 +168,27 @@ func TestALateAnswerSurvivesTheWaiterHangingUp(t *testing.T) {
 		t.Errorf("Wait = %+v, %v, want the late answer kept", got, err)
 	}
 }
+
+// A ticket that ages out unanswered, open or lapsed, answers a wait on it with
+// how it ended: "unknown ticket" would read as a ticket the caller mistyped.
+func TestAWaitOnAnExpiredTicketSaysItExpired(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), nil)
+	plant(svc, "open", "s1", "s2", "docs")
+	plant(svc, "lapsed", "s1", "s3", "api")
+	svc.mu.Lock()
+	svc.lapseLocked("lapsed", svc.tickets["lapsed"], StatusUnanswered)
+	delete(svc.tickets, "lapsed")
+	svc.mu.Unlock()
+
+	later := time.Now().Add(2 * ticketTTL)
+	svc.now = func() time.Time { return later }
+	for id, target := range map[string]string{"open": "docs", "lapsed": "api"} {
+		got, err := svc.Wait(context.Background(), id, 1)
+		if err != nil || got.Status != StatusExpired || got.Target != target {
+			t.Errorf("Wait(%s) = %+v, %v, want expired from %q", id, got, err, target)
+		}
+	}
+	if _, err := svc.Wait(context.Background(), "never", 1); err == nil || !strings.Contains(err.Error(), "unknown ticket") {
+		t.Errorf("Wait on a ticket that never existed = %v, want unknown ticket", err)
+	}
+}

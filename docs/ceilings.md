@@ -472,8 +472,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `LICH_SESSION_ID`, and an MCP call carries nothing that names its caller (Claude Code 2.1.288 sends only
   `claudecode/toolUseId` and `progressToken`). One that sends without `private` is the session to lich: a sibling's
   no-ticket collect can take its result and the note lands at the session's prompt, both measured on 2026-10-03.
-  A private result is announced nowhere, so only its ticket recovers it and it expires silently with the ticket's
-  hour. It covers tickets, not ownership: the sessions and worktrees a step opens still come from the session, their
+  A private result is announced nowhere, so only its ticket recovers it, and when the ticket's hour runs out only a
+  wait on that ticket hears it expired: one that comes back after another hour, or never, is told nothing. It covers tickets, not ownership: the sessions and worktrees a step opens still come from the session, their
   marks and stalled toasts land on its card, and closing them is the workflow's own job. opencode's
   `send_to_session` takes `private` from lich-plugin 0.13.2; its `open_session` takes no task at all, so a private
   hand-off at open is `lich open --prompt --private` there.

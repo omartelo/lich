@@ -139,8 +139,8 @@ func TestAPrivateResultAgesOutSilently(t *testing.T) {
 
 	later := time.Now().Add(2 * ticketTTL)
 	svc.now = func() time.Time { return later }
-	if _, err := svc.Wait(context.Background(), "t1", 1); err == nil {
-		t.Fatal("Wait found a private result past its ticket's lifetime")
+	if got, err := svc.Wait(context.Background(), "t1", 1); err != nil || got.Status != StatusExpired {
+		t.Fatalf("Wait = %+v, %v, want the private result expired past its ticket's lifetime", got, err)
 	}
 	events.mu.Lock()
 	defer events.mu.Unlock()
@@ -148,5 +148,24 @@ func TestAPrivateResultAgesOutSilently(t *testing.T) {
 		if e.Count != 0 {
 			t.Errorf("inbox events = %+v, want nothing counted for a result nobody was told about", events.inbox)
 		}
+	}
+}
+
+// Nobody else may hear of it, but the caller that comes back on the ticket
+// must: told "unknown ticket", it cannot tell a result it missed from a ticket
+// it mistyped.
+func TestAWaitOnAnExpiredPrivateResultSaysItExpired(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
+	plantPrivate(svc, "t1", "s1", "s2", "docs")
+	_ = svc.Reply("", "t1", "done")
+
+	later := time.Now().Add(2 * ticketTTL)
+	svc.now = func() time.Time { return later }
+	got, err := svc.Wait(context.Background(), "t1", 1)
+	if err != nil || got.Status != StatusExpired || !got.Private {
+		t.Fatalf("Wait = %+v, %v, want the private result expired", got, err)
+	}
+	if _, err := svc.Wait(context.Background(), "never", 1); err == nil || !strings.Contains(err.Error(), "unknown ticket") {
+		t.Errorf("Wait on a ticket that never existed = %v, want unknown ticket", err)
 	}
 }

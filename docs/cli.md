@@ -97,7 +97,7 @@ it, so an outcome that is neither done nor failed has a code of its own:
 | 0 | Done. For `send` and `wait`: an answer is in hand. |
 | 1 | Failed. The `lich: …` line on stderr says why. |
 | 2 | `send` / `wait` / `control` only: **the wait ran out and a ticket came back.** Nothing failed and the errand is still open: `lich wait <ticket>` picks the answer up later. For `control`: the session took the command and has not confirmed it yet; its id is printed, and it still goes through. |
-| 3 | `send` / `wait` / `control` only: **the errand is over and no answer is coming through lich**: never read, never delivered, answered somewhere else, or a subagent worker closed before it answered (`stopped`). Retrying the wait is pointless; the output says what to do instead. For `control`: the session ended before confirming the command. |
+| 3 | `send` / `wait` / `control` only: **the errand is over and no answer is coming through lich**: never read, never delivered, answered somewhere else, a subagent worker closed before it answered (`stopped`), or nobody answered within the ticket's hour (`expired`). Retrying the wait is pointless; the output says what to do instead. For `control`: the session ended before confirming the command. |
 
 2 and 3 print their prose (or `--json`) on stdout like an answer does and write
 nothing on stderr: they are outcomes, not failures. No other command has an
@@ -224,7 +224,9 @@ collected is typed as usual.
   this side controls rather than a killed process. Capped at 30 minutes.
 - `--private` keeps the result to its ticket: no note is typed at the sending
   session's prompt, the card does not count it, and `lich wait` without a ticket
-  never returns it. It is for a subagent or a workflow step running inside a
+  never returns it. Uncollected for an hour, it is dropped, and `lich wait
+  <ticket>` says it expired (exit 3) rather than calling the ticket unknown.
+  It is for a subagent or a workflow step running inside a
   session, which reaches lich as that session (see below).
 - Answered: prints the answer alone, exit 0.
 - Not answered in time: the message was still delivered, so it says so and hands
@@ -265,6 +267,13 @@ collected is typed as usual.
   the sender's inbox, announced like any other result (a private errand's waits
   for its ticket, as ever). It is taken once, and a `lich wait` on that ticket
   before it lands answers with how the errand ended rather than as unknown.
+- **Expired**: nobody answered within the ticket's hour, counted from the send
+  or from the last wait that gave up on it, or a late answer never came for an
+  errand that ended without one. The ticket is dropped, and for one more hour
+  `lich wait <ticket>` says it expired, exit 3, rather than calling the ticket
+  unknown. Nothing is announced for it, with one exception: a sender that is
+  itself a subagent worker somebody waits on finds it in its inbox, since its
+  own report waits for this outcome.
 
 ```
 docs is still working. The errand is open — a message that session was not ready
@@ -478,7 +487,8 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
     through its inbox: its own report waits for this outcome.
   - **reports only after the work it handed off is back**: while an errand it
     sent is open, or a result for it is unread, its mod's report is ignored,
-    and the turn that outcome starts is the one that answers.
+    and the turn that outcome starts is the one that answers. An errand it
+    sent that nobody answers within the hour comes back to it as `expired`.
   - **closes once it is done** when it runs in the caller's checkout: after it
     answers the errand and the turn it answered in ends, lich parks it the way
     `lich close` does, like a native subagent that returned its result. A worker
