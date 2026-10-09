@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A session card offers to open a pull request.** Hover a card whose branch
+  has none yet and a PR button shows where the PR number would be; clicking it
+  types the request to open one at that session's prompt, ready to send.
+
 ### Fixed
 
 - **A terminal opened from a session in the project's own directory joins that

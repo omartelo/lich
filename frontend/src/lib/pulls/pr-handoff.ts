@@ -1,4 +1,4 @@
-import type { PullRequestDetail } from "@/lib/api-types"
+import type { BaseStatus, PullRequestDetail } from "@/lib/api-types"
 import { conflictsWithBase } from "@/lib/pulls/merge-gate"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 
@@ -67,4 +67,13 @@ export function createPullRequestPrompt(branch: string): string {
   return bracketedPaste(
     `Branch ${branch} has no pull request yet. Open one with \`gh pr create\`: push the branch first if it is not on the remote, write the title and body from the commits and the diff against the base branch, and follow the repository's pull request template if it has one.`,
   )
+}
+
+// offersPullRequest says whether a branch with no open pull request is one a
+// pull request could be opened from: on a branch, with an origin to push to, and
+// not the base itself. Commits ahead of the base are not counted (BaseStatus
+// carries only the behind side), so a branch with nothing to propose still gets
+// the offer, and the agent is the one that says so.
+export function offersPullRequest(branch: string, base: BaseStatus | null): boolean {
+  return branch !== "" && base !== null && `origin/${branch}` !== base.base
 }
