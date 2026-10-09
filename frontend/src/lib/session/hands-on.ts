@@ -44,7 +44,7 @@ const RUNG: Record<ProviderKind, "turn" | "tool"> = {
   opencode: "turn",
   omp: "turn",
   crush: "tool",
-  cursor: "tool",
+  cursor: "turn",
   // Kiro opens a turn: lich registers userPromptSubmit for busy and stop for
   // done, so a turn the user never interrupts is still counted from end to end.
   kiro: "turn",

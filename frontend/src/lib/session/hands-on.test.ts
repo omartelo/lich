@@ -62,13 +62,13 @@ describe("handsOnDetail", () => {
     expect(handsOnDetail("antigravity")).toBe(handsOnDetail("claude"))
     expect(handsOnDetail("opencode")).toBe(handsOnDetail("claude"))
     expect(handsOnDetail("omp")).toBe(handsOnDetail("claude"))
+    expect(handsOnDetail("cursor")).toBe(handsOnDetail("claude"))
   })
 
   it("names the tool call for a provider that never opens a turn", () => {
     expect(handsOnDetail("crush")).toBe(
       "How long this session has been worked on — typed at, or reporting a tool call. A gap longer than 15 minutes counts as time away.",
     )
-    expect(handsOnDetail("cursor")).toBe(handsOnDetail("crush"))
   })
 
   // The shape is the contract: same two sentences on both rungs. A third

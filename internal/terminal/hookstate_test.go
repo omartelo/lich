@@ -12,6 +12,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/omartelo/lich/internal/events"
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // The two readings of one `waiting` report, which is the whole point of
@@ -112,6 +113,62 @@ func TestHookPublishesOnlyABlockingWait(t *testing.T) {
 	got := rec.statesOf("s1")
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("the window was told %v, want %v", got, want)
+	}
+}
+
+// stateLog stands in for the relay, the one watcher of the raw state stream.
+type stateLog struct {
+	mu     sync.Mutex
+	states []string
+}
+
+func (l *stateLog) watch(_, state string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.states = append(l.states, state)
+}
+
+func (l *stateLog) seen() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.states)
+}
+
+// A Cursor CLI session runs Claude Code's plugin, and on 2026.10.01 its TUI
+// delivers that plugin's UserPromptSubmit and Stop, so a Cursor turn reaches the
+// card and the relay like any other. Esc ends a turn with two stop hooks, one
+// "aborted" and one "error" for the same generation: the second is the same
+// ending told twice, and it must neither ring the card again nor close an
+// errand delivered in the gap between the two.
+func TestACursorTurnReachesTheWindowAndTheRelayOnce(t *testing.T) {
+	hub, rec := newProbeHub(t)
+	marks := &unreadStore{}
+	svc := New(marks, nil, hub)
+	if svc.wsErr != nil {
+		t.Fatalf("transport: %v", svc.wsErr)
+	}
+	svc.spawns.Store("s1", spawn{kind: providers.Cursor})
+	relay := &stateLog{}
+	svc.SetSessionState(relay.watch)
+
+	// A turn interrupted with Esc, then a turn that runs to its end.
+	for _, state := range []string{statusBusy, statusDone, statusDone, statusBusy, statusDone} {
+		postHook(t, svc, "s1", state)
+	}
+
+	hub.Emit(probeReadyEvent, nil)
+	waitFor(t, func() bool { return slices.Contains(rec.snapshot(), probeReadyEvent) },
+		"the window to be told about both turns")
+
+	want := []string{statusBusy, statusDone, statusBusy, statusDone}
+	if got := rec.statesOf("s1"); !slices.Equal(got, want) {
+		t.Errorf("the window was told %v, want %v", got, want)
+	}
+	if got := relay.seen(); !slices.Equal(got, want) {
+		t.Errorf("the relay was told %v, want %v", got, want)
+	}
+	if got, want := marks.written(), []bool{false, true, false, true}; !slices.Equal(got, want) {
+		t.Errorf("unread marks written = %v, want %v: the card rang once per ending", got, want)
 	}
 }
 

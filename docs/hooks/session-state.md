@@ -45,11 +45,11 @@ Both sides test against the payloads in
 
 | Claude Code hook   | Codex hook          | Antigravity hook | opencode event           | oh-my-pi event | Crush hook | Cursor CLI hook    | Kiro CLI hook      | state     |
 |--------------------|---------------------|------------------|--------------------------|----------------|------------|--------------------|--------------------|-----------|
-| `UserPromptSubmit` | `UserPromptSubmit`  | `PreInvocation`  | `session.status` (`busy`) | `input`        | —          | —                  | `userPromptSubmit` | `busy`    |
-| `PreToolUse`       | `PreToolUse`        | `PreToolUse`     | `tool.execute.before`    | `tool_call`    | —          | dropped            | `preToolUse`       | `busy` + `tool` |
-| `PostToolUse`      | `PostToolUse`       | —                | `tool.execute.after`     | `turn_start`   | —          | dropped            | `postToolUse`      | `busy`    |
+| `UserPromptSubmit` | `UserPromptSubmit`  | `PreInvocation`  | `session.status` (`busy`) | `input`        | —          | `UserPromptSubmit` | `userPromptSubmit` | `busy`    |
+| `PreToolUse`       | `PreToolUse`        | `PreToolUse`     | `tool.execute.before`    | `tool_call`    | —          | `PreToolUse`       | `preToolUse`       | `busy` + `tool` |
+| `PostToolUse`      | `PostToolUse`       | —                | `tool.execute.after`     | `turn_start`   | —          | `PostToolUse`      | `postToolUse`      | `busy`    |
 | `Notification`     | `PermissionRequest` | —                | any `*.asked`            | —              | —          | —                  | —                  | `waiting` + `reason` |
-| `Stop`, `StopFailure` | `Stop`              | `Stop`           | `session.status` (`idle`) | `session_stop` | —          | —                  | `stop`             | `done`    |
+| `Stop`, `StopFailure` | `Stop`              | `Stop`           | `session.status` (`idle`) | `session_stop` | —          | `Stop`             | `stop`             | `done`    |
 | `SessionEnd`       | —                   | —                | —                        | —              | —          | `SessionEnd`       | —                  | `idle`    |
 | mod `session.compact` | —                | —                | —                        | —              | —          | —                  | —                  | `compacting` |
 
@@ -117,6 +117,16 @@ block, and a command the user has not permitted is still refused — and `{}`, a
 object carrying no `decision` at all, **denies** it. The trap is that last one: a
 report that starts printing JSON without a verdict stops that session from using
 tools, and nothing says why.
+
+**Cursor CLI's column is Claude Code's registration, fired by Cursor.** lich
+installs nothing there: the CLI runs the plugin installed in Claude Code and maps
+its `UserPromptSubmit` and `Stop` onto its own `beforeSubmitPrompt` and `stop`
+(measured on the interactive TUI, 2026.08.11 through 2026.10.01; `cursor-agent -p`
+fires neither). It has no `Notification`, so a Cursor session never reports
+`waiting`. **Esc ends a Cursor turn twice**: two `stop` hooks for the same
+generation, `aborted` then `error`, about 60ms apart. lich drops a Cursor `done`
+that finds no turn open (`terminal.repeatedEnding`), because the second one would
+ring the card again and close an errand the relay delivered in between.
 
 **Crush reports no state at all.** Its only hook event is `PreToolUse`, and a
 `busy` with nothing that can end it would leave a spinner on the card until the
@@ -359,7 +369,7 @@ missing reason never costs a bell.
   `idle` abandons an open window rather than closing it, there being no closing
   report coming. lich's own `interrupted` closes one: a stopped turn is a turn
   that ended, and it changed files like any other. A provider that reports no
-  state has no window here at all, which today is Crush and Cursor CLI.
+  state has no window here at all, which today is Crush.
   `compacting` neither opens nor closes one, and the `done` that closes a
   `/compact` finds no window open and closes nothing.
 - **Store** — `frontend/src/lib/session/session-status-store.ts`: one subscription taken

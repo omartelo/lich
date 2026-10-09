@@ -89,9 +89,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   busy says nothing, exactly like a block whose cards have never reported.
 - **The sidebar's state chips read the ring, nothing more** (`frontend/src/lib/session/session-filter.ts`):
   Waiting, Running and Unread are the card's amber, spinning and unread green ring, and Idle is everything
-  else, a read turn included. A provider that cannot raise a state cannot be filtered into it: Crush and
-  Cursor CLI report no turn at all and always sit under Idle; Antigravity, oh-my-pi and Kiro CLI raise no
-  permission event, so they never reach Waiting (a Kiro session blocked on a confirmation counts as Running).
+  else, a read turn included. A provider that cannot raise a state cannot be filtered into it: Crush
+  reports no turn at all and always sits under Idle; Antigravity, oh-my-pi, Kiro CLI and Cursor CLI raise no
+  permission event, so they never reach Waiting (a Kiro or Cursor session blocked on a confirmation counts as
+  Running).
   There is no error chip: no provider reports one, and a process that exited is known only to its terminal,
   not to a store the sidebar reads. The chips are not persisted and drop on a project switch, like the query.
 - **The Run card is never started for you** (`frontend/src/components/sidebar/SessionSidebar.tsx`): a fresh
@@ -191,18 +192,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Hiding a reading hides its warning too. An item without data can occupy an editor slot while drawing
   nothing in the live footer — a PR on a branch without one, or an unsupported provider reading.
 - **Hands-on time is read off three signals, and one of them is not universal**
-  (`internal/terminal/handson.go`, `noteOutput`, `closableState`): the figure beside the cost
+  (`internal/terminal/handson.go`, `noteOutput`): the figure beside the cost
   counts the gap between consecutive signs of life in a session — any hook report naming it, a
   keystroke at its PTY, or its own output while a turn is open — and drops any gap longer than
   `handsOnIdleGap`. The output signal is the one that carries an unattended turn, and it is
   gated on the provider having reported `busy`, because a `tail -f`, a dev server or a TUI
   repainting would otherwise bill hours nobody worked. **Which turns get counted therefore
   depends on what a provider's hooks report at all**, and there are two rungs. On the top one —
-  Claude Code, Codex, Antigravity, opencode, oh-my-pi, Kiro CLI — the turn opens, so a turn nobody
-  touches is counted from its own output. On the lower one — **Crush and Cursor CLI** — no turn
+  Claude Code, Codex, Antigravity, opencode, oh-my-pi, Cursor CLI, Kiro CLI — the turn opens, so a
+  turn nobody touches is counted from its own output. On the lower one — **Crush** — no turn
   ever opens (`docs/hooks/session-state.md`), and the turn is counted through the reports its
-  tool calls fire: Cursor's `PreToolUse`/`PostToolUse` state reports, which beat even though
-  `closableState` refuses to publish them, and Crush's `/session-start`, which its only hook
+  tool calls fire: Crush's `/session-start`, which its only hook
   event (`PreToolUse`) fires once per tool call — measured 2026-09-03 against Crush 0.88.0, three
   tool calls in one turn, three POSTs. **What that rung cannot count is a turn that calls no tool
   at all**: a long answer written straight out, with no keystroke and no report between the
@@ -295,10 +295,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   and leaves that card with no last turn until it respawns. A pair read back at launch names loose objects
   no ref reaches, so a `git gc --prune` in that checkout between one run and the next leaves the panel
   reporting a failure rather than an absent turn. And the boundary is the session-state contract, so
-  **Crush and Cursor CLI have no last turn at all**: neither reports a state
+  **Crush has no last turn at all**: it reports no state
   (`docs/hooks/session-state.md`), so nothing ever opens or closes a window there, and the recap band beside it
   is never drawn either. Whether the switch is *offered* is read off the session's own reports and corrects
-  itself the day either one starts reporting (`turnSwitchable`), but the sentence under the dead switch naming
+  itself the day it starts reporting (`turnSwitchable`), but the sentence under the dead switch naming
   the provider is a hand-written list (`turnUnavailableReason`,
   `frontend/src/lib/git/last-turn.ts`): the two disagree, and the panel names a provider that has since started
   reporting, until that list is moved with the contract.
@@ -497,6 +497,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   prompt lost on the way (the mod reloading as the response lands) is reported unread, not sent twice. A hook that
   drops the prompt is reported undelivered with its reason, except at a session that was mid-turn, whose ack lich
   stops waiting for after the receipt window.
+- **A task handed to a Crush session waits out its ticket when the agent ends its turn without answering**
+  (`internal/relay/observe.go`, `turnCandidates`): the relay closes an errand as unanswered on the target's
+  `done`, and Crush raises no hook at a turn's end, its only event being `PreToolUse` (0.98.1). Its database
+  does mark the end (`finish.reason` other than `tool_use` in `.crush/crush.db`), but the conversation id
+  reaches lich only on the first tool call, so a turn that calls no tool has nothing to read. The asker hears
+  nothing until the ticket's deadline. The day Crush ships `Stop`, the existing `report-state.sh done` closes it.
 - **Only a merge lich makes is announced, and only to a card running at that moment** (`internal/relay`,
   `AnnounceMerge`; called from the Pulls screen's merge): a pull request merged on github.com, with `gh` in a
   terminal or by an agent leaves every session in its checkout believing it is still open, and so does one merged
@@ -831,8 +837,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The Review tab's remembered source is a wish, not what is on screen** (`ReviewPanel`,
   `frontend/src/lib/dock-prefs.ts`): the pref is global and holds what the user picked, while what the
   panel shows is that choice put through `turnSwitchable` — a session whose provider never reports and
-  holds no last-turn record has no turn to bracket, so it is shown the working tree, with no switch or, on Crush and Cursor
-  CLI, a disabled one naming why. Nothing writes the guard's answer back, and that is the whole design: a session with neither is
+  holds no last-turn record has no turn to bracket, so it is shown the working tree, with no switch or, on Crush, a disabled
+  one naming why. Nothing writes the guard's answer back, and that is the whole design: a session with neither is
   unswitchable after a reload until it next reports, so a panel that reset the pref instead of overriding
   it would erase the choice before the switch had a chance to appear. The two halves of that guard read
   different sources — the record rides the session's hydration, the diff behind it is seeded when the

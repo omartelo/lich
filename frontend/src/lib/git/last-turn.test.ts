@@ -56,11 +56,10 @@ describe("turnSwitchable", () => {
 })
 
 describe("turnUnavailableReason", () => {
-  // The two the session-state contract leaves out, each named so the panel says
+  // The one the session-state contract leaves out, named so the panel says
   // whose limit this is rather than reporting a blank of its own.
-  it("names the provider on the two that report no turn", () => {
+  it("names the provider that reports no turn", () => {
     expect(turnUnavailableReason("crush")).toContain("Crush")
-    expect(turnUnavailableReason("cursor")).toContain("Cursor CLI")
   })
 
   // The sentence has to say what is missing, not only who is missing it: a name
@@ -75,6 +74,7 @@ describe("turnUnavailableReason", () => {
   it("says nothing for a provider that reports", () => {
     expect(turnUnavailableReason("claude")).toBe("")
     expect(turnUnavailableReason("kiro")).toBe("")
+    expect(turnUnavailableReason("cursor")).toBe("")
   })
 
   // A shell has no agent whose turns could be missed, and no active session at

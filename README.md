@@ -109,12 +109,12 @@ reads what each CLI writes down and no two of them write down the same things.
 | Cost in the footer | yes | yes | no | yes | yes | yes | no | credits |
 | How much of your plan is left | yes | yes | yes | OpenCode Go only | no | no | yes | no |
 | A turn your plan's usage limit stopped picks up again once the limit resets | yes | yes | no | its own retries | its own retries | no | no | no |
-| Spinner while a turn runs, ring when it ends | yes | yes | yes | yes | yes | no | no | yes |
+| Spinner while a turn runs, ring when it ends | yes | yes | yes | yes | yes | no | yes | yes |
 | Bell when the agent is blocked on you | yes | yes | no | yes | no | no | no | no |
 | The card says when the conversation is being compacted | yes | no | no | no | no | no | no | no |
-| Sidebar filter by state: Waiting, Running, Unread | yes | yes | no Waiting | yes | no Waiting | no, always Idle | no, always Idle | no Waiting |
-| Machine kept out of idle sleep while a turn runs | yes | yes | yes | yes | yes | no | no | yes |
-| Review tab's **Last turn**, with the agent's recap | yes | yes | yes | yes | yes | no | no | yes |
+| Sidebar filter by state: Waiting, Running, Unread | yes | yes | no Waiting | yes | no Waiting | no, always Idle | no Waiting | no Waiting |
+| Machine kept out of idle sleep while a turn runs | yes | yes | yes | yes | yes | no | yes | yes |
+| Review tab's **Last turn**, with the agent's recap | yes | yes | yes | yes | yes | no | yes | yes |
 | Search the conversation from the palette | yes | yes | yes | yes | yes | yes | no | yes |
 | Resume a conversation started outside lich, from the palette's History tab | yes | yes | yes | yes | yes | Linux; macOS and Windows untested | yes | yes |
 | Fork a conversation into a new worktree | yes | yes | no | yes | no | no | no | no |
@@ -129,11 +129,13 @@ reads what each CLI writes down and no two of them write down the same things.
 | Delegate privately from a subagent or workflow step | yes | yes | yes | yes | yes | yes | yes | yes |
 | A resumed session keeps the model and effort it was on | model only | yes | no | model | yes | no | model | model; effort untested |
 | A result still waits for you after you interrupt a wait for it | yes | yes | yes | yes | no | yes | yes | yes |
+| A task you hand another session reports back "unanswered" as soon as that agent ends its turn without replying | yes | yes | yes | yes | yes | no, waits for the deadline | yes | yes |
 
-Crush and Cursor CLI report neither the start nor the end of a turn, and that is
-where four of those rows go at once: nothing opens a window for the card's
-spinner, for the bell, for the Review tab's last turn, or for the hold that keeps
-the machine awake. The Review tab says so on the session itself rather than
+Crush reports neither the start nor the end of a turn, and that is
+where five of those rows go at once: nothing opens a window for the card's
+spinner, for the bell, for the Review tab's last turn, for the hold that keeps
+the machine awake, or for telling whoever handed it a task that the turn ended
+without an answer. The Review tab says so on the session itself rather than
 leaving you to notice the switch never appeared. Kiro CLI meters spend in credits
 rather than dollars, so its own footer is the only place that figure can be read.
 Antigravity's plan is read by asking `agy` itself (1.1.11 or newer; an older one
