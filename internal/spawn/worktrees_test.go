@@ -93,6 +93,26 @@ func TestOpenUsesACheckoutThatIsAlreadyThere(t *testing.T) {
 	}
 }
 
+// git lists the main checkout among the worktrees, so a branch the project's
+// own directory holds resolves to the project path. Stored as-is, that row
+// reads as a worktree session: a second sidebar block for the same directory,
+// and a close that offers to remove the project itself.
+func TestOpenStoresTheProjectsOwnCheckoutAsTheRoot(t *testing.T) {
+	svc, sessions, worktrees, term, _ := closer(t)
+	worktrees.checkouts = append(worktrees.checkouts, project.Worktree{Name: "main", Path: "/src/lich"})
+
+	opened, err := svc.Open("s1", "", "", "main", "", "", "", "", false)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if opened.Path != "" || len(sessions.rows) != 1 || sessions.rows[0].path != "" {
+		t.Errorf("opened = %+v, row = %+v; want the project root stored as \"\"", opened, sessions.rows)
+	}
+	if term.spawns[0].cwd != "/src/lich" {
+		t.Errorf("spawn cwd = %q, want the project's own directory", term.spawns[0].cwd)
+	}
+}
+
 // Two live sessions answering to one label is the single thing `lich send`
 // cannot resolve, so a name already in use is given up rather than repeated.
 func TestOpenFallsBackWhenTheBranchNameIsAlreadyACard(t *testing.T) {
