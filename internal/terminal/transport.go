@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"runtime/pprof"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -56,6 +57,12 @@ const (
 	statusDone    = "done"
 	statusWaiting = "waiting"
 	statusIdle    = "idle"
+	// statusCompacting is the agent folding its conversation into a summary,
+	// reported only by Claude Code's mod. It brackets the compaction rather than
+	// replacing a turn state: the report that closes it restates where the
+	// session stands (busy for an auto-compaction mid-turn, done for a /compact
+	// at the prompt), so every consumer that keeps turn accounting skips it.
+	statusCompacting = "compacting"
 
 	// statusInterrupted is lich's own: the only state it ever publishes that no
 	// provider reports and no hook may send — parseHookRequest rejects it like
@@ -63,11 +70,14 @@ const (
 	// at the PTY, which is neither a finished turn nor a session that has left,
 	// and lich has to say it itself because three of the five providers raise
 	// nothing at all when a turn is interrupted (see Service.noteInterrupt and
-	// docs/hooks/session-state.md). Consumers that only know the four above read
+	// docs/hooks/session-state.md). Consumers that only know the states above read
 	// it as "no state", which clears the card's indicator — the right reading:
 	// an interrupted session is sitting at its prompt with nothing to show.
 	statusInterrupted = "interrupted"
 )
+
+// hookStates is every state a hook may report.
+var hookStates = []string{statusBusy, statusDone, statusWaiting, statusIdle, statusCompacting}
 
 // encodeFrame prefixes payload with the session id. The id must fit one byte
 // of length.
@@ -508,8 +518,7 @@ func parseHookRequest(body []byte) (hookRequest, error) {
 	if req.SessionID == "" {
 		return hookRequest{}, errors.New("hook missing session_id")
 	}
-	if req.State != statusBusy && req.State != statusDone &&
-		req.State != statusWaiting && req.State != statusIdle {
+	if !slices.Contains(hookStates, req.State) {
 		return hookRequest{}, fmt.Errorf("hook has unknown state %q", req.State)
 	}
 	req.Tool = clampRunes(strings.TrimSpace(req.Tool), hookTextLimit)

@@ -31,6 +31,8 @@ func TestTurnLogTellsBlockedFromIdle(t *testing.T) {
 		{"nothing was ever reported", nil, false},
 		{"the session ended", []string{statusBusy, statusIdle}, false},
 		{"a turn that ended and one that never started", []string{statusBusy, statusDone, statusWaiting}, false},
+		{"an auto-compaction inside the turn", []string{statusBusy, statusCompacting}, true},
+		{"a /compact at the prompt", []string{statusBusy, statusDone, statusCompacting}, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -49,7 +51,7 @@ func TestTurnLogTellsBlockedFromIdle(t *testing.T) {
 // distinction, not a gate on the stream.
 func TestTurnLogPublishesEveryOtherState(t *testing.T) {
 	var log turnLog
-	for _, state := range []string{statusBusy, statusDone, statusIdle, statusBusy} {
+	for _, state := range []string{statusBusy, statusCompacting, statusDone, statusIdle, statusBusy} {
 		if !log.report("s1", state) {
 			t.Fatalf("%q was held back from the window", state)
 		}

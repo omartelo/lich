@@ -19,6 +19,12 @@ import (
 // came. Getting that backwards would report "answered elsewhere" about a
 // request the target had not read yet, which is worse than saying nothing.
 func (s *Service) Observe(sessionID, state string) {
+	// Nothing here reads a compaction: it neither starts nor ends a turn, and a
+	// peer listing sessions learns nothing from it the report after it will not
+	// say. Recorded, it would overwrite the busy every errand check reads.
+	if state == stateCompacting {
+		return
+	}
 	s.mu.Lock()
 	blocked := s.noteBlockLocked(sessionID, state)
 	finished := s.finishedWorkerLocked(sessionID, state)

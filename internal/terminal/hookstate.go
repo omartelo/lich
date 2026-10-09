@@ -46,6 +46,10 @@ func (l *turnLog) report(id, state string) bool {
 		// it, so the report after it still has to be read against the turn it
 		// interrupted. Two permission prompts in one turn are two blocks.
 		return l.open[id]
+	case statusCompacting:
+		// Recorded neither way either: an auto-compaction runs inside a turn and
+		// a /compact between two, and the report that ends it says which.
+		return true
 	case statusBusy:
 		if l.open == nil {
 			l.open = make(map[string]bool)

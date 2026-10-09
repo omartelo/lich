@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A Claude Code card says when its conversation is being compacted.** A
+  `/compact` or an automatic compaction shows "Compacting…" under the session's
+  name with a spinner, instead of the finished turn's check or a spinner that
+  names nothing. Needs the next lich-plugin release.
+
 ### Changed
 
 - **Search the terminal font list by name.** Settings › Appearance › Terminal

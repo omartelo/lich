@@ -37,9 +37,9 @@ const (
 	// carrying the status it exited with (see exitEvent).
 	exitEventPrefix = "terminal:exit:"
 	// statusEventName carries a session's processing state ({id, state, tool,
-	// detail, reason} — "busy"/"done"/"waiting"/"idle", plus the tool a pre-tool
-	// report names and what a waiting one is blocked on), reported by the lich
-	// hooks running inside the PTY (see transport.hook and
+	// detail, reason} — "busy"/"done"/"waiting"/"idle"/"compacting", plus the
+	// tool a pre-tool report names and what a waiting one is blocked on),
+	// reported by the lich hooks running inside the PTY (see transport.hook and
 	// docs/hooks/session-state.md). "interrupted" is the one value lich raises
 	// itself, for a turn the user stopped at the PTY. The frontend keeps it in
 	// stores keyed by id (session-status-store.ts, session-tool-store.ts) rather

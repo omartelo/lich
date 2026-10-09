@@ -88,6 +88,7 @@ describe("phaseOf", () => {
   it("sorts every status the card renders into the chip it lands under", () => {
     expect(phaseOf("waiting", false)).toBe("waiting")
     expect(phaseOf("busy", false)).toBe("running")
+    expect(phaseOf("compacting", false)).toBe("running")
     expect(phaseOf("done", true)).toBe("unread")
   })
 

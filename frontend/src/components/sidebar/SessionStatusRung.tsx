@@ -4,6 +4,7 @@ import {
   CircleQuestionMark,
   Clock,
   CornerDownLeft,
+  FoldVertical,
   Hourglass,
   Inbox,
   ListChecks,
@@ -68,8 +69,8 @@ export function SessionStatusRung({
   const scheduledAt = session.scheduledAt ?? 0
   return (
     <>
-      {/* One line, nine rungs: an open request, then a session blocked
-          on the user, then a handoff waiting for this prompt, then a
+      {/* One line, ten rungs: an open request, then a session blocked
+          on the user, then a conversation being compacted, then a handoff waiting for this prompt, then a
           usage limit the turn stopped on, then results waiting to be collected, then how far
           a quiet card got through its task list, then the
           tool, then a prompt scheduled for later, then where the session
@@ -130,6 +131,14 @@ export function SessionStatusRung({
           <span className="truncate font-medium text-tone-wait">
             {waitingReason || "Waiting on you"}
           </span>
+        </span>
+      ) : status === "compacting" ? (
+        // Its own rung because the spinner beside it reads as a turn running,
+        // and a compaction is several seconds of no tool line on a card that is not
+        // stuck: the conversation is being folded into a summary.
+        <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+          <FoldVertical className="size-3 shrink-0" />
+          <span className="truncate font-medium text-foreground">Compacting…</span>
         </span>
       ) : handoffHeld ? (
         <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">

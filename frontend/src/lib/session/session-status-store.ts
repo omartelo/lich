@@ -56,9 +56,9 @@ interface Entry {
 }
 
 // The tab badge of a project with several sessions. "waiting" wins because it
-// blocks the user, then "busy" because something is still running; "done" is
-// the leftover.
-const BADGE_PRIORITY = ["waiting", "busy", "done"] as const
+// blocks the user, then "busy" and "compacting" because something is still
+// running; "done" is the leftover.
+const BADGE_PRIORITY = ["waiting", "busy", "compacting", "done"] as const
 
 // createSessionStatusStore keeps the last reported status of every session,
 // keyed by session id, fed by one subscription taken at creation — before any
@@ -109,8 +109,9 @@ export function createSessionStatusStore(
   const computePending = (): PendingStatus[] => {
     const next: PendingStatus[] = []
     for (const [id, entry] of entries) {
-      // "busy" is progress, not a notification; a seen "done" is already read.
-      if (entry.status === null || entry.status === "busy") {
+      // "busy" and "compacting" are progress, not a notification; a seen
+      // "done" is already read.
+      if (entry.status === null || entry.status === "busy" || entry.status === "compacting") {
         continue
       }
       if (entry.status === "done" && entry.seen) {
@@ -238,7 +239,7 @@ export function createSessionStatusStore(
   const runningOf = (ids: readonly string[]): string[] =>
     ids.filter((id) => {
       const status = entries.get(id)?.status
-      return status === "busy" || status === "waiting"
+      return status === "busy" || status === "waiting" || status === "compacting"
     })
 
   const subscribe = (id: string, listener: () => void): (() => void) => {

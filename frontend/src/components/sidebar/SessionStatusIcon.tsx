@@ -4,10 +4,12 @@ import type { SessionKind } from "@/lib/session/sessions"
 import type { SessionStatus } from "@/lib/session/session-events"
 
 // Ring drawn around the provider icon per processing state: a spinning ring
-// while Claude produces output, solid emerald once its turn ends, amber when
-// it is blocked on the user.
+// while Claude produces output or compacts, solid emerald once its turn ends,
+// amber when it is blocked on the user.
+const SPINNING = "animate-spin border-muted-foreground/25 border-t-muted-foreground"
 const RING: Record<SessionStatus, string> = {
-  busy: "animate-spin border-muted-foreground/25 border-t-muted-foreground",
+  busy: SPINNING,
+  compacting: SPINNING,
   done: "border-tone-pass",
   waiting: "border-tone-wait",
 }

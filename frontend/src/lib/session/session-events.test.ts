@@ -71,6 +71,7 @@ describe("toSessionStatus", () => {
     expect(toSessionStatus("busy")).toBe("busy")
     expect(toSessionStatus("done")).toBe("done")
     expect(toSessionStatus("waiting")).toBe("waiting")
+    expect(toSessionStatus("compacting")).toBe("compacting")
   })
 
   it("clears the indicator on the contract's idle", () => {
@@ -343,7 +344,14 @@ describe("decideStatusNotice", () => {
 
   it("says nothing about a session that is merely running", () => {
     expect(decideStatusNotice("busy", "waiting", false, BOTH_ON)).toBe("none")
+    expect(decideStatusNotice("compacting", "busy", false, BOTH_ON)).toBe("none")
     expect(decideStatusNotice(null, "busy", false, BOTH_ON)).toBe("none")
+  })
+
+  // A /compact runs at the prompt and closes on "done": the turn it follows was
+  // already announced, and the compaction is not a second one.
+  it("does not announce the done that closes a compaction", () => {
+    expect(decideStatusNotice("done", "compacting", false, BOTH_ON)).toBe("none")
   })
 
   // The dialog belongs to the blocked-on-you channel alone: a finished turn with

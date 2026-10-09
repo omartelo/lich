@@ -130,6 +130,9 @@ const (
 	stateDone    = "done"
 	stateIdle    = "idle"
 	stateWaiting = "waiting"
+	// stateCompacting brackets a compaction without moving the turn; the report
+	// closing it restates the session's state (internal/terminal).
+	stateCompacting = "compacting"
 	// stateInterrupted is not a hook report: lich raises it for a turn the user
 	// stopped at the PTY (internal/terminal, noteInterrupt).
 	stateInterrupted = "interrupted"

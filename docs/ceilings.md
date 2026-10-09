@@ -586,6 +586,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   by the mod, so the status line lags an errand by up to its read interval, and an errand sent privately (a
   subagent or workflow step inside the session) never shows there, since the session's own collect never
   reaches it.
+- **Only a Claude Code card says it is compacting** (`compacting`, docs/hooks/session-state.md): the start of a
+  compaction is reported by the mod's `session.compact`, and no other harness has that event wired. On the seven
+  other providers, and on a Claude Code session without the mod, a `/compact` keeps the finished turn's check
+  and an auto-compaction is a spinner with no tool line, which reads as a stuck turn. A compaction the mod
+  never closes (the mod killed mid-call) holds "Compacting…" until the session's next report.
 - **The plan gauge answers to undocumented routes, and three providers have none** (`internal/quota`): Claude
   Code's and Codex's usage routes are what their own CLIs poll, Cursor CLI's is the cursor.com dashboard's own
   (`/api/usage-summary`, sent the CLI's token as the dashboard's session cookie with the dashboard's Origin and
