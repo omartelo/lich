@@ -7,17 +7,11 @@ description = "lich's window: an embedded Chromium (CEF) launched by the Go back
 license = "AGPL-3.0-only"
 
 [dependencies]
-# The fork's `lich-hooks` branch: upstream's `native-tongue/capabilities`
-# (ba69cfd, the decision hooks: keys, Chromium's commands, new windows,
-# navigation, downloads, permissions, the context menu) plus the page-first
-# key decision (kurogane#21), window_class / window_title / window_icon /
-# cache_dir (kurogane#11), the main window's geometry handed to the
-# delegate (kurogane#19) and Chromium's status bubble kept off the window
-# (kurogane#23); move back to 0x48piraj/kurogane once they land
-# (build/linux/shell/README.md). CEF comes through it (kurogane::cef): a
-# dependency of our own would turn cef's default features back on for the
-# whole build.
-kurogane = { git = "https://github.com/omartelo/kurogane", rev = "e58b415915fba769f5a66fe681c407b13e67512c" }
+# The fork's `lich-master` branch: upstream master (a26964d, the decision
+# hooks, WindowOptions, profile_dir and CEF 154 loaded at run time through
+# tetsu) plus Chromium's status bubble kept off the window (kurogane#23);
+# move back to 0x48piraj/kurogane once it lands (build/linux/shell/README.md).
+kurogane = { git = "https://github.com/omartelo/kurogane", rev = "c004c49ca0ffee9f98586b9601dfab138187ee95" }
 
 # Whether this machine can confine Chromium's subprocesses is asked the way
 # Chromium asks it (main.rs): a fork that tries a user namespace.

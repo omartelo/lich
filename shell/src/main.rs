@@ -9,14 +9,11 @@
 // CTRL_CLOSE_EVENT to the group and killed the window with 0xc000013a inside the
 // startup grace, which lich reads as a window that could not open.
 #![windows_subsystem = "windows"]
-use geometry::Geometry;
-use kurogane::cef::{self, ImplDisplay};
 use kurogane::{
-    App, BrowserBounds, ChromeCommand, ClientAppBrowserDelegate, CommandDecision, KeyDecision,
-    WindowState,
+    App, ChromeCommand, CommandDecision, KeyDecision, WindowClosing, WindowOptions, WindowPlacement,
 };
 use std::io::{ErrorKind, Read};
-use std::path::PathBuf;
+use std::path::Path;
 
 mod geometry;
 
@@ -143,63 +140,35 @@ fn command_decision(command: ChromeCommand) -> CommandDecision {
     }
 }
 
-struct Window {
-    /// Where the geometry is remembered; None, a shell launched by hand
-    /// without a profile, opens at CEF's default every time.
-    geometry: Option<PathBuf>,
-}
-
-impl ClientAppBrowserDelegate for Window {
-    fn initial_window_geometry(&self) -> Option<(BrowserBounds, WindowState)> {
-        let saved = read_geometry(self.geometry.as_deref()?)?;
-        Some(saved.restore(work_area(BrowserBounds {
-            x: saved.x,
-            y: saved.y,
-            width: saved.width,
-            height: saved.height,
-        })))
-    }
-
-    fn on_window_closing(&self, bounds: BrowserBounds, state: WindowState) {
-        let Some(path) = &self.geometry else {
-            return;
-        };
-        let work_area = work_area(bounds);
-        let Some(geometry) = Geometry::closed(bounds, state, work_area, read_geometry(path)) else {
-            return;
-        };
-        if let Err(err) = std::fs::write(path, geometry.encode()) {
-            eprintln!(
-                "lich-shell: could not remember the window at {}: {err}",
-                path.display()
-            );
-        }
-    }
-}
-
-/// The work area of the display nearest to `bounds`, in DIP screen
-/// coordinates; empty when CEF knows no display.
-fn work_area(bounds: BrowserBounds) -> BrowserBounds {
-    let rect = cef::Rect {
-        x: bounds.x,
-        y: bounds.y,
-        width: bounds.width,
-        height: bounds.height,
+/// The work area width of the display nearest to `placement`; 0 when CEF
+/// knows no display. UI thread, as the closing hook runs.
+fn work_area_width(placement: WindowPlacement) -> u32 {
+    use kurogane::tetsu::{ImplDisplay, Rect, display_get_matching_bounds};
+    let rect = Rect {
+        x: placement.x,
+        y: placement.y,
+        width: i32::try_from(placement.width).unwrap_or(i32::MAX),
+        height: i32::try_from(placement.height).unwrap_or(i32::MAX),
     };
-    let area = cef::display_get_matching_bounds(Some(&rect), 0)
-        .map(|display| display.work_area())
-        .unwrap_or_default();
-    BrowserBounds {
-        x: area.x,
-        y: area.y,
-        width: area.width,
-        height: area.height,
+    display_get_matching_bounds(Some(&rect), 0)
+        .map(|display| display.work_area().width.unsigned_abs())
+        .unwrap_or_default()
+}
+
+/// Remembers where the window closed, in `path`.
+fn remember_window(path: &Path, closing: &WindowClosing) {
+    let placement = geometry::closed(closing.placement(), work_area_width(closing.placement()));
+    if let Err(err) = std::fs::write(path, geometry::encode(placement)) {
+        eprintln!(
+            "lich-shell: could not remember the window at {}: {err}",
+            path.display()
+        );
     }
 }
 
-/// The saved geometry, or None the first time. A file that cannot be read or
+/// The saved placement, or None the first time. A file that cannot be read or
 /// does not parse is reported, and overwritten at the next close.
-fn read_geometry(path: &std::path::Path) -> Option<Geometry> {
+fn read_geometry(path: &Path) -> Option<WindowPlacement> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(err) if err.kind() == ErrorKind::NotFound => return None,
@@ -208,7 +177,7 @@ fn read_geometry(path: &std::path::Path) -> Option<Geometry> {
             return None;
         }
     };
-    let geometry = Geometry::decode(&text);
+    let geometry = geometry::decode(&text);
     if geometry.is_none() {
         eprintln!("lich-shell: ignoring a damaged {}", path.display());
     }
@@ -219,13 +188,10 @@ fn main() {
     // CEF re-executes this binary for the renderer, GPU and utility roles with
     // an argv of its own. Those roles exit inside run_or_exit before any window
     // exists, so a missing --url= is a subprocess, not an error.
-    // kurogane takes the runtime from CEF_PATH before the one beside the
-    // executable, a developer's override that a CEF developer's shell would
-    // carry into lich (the CI runner's did: "invalid CEF runtime at .cef").
-    // The window lich ships is the only runtime it runs on.
-    // SAFETY: no other thread exists yet, so nothing reads the environment
-    // concurrently.
-    unsafe { std::env::remove_var("CEF_PATH") };
+    // kurogane loads the CEF beside the executable before any CEF_PATH, so a
+    // CEF developer's override never reaches the window lich ships; a shell
+    // run from cargo's target has none beside it and takes CEF_PATH, which
+    // is how `task dev` and the tests run it.
     let launch = parse(std::env::args().skip(1));
     #[cfg(windows)]
     if let Some(class) = &launch.class {
@@ -241,12 +207,16 @@ fn main() {
     } else {
         sandbox_available()
     };
+    // The title is fixed: the page's own never names the window. Where the
+    // window closed last time is where it opens, if the profile remembers it;
+    // kurogane brings a placement onto a display that is still there.
+    let geometry_file = launch.profile_dir.as_deref().map(geometry::file);
+    let mut window = WindowOptions::new().title(TITLE);
+    if let Some(placement) = geometry_file.as_deref().and_then(read_geometry) {
+        window = window.placement(placement);
+    }
     let mut app = App::url(launch.url.unwrap_or_else(|| "about:blank".into()))
-        // Only reached without --user-data-dir, which lich always passes: a
-        // shell launched by hand gets a profile under its own name rather than
-        // kurogane's default.
-        .profile_id("lich")
-        .window_title(TITLE)
+        .window(window)
         .window_icon(ICON)
         // CEF's Chrome runtime loads the extensions a distribution installs
         // system-wide (plasma-browser-integration on KDE). A window that is
@@ -254,8 +224,10 @@ fn main() {
         .chromium_flag("disable-extensions")
         .on_key(|key, _| key_decision(key.modifiers().ctrl(), key.modifiers().meta()))
         .on_chrome_command(|request, _| command_decision(request.command()))
-        .delegate(Window {
-            geometry: launch.profile_dir.as_deref().map(geometry::file),
+        .on_window_closing(move |closing, _| {
+            if let Some(path) = &geometry_file {
+                remember_window(path, closing);
+            }
         });
     // Chromium keeps the key for its cookie store in the Keychain, granted to
     // one code identity; an ad-hoc signed binary gets a new one every build,
@@ -279,13 +251,14 @@ fn main() {
     if let Some(class) = launch.class {
         app = app.window_class(class);
     }
-    // The profile goes where lich keeps it for any browser. Explicitly, not
-    // through the XDG cache directory kurogane would derive it from: Chromium
-    // rewrites XDG_CACHE_HOME for itself from --user-data-dir, and a profile
-    // located through that variable moves with it.
-    if let Some(dir) = launch.profile_dir {
-        app = app.cache_dir(dir);
-    }
+    // The profile goes where lich keeps it for any browser, which it always
+    // passes; a shell launched by hand without one gets a profile under its
+    // own name rather than kurogane's default for the executable. The two
+    // are exclusive in kurogane: a directory names the profile by itself.
+    app = match launch.profile_dir {
+        Some(dir) => app.profile_dir(dir),
+        None => app.profile_id("lich"),
+    };
     let wayland = std::env::var("WAYLAND_DISPLAY").ok();
     if let Some((name, value)) = display_switch(wayland.as_deref()) {
         app = app.chromium_flag_with_value(name, value);

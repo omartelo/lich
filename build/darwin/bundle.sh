@@ -74,8 +74,8 @@ rm -rf "$(dirname "$iconset")"
 
 # Ad-hoc signature: arm64 refuses to run an executable carrying none, and a
 # bundle whose seal does not cover Info.plist and the icon reads as damaged.
-# Innermost first, as codesign wants it: ANGLE's dylibs are not in a place
-# --deep would find them, the framework's seal must cover the trimmed
+# Innermost first, as codesign wants it: the framework's dylibs are not in a
+# place --deep would find them, the framework's seal must cover the trimmed
 # Resources, not the distribution's, and each helper app seals its own plist.
 # This is not notarization — Gatekeeper still calls the developer unidentified.
 if [ -n "$shell" ]; then

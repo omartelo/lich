@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **lich's window runs Chromium 154.** The embedded Chromium (CEF) moved
+  from 150 to 154, and with it the window's title bar, icon, remembered
+  placement and keyboard handling are kurogane's own now rather than lich's
+  patches on it. On Linux, maximizing, closing and reopening the window puts
+  it back where it was and how it was, as before.
+
 - **A Claude Code card says when its conversation is being compacted.** A
   `/compact` or an automatic compaction shows "Compacting…" under the session's
   name with a spinner, instead of the finished turn's check or a spinner that

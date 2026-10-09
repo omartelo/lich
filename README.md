@@ -246,7 +246,7 @@ surfaces are CodeMirror 6. The Chromium shell is a decision record:
 [`docs/chromium-shell.md`](docs/chromium-shell.md). Prerequisites are **Go
 1.27.0+**, **Node + pnpm** and **[Task](https://taskfile.dev)** — no C toolchain
 for the Go binary. The window (`shell/`, Rust on CEF) adds a Rust toolchain,
-CMake and Ninja, plus Chromium's dev libraries on Linux and MSVC on Windows;
+plus Chromium's dev libraries on Linux and MSVC on Windows;
 [CONTRIBUTING.md](CONTRIBUTING.md) lists them.
 
 ```bash

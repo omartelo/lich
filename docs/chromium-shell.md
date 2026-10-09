@@ -144,10 +144,12 @@ extensions loading into it.
 
 What was written when this was deferred still holds, and is now the price
 paid: +100 MB per package download (~300 MB on disk), and a Rust toolchain
-with CMake in CI. What changed is the route. `energye/energy` (Go bindings,
+in CI. What changed is the route. `energye/energy` (Go bindings,
 CGO) was never taken. The window is a **separate binary**, `shell/`, a Rust
-crate on [kurogane](https://github.com/0x48piraj/kurogane) (cef-rs
-underneath), and the Go binary launches it with the `internal/chromium.Args`
+crate on [kurogane](https://github.com/0x48piraj/kurogane) (tetsu, its CEF
+bindings, underneath: nothing of CEF is linked, the window loads `libcef`
+from the runtime beside it when it starts, and the build needs no CEF at
+all), and the Go binary launches it with the `internal/chromium.Args`
 argv — `--url=<url>`, `--class`, `--user-data-dir`, the user's `--` switches
 — plus `--exit-on-stdin-eof`: lich holds the write end of a pipe on the
 window's stdin for as long as it lives, and the window ends on the EOF, so a
@@ -169,13 +171,17 @@ driver in both. `seq 1 400000` into an xterm.js session paced at 84 rAF/s on
 a 100 Hz display. Native Wayland, XWayland and X11 all open with the class
 and title the Go side asks for.
 
-kurogane needed two things it did not have — a WM_CLASS / app_id and a
-title on the window it creates — so `shell/` builds against a fork carrying
-that patch (`App::window_class`, `App::window_title`; cef-rs drops an owned
-string on the way back into a CEF out-struct, so the fork allocates them
-through CEF itself). The patch is upstream as
-[kurogane#11](https://github.com/0x48piraj/kurogane/pull/11); the fork
-(`omartelo/kurogane`) is the pin until it lands.
+kurogane needed things it did not have — a WM_CLASS / app_id, a title and
+an icon on the window it creates, the profile where lich keeps it, where the
+window closed, a page-first answer to a key — and lich sent each upstream
+([kurogane#11](https://github.com/0x48piraj/kurogane/pull/11),
+[#12](https://github.com/0x48piraj/kurogane/pull/12),
+[#19](https://github.com/0x48piraj/kurogane/pull/19),
+[#21](https://github.com/0x48piraj/kurogane/pull/21)). Upstream took the
+ideas and reshaped them into its own API (`WindowOptions`, `profile_dir`,
+the decision hooks), which is what `shell/` builds against now; the fork
+(`omartelo/kurogane`) carries the one patch still in review
+(`build/linux/shell/README.md`).
 
 Windows ships the same window, flat beside `lich.exe` as `shell\` the way
 CEF lays itself out there, inside the installer (`build/windows/lich.iss`)
