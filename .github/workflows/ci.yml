@@ -93,7 +93,7 @@ jobs:
       run:
         shell: bash
     env:
-      CEF_PATH: ${{ github.workspace }}/.cef
+      CEF_DIR: ${{ github.workspace }}/.cef
     steps:
       - uses: actions/checkout@v7
 
@@ -126,10 +126,9 @@ jobs:
             echo "::error::the runner no longer restricts user namespaces, so this step proves nothing"
             exit 1
           fi
-          # rust-cache can restore a target/ without the runtime the build script copies.
-          test -f target/release/libcef.so || cargo clean --release -p cef-dll-sys
           cargo build --release
-          ../build/linux/shell/assemble.sh target/release "$RUNNER_TEMP/shell"
+          ../build/cef.sh "$CEF_DIR"
+          ../build/linux/shell/assemble.sh target/release "$CEF_DIR" "$RUNNER_TEMP/shell"
           log="$RUNNER_TEMP/shell.log"
           status=0
           timeout 20 env -u DISPLAY -u WAYLAND_DISPLAY "$RUNNER_TEMP/shell/lich-shell" \

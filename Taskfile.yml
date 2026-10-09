@@ -39,6 +39,7 @@ tasks:
       - shell/Cargo.lock
       - shell/.cargo/config.toml
       - shell/build.rs
+      - build/cef.sh
       - build/linux/shell/assemble.sh
       - build/windows/shell/assemble.sh
       - build/darwin/shell/assemble.sh
@@ -48,39 +49,27 @@ tasks:
       - "{{.BIN_DIR}}/shell/lich-shell{{exeExt}}"
       - "{{.BIN_DIR}}/shell/{{if eq OS \"windows\"}}libcef.dll{{else if eq OS \"darwin\"}}Chromium Embedded Framework.framework{{else}}cef/libcef.so{{end}}"
     vars:
-      # On macOS cef-rs copies nothing out of the CEF distribution it
-      # downloads, so assemble.sh reads the framework straight from it, and
-      # the download has to land somewhere known: here, where CI points it too.
-      CEF_PATH:
-        sh: echo "${CEF_PATH:-{{.ROOT_DIR}}/.cef}"
+      # Where build/cef.sh puts the CEF distribution (CI points it at the
+      # same place, and caches it). kurogane links nothing of CEF: the
+      # window loads libcef when it starts, so the distribution is only what
+      # assemble.sh ships beside the binary.
+      CEF_DIR:
+        sh: echo "${CEF_DIR:-{{.ROOT_DIR}}/.cef}"
     cmds:
       # The Go binary stays pure and static; the window is a separate Rust
       # binary on CEF, found beside it at run time (internal/chromium/shell.go).
       # assemble.sh strips libcef.so and keeps only the runtime files lich
-      # needs — the 1.3 GB cargo leaves in target/ becomes ~300 MB.
-      #
-      # cef-dll-sys's build script is what copies libcef.so and the rest of the
-      # runtime into target/release, and it only runs when cargo decides the
-      # crate is stale. A target/ restored from CI's cache is not stale, but
-      # rust-cache drops every loose file in target/release when it saves — so
-      # the crate is fresh and the runtime is gone. Cleaning the crate is the
-      # one way to make its build script run again; a no-op everywhere else.
-      - cmd: test -f shell/target/release/libcef.so || (cd shell && cargo clean --release -p cef-dll-sys)
-        platforms: [linux]
-      - cmd: test -f shell/target/release/libcef.dll || (cd shell && cargo clean --release -p cef-dll-sys)
-        platforms: [windows]
+      # needs — the 1.4 GB distribution becomes ~300 MB.
       - cmd: cd shell && cargo build --release
-        platforms: [linux, windows]
-      - cmd: cd shell && CEF_PATH="{{.CEF_PATH}}" cargo build --release
-        platforms: [darwin]
-      - cmd: build/linux/shell/assemble.sh shell/target/release {{.BIN_DIR}}/shell
-        platforms: [linux]
       # Through bash on purpose: Task's own shell runs the command line, but a
       # script file needs a real sh, and git-bash is the one every Windows
       # machine with git has.
-      - cmd: bash build/windows/shell/assemble.sh shell/target/release {{.BIN_DIR}}/shell
+      - cmd: bash build/cef.sh "{{.CEF_DIR}}"
+      - cmd: build/linux/shell/assemble.sh shell/target/release "{{.CEF_DIR}}" {{.BIN_DIR}}/shell
+        platforms: [linux]
+      - cmd: bash build/windows/shell/assemble.sh shell/target/release "{{.CEF_DIR}}" {{.BIN_DIR}}/shell
         platforms: [windows]
-      - cmd: build/darwin/shell/assemble.sh shell/target/release "{{.CEF_PATH}}" {{.BIN_DIR}}/shell
+      - cmd: build/darwin/shell/assemble.sh shell/target/release "{{.CEF_DIR}}" {{.BIN_DIR}}/shell
         platforms: [darwin]
 
   build:

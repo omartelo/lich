@@ -14,9 +14,9 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     env:
-      # cef-rs downloads the CEF distribution into CEF_PATH at build time
-      # (~200 MB); the cache step below keeps it between runs.
-      CEF_PATH: ${{ github.workspace }}/.cef
+      # build/cef.sh fetches the CEF distribution the window ships into
+      # CEF_DIR (~1.4 GB unpacked); the cache step below keeps it between runs.
+      CEF_DIR: ${{ github.workspace }}/.cef
     steps:
       - uses: actions/checkout@v7
         with:
@@ -112,7 +112,7 @@ jobs:
         shell: bash
     env:
       # The window's CEF distribution, as in the linux job.
-      CEF_PATH: ${{ github.workspace }}/.cef
+      CEF_DIR: ${{ github.workspace }}/.cef
     steps:
       - uses: actions/checkout@v7
         with:
@@ -254,7 +254,7 @@ jobs:
             runner: macos-15-intel
     runs-on: ${{ matrix.runner }}
     env:
-      CEF_PATH: ${{ github.workspace }}/.cef
+      CEF_DIR: ${{ github.workspace }}/.cef
     steps:
       - uses: actions/checkout@v7
         with:
