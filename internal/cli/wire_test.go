@@ -391,7 +391,7 @@ func (s *spawnTerminal) Start(_, _, cwd, kind, _, _ string, _, _ bool, _, _ int)
 // lich derives for it.
 func (*spawnTerminal) AgentName(string) string { return "" }
 
-func (s *spawnTerminal) Close(id string) error {
+func (s *spawnTerminal) CloseBy(id, _ string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed = id

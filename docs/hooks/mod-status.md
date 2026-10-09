@@ -69,7 +69,7 @@ reads as three empty lists. Every list is oldest first.
   this session's inbox. The same entries the card's inbox mark counts.
   - `target`: as in `open`.
   - `status`: how the errand ended, as `lich wait` reports it: `answered`,
-    `unanswered`, `unread` or `undelivered`.
+    `unanswered`, `unread`, `undelivered` or `stopped`.
 
 An errand sent by a subagent or a workflow step inside the session (a private
 ticket, which only a wait on that ticket collects) is left out of `open` and

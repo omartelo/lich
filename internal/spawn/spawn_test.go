@@ -361,6 +361,7 @@ type fakeTerminal struct {
 	spawns   []started
 	err      error
 	closed   []string
+	closers  []string
 	closeErr error
 	// names is what each session's agent has on record, standing in for the
 	// transcript the terminal service reads. Empty for a session nobody renamed.
@@ -384,8 +385,9 @@ func (f *fakeTerminal) RunModCommand(ctx context.Context, id string, cmd termina
 
 func (f *fakeTerminal) AgentName(id string) string { return f.names[id] }
 
-func (f *fakeTerminal) Close(id string) error {
+func (f *fakeTerminal) CloseBy(id, closerID string) error {
 	f.closed = append(f.closed, id)
+	f.closers = append(f.closers, closerID)
 	return f.closeErr
 }
 

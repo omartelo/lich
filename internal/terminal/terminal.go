@@ -287,10 +287,11 @@ type Service struct {
 	// startReports answers whether a provider's sessions run lich's hooks, so
 	// whether a session-start report can be waited for (startgate.go).
 	startReports func(provider string) bool
-	// onClosed, when set, is told about every session Close takes down, before
-	// its process dies: the relay ends a closed worker's errand there, ahead of
-	// the SessionEnd the dying CLI reports. Guarded by mu like onState.
-	onClosed func(id string)
+	// onClosed, when set, is told about every session Close takes down and who
+	// closed it, before its process dies: the relay ends a closed worker's
+	// errand there, ahead of the SessionEnd the dying CLI reports. Guarded by mu
+	// like onState.
+	onClosed func(id, closerID string)
 	// onLimit, when set, is told about every turn a usage limit ended that names
 	// its reset (limit.go). Guarded by mu like onState.
 	onLimit func(id string, resetsAt int64)
@@ -678,8 +679,9 @@ func (s *Service) SetSessionState(fn func(id, state string)) {
 }
 
 // SetSessionClosed wires fn to every session Close takes down, called before
-// its process is killed. Only one watcher, the relay (relay.SessionClosed).
-func (s *Service) SetSessionClosed(fn func(id string)) {
+// its process is killed with the session that closed it (CloseBy), empty for a
+// close the window made. Only one watcher, the relay (relay.SessionClosed).
+func (s *Service) SetSessionClosed(fn func(id, closerID string)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onClosed = fn
@@ -773,8 +775,14 @@ var lichBin = sync.OnceValue(func() string {
 	return exe
 })
 
-// Close terminates a session's shell, if any.
+// Close terminates a session's shell, if any. It is the window's close, so no
+// session is named as the one that asked for it.
 func (s *Service) Close(id string) error {
+	return s.CloseBy(id, "")
+}
+
+// CloseBy is Close on behalf of closerID, the session that asked for it.
+func (s *Service) CloseBy(id, closerID string) error {
 	s.mu.Lock()
 	sess, ok := s.sessions[id]
 	if ok {
@@ -784,7 +792,7 @@ func (s *Service) Close(id string) error {
 	closed := s.onClosed
 	s.mu.Unlock()
 	if closed != nil {
-		closed(id)
+		closed(id, closerID)
 	}
 	s.spawns.Delete(id)
 	// A turn dies with its session, and an open one left behind would keep the

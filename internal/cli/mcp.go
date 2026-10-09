@@ -745,6 +745,8 @@ func collectedText(collected relay.Collected) string {
 			parts = append(parts, unansweredText(result.Target))
 		case relay.StatusUndelivered:
 			parts = append(parts, undeliveredText(result.Target))
+		case relay.StatusStopped:
+			parts = append(parts, stoppedText(result.Target))
 		}
 	}
 	if len(collected.Open) > 0 {

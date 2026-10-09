@@ -94,11 +94,11 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 
 	active := neighborOf(found.project, found.session.ID)
 	if last && worktree == RemoveWorktree {
-		if err := s.removeCheckout(found, active, force); err != nil {
+		if err := s.removeCheckout(found, active, fromID, force); err != nil {
 			return Closed{}, err
 		}
 		closed.Removed = true
-		s.finish(found, active)
+		s.finish(found, active, fromID)
 		return closed, nil
 	}
 
@@ -112,7 +112,7 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 		return Closed{}, err
 	}
 	closed.Kept = last
-	s.finish(found, active)
+	s.finish(found, active, fromID)
 	return closed, nil
 }
 
@@ -139,7 +139,7 @@ func (s *Service) CloseFinishedWorker(id string) error {
 	if err := s.sessions.CloseSession(found.project.ID, id, active); err != nil {
 		return err
 	}
-	s.finish(found, active)
+	s.finish(found, active, "")
 	return nil
 }
 
@@ -173,7 +173,7 @@ func sharesCallersCheckout(worker located) bool {
 // asked to remove the directory it is running in, and the parked rows go before
 // the checkout does — one left behind would offer a resume into a directory that
 // no longer exists.
-func (s *Service) removeCheckout(found located, active string, force bool) error {
+func (s *Service) removeCheckout(found located, active, closerID string, force bool) error {
 	// The window offers this removal behind a confirmation naming the directory;
 	// here there is nobody to show it to, so an adopted checkout stays the user's.
 	// Asked before anything is taken apart, not after: the removal itself is
@@ -200,7 +200,7 @@ func (s *Service) removeCheckout(found located, active string, force bool) error
 			found.session.Path,
 		)
 	}
-	if err := s.term.Close(found.session.ID); err != nil {
+	if err := s.term.CloseBy(found.session.ID, closerID); err != nil {
 		return fmt.Errorf("close the session's terminal: %w", err)
 	}
 	if err := s.sessions.DeleteSession(found.project.ID, found.session.ID, active); err != nil {
@@ -216,8 +216,8 @@ func (s *Service) removeCheckout(found located, active string, force bool) error
 // the paths that already made it (removeCheckout) because it is a no-op the
 // second time, and skipping it on the others would leave an agent running in a
 // session nobody can reach.
-func (s *Service) finish(found located, active string) {
-	if err := s.term.Close(found.session.ID); err != nil {
+func (s *Service) finish(found located, active, closerID string) {
+	if err := s.term.CloseBy(found.session.ID, closerID); err != nil {
 		// The row is already written — parked, or deleted with its checkout — so
 		// there is nothing to undo and nothing the caller could do about it. The
 		// window's own close ignores this too, but the card still has to come

@@ -155,18 +155,19 @@ func (s *Service) errandOpenAtLocked(sessionID string) bool {
 	return false
 }
 
-// SessionClosed ends the subagent errands at a session that was just closed,
-// without telling their callers: closing a worker is its caller stopping it
-// (TaskStop runs `lich close`), or the user doing the same from its card, and
-// neither has anything left to hear. A caller still holding the line hears
-// stopped; the ticket stays waitable as stopped, and nothing reaches the inbox.
-// The exception is a caller that is itself a worker somebody waits on
-// (owesSubagentAnswerLocked): its answer waits for this outcome
-// (WorkerAnswered), so the stop is filed in its inbox, where it resumes it.
-// The terminal calls this before the process dies (terminal.SetSessionClosed),
-// so the SessionEnd its CLI reports on the way out finds nothing to call
-// unanswered. Errands of any other kind end as they always did.
-func (s *Service) SessionClosed(sessionID string) {
+// SessionClosed ends the subagent errands at a session that was just closed by
+// closerID, empty when the window closed it. A caller that closed its own
+// worker (TaskStop runs `lich close` in the caller's process) stopped the work
+// and is told nothing; a caller still holding the line hears stopped, and the
+// ticket stays waitable as stopped. Anyone else's close ends work the caller
+// never stopped, so the stop is filed in the caller's inbox with a nudge, as is
+// one for a caller that is itself a worker somebody waits on
+// (owesSubagentAnswerLocked), whose answer waits for this outcome
+// (WorkerAnswered). The terminal calls this before the process dies
+// (terminal.SetSessionClosed), so the SessionEnd its CLI reports on the way out
+// finds nothing to call unanswered. Errands of any other kind end as they
+// always did.
+func (s *Service) SessionClosed(sessionID, closerID string) {
 	var stopped []*ticket
 	var told []string
 	s.mu.Lock()
@@ -176,7 +177,7 @@ func (s *Service) SessionClosed(sessionID string) {
 			continue
 		}
 		delete(s.tickets, id)
-		if t.attended == 0 && s.owesSubagentAnswerLocked(t.fromID) {
+		if t.attended == 0 && (t.fromID != closerID || s.owesSubagentAnswerLocked(t.fromID)) {
 			s.stashLocked(id, t, StatusStopped, "")
 			told = append(told, t.fromID)
 		} else {

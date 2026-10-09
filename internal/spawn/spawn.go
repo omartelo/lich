@@ -117,7 +117,9 @@ type Worktrees interface {
 // terminal service implements it.
 type Terminal interface {
 	Start(id, projectID, cwd, kind, resume, name string, fork, setup bool, cols, rows int) error
-	Close(id string) error
+	// CloseBy closes the session on behalf of closerID, the session that asked
+	// for it, or empty when none did.
+	CloseBy(id, closerID string) error
 	// AgentName is the name that session's agent answers to in its provider's
 	// peer roster, read out of the provider's own record. Empty when there is
 	// none, which is what leaves `lich close` matching the derived name.

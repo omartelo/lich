@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   second group for the same directory, and closing that session offered to
   remove the project as if it were a worktree.
 
+- **A Claude Code subagent closed from its card now tells the session that
+  asked for it.** The asking session used to keep waiting on a task that was
+  gone; it now hears the task stopped, as it does when a worker is closed by
+  another session. Stopping your own subagent with TaskStop still ends it
+  quietly. `wait_for_answer` and `lich wait` also name a stopped task when they
+  collect it, instead of returning nothing.
+
 ## [0.64.0] - 2026-10-09
 
 ### Added

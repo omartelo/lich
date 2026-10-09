@@ -517,8 +517,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   waits for the errands it sent itself (`relay.awaitsOutcomeLocked`), since Claude Code does not list them as
   background work; one of those that ages out on `ticketTTL` reaches no prompt, and the report then waits for the
   next turn something else starts in the worker. Closing a worker
-  ends its errand without a word to the asker (`relay.SessionClosed`, wired before the PTY is killed so the
-  SessionEnd its CLI reports finds nothing to call unanswered). Both reach the asker the way Claude Code's own background agent's
+  ends its errand (`relay.SessionClosed`, wired before the PTY is killed so the SessionEnd its CLI reports finds
+  nothing to call unanswered) without a word to an asker that closed it itself, as TaskStop does; closed from
+  its card or by another session, the asker is told it `stopped`. Who closed it is the session `lich close` runs
+  in (`terminal.CloseBy`), so a TaskStop run from anywhere but the asker's own process reads as someone else's. Both reach the asker the way Claude Code's own background agent's
   completion does, one `● lich session "…" finished` line on screen and the note whole in the model's context
   (docs/hooks/mod-control.md, A prompt as a notification), through a render path Claude Code does not document:
   a Claude Code that drops it shows the raw XML as a prompt, and a lich-plugin older than 0.16.0 shows the note as

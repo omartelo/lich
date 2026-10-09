@@ -355,7 +355,7 @@ func TestAWorkerHearsItsOwnWorkerStopped(t *testing.T) {
 	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
 	plantAnsweredByMod(svc, "t2", "s2", "s3", "api")
 
-	svc.SessionClosed("s3")
+	svc.SessionClosed("s3", "s2")
 
 	collected, err := svc.CollectNow("s2")
 	if err != nil {

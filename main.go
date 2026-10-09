@@ -348,7 +348,12 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //   - relay.WorkerAnswered is a worker's answer, which arrives over
 //     /mod/answer: called here it answers another session's errand.
 //   - relay.SessionClosed is what the terminal tells the relay as it closes a
-//     session: called here it ends a running worker's errand in silence.
+//     session: called here it ends a running worker's errand, in silence when
+//     the closer named is the worker's caller.
+//   - terminal.CloseBy is a close on behalf of a session, which `lich close`
+//     reaches through spawn.Close: called here with the worker's caller as the
+//     closer, it ends that caller's errand without telling it. The window
+//     closes with terminal.Close.
 //   - drop.Purge deletes every copy dropped into a session, by id: the page
 //     closes sessions through the store, which is what reports one gone.
 //   - drop.SetPicker is startup wiring like the ones below, and nilling it
@@ -403,6 +408,7 @@ func denyInternal(d *rpc.Handler) {
 		"relay.Observe",
 		"relay.WorkerAnswered",
 		"relay.SessionClosed",
+		"terminal.CloseBy",
 		"relay.RunSchedules",
 		"relay.ParkResume",
 		"agentplugin.RepairRegistrations",

@@ -43,6 +43,7 @@ var denied = map[string]reflect.Type{
 	"terminal.EnqueueModCommand":      reflect.TypeFor[*terminal.Service](),
 	"terminal.RunModCommand":          reflect.TypeFor[*terminal.Service](),
 	"terminal.SubmitPrompt":           reflect.TypeFor[*terminal.Service](),
+	"terminal.CloseBy":                reflect.TypeFor[*terminal.Service](),
 }
 
 // stubService stands in for the registered services: dispatch resolves a
@@ -51,6 +52,7 @@ var denied = map[string]reflect.Type{
 type stubService struct{}
 
 func (stubService) Close() error               { return nil }
+func (stubService) CloseBy() error             { return nil }
 func (stubService) SetSessionGone() error      { return nil }
 func (stubService) Upload() error              { return nil }
 func (stubService) Save() error                { return nil }
