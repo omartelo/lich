@@ -62,7 +62,7 @@ function CloseWorktreeDialog({
   onKeep,
   onRemove,
 }: CloseWorktreeDialogProps) {
-  const path = <span className="break-all font-mono">{session?.path}</span>
+  const path = <span className="break-all font-mono select-text">{session?.path}</span>
   return (
     <ConfirmDialog
       open={session !== null}
@@ -115,8 +115,9 @@ function ForceRemoveWorktreeDialog({
       title="Worktree has uncommitted changes"
       description={
         <>
-          The worktree at <span className="break-all font-mono">{session?.path}</span> contains
-          uncommitted changes. Removing it will discard them permanently. The branch is kept.
+          The worktree at <span className="break-all font-mono select-text">{session?.path}</span>{" "}
+          contains uncommitted changes. Removing it will discard them permanently. The branch is
+          kept.
         </>
       }
     >

@@ -441,8 +441,6 @@ export function WorktreeDialog({
             onKeyDown={onSearchKeyDown}
             placeholder="Search branches…"
             aria-label="Search base branches"
-            autoComplete="off"
-            spellCheck={false}
             className="font-mono"
           />
           <div

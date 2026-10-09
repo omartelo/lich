@@ -1,5 +1,15 @@
+// @vitest-environment jsdom
+//
+// jsdom for the context-menu cases that need real markup: a fake closest()
+// would have to reimplement the selectors it is meant to check.
 import { describe, expect, it, vi } from "vitest"
-import { installBrowserDefaults, isAppContextMenu, isBrowserChord } from "./browser-defaults"
+import {
+  installBrowserDefaults,
+  isAppContextMenu,
+  isBrowserChord,
+  MOUSE_BACK_BUTTON,
+  MOUSE_FORWARD_BUTTON,
+} from "./browser-defaults"
 
 const chord = (over: Partial<KeyboardEvent>) =>
   ({
@@ -71,6 +81,34 @@ describe("isAppContextMenu", () => {
   })
 })
 
+describe("isAppContextMenu on real markup", () => {
+  const mount = (html: string) => {
+    document.body.innerHTML = html
+    return document.querySelector("[data-target]")
+  }
+
+  // docs/ceilings.md promises the window's editing items in a text field.
+  it("leaves a text field's menu alone, so Cut, Copy and Paste are offered", () => {
+    expect(isAppContextMenu(mount("<input data-target>"))).toBe(false)
+    expect(isAppContextMenu(mount("<textarea data-target></textarea>"))).toBe(false)
+    expect(
+      isAppContextMenu(mount('<div contenteditable="true"><span data-target>x</span></div>')),
+    ).toBe(false)
+  })
+
+  // A read-only CodeMirror view carries contenteditable="false": nothing to edit there.
+  it("claims a contenteditable that is switched off", () => {
+    expect(isAppContextMenu(mount('<div contenteditable="false" data-target>x</div>'))).toBe(true)
+  })
+
+  // xterm's helper textarea sits inside the terminal; the mouse-reading app
+  // still owns the right button there.
+  it("claims the textarea inside a terminal whose app reads the mouse", () => {
+    const html = '<div class="xterm enable-mouse-events"><textarea data-target></textarea></div>'
+    expect(isAppContextMenu(mount(html))).toBe(true)
+  })
+})
+
 // The window is injected, so the wiring is checked without one: which phase each
 // listener takes, and which events it is allowed to cancel. Both matter more than
 // the matchers above — a keydown listener on the bubble phase reaches the browser
@@ -124,5 +162,40 @@ describe("installBrowserDefaults", () => {
     expect(listeners.get("dragover")?.capture).toBeUndefined()
     expect(fire("drop", {})).toHaveBeenCalled()
     expect(fire("dragover", {})).toHaveBeenCalled()
+  })
+
+  // The cursor is the only answer a drag gets before it lands: anything but
+  // "none" tells the user the window will take the file.
+  it("answers an unclaimed dragover with no drop allowed", () => {
+    const { fire } = install()
+    const dataTransfer = { dropEffect: "copy" }
+
+    fire("dragover", { defaultPrevented: false, dataTransfer })
+
+    expect(dataTransfer.dropEffect).toBe("none")
+  })
+
+  // A terminal's drop zone runs first and claims the drag with preventDefault;
+  // its "copy" must survive the window listener.
+  it("leaves a claimed dragover's drop effect alone", () => {
+    const { fire } = install()
+    const dataTransfer = { dropEffect: "copy" }
+
+    fire("dragover", { defaultPrevented: true, dataTransfer })
+
+    expect(dataTransfer.dropEffect).toBe("copy")
+  })
+
+  // Capture phase, so a terminal that stops the event still has its default
+  // cancelled; preventDefault only, so the PTY still reads the button.
+  it("cancels the mouse back and forward buttons, in the capture phase", () => {
+    const { listeners, fire } = install()
+
+    expect(listeners.get("mouseup")?.capture).toBe(true)
+    expect(fire("mouseup", { button: MOUSE_BACK_BUTTON })).toHaveBeenCalled()
+    expect(fire("mouseup", { button: MOUSE_FORWARD_BUTTON })).toHaveBeenCalled()
+    for (const button of [0, 1, 2]) {
+      expect(fire("mouseup", { button })).not.toHaveBeenCalled()
+    }
   })
 })

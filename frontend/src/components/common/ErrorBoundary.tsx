@@ -78,7 +78,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         <p className="text-sm text-foreground">{this.props.label} stopped rendering</p>
         {/* The message, not just a console line: the window it would have been
             read in is the one this fallback is standing in for. */}
-        <Notice className="max-w-md py-0 font-mono break-words">
+        <Notice className="max-w-md py-0 font-mono break-words select-text">
           {error.message || String(error)}
         </Notice>
         {/* The same retry that just failed is a loop, so past the second throw

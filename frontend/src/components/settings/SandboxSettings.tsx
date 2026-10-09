@@ -300,7 +300,7 @@ function Grant({
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-foreground">{title}</div>
         <p className="mt-0.5 max-w-prose text-xs text-muted-foreground">{description}</p>
-        <p className="mt-1 font-mono text-[0.6875rem] leading-relaxed text-muted-foreground">
+        <p className="mt-1 font-mono text-[0.6875rem] leading-relaxed text-muted-foreground select-text">
           {detail}
         </p>
       </div>

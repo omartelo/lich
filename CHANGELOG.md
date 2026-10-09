@@ -40,8 +40,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stays on one line at its own size instead of wrapping into a taller, narrower block.
 - **The window stops acting like a browser.** Hovering a project tab or a link no
   longer pops up its address, session token included, in the bottom-left corner;
-  Alt+Left no longer walks back through the screens you visited; and Ctrl+F outside
-  a session and Ctrl+P no longer open Chromium's find bar and print preview.
+  Alt+Left and the mouse back button no longer walk back through the screens you
+  visited; and Ctrl+F outside a session and Ctrl+P no longer open Chromium's find
+  bar and print preview.
+- **A dark theme opens dark.** Launching lich or reloading the window no longer
+  flashes the light theme first, custom themes included.
+- **The interface no longer selects like a web page.** Ctrl+A and stray drags no
+  longer highlight the whole interface (paths, errors and PR text stay selectable),
+  text fields offer Cut, Copy and Paste on right-click, and images and links can't
+  be dragged out of the window.
 
 ## [0.62.1] - 2026-10-08
 

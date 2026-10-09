@@ -98,7 +98,7 @@ function ConflictList({ files }: { files: string[] }) {
 function ConflictPath({ file }: { file: string }) {
   const { dir, name } = splitConflictPath(file)
   return (
-    <span className="font-mono text-destructive">
+    <span className="font-mono text-destructive select-text">
       {dir && <span className="opacity-70">{dir}</span>}
       {name}
     </span>

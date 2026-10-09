@@ -67,8 +67,6 @@ export function ImportThemeDialog({
               value={url}
               onChange={(event) => setUrl(event.target.value)}
               placeholder="https://github.com/you/lich-themes.git"
-              autoComplete="off"
-              spellCheck={false}
               disabled={busy}
             />
             <Button type="submit" disabled={!trimmed || busy}>

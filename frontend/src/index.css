@@ -194,6 +194,33 @@
     }
   html {
     @apply font-sans;
+    color-scheme: light;
+    }
+  html.dark {
+    color-scheme: dark;
+    }
+  /* A window has no page to rubber-band past or swipe back from. */
+  html, body {
+    overscroll-behavior: none;
+    }
+  /* The chrome is an application, not a document: Ctrl+A and a stray drag do
+     not paint it blue. What a user copies opts back in here, or with
+     `select-text` where it is a path, a branch or an error. CodeMirror needs it
+     even read-only, where its content is contenteditable="false"; xterm keeps
+     its own selection model and stylesheet. */
+  body {
+    user-select: none;
+    }
+  input, textarea, [contenteditable], code, pre, .cm-editor {
+    user-select: text;
+    }
+  /* An image or a link dragged out of the window hands the desktop a URL to a
+     page that only opens inside it. */
+  img, a {
+    -webkit-user-drag: none;
+    }
+  ::selection {
+    background-color: color-mix(in oklab, var(--primary) 25%, transparent);
     }
 }
 
@@ -337,7 +364,8 @@
   width: 8px;
   height: 8px;
 }
-::-webkit-scrollbar-track {
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {

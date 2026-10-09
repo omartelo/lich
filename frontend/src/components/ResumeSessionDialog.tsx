@@ -55,7 +55,7 @@ export function ResumeSessionDialog({
           <DialogTitle>Resume previous session?</DialogTitle>
           <DialogDescription className="break-words">
             <span className="font-medium">{session?.label}</span> left a conversation behind (
-            <span className="break-all font-mono">{session?.providerSessionId}</span>
+            <span className="break-all font-mono select-text">{session?.providerSessionId}</span>
             ). Resume it to pick the conversation up where it stopped, or start new for an empty
             one.
           </DialogDescription>

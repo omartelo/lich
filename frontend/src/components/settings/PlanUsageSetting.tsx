@@ -81,7 +81,7 @@ function PlanBody({ plan, now }: { plan: QuotaPlan; now: Date }) {
       {/* The login this reading was taken against. Settings asks the machine-wide
           question, so this is lich's own — never a session's wrapper binary. */}
       {accountLine(plan) && (
-        <span className="break-all font-mono text-[0.6875rem] text-muted-foreground">
+        <span className="break-all font-mono text-[0.6875rem] text-muted-foreground select-text">
           {accountLine(plan)}
         </span>
       )}

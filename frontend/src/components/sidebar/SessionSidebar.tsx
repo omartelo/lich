@@ -563,7 +563,6 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             onKeyDown={onFilterKeyDown}
             placeholder="Filter sessions"
             aria-label="Filter sessions"
-            spellCheck={false}
             className="h-7 text-xs"
           />
           <SessionPhaseChips

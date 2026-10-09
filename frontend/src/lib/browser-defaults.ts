@@ -33,16 +33,29 @@ export function isBrowserChord(event: ChordState): boolean {
   return event.shiftKey ? MOD_SHIFT_KEYS.has(key) : MOD_KEYS.has(key)
 }
 
+// A field the user types in. contenteditable="false" is a read-only CodeMirror
+// view, which has nothing to cut or paste.
+const TEXT_FIELD = 'input, textarea, [contenteditable]:not([contenteditable="false"])'
+
 // isAppContextMenu reports a right-click that Chromium's menu must not answer.
 // A plain terminal keeps it because that is where its Copy and Paste entries
-// live; the rest of the UI would only be offered Back, Reload, Save as, Print and
-// View source. A terminal whose app reads the mouse (xterm marks it with
-// enable-mouse-events) owns the right button: xterm forwards it to the PTY, and
-// the app draws its own menu, which Chromium's would land on top of.
+// live, and a text field keeps it for its Cut, Copy and Paste; the rest of the
+// UI would only be offered Back, Reload, Save as, Print and View source. A
+// terminal whose app reads the mouse (xterm marks it with enable-mouse-events)
+// owns the right button, its helper textarea included: xterm forwards it to the
+// PTY, and the app draws its own menu, which Chromium's would land on top of.
 export function isAppContextMenu(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null
-  return !element?.closest?.(".xterm:not(.enable-mouse-events)")
+  if (element?.closest?.(".xterm")) {
+    return !element.closest(".xterm:not(.enable-mouse-events)")
+  }
+  return !element?.closest?.(TEXT_FIELD)
 }
+
+// MouseEvent.button values of the side buttons, which Chromium turns into Back
+// and Forward: in a hash-routed window that walks back through app screens.
+export const MOUSE_BACK_BUTTON = 3
+export const MOUSE_FORWARD_BUTTON = 4
 
 // installBrowserDefaults swallows the lot. preventDefault only, never
 // stopPropagation: a terminal must still receive every chord as a PTY sequence,
@@ -63,9 +76,30 @@ export function installBrowserDefaults(target: Window): void {
       event.preventDefault()
     }
   })
-  // Bubble phase, so a future drop zone of our own runs first and this only
-  // catches what nothing claimed. dnd-kit is untouched — it rides pointer
-  // events, not the HTML drag protocol.
-  target.addEventListener("dragover", (event) => event.preventDefault())
+  // Chromium navigates on the mouseup of a side button, and that is the event
+  // whose preventDefault cancels it; cancelling the auxclick does not.
+  target.addEventListener(
+    "mouseup",
+    (event) => {
+      if (event.button === MOUSE_BACK_BUTTON || event.button === MOUSE_FORWARD_BUTTON) {
+        event.preventDefault()
+      }
+    },
+    true,
+  )
+  // Bubble phase, so a drop zone of our own (a terminal's) runs first and this
+  // only catches what nothing claimed. dnd-kit is untouched: it rides pointer
+  // events, not the HTML drag protocol. An unclaimed dragover is still
+  // cancelled, or a file dropped there would replace the app, but its effect is
+  // "none", so the cursor does not promise a drop the window will refuse.
+  target.addEventListener("dragover", (event) => {
+    if (event.defaultPrevented) {
+      return
+    }
+    event.preventDefault()
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "none"
+    }
+  })
   target.addEventListener("drop", (event) => event.preventDefault())
 }

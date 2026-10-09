@@ -151,7 +151,6 @@ export function ProviderBinary({
                   value={layer.value}
                   onChange={(event) => layer.persist(event.target.value)}
                   placeholder={providerBin}
-                  spellCheck={false}
                   aria-label={`${providerName} binary for ${layer.label}`}
                   className={cn(
                     "h-8 min-w-0 flex-1 font-mono text-xs",
@@ -170,7 +169,7 @@ export function ProviderBinary({
               </Layer>
             ))}
             <Layer label="$PATH" wins={scope === "path"} check={onPath} value={providerBin}>
-              <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground select-text">
                 {onPath?.path || providerBin}
               </span>
             </Layer>
@@ -180,7 +179,7 @@ export function ProviderBinary({
         <div className="flex items-center justify-between gap-4">
           <span className="flex min-w-0 items-center gap-2 text-xs">
             <Verdict check={check} bin={configured || providerBin} />
-            <span className="truncate font-mono text-foreground">
+            <span className="truncate font-mono text-foreground select-text">
               {check?.path || configured || providerBin}
             </span>
             <span className="whitespace-nowrap text-muted-foreground">
