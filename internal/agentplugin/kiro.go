@@ -118,7 +118,7 @@ func (s *Service) kiroInstall() error {
 	return s.kiroRegisterMCP()
 }
 
-// kiroScripts is every file the registration runs or sources, deduplicated —
+// kiroScripts is every file the registration runs, sources or reads, deduplicated —
 // report-state is named by three events and fetched once.
 func kiroScripts() []string {
 	seen := map[string]bool{}
@@ -130,7 +130,7 @@ func kiroScripts() []string {
 		seen[hook.script] = true
 		out = append(out, hook.script)
 	}
-	return append(out, "hooks/report-touched.sh", "hooks/conversation-id.sh")
+	return append(out, "hooks/report-touched.sh", "hooks/conversation-id.sh", "hooks/detail.jq")
 }
 
 // kiroAgentFile is the agent lich writes: the hooks, and the least configuration

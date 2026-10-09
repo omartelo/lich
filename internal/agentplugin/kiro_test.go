@@ -226,8 +226,9 @@ func TestKiroAgentWritesNoTimeout(t *testing.T) {
 
 // TestKiroScriptsAreFetchedOnce proves the install asks the release for each
 // script one time even though report-state is named by three events, and that
-// the touched report and the conversation-id parser the reports source — which
-// no kiroHooks row names — are fetched at all.
+// the touched report, the conversation-id parser the reports source and the
+// detail filter the tool report reads — which no kiroHooks row names — are
+// fetched at all.
 func TestKiroScriptsAreFetchedOnce(t *testing.T) {
 	got := kiroScripts()
 	want := []string{
@@ -236,6 +237,7 @@ func TestKiroScriptsAreFetchedOnce(t *testing.T) {
 		"hooks/report-tool.sh",
 		"hooks/report-touched.sh",
 		"hooks/conversation-id.sh",
+		"hooks/detail.jq",
 	}
 	slices.Sort(got)
 	slices.Sort(want)
@@ -298,6 +300,27 @@ func TestKiroInstallWritesTheSourcedConversationIDParser(t *testing.T) {
 	path := filepath.Join(configDir, "lich", "plugin", "hooks", providers.Kiro, "conversation-id.sh")
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("the parser the reports source was not installed: %v", err)
+	}
+}
+
+// The tool report reads its detail line through `jq -f "$here/detail.jq"`, and
+// a missing filter fails silently: the card shows the tool and no detail.
+func TestKiroInstallWritesTheToolDetailFilter(t *testing.T) {
+	files := kiroFiles()
+	files[tagged("hooks/detail.jq")] = ".tool_input.command\n"
+	s, _ := fileServer(t, files)
+	t.Setenv(fakeCLIGuard, "1")
+	t.Setenv(fakeCLILog, filepath.Join(t.TempDir(), "cli.log"))
+	s.bins = stubBin(mustExecutable(t))
+	configDir, _ := kiroTestHome(t)
+
+	if err := s.Install(providers.Kiro); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	path := filepath.Join(configDir, "lich", "plugin", "hooks", providers.Kiro, "detail.jq")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the filter the tool report reads was not installed: %v", err)
 	}
 }
 

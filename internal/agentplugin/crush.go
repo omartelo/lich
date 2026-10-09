@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/omartelo/lich/internal/providers"
@@ -69,6 +70,11 @@ var crushHooks = []struct {
 	{script: "hooks/report-touched.sh", name: "lich-touched", matcher: crushWriteTools},
 }
 
+// crushSourcedScripts are the files the registered scripts source rather than
+// run: no hook names them, but report-session-start reports nothing without
+// them beside it.
+var crushSourcedScripts = []string{"hooks/conversation-id.sh"}
+
 func (s *Service) crushInstall() error {
 	if err := s.crushSupportsHooks(); err != nil {
 		return err
@@ -84,14 +90,18 @@ func (s *Service) crushInstall() error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", dir, err)
 	}
+	scripts := slices.Clone(crushSourcedScripts)
 	for _, hook := range crushHooks {
-		data, err := s.fetchFile(version, hook.script)
+		scripts = append(scripts, hook.script)
+	}
+	for _, script := range scripts {
+		data, err := s.fetchFile(version, script)
 		if err != nil {
 			return err
 		}
 		// Executable: Crush dispatches a shebang'd script through os/exec, which
 		// needs the bit the way any other shell would.
-		if err := writeFile(filepath.Join(dir, filepath.Base(hook.script)), data, 0o755); err != nil {
+		if err := writeFile(filepath.Join(dir, filepath.Base(script)), data, 0o755); err != nil {
 			return err
 		}
 	}
