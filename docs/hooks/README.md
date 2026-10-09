@@ -117,10 +117,13 @@ a release speaks:
 - A change **within** an existing contract (a script tweak) is a plugin-only
   release and bumps the plugin's **patch** version. No lich release is needed.
 - A change **to** a contract (new endpoint, header, field, or accepted value)
-  bumps the plugin's **minor** version (its major, from 1.0). Ship the lich
-  server side first, then the plugin. The order runs through the fixtures: the
-  prose here moves, then [`fixtures/`](fixtures/), then lich's endpoint, then the
-  plugin.
+  bumps the plugin's **minor** version (its major, from 1.0). The lich server
+  side merges first: the prose here, then [`fixtures/`](fixtures/), then lich's
+  endpoint. The plugin's fixtures pin that merge commit, the plugin release is
+  tagged next, and the lich release that installs it is cut last, since that
+  lich may fetch files only the new plugin ships. Tagging the plugin before
+  lich ships is safe: the ceiling below keeps every older lich on the plugin
+  releases it speaks.
 
 Each lich declares the range it speaks in `internal/agentplugin/compat.go`: a
 floor, the oldest release whose reports it still parses, and a ceiling, the
@@ -129,7 +132,8 @@ contract change raises the ceiling in the same change. An install or update
 writes the newest release inside that range, never simply the newest release:
 Claude Code and Codex get their marketplace pinned to that release's tag, and
 the file-shipped harnesses fetch their files at it. The plugin's contract tests
-read these fixtures at a lich release tag, not from `main`.
+read these fixtures at a lich release tag, not from `main`, except a contract
+no lich release ships yet, which they read at the commit that merged it.
 
 ## Adding a new hook
 
