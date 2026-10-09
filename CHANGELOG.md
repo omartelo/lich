@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moves the card to the new conversation. Needs lich-plugin 0.20 for the state
   reports; the start is guarded with any release.
 
+- **A session waiting on a subagent of its own is no longer reported as done
+  without an answer.** A worker handed a task with a ticket that started its own
+  subagent and ended its turn to wait for it had its task closed as unanswered;
+  the task now stays open until the turn that subagent's report starts.
+
 - **A Claude Code subagent closed from its card now tells the session that
   asked for it.** The asking session used to keep waiting on a task that was
   gone; it now hears the task stopped, as it does when a worker is closed by

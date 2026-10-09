@@ -261,7 +261,10 @@ collected is typed as usual.
   the two that turn actually was is the part nothing outside that session can
   say, so it is not decided: a note at the worker's own prompt names the
   requests that went home unanswered, and says every answer from here on has to
-  name its ticket. **A late answer still lands**: a worker that handed its work
+  name its ticket. A turn that ends while the session still waits on an errand
+  it sent itself, a subagent of its own say, says nothing yet: that errand's
+  outcome reaching its prompt resumes it, and the turn after is the one read.
+  **A late answer still lands**: a worker that handed its work
   to the background ends its turn before the work is done, so for an hour after
   the turn ended `lich reply <ticket>` on that errand still files the answer in
   the sender's inbox, announced like any other result (a private errand's waits

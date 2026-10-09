@@ -523,3 +523,42 @@ func TestAnUnansweredTurnLeavesAnOrdinaryErrandAlone(t *testing.T) {
 	svc.WorkerUnanswered("s2", UnansweredBlank)
 	expectOpen(t, svc, "t1")
 }
+
+// A worker that answers by its ticket and runs a subagent of its own in the
+// background ends its turn waiting for that subagent: the report reaching its
+// prompt is what resumes it. That turn ending is not the worker finishing
+// without an answer, whether the report is still on its way or already waits
+// in its inbox for the prompt to free up.
+func TestATurnEndingWhileTheWorkerAwaitsItsOwnErrandKeepsItsErrandOpen(t *testing.T) {
+	for name, reportFirst := range map[string]bool{"report still running": false, "report waiting": true} {
+		t.Run(name, func(t *testing.T) {
+			term := newFakeTerminal("s1", "s2", "s3")
+			svc := newRelay(workspace(), term, nil)
+			plantSubagent(svc, "t1", "s1", "s2", "docs")
+			plantSubagent(svc, "t2", "s2", "s3", "api")
+
+			svc.Observe("s2", stateBusy)
+			if reportFirst {
+				if err := svc.Reply("s3", "t2", "the api is done"); err != nil {
+					t.Fatalf("Reply: %v", err)
+				}
+			}
+			svc.Observe("s2", stateDone)
+			expectOpen(t, svc, "t1")
+
+			if !reportFirst {
+				if err := svc.Reply("s3", "t2", "the api is done"); err != nil {
+					t.Fatalf("Reply: %v", err)
+				}
+			}
+			if !awaitWritten(term, "s2", "api") {
+				t.Fatal("the worker was never told its own worker finished")
+			}
+			svc.Observe("s2", stateBusy)
+			if err := svc.Reply("s2", "t1", "docs and api are done"); err != nil {
+				t.Fatalf("Reply: %v", err)
+			}
+			expectAnswer(t, svc, "t1", "docs and api are done")
+		})
+	}
+}
