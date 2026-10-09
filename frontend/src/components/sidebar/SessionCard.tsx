@@ -11,6 +11,7 @@ import {
   FolderOpen,
   GitBranch,
   GitPullRequestArrow,
+  GitPullRequestCreate,
   Pencil,
   Columns2,
   Pin,
@@ -38,6 +39,7 @@ import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { baseReadout } from "@/lib/git/base-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
+import { createPullRequestPrompt, offersPullRequest } from "@/lib/pulls/pr-handoff"
 import { CloseButton } from "@/components/common/CloseButton"
 import { DiffStat } from "@/components/DiffStat"
 import { SessionEntrypointItem } from "./SessionEntrypointItem"
@@ -255,16 +257,13 @@ export function SessionCard({
   // decides whether to reach for the tool or the command (delegatePrompt).
   //
   // The card takes the screen first: the request is typed but not sent, so a
-  // delegation from a card that was not the one in view would leave a line
+  // request from a card that was not the one in view would leave a line
   // waiting in a terminal the user cannot see.
-  const delegate = (label: string) => {
+  const writeAtOwnPrompt = (text: string) => {
     onSelect()
-    void TerminalService.Write(session.id, bracketedPaste(delegatePrompt(session.kind, label)))
-    requestTerminalFocus(session.id)
-  }
-  const delegateWorktree = () => {
-    onSelect()
-    void TerminalService.Write(session.id, bracketedPaste(delegateWorktreePrompt(session.kind)))
+    TerminalService.Write(session.id, text).catch((error) =>
+      toast.error(`Couldn’t hand this to the session: ${errorText(error)}`),
+    )
     requestTerminalFocus(session.id)
   }
 
@@ -529,6 +528,24 @@ export function SessionCard({
                         <GitPullRequestArrow className="size-3 shrink-0" />#{pr.number}
                       </span>
                     )}
+                    {/* The PR's slot when there is none yet: shown on hover only,
+                        like the pin, so a card at rest stays as quiet as before. */}
+                    {pr === null &&
+                      session.kind !== "shell" &&
+                      offersPullRequest(git.branch, git.base) && (
+                        <span
+                          role="button"
+                          aria-label="Ask the agent to open a pull request"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            writeAtOwnPrompt(createPullRequestPrompt(git.branch))
+                          }}
+                          className="flex items-center gap-1 rounded-sm opacity-0 transition-[color,opacity] hover:text-foreground group-hover:opacity-100"
+                        >
+                          <GitPullRequestCreate className="size-3 shrink-0" />
+                          PR
+                        </span>
+                      )}
                     {git.files > 0 && <DiffStat added={git.added} deleted={git.deleted} />}
                   </span>
                 </span>
@@ -688,8 +705,12 @@ export function SessionCard({
           open
           onOpenChange={setDelegatePickerOpen}
           groups={delegateGroups}
-          onPick={(target) => delegate(target.label)}
-          onPickWorktree={delegateWorktree}
+          onPick={(target) =>
+            writeAtOwnPrompt(bracketedPaste(delegatePrompt(session.kind, target.label)))
+          }
+          onPickWorktree={() =>
+            writeAtOwnPrompt(bracketedPaste(delegateWorktreePrompt(session.kind)))
+          }
         />
       )}
       {/* Mounted only while it is open, unlike the entrypoint dialog beside it:

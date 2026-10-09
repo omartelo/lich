@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createPullRequestPrompt, pullRequestHandoff } from "./pr-handoff"
+import { createPullRequestPrompt, offersPullRequest, pullRequestHandoff } from "./pr-handoff"
 import type { CheckItem, PullRequestDetail } from "@/lib/api-types"
 
 const detail = (over: Partial<PullRequestDetail> = {}): PullRequestDetail => ({
@@ -110,5 +110,25 @@ describe("createPullRequestPrompt", () => {
     expect(prompt).toContain("`gh pr create`")
     expect(prompt.startsWith("\x1b[200~")).toBe(true)
     expect(prompt.endsWith("\x1b[201~")).toBe(true)
+  })
+})
+
+describe("offersPullRequest", () => {
+  const base = { base: "origin/main", behind: 0, conflicts: null }
+
+  it("offers a feature branch that has an origin", () => {
+    expect(offersPullRequest("quiet-willow", base)).toBe(true)
+  })
+
+  it("withholds the base branch itself", () => {
+    expect(offersPullRequest("main", base)).toBe(false)
+  })
+
+  it("withholds a repository with no origin to measure against", () => {
+    expect(offersPullRequest("quiet-willow", null)).toBe(false)
+  })
+
+  it("withholds a detached HEAD", () => {
+    expect(offersPullRequest("", base)).toBe(false)
   })
 })
