@@ -118,6 +118,13 @@ export type SessionState = Record<string, ProjectSessions>
 // checkout.
 const NO_SESSIONS: ProjectSessions = { sessions: [], activeId: "", nextSeq: 1 }
 
+// checkoutPath is the path a session opened in `dir` is stored under: "" when
+// that is the project's own directory, which is what Session.path promises and
+// what keys the root block, `dir` otherwise.
+export function checkoutPath(dir: string, projectPath: string): string {
+  return dir === projectPath ? "" : dir
+}
+
 // addSession appends a session to a project and makes it active. If the project
 // has no entry yet, it is created with this session as the first. A worktree
 // session carries its own path and is labeled after the worktree instead of the

@@ -9,6 +9,7 @@ import { storedGroups } from "@/lib/session/panes-store"
 import {
   activeSessionId,
   addSession,
+  checkoutPath,
   closeSession as removeSession,
   isSessionKind,
   removeProject,
@@ -282,7 +283,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     ) => {
       const sessionId = newSessionId()
       const resolvedKind = resolveNewSessionKind(kind, projectNewSessionKind(projectId))
-      const added = addSession(sessionsRef.current, projectId, sessionId, resolvedKind, path)
+      const projectPath = projectsRef.current.find((p) => p.id === projectId)?.path ?? ""
+      const checkout = checkoutPath(path, projectPath)
+      const added = addSession(sessionsRef.current, projectId, sessionId, resolvedKind, checkout)
       const next = folder ? setSessionsFolder(added, projectId, [sessionId], folder) : added
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]
@@ -292,7 +295,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         sessionId,
         created.label,
         resolvedKind,
-        path,
+        checkout,
         project.nextSeq,
         sandbox,
       )

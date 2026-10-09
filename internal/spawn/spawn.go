@@ -522,7 +522,7 @@ func (s *Service) place(target store.Project, worktree, base string) (placement,
 	if err != nil {
 		return placement{}, err
 	}
-	at.cwd, at.stored, at.setup = found.path, found.path, found.fresh
+	at.cwd, at.stored, at.setup = found.path, storedPath(target.Path, found.path), found.fresh
 	if found.label != "" {
 		at.label = found.label
 	}
