@@ -40,18 +40,16 @@ export function turnSwitchable(everReported: boolean, hasLastTurn: boolean): boo
   return everReported || hasLastTurn
 }
 
-// The two providers whose CLI reports neither the start nor the end of a turn,
+// The providers whose CLI reports neither the start nor the end of a turn,
 // under the name a user reads in Settings, mirrored from
 // docs/hooks/session-state.md (keep in sync). Crush registers no state at all,
-// and Cursor CLI's reports are dropped by closableState, so on both of them
-// nothing ever opens a window for the panel to bracket.
+// so nothing there ever opens a window for the panel to bracket.
 //
 // Written out one by one rather than derived, for the same reason
 // NO_FORK_PROVIDERS is (sessions.ts): a provider added to lich has to answer
 // this question on purpose instead of inheriting a claim nobody measured.
 const NO_TURN_PROVIDERS: Partial<Record<SessionKind, string>> = {
   crush: "Crush",
-  cursor: "Cursor CLI",
 }
 
 // turnUnavailableReason is the sentence the Review panel wears where the "Last

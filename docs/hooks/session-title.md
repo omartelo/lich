@@ -125,9 +125,8 @@ Crush card keeps the name lich gave it.
 
 **Cursor now runs this path for the first time, and still reports nothing.** lich
 installs no plugin there; the CLI executes the Claude Code registration, and of
-the events that registration names it delivers `PostToolUse` but not `Stop`
-(`README.md`) — so a Cursor session never reached this report at all while it
-was sent at the turn's end, and reaches it now. It gets no further than a guard:
+the events that registration names it delivers `PostToolUse` and `Stop`
+(`README.md`), so a Cursor session reaches this report on both. It gets no further than a guard:
 either the payload names no readable transcript, or the transcript it names
 carries none of the three shapes read above. Nothing is sent, nothing latches,
 and the card keeps the name lich gave it — the same outcome as before, through a

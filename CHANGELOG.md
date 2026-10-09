@@ -37,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   open for as long as the worker runs. Needs a lich-plugin release that reports
   it.
 
+- **A Cursor CLI card now shows its turns.** It spins while the agent works,
+  rings when the turn ends, keeps the machine awake, records the Review tab's
+  last turn and shows up under Running. A task handed to a Cursor session
+  reports back "unanswered" as soon as that turn ends without a reply, instead
+  of waiting for the deadline. Stopping a turn with Esc rings once.
+
 ## [0.64.0] - 2026-10-09
 
 ### Added

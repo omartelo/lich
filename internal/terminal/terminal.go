@@ -478,14 +478,11 @@ func (s *Service) onHookState(req hookRequest) {
 	// being worked, whatever endpoint it arrived on and whether or not
 	// lich publishes it. That is why the other three callbacks beat too
 	// — a provider whose hooks report no state has no other way to say
-	// its agent is running. Cursor CLI's tool reports are dropped a line
-	// down for want of anything that could end the spinner they would
-	// start, and they are the only proof a Cursor turn is running at all
-	// (see closableState).
+	// its agent is running.
 	s.beatHandsOn(req.SessionID, 0)
-	// Dropped where the harness cannot close it, before the turn log
-	// ever sees it: a state nothing ends outlives what it describes.
-	if !closableState(s.kindOf(req.SessionID), req.State) {
+	// Dropped before the turn log and the relay see it: one ending told
+	// twice is still one turn.
+	if s.repeatedEnding(req.SessionID, req.State) {
 		return
 	}
 	// The window is told what the report means, not what it said: a

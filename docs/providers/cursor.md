@@ -22,14 +22,13 @@ machine where the lich plugin is installed in Claude Code, a Cursor session repo
 the files it touches, with nothing installed there, and on a machine without it that session reports nothing at
 all. Nothing on the card says which of the two it is.
 
-**What never arrives is the turn.** Of the nine events the plugin registers, Cursor delivers four,
-`SessionStart`, `PreToolUse`, `PostToolUse` and `SessionEnd`, and no `UserPromptSubmit` or `Stop`, measured
-against hooks in Cursor's own format and in Claude Code's alike. So a turn that calls no tool never begins and
-one that does never ends, which is why `terminal.closableState` drops every state but `idle` from a Cursor
-session rather than pinning a spinner to the card for the rest of it: no spinner, no bell, no auto-title, and no
-`waiting` either (`Notification` maps to nothing there). That is the Crush row of
-[`../hooks/session-state.md`](../hooks/session-state.md)'s table arrived at from the other direction, since lich
-does not own the registration here and so filters what it cannot close.
+**The turn arrives; the wait does not.** Of the nine events the plugin registers, Cursor's TUI delivers every
+one but `Notification`, `UserPromptSubmit` and `Stop` included (measured 2026.08.11 through 2026.10.01;
+`cursor-agent -p` fires only `SessionStart` and `SessionEnd`). So a Cursor card spins, rings, keeps the
+machine awake and records a last turn like a Claude Code one, and the relay closes an errand when the turn
+ends without an answer. A permission prompt reads as `busy`, never `waiting`. Esc ends a turn with two `stop`
+hooks, `aborted` then `error`, and lich keeps only the first (`terminal.repeatedEnding`,
+[`../hooks/session-state.md`](../hooks/session-state.md)).
 
 ## Transcript & cost
 

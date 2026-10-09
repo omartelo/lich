@@ -171,7 +171,7 @@ hook (`docs/hooks/session-state.md`), and it is the same thing its card shows:
 - `-` (`""` in `--json`) — **not reported**, which is not the same as idle.
   Only providers whose companion plugin reports state have one at all (Crush
   reports none, a Cursor session reports only where the plugin is installed in
-  Claude Code, and a session that has not had a turn yet has said nothing
+  Claude Code and never reports waiting, and a session that has not had a turn yet has said nothing
   either), so an empty state says nothing about whether that session is free.
 
 ### `lich whoami [--json]`
