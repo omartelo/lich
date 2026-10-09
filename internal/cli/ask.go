@@ -52,7 +52,7 @@ var askTools = []mcpTool{
 			"answer. Claude Code sessions only, and never your own.",
 		Schema: schema(map[string]any{
 			"session": property("string",
-				"The session to ask, by the label on its card or the name it answers to."),
+				"The session to ask, by the label on its card, the name it answers to or its lich id."),
 			"question": property("string", "The question."),
 			"project": property("string",
 				"Project to narrow to, by name or by directory path, when the same label "+

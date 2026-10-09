@@ -104,7 +104,7 @@ var controlTools = []mcpTool{
 			"every new session.",
 		Schema: schema(map[string]any{
 			"session": property("string",
-				"The session to drive, by the label on its card or the name it answers to."),
+				"The session to drive, by the label on its card, the name it answers to or its lich id."),
 			"action": property("string", "One of prompt, abort, model, effort, command."),
 			"value": property("string",
 				"prompt: the text (required). model: the model name, or omit to go back to the "+

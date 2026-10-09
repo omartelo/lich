@@ -29,6 +29,12 @@ var commands = []command{
 		about: "List the live sessions that can be reached.",
 	},
 	{
+		name: "whoami",
+		args: "[--json]",
+		about: "Print the session this command runs in, which `sessions` never lists:\n" +
+			"its label, project, provider, roster name, state and lich id.",
+	},
+	{
 		name: "send",
 		args: "[--project <name>] [--timeout <seconds>] [--private] [--json] <session> <prompt>",
 		about: "Put <prompt> at <session>'s prompt and wait for its agent to answer.\n" +

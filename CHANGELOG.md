@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A session can find out its own name.** `lich whoami` prints the session the
+  command runs in, with its label and lich id, which `lich sessions` leaves out.
+  Every command and tool that takes a session (`send`, `close`, `rename`,
+  `control`, `ask`, `file`) now also accepts that id in place of the label.
+
 ## [0.63.0] - 2026-10-09
 
 ### Added

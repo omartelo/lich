@@ -205,7 +205,7 @@ var folderTools = []mcpTool{
 				"Folder to file the session under, exactly as list_folders names it, or a new "+
 					"name. An empty string takes the session out of its folder."),
 			"session": property("string",
-				"Session to file, by the label on its card or the name it answers to. Omit to "+
+				"Session to file, by the label on its card, the name it answers to or its lich id. Omit to "+
 					"file the session you are running in."),
 			"project": property("string",
 				"Project to narrow to, by name or by directory path, when the same label "+
