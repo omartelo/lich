@@ -156,7 +156,7 @@ X-Lich-Plugin: <plugin release>
   refused.
 
 The body is held to 64 KiB, the room an answer needs, where every other hook
-endpoint takes 4 KiB.
+endpoint but `/mod/answer` takes 4 KiB.
 
 Responses: `204` ok · `401` invalid token · `400` invalid body.
 
@@ -243,8 +243,8 @@ a second request at twice the latency (measured on 2.1.289).
   otherwise returns the id the ack will carry. `Service.RunModCommand` queues the
   same way and waits for the ack until its context ends; a command no poll
   collected by then is withdrawn from the queue. `spawn.Control` calls it behind
-  `lich control` and `control_session`, and `spawn.Ask` behind `lich ask` and
-  `ask_session`, for 90 seconds; both add the rules about who asks: Claude Code
+  `lich control` and `control_session` (10 seconds, 60 for a `command`), and
+  `spawn.Ask` behind `lich ask` and `ask_session` (90 seconds); both add the rules about who asks: Claude Code
   only, never the caller's own session. `Service.SubmitPrompt` is the relay's
   producer (`internal/relay`): it queues a `prompt` the same way and hands the
   relay the wait on its ack, and a session with no mod polling is typed at instead.

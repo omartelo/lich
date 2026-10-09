@@ -1,8 +1,8 @@
 # Theme JSON
 
 lich ships bundled `light` and `dark` themes and accepts user-imported JSON themes.
-The Appearance settings can save a valid dark starter template that uses only hex
-colors; it is `themes/template.json`, embedded in the binary, and it names every
+The Appearance settings can save a valid dark starter template that uses hex
+colors everywhere but the two tone tokens; it is `themes/template.json`, embedded in the binary, and it names every
 supported color.
 Imported themes are stored under the user config directory:
 
@@ -14,7 +14,7 @@ file that fails the rules below, is named anything but its own `<id>.json`, or
 carries a newer `formatVersion`) is not dropped: Settings › Appearance lists it
 as a theme that can't load, with the reason, and it can be removed from there. A
 file whose name is not a valid theme id is not one lich could have written, and
-is skipped with a warning in the log.
+is skipped silently.
 
 The theme format and the pack manifest are covered by lich's semver promise; see
 [stability.md](stability.md).
@@ -150,7 +150,8 @@ git's `user@host:path` shorthand. Everything else is rejected before git runs:
 `ext::` resolves through a remote helper that executes a shell command, and an
 argument starting with `-` would be read as a flag. Credential prompts are
 disabled, so a private repository fails instead of hanging — authentication
-rides the ssh key or credential helper git already has.
+rides the ssh key git already has; credential helpers are switched off for the
+clone.
 
 ### Start a repository
 
@@ -165,7 +166,7 @@ cat > lich-theme.json <<'EOF'
 EOF
 ```
 
-Put a theme beside it. Settings › Appearance › **Save template** writes a valid
+Put a theme beside it. Settings › Appearance › **Import** › **Download template** writes a valid
 starter naming every supported color — save it into the repository, then set its
 `id`, `name` and `scheme`. File names inside the repository are yours; lich
 stores each theme as `<id>.json` under its own directory on install.

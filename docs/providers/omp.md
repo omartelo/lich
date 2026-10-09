@@ -15,7 +15,7 @@ the user never wrote is in every session's prompt and in `/proc/<pid>/cmdline`.
 ## Hooks
 
 An oh-my-pi card sends no reason with a `waiting` and keeps the generic "Waiting on you"
-(`frontend/src/components/sidebar/SessionCard.tsx`; the mapping table is in
+(`frontend/src/components/sidebar/SessionStatusRung.tsx`; the mapping table is in
 [`../hooks/session-state.md`](../hooks/session-state.md)). It does not report `waiting` in the first place: it
 declares an approval event no run was ever seen emitting, so there is nothing to hang a reason on. A bare card
 there means the harness never spoke, not that the block is trivial.

@@ -21,7 +21,7 @@
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
     <a href="https://github.com/sponsors/omartelo"><img alt="Sponsor" src="https://img.shields.io/github/sponsors/omartelo?color=ea4aaa&logo=githubsponsors&label=sponsors" /></a>
   </p>
-  <img src="docs/media/session.png" alt="Four Claude Code sessions side by side on one wall, each in its own git worktree — the sidebar lists them with their branch and diff badge, and the footer shows the model, the plan and the branch" width="900" />
+  <img src="docs/media/session.png" alt="Four Claude Code sessions side by side on one wall, each in its own git worktree — the sidebar lists them with their branch and diff badge, and the footer shows the model, the plan and the branch" width="1000" />
   <!-- sponsor-logos: company logos go here, between the screenshot and Why lich -->
 </div>
 
@@ -46,10 +46,10 @@ lich lets you:
   you share it with; write your dev server into `.lich/run-worktree.sh` and every
   checkout gets a **Run** card for it, on the port lich reserved for that
   worktree. The footer follows `cd` and names the branch — and, for a
-  Claude Code or Codex session, the model and the context window in use; for
-  those two, Antigravity, Cursor CLI and an OpenCode Go subscription, how much
-  of your plan's rolling window is left; for Claude Code, if you ask, what the
-  session has spent.
+  Claude Code, Codex or Kiro CLI session, the model and the context window in
+  use; for Claude Code, Codex, Antigravity, Cursor CLI and an OpenCode Go
+  subscription, how much of your plan's rolling window is left; if you ask, what
+  the session has spent, on the providers that record it.
 - **Put one session to work for another.** Hand a task to another card and its
   own agent writes the answer back, whatever runs in either end: the agent
   reaches the other sessions through tools handed at spawn — MCP for Claude
@@ -65,7 +65,9 @@ lich lets you:
 - **Branch off a worktree without the setup.** Spin one up from any base
   branch and lich seeds it with your gitignored `.env*` files, hands it a
   dev-server port no other checkout and no process on the machine is using, and
-  runs your per-project setup script before the agent starts.
+  runs your per-project setup script before the agent starts. Start it from the
+  checkout's uncommitted work and those changes come along, untracked files
+  included.
 - **Run a session confined.** An agent can open inside an OS sandbox: a fresh
   empty home holding only that provider's own state, the rest of the machine
   read-only, and write access to the checkout it was opened for. Your ssh keys,
@@ -74,11 +76,16 @@ lich lets you:
   runs bubblewrap and macOS `sandbox-exec`; it is not a boundary against hostile
   code, and [`docs/ceilings.md`](docs/ceilings.md) says what it does not stop.
 - **Review the diff where you read it.** A CodeMirror dock shows the working
-  changes beside a live file tree. Right-click a selection to comment against
-  those lines; the batch is pasted into the session as a single prompt, unsent.
+  changes beside a live file tree, folds the ones that only moved whitespace when
+  you ask it to, and shows a changed image or PDF before and after. Right-click a
+  selection to comment against those lines; the batch is pasted into the session
+  as a single prompt, unsent. Its Code tab browses the checkout and searches the
+  text of its files.
 - **Ship the pull request from here.** List the repository's open pull requests,
   check one out into a worktree of its own, then read the diff, review it inline
-  and merge it — with the methods the base branch actually accepts.
+  and merge it — with the methods the base branch actually accepts. On a branch
+  with no pull request yet, **Create with agent** asks that branch's session to
+  open one, and nothing is sent until you press Enter.
 
 Plus: [themes](docs/themes.md) you import as JSON or install from a git
 repository, a `Ctrl`/`Cmd`+`K` palette that jumps by name or by what was said in
@@ -140,7 +147,7 @@ reports what Claude Code measured about itself; every other CLI's footer, and a
 Claude Code session without it, shows what lich reads from what the CLI wrote down.
 The History tab's **Outside lich** group lists conversations that ran in one of
 your projects' checkouts and that lich does not hold. A session lich opened and you
-closed for good stays out of it, except one closed before this release: lich tells
+closed for good stays out of it, except one closed before 0.62.0: lich tells
 its own Claude Code conversations apart by the name it starts them under, and the
 other seven CLIs write down nothing that could tell them apart, so theirs show up
 there once.
@@ -178,9 +185,9 @@ needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
 2. **Open a project** — the `+` in the tab strip lists what you closed recently
    and opens your OS folder picker; point it at a git repository.
 3. **Point lich at your agent** — the first launch lists the agents it found on
-   your machine; in Global Settings › Providers you can set each binary path and
-   choose the default. A project can inherit it or choose a different provider
-   in Project Settings › Providers.
+   your machine; in Settings › Providers you can set each binary path and
+   choose the default. A project can follow it or choose a different provider
+   on the same screen.
 4. **Start a session** — *New Session* spawns a terminal running your agent in
    the project. Each checkout header also has a `+` menu for opening any enabled
    provider or a plain terminal in that exact checkout; click the header itself
@@ -190,15 +197,14 @@ needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
 
 ## Configuration
 
-- **Providers** — set each provider's binary path and the global default in
-  Global Settings › Providers. Project Settings › Providers can override that
-  choice for one project; **Use default** removes the override, so later changes
-  to the global default flow through automatically. A provider's section opens
-  with how much of your plan is left, when lich can read it, and the Claude Code
-  and Codex sections carry the ladder for what
-  the footer says about a session — the context ring, plus the cost readout for
-  Claude Code, that last rung off by default since the figure only means
-  something when you are billed per token.
+- **Providers** — set each provider's binary path and the default for all
+  projects in Settings › Providers. The open project's row there can override
+  that choice; **Clear** removes the override, so later changes to the default
+  flow through automatically. A provider's section opens
+  with how much of your plan is left, when lich can read it. What the footer
+  shows is set in Settings › Appearance by dragging its items; the cost
+  readout starts hidden, since the figure only means something when you are
+  billed per token.
 - **Worktrees** — `.lich/setup-worktree.sh` in the project checkout runs in a
   new worktree's terminal ahead of the agent; the New worktree dialog shows it
   and offers a detected suggestion when the repo ships none. A
@@ -211,10 +217,21 @@ needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
 
 ## Privacy & updates
 
-Everything runs on your machine. No account, no sign-in, no telemetry — the
-backend is a token-authenticated loopback listener, and nothing leaves
-`localhost` except the update check: a version ping to GitHub Releases at startup
-and hourly. Updates apply in place on Windows/macOS and through the AUR on Arch.
+Everything runs on your machine. No account, no sign-in, no telemetry: the
+backend is a token-authenticated loopback listener. On its own, lich goes to the
+network for these and nothing else:
+
+- **Updates**: a version check against GitHub Releases at startup and hourly,
+  and the lich plugin's release list on GitHub at startup.
+- **Plan usage**: each provider's own usage endpoint (Anthropic, OpenAI, Cursor,
+  OpenCode Go), with the login the session's CLI already uses, at most every five
+  minutes. Antigravity's plan is read from `agy` itself.
+- **Prices**: LiteLLM's public price table on GitHub, once for a model the
+  bundled table does not know.
+
+The Windows installer's build updates in place; a Homebrew, Scoop, AUR or Linux
+package install updates through its package manager, and lich hands you the
+command.
 Settings › Help says what the log file carries — paths, project and branch names,
 your gh login, never a session token — before you attach it to a bug report, and
 `lich rage` collects that report into one archive without uploading any of it.

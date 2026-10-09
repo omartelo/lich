@@ -75,7 +75,7 @@ refresh reads a tree the tool has not touched yet (see the ceilings).
   session id.
 - **UI push** — `internal/terminal/terminal.go`: emits the global app event
   `session-touched` (`{id}`).
-- **Refresh** — `frontend/src/providers/projects.tsx`: resolves the session id to the
+- **Refresh** — `frontend/src/providers/project-events.tsx`: resolves the session id to the
   path its card watches (its worktree, else the project path) and calls
   `refreshGitStatus(path)` (`frontend/src/lib/git/use-git-status.ts`), which fetches
   that path now, ahead of the poll tick. A no-op when no card watches the path
@@ -99,4 +99,4 @@ refresh reads a tree the tool has not touched yet (see the ceilings).
   write, and the last write of a turn waits for the poll like it always did.
   Registering it anyway costs one git call per write tool and makes a burst of
   edits show up a poll earlier than nothing would; a `PostToolUse` in Crush
-  turns this into the same signal the other three send.
+  turns this into the same signal the other harnesses send.

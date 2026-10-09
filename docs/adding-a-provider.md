@@ -60,14 +60,17 @@ tool.
 
 | File | What it holds | What a new provider adds |
 |---|---|---|
-| `internal/providers/providers.go` | the registry | an id constant, a `Registry` entry (id, display name, binary names, install-docs URL), a line in `AcceptsMCPServer` if it takes an MCP server on its command line, and one in `SupportsFork` — that one is a table every provider must appear in, so a new id fails its test until it is answered |
-| `internal/terminal/command.go` | what a spawn runs | entries in `skipPermissionFlags`, `modelFlags`, `effortFlags`, `briefingFlags` and `resumeArgs` (with a fork arm there if the CLI branches a conversation) — each one optional, and absent means "no flag rather than somebody else's" — plus a `subcommandArgs` arm if the session is a subcommand rather than the bare binary |
+| `internal/providers/providers.go` | the registry | an id constant, a `Registry` entry (id, display name, binary names, install-docs URL), a line in `AcceptsMCPServer` if it takes an MCP server on its command line, and one in `SupportsFork` — that one is a table every provider must appear in, so a new id fails its test until it is answered, plus an arm in `CostSourceOf` if it records spend |
+| `internal/terminal/command.go` | what a spawn runs | entries in `skipPermissionFlags`, `modelFlags`, `effortFlags`, `briefingFlags` and `resumeArgs` (with a fork arm there if the CLI branches a conversation) — each one optional, and absent means "no flag rather than somebody else's" — plus a `subcommandArgs` arm if the session is a subcommand rather than the bare binary, and an `mcpArgs` arm if it is in `AcceptsMCPServer` |
 | `internal/terminal/resume.go` | whether a resume can be offered | a `ResumeAvailable` case answering from what that provider left on disk |
 | `internal/terminal/transcript.go`, `sessiondb.go` | where that state lives | the path resolver the case above calls |
 | `internal/terminal/usage.go` | the footer's session readout | a `usageSourceFor` arm, plus a `sessionCost` arm reading whatever that provider records about spend — and a `contextUsageFor` arm only if it also records the model's context window. Which rung that lands the provider on is a row in `docs/ceilings.md`, in the same PR |
 | `internal/terminal/said.go`, `search.go`, `index.go` | the recap beside a diff, the palette's Messages tab and the conversation a parked session is indexed with | an arm in `transcriptReaderFor` with a line reader for a provider that files its conversation as JSONL, or the `said` and `search` queries in `sessiondb.go` for one that keeps it in a database of its own — a provider in neither is simply never listed, which is what every other miss in those searches looks like. All three readers go through the same two arms, so a provider that lands here is searchable in the History tab too |
+| `internal/terminal/startgate.go` | when a session can take typed work | an entry in `startsAtPrompt` only if its hook reports session-start from the agent's own prompt before the first turn, past any trust question; that report is then what makes its sessions ready for work. Measure it in a fresh worktree |
+| `internal/terminal/conversations.go`, `conversations_stores.go` | conversations started outside lich (the History tab's Outside lich group) | a `conversationReaders` entry listing that provider's stored conversations; absent means they are never offered |
+| `internal/quota/` | plan usage in Settings and the footer | a `<provider>.go` reader and its place in `Service.read`, only if the provider exposes plan limits; a gap is a `docs/ceilings.md` line |
 | `internal/sandbox/sandbox.go` | what a confined session can still reach | a `stateDirs` case — a provider missing here confines to a home with no credentials, which is a session that opens and cannot log in |
-| `internal/agentplugin/` | the companion plugin | a `<provider>.go` with install / installed-version, plus the four switches and the `supported` list in `agentplugin.go` |
+| `internal/agentplugin/` | the companion plugin | a `<provider>.go` with install / installed-version, plus the two switches (`Install`, `installedVersion`), `registersServerAtInstall` and the `supported` list in `agentplugin.go`, and a `registrations` entry in `repair.go` if the install writes an MCP server |
 | `internal/cli/mcp.go` | the `open_session` tool schema | the new id in the `kind` description |
 
 Nothing else in the backend enumerates providers: the settings store keys
@@ -83,7 +86,7 @@ everything on the id (`provider.<id>.bin`, `.enabled`, `.sandbox`,
 | `frontend/src/components/ProviderIcon.tsx` | a brand path, or a lucide fallback |
 | `frontend/src/lib/session/delegate-prompt.ts` | `TOOL_KINDS` only if it is handed lich's tools at spawn |
 | `frontend/src/lib/session/tool-label.ts` | a rule only if it spells MCP tool names in a shape not already handled |
-| `internal/terminal/startgate.go` | an entry in `startsAtPrompt` only if its hook reports session-start from the agent's own prompt before the first turn, past any trust question; that report is then what makes its sessions ready for work. Measure it in a fresh worktree |
+| `frontend/src/components/settings/PlanUsageSetting.tsx` | a `loginCommand` entry only if `internal/quota` reads a plan for it |
 | `frontend/src/lib/session/hands-on.ts` | a rung in `RUNG`: whether the hands-on clock hears that provider through a turn its hooks open, or only through its tool calls. The record is exhaustive over `ProviderKind`, so `tsc` refuses a provider that has not picked a side |
 | `frontend/src/lib/api-types.ts` | nothing, unless the change moves a JSON tag — the `DetectedProvider` mirror is hand-owned and moves in the same commit |
 
@@ -114,7 +117,7 @@ harness and not by lich:
 - **It runs commands.** Then it gets a hook-registration file mapping its own
   event names onto the scripts already in `hooks/`, and the install is either
   its plugin CLI (Claude Code, Codex) or lich writing the files (Antigravity,
-  Crush).
+  Crush, Kiro CLI).
 - **It loads a module.** Then it gets a single-file client of its own
   (`opencode/lich.js`, `omp/lich.js`) posting the same payloads to the same
   endpoints.

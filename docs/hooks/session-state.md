@@ -119,7 +119,7 @@ tools, and nothing says why.
 **Crush reports no state at all.** Its only hook event is `PreToolUse`, and a
 `busy` with nothing that can end it would leave a spinner on the card until the
 next turn — a state that is wrong for longer than it is right. So the plugin
-registers this contract on the three harnesses that can close it, and a Crush
+registers this contract on the harnesses that can close it, and a Crush
 card carries no indicator. The day Crush ships `Stop` (its `docs/hooks/FUTURE.md`
 tracks the request, not the event), the column fills in from the existing script.
 
@@ -285,7 +285,7 @@ missing reason never costs a bell.
   replacing it, so two permission prompts in one turn are two blocks.
 - **The interrupt lich reads itself** — `internal/terminal/draft.go` and
   `Service.noteInterrupt`: no harness event says "the user stopped this turn"
-  (see the ceiling above), so lich takes it from the keystrokes going into the
+  (see Known ceilings below), so lich takes it from the keystrokes going into the
   PTY, which is the one place every provider is alike. A lone `Ctrl+C` or
   `Escape` — never a byte inside an escape sequence, never one carried in by a
   bracketed paste — ends a turn `turnLog` already has open, and lich emits
@@ -331,8 +331,9 @@ missing reason never costs a bell.
   for the one session whose terminal is on screen, while the window has focus, and
   a fresh report clears the mark again. Only `done` reads it — the live states say
   what they say whether or not anybody is watching.
-- **Render** — `frontend/src/components/sidebar/SessionCard.tsx`: reads the stores
-  (`useSessionStatus`, `useSessionTool`, `useSessionWaitingReason`) and shows a
+- **Render** — `frontend/src/components/sidebar/SessionCard.tsx` and
+  `SessionStatusRung.tsx`: read the stores
+  (`useSessionStatus`, `useSessionTool`, `useSessionWaitingReason`) and show a
   spinner (`busy`), check (`done`) or bell (`waiting`); any other value, including
   `idle` and `interrupted`, clears the indicator. A `done` is drawn at two weights
   (`SessionStatusIcon`, `useSessionUnread`): solid while the finished turn is
@@ -350,7 +351,7 @@ missing reason never costs a bell.
   left with three finished agents in it still badges for the two nobody opened;
   `busy` and `waiting` badge for as long as they hold, being live states rather
   than notifications.
-- **Toast + route** — `frontend/src/providers/projects.tsx`: raises an actionable toast
+- **Toast + route** — `frontend/src/providers/project-events.tsx`: raises an actionable toast
   that navigates to the session's card when a report says `waiting`, carrying the
   reason under the session's name, skipped for the session already focused. It reads the raw event rather than the store: the
   store collapses a repeat state into no notification, which would swallow a
@@ -423,7 +424,7 @@ missing reason never costs a bell.
   `tool_approval_requested` event, but no real run was ever observed emitting it
   — and a report wired to an event name that never fires is one that silently
   never arrives. So an omp session waiting on a permission shows a spinner
-  rather than a bell, which Settings says out loud (`OMP_APPROVAL_HINT`) because
+  rather than a bell, which Settings says out loud (`NO_APPROVAL_EVENT_HINT`) because
   a missing bell reads as a broken install.
 - **An opencode report is only as precise as the server it runs in.** The plugin
   reads `LICH_SESSION_ID` from the environment of the process it was loaded by,

@@ -12,7 +12,7 @@ no per-spawn append flag, so the point the briefing makes exists only in lich's 
 ## Hooks
 
 Codex's `PermissionRequest` carries only the thing being asked about (`tool_name`, `tool_input`) and no message
-of its own, so a waiting card reads a bare `Bash` (`frontend/src/components/sidebar/SessionCard.tsx`; the
+of its own, so a waiting card reads a bare `Bash` (`frontend/src/components/sidebar/SessionStatusRung.tsx`; the
 mapping table is in [`../hooks/session-state.md`](../hooks/session-state.md)). That says which card to open and
 not what it will ask.
 

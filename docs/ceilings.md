@@ -60,13 +60,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   pointer and never reaches a header either: the menu is its path too. A card on a wall or in the pinned block
   starts no filing drag, because both outrank the folder and the drop would land with nothing moving on
   screen; for the same reason a card drawn on a wall is offered no folder in its menu. A filtered block
-  offers no "Move group to folder", because the cards it drew are the ones that survived the query and filing
+  offers no "Move group to folder", because the cards it drew are the ones that survived the filter and filing
   "the group" would file part of it.
 - **A folder's + opens only where its cards already live**
   (`frontend/src/components/sidebar/FolderLaunchMenuItems.tsx`): a folder has no directory of its own, so its
   + lists the checkouts of the cards it holds and opens the session in the one picked. A worktree none of its
   cards is in is not offered: open the session there and drag it in. Under a filter the list is read off the
-  cards the query left, so it can name fewer checkouts than the folder holds. The folder is written by a
+  cards the filter (query or state chips) left, so it can name fewer checkouts than the folder holds. The folder is written by a
   second call chained after the session's insert (`newSession`), so a lich that dies between the two brings
   the session back unfiled.
 - **Renaming a folder remounts its block** (`frontend/src/lib/session/group-prefs.ts`): the block is keyed by
@@ -77,7 +77,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   sessions afterwards and nothing warns first, where the New folder dialog does say a typed name already
   exists.
 - **An agent files by the name as written, like the window** (`internal/spawn/folders.go`): `lich file`,
-  `lich rename-folder` and their MCP tools match a folder exactly, so an agent that types `auth` beside `Auth`
+  `lich rename-folder`, `lich color-folder` and their MCP tools match a folder exactly, so an agent that types `auth` beside `Auth`
   starts a second folder; the tool descriptions send it to `list_folders` first instead of folding case behind
   the user's back. A rename from there refuses a name no session carries, because the store would report
   success over nothing, and answers with every session that moved, which is how a merge shows. `lich open
@@ -96,7 +96,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   not to a store the sidebar reads. The chips are not persisted and drop on a project switch, like the query.
 - **The Run card is never started for you** (`frontend/src/components/sidebar/SessionSidebar.tsx`): a fresh
   worktree's setup script is still installing dependencies in the agent's card when the checkout appears, and
-  lich has no "setup finished" signal to hang an automatic start on — `terminal.Ready` answers a different
+  the setup-finished marker (`setupDone`, `internal/terminal/setup.go`) never reaches the window, so there is
+  nothing there to hang an automatic start on — `terminal.Ready` answers a different
   question, going false again for every turn the agent takes. So the card is one gesture, which is also what
   keeps eight worktrees from meaning eight dev servers.
 - **A session is ready for work only once its agent reports from its own prompt, where it can**
@@ -115,7 +116,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The cost readout bills per `(session, transcript)`** (`internal/pricing`, `internal/terminal/usage_cost.go`): a
   conversation forked inside the PTY bills its copied history twice — lich's own resume continues the same
   transcript and is unaffected — and each sub-agent's own transcript is counted in, so one unreadable or
-  unpriceable sub-agent withholds the whole session's number. A withheld number is marked `$—` on the footer
+  unpriceable sub-agent withholds the whole session's number. A Claude Code session whose mod reports a cost
+  is not scanned at all: the report replaces the transcript, sub-agents included. A withheld number is marked `$—` on the footer
   only when the reason is standing (`costMiss.spoken` in `internal/terminal/usage_cost.go`): a transcript that
   merely could not be read this turn says nothing and keeps the last figure, so a reader cannot tell that
   absence from a session still on its first turn.
@@ -196,7 +198,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   gated on the provider having reported `busy`, because a `tail -f`, a dev server or a TUI
   repainting would otherwise bill hours nobody worked. **Which turns get counted therefore
   depends on what a provider's hooks report at all**, and there are two rungs. On the top one —
-  Claude Code, Codex, Antigravity, opencode, oh-my-pi — the turn opens, so a turn nobody
+  Claude Code, Codex, Antigravity, opencode, oh-my-pi, Kiro CLI — the turn opens, so a turn nobody
   touches is counted from its own output. On the lower one — **Crush and Cursor CLI** — no turn
   ever opens (`docs/hooks/session-state.md`), and the turn is counted through the reports its
   tool calls fire: Cursor's `PreToolUse`/`PostToolUse` state reports, which beat even though
@@ -225,7 +227,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **An interrupted turn is read off the keystrokes, not from the provider** (`internal/terminal/draft.go`,
   `hookstate.go`, `Service.noteInterrupt`): Claude Code, Codex and oh-my-pi all skip the hook that ends a turn
   when the user stops one, so lich publishes `interrupted` itself when a lone Ctrl+C or Escape reaches a session
-  it knows is mid-turn. It is a guess made from bytes, and it has three edges. A provider session running a tool
+  it knows is mid-turn. It is also raised with no keystroke, when a Claude Code mod acks an abort sent from
+  lich and when a usage limit ends a Codex turn (`internal/terminal/limit.go`). It is a guess made from bytes, and it has three edges. A provider session running a tool
   that owns the terminal — an editor opened through a shell command — takes Escape as the interrupt and clears
   the ring while the turn is still running; the next report from the provider puts it back. opencode does report
   its own abort, and reports it as the turn *finishing* (`session.status idle`), so an interrupted opencode card
@@ -300,7 +303,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `frontend/src/lib/git/last-turn.ts`): the two disagree, and the panel names a provider that has since started
   reporting, until that list is moved with the contract.
 - **A finished turn is unread until its own card is watched** (`frontend/src/lib/session/session-status-store.ts`,
-  `frontend/src/providers/projects.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
+  `frontend/src/providers/project-events.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
   fades only for the session whose terminal is on screen **while the window has focus**. A card left focused in a
   background window keeps its ring solid until the window is touched again, which is the point, but it also means
   a browser that reports focus oddly never fades one.
@@ -396,7 +399,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   a right-click menu of its own: editing items in a text field, nothing outside one, and no Inspect
   (Ctrl+Shift+I still opens DevTools). The frontend uses none of the refused ones today. The trap is the
   next feature that does: `navigator.clipboard.readText()`, a blob download or a popup works in a browser tab
-  (`--no-window`, an Intel Mac whose window died) and fails silently in the bundled window until
+  (a Mac whose window is missing or died at startup, `openWithoutWindow` in `main.go`) and fails silently in the bundled window until
   `shell/src/main.rs` answers the matching hook (`on_permission`, `on_download`, `on_new_window`,
   `on_navigation`). A second one: kurogane reports through `tracing` and the window installs no subscriber, so
   a window CEF could not create after startup says nothing on the stderr lich reads; a failure to start still
@@ -430,10 +433,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the running one, which raises the window it has (the kurogane fork's relaunch hook; without it CEF opened a
   second browser that kept lich alive after the window closed, #470), reports the forward as a failed
   initialise, the duplicate exits 1, and `focusRunning` logs one Warn per duplicate launch. Raising is
-  best-effort: a Wayland compositor may only mark the window urgent. Focus never climbs the ladder — a
-  fallback there would open lich a second time, in a system browser, on the profile the window owns — so a
-  lich already running in the fallback browser is not focused by it either, and what a system browser does
-  with the forwarded command line is its own.
+  best-effort: a Wayland compositor may only mark the window urgent. On an install with no window of its
+  own, a duplicate launch cannot focus the running lich's tab; it opens one more tab pointed at it
+  (`focusRunning`, `system.OpenURL`).
 - **A prompt in use is recognised from the bytes going in, never from the line itself**
   (`internal/terminal/draft.go`; typed deliveries only, a Claude Code session with its mod is handed the message, see below): a relayed message pastes at the prompt and sends an Enter behind it, so lich
   holds the delivery back while the user has unsent input there. What it counts is printable input since the last
@@ -522,17 +524,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (`store.SubagentCards`), which reaches the mod as `LICH_SUBAGENT_CARDS=off` at spawn, so a session already
   running keeps the value it started with.
 - **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`,
-  `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that
+  `resolveLichBinary`): Crush's, oh-my-pi's, Cursor's, Antigravity's and Kiro's registrations name the absolute path of the lich that
   wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and
   deletes when the run ends, so writing it gives a registration that works for the rest of that session and then
   fails silently forever. lich writes `lich` from PATH instead, recognising the cache by shape
   (`go-build*/b*/exe/*`) since the toolchain exports no marker. The trap is that a dev install then points at
   whatever version is installed on the machine — harmless, because the registration is only the transport and a
   session reaches the lich its PTY's coordinates name, but not what the file appears to say. With no lich on
-  PATH at all, a dev install registers nothing: Crush and oh-my-pi still get their hooks, and Cursor's install
-  refuses outright.
+  PATH at all, a dev install registers nothing: Crush, oh-my-pi, Antigravity and Kiro still get their hooks, and Cursor's
+  install refuses outright.
 - **A plugin install is pinned, so the harness never updates it on its own** (`internal/agentplugin/compat.go`,
-  `claudePinMarketplace`, `codexPinMarketplace`): lich installs the newest plugin release inside the range it
+  `claude.go` `claudePinMarketplace`, `codex.go` `codexPinMarketplace`): lich installs the newest plugin release inside the range it
   speaks and declares Claude Code's and Codex's marketplace at that release's tag, so a plugin release this lich
   would not parse never arrives behind its back. The price is that a newer compatible release only lands through
   lich's own update prompt, and a marketplace the user pointed somewhere else is re-pointed on the next install.
@@ -697,7 +699,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   connects to. Read-only, so a host the user has never connected to *outside* the sandbox still fails inside
   it and cannot be learned there — blind trust-on-first-use is not a thing to grant an unattended agent. And a
   `known_hosts` symlinked out of a dotfiles repository is dropped like every other link in the home
-  (`internal/sandbox`'s `existing`), which takes the whole grant down with it. That is why Settings lists what
+  (`internal/sandbox`, `mounts.keep`; the card names it from `SkippedLinks`), which takes the whole grant down with it. That is why Settings lists what
   is in the agent, and re-reads the list every time the window regains focus: `ssh-add` is run in a terminal
   outside lich, so the tab back is the frame where a key loaded a moment ago has to already be named by the
   switch that hands it over. The GitHub token is one account's, the project's own (`vcs.account`), and it
@@ -785,20 +787,20 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   effect rather than from the render body (the body sees passes that were never committed, which reads a
   correct hook as an oscillation). A probe missing either one calls the ref version green.
 - **The dock's remembered browse is module memory, keyed by a path and never swept**
-  (`frontend/src/lib/file-browse.ts`): every checkout the Code tab has ever browsed keeps its filter,
-  folds, preview and marked row until the page reloads — a few strings per checkout, deliberately not
+  (`frontend/src/lib/file-browse.ts`): every checkout the Code tab has ever browsed keeps its filter or
+  text search, folds, preview, landing line and marked row until the page reloads — a few strings per checkout, deliberately not
   worth a sweep, and deliberately not persisted: these are positions in a tree that is re-read on each
   mount, and outliving a reload would mean pointing at files that have since moved. The key is the
   checkout path with no project or session in it, so two projects sharing a path share a browse, which
-  is the same thing as saying they share a checkout. The tree and each previewed file now also file
+  is the same thing as saying they share a checkout. The tree and each previewed text file now also file
   their answers in `remote-cache`, whose 32-entry cap they share with the pull request screen: a browse
   that opens more files than that evicts the oldest answers, and the panel pays a "Loading…" on the way
-  back to them.
+  back to them. An image or PDF preview is not cached and loads again on the way back.
 - **The Review tab's remembered source is a wish, not what is on screen** (`ReviewPanel`,
   `frontend/src/lib/dock-prefs.ts`): the pref is global and holds what the user picked, while what the
   panel shows is that choice put through `turnSwitchable` — a session whose provider never reports and
-  holds no last-turn record has no turn to bracket, so it is shown the working tree and offered no
-  switch. Nothing writes the guard's answer back, and that is the whole design: a session with neither is
+  holds no last-turn record has no turn to bracket, so it is shown the working tree, with no switch or, on Crush and Cursor
+  CLI, a disabled one naming why. Nothing writes the guard's answer back, and that is the whole design: a session with neither is
   unswitchable after a reload until it next reports, so a panel that reset the pref instead of overriding
   it would erase the choice before the switch had a chance to appear. The two halves of that guard read
   different sources — the record rides the session's hydration, the diff behind it is seeded when the
@@ -810,13 +812,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   it. A future route that reuses `Pulls` across two projects would keep the first one's box and its selection,
   and nothing in the component would say so.
 - **The settings screen remembers nothing per project, on purpose** (`frontend/src/lib/settings-prefs.ts`):
-  the pane that was open and the search box are stored under one key each, so opening Settings in project B
+  the pane that was open, the search box and the provider picked are stored under one key each, so opening Settings in project B
   lands on the pane project A was reading. That is the rule pulls-prefs states, landing on the other side —
   the nav is the same list of panes in every project, so neither is about a repository — and it is a decision
   rather than an oversight: the *values* those panes read and write are project-scoped already, in the
   workspace database under the project's own id. The trap is for whoever adds a pane that is genuinely about
   one repository's content. Its remembered state belongs on the per-project side, which means a new key with
-  the project id in it, not another global one beside these two.
+  the project id in it, not another global one beside these three.
 - **The settings search reads names, and its index is written by hand** (`frontend/src/lib/settings-index.ts`):
   every control is listed there with the section and group it lives in, because the panes are React components
   whose blocks exist only once rendered and the suite runs in node. Two things follow. A block added without
@@ -863,17 +865,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   pull request's file on the next one's tree. The re-read is held in state and never in a ref, for the replay
   reason `use-remote-resource.ts` documents, and `use-active-file.test.tsx` pins it by moving the pull
   request on a live component — a probe that remounted instead would call the ref version green.
-- **A profile belongs to one browser, so changing browsers opens lich at its defaults**
+- **A profile belongs to one window build, so pinning another opens lich at its defaults**
   (`internal/chromium/profiledir.go`): every `lich.*` UI setting lives in the localStorage of the profile keyed
-  by the browser that opened it, and nothing copies between profiles. Pin a different browser, or fall back to
-  a system one when the bundled window dies, and lich comes up factory-fresh; the settings are still under the
-  other key. A browser pinned at a path carrying its own version (an AppImage) is a new browser on every update.
+  by the path of the window that opened it, and nothing copies between profiles. A `LICH_SHELL` pin, or the
+  macOS tab a dead window falls back to, comes up factory-fresh; the settings are still under the other key. A
+  window pinned at a path carrying its own version (an AppImage) is a new profile on every update.
 - **Every package ships lich's own window, and only macOS falls back to a system browser**
   (`internal/chromium/shell.go`, `shell/`): the Linux packages, the Windows installer and both `Lich.app`
-  bundles ship an embedded Chromium (CEF through kurogane) beside the binary, and the ladder takes it above
-  the desktop's default and every scan. The trap: the four launch paths are one, so a window-side change (a
+  bundles ship an embedded Chromium (CEF through kurogane) beside the binary, and nothing but a `LICH_SHELL` pin
+  outranks it. The trap: the four launch paths are one, so a window-side change (a
   flag in `Args`, a prefs write, the restart signal) lands on lich's own Chromium everywhere but on a Mac
-  whose window died, where it lands on a system browser, and the Go side cannot tell which it got. Windows
+  whose window died, where lich serves a plain tab and the change reaches nothing. Windows
   and macOS have one more: both were built and smoke-tested on a CI runner only (`release.yml` opens the
   window and reads a page over CDP), never on a desk, so the taskbar icon and AppUserModelID grouping on
   Windows, the Dock tile, Cmd-Tab and menu bar name on macOS, and the graceful close on restart on both are
@@ -889,7 +891,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (`internal/chromium.Run`): `go run` with no `LICH_SHELL` pin, a binary copied out of the package it shipped in, a
   package missing `lib/lich/shell`, a window that exits on a missing system library or a glibc older than 2.34
   (Debian 11, RHEL 8, which `lich-shell` will not load on) — each ends in the error dialog with the log path,
-  never in a browser on the machine; the dialog names the release page. Only macOS keeps a fallback, and only to a plain tab: a window that exits
+  never in a browser on the machine; a missing window's dialog names the release page, a crashed one's
+  quotes its FATAL lines. Only macOS keeps a fallback, and only to a plain tab: a window that exits
   with an error inside `startupGrace` (30 s, because a segfault is reported only after its core dump is
   written) hands the URL to the default browser instead.
   `lich doctor` names the window a launch would open.
@@ -942,8 +945,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **Opened as a tab there is no window lifecycle** (`main.go`, `openWithoutWindow`, macOS only): lich opens a
   plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on. Closing
   the tab leaves lich serving.
-- **The tab fallback cannot tell "opened" from "nothing happened"** (`internal/system.OpenURL`): `xdg-open`,
-  `open` and `rundll32` are started and never waited on — waiting would block for the life of the browser they
+- **The tab fallback cannot tell "opened" from "nothing happened"** (`internal/system.OpenURL`): `open` is
+  started and never waited on — waiting would block for the life of the browser they
   hand off to. A desktop with a URL handler installed but no browser behind it therefore looks like success:
   lich stays up with a notification and nothing on screen. Only a machine missing the opener itself reaches
   the dialog that carries the URL.

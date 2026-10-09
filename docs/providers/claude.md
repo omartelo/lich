@@ -14,7 +14,7 @@ the user never wrote is in every session's prompt and in `/proc/<pid>/cmdline`.
 ## Hooks
 
 Claude Code is the only provider that says what a session is waiting for
-(`frontend/src/components/sidebar/SessionCard.tsx`; the mapping table is in
+(`frontend/src/components/sidebar/SessionStatusRung.tsx`; the mapping table is in
 [`../hooks/session-state.md`](../hooks/session-state.md)). Its `Notification` carries a `message` written for a
 human, so the card reads "Claude needs your permission to use Bash".
 

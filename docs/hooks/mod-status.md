@@ -62,8 +62,9 @@ reads as three empty lists. Every list is oldest first.
   - `target`: the label of the session working it, as it was when it was sent.
   - `state`: `queued` while the task waits for the target to reach a prompt;
     after that, the target's last report as
-    [session-state](session-state.md) spells it (`busy`, `waiting`, `done`,
-    `idle`), and `""` when it has reported nothing.
+    [session-state](session-state.md) spells it (`busy`, `waiting`, `done`),
+    `interrupted` for a turn lich saw stopped, and `""` when it has reported
+    nothing or has ended (`idle`).
 - `ready`: errands that ended while nobody held the line, whose outcome waits in
   this session's inbox. The same entries the card's inbox mark counts.
   - `target`: as in `open`.

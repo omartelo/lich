@@ -36,7 +36,7 @@ failed to persist.
 
 Both sides test against the payloads in
 [`fixtures/session-start.jsonl`](fixtures/session-start.jsonl), including the
-deprecated alias and the defaulted `provider`.
+defaulted `provider`.
 
 ## Event → action mapping
 
@@ -126,7 +126,8 @@ scripted run would have said this contract could not be closed.
 - **Every provider resumes; the shell does not.** The field and the column are
   provider-agnostic, but each CLI spells resume its own way (`claude --resume
   <id>`, `codex resume <id>`, `agy --conversation <id>`, `omp -r <id>`,
-  `opencode --session <id>`, `crush --session <id>`), so both `resumeArgs` (`internal/terminal/command.go`) and
+  `opencode --session <id>`, `crush --session <id>`, `cursor-agent --resume <id>`,
+  `kiro-cli --resume-id <id>`), so both `resumeArgs` (`internal/terminal/command.go`) and
   `resumableSession` (`frontend/src/lib/session/sessions.ts`) list the kinds that
   have one. A shell session that had a provider CLI run inside it by hand carries
   an id and is still never offered a resume — the shell cannot reopen it.
@@ -143,7 +144,10 @@ scripted run would have said this contract could not be closed.
   moves that root — 1.1.19 falls back to a hardcoded `.gemini` under the home
   when it cannot resolve one — and the answer matters more there than elsewhere,
   because `agy` drops a `--conversation` it cannot find with a log line and opens
-  a brand new conversation rather than failing. opencode and Crush file no
+  a brand new conversation rather than failing. Kiro CLI's proof is
+  `~/.kiro/sessions/cli/<id>.json`, and Cursor CLI's is its chat database,
+  `chats/<md5 of the checkout>/<id>/store.db` under its config directory.
+  opencode and Crush file no
   per-session transcript,
   so the proof is a row in their own SQLite database instead
   (`internal/terminal/sessiondb.go`): `SELECT 1` on the `id` of `session` in
