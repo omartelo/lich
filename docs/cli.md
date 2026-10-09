@@ -67,7 +67,8 @@ POST http://127.0.0.1:${LICH_PORT}/rpc/spawn.<Method>?token=${LICH_TOKEN}
 on its own: it reads the coordinates from `runtime.json` (`internal/singleton`,
 mode 0600), the same file `install.sh` reads to reach a running lich for
 `/restart`. `LICH_DEV` selects the dev instance's file, as everywhere else. With
-no lich running at all, every command exits 1 with `lich: no lich is running`.
+no lich running at all, every command exits 1 with `lich: no lich is running — open lich, or run this
+inside one of its sessions`.
 
 The environment wins over the runtime file, and that order is load-bearing: a
 session belongs to the lich that spawned it, and on a machine running a daily
@@ -126,10 +127,10 @@ none answered.
 
 A word that names no subcommand is refused with `lich: unknown command "…"`, a
 guess at the one it resembles, and exit 1 — a typo does not open a window.
-Arguments the app itself takes still do: bare `lich`, and `lich --` with the
-Chromium flags behind it.
+Arguments the app itself takes still do: bare `lich`, `lich --shell <path>`, and
+`lich --` with the Chromium flags behind it.
 
-`--json` on `sessions`, `send`, `wait`, `open`, `close`, `control`, `ask`, `worktrees`, `folders`, `file`,
+`--json` on `sessions`, `send`, `wait`, `open`, `close`, `rename`, `control`, `ask`, `worktrees`, `folders`, `file`,
 `rename-folder`, `color-folder`, `cost` and `version`
 replaces the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
@@ -173,7 +174,7 @@ hook (`docs/hooks/session-state.md`), and it is the same thing its card shows:
   Claude Code, and a session that has not had a turn yet has said nothing
   either), so an empty state says nothing about whether that session is free.
 
-### `lich send [--project <name>] [--timeout <seconds>] [--private] <session> <prompt>`
+### `lich send [--project <name>] [--timeout <seconds>] [--private] [--json] <session> <prompt>`
 
 Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
 
@@ -219,7 +220,7 @@ collected is typed as usual.
   session's mod is never typed again: one its mod collected and the session never
   started on is reported here too.
 - **Never delivered**: the task was held for a session that never reached a
-  prompt — it ended, or whatever had its terminal outlasted the queue (10
+  prompt — it ended, or whatever had its terminal outlasted the queue (5
   minutes). The ticket is dropped rather than left to expire, and the output
   says the task is gone rather than waiting anywhere: it has to be sent again
   once that card shows what happened. Exit 3. A sender that had already stopped
@@ -260,13 +261,13 @@ ticket comes back at once and the message goes in when that session's agent is
 the program reading its PTY — a fresh worktree installs its dependencies before
 its agent, which routinely outlasts the caller's own `--timeout`, and losing the
 task there is exactly what a fan-out cannot afford. `send` never blocks past
-what was asked. A queue that can never end — the session dies, or 10 minutes
+what was asked. A queue that can never end — the session dies, or 5 minutes
 pass — is reported as a failure the sender can act on, never a ticket left to
 expire. `internal/terminal` tells the setup script and the agent apart by a
 marker the setup wrapper prints between them (`setupDone`): the PTY and the pid
 are the same across the `exec`, so nothing else can.
 
-### `lich wait [--timeout <seconds>] [--no-wait] [<ticket>]`
+### `lich wait [--timeout <seconds>] [--no-wait] [--json] [<ticket>]`
 
 With a ticket: waits again on that errand. Same output and exit codes as `send`. A result that
 already came back unattended is handed over on the spot — it sits in the
@@ -323,7 +324,7 @@ lich: 2 requests are open against this session, and an answer that names no tick
 Outside a session, or with nothing open, it is an error rather than a guess, and
 the ticket is still the way to name a specific errand.
 
-### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--ultracode] [--folder <name>] [--prompt <task> [--private | --subagent]]`
+### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--effort <level>] [--ultracode] [--folder <name>] [--prompt <task> [--private | --subagent]] [--json]`
 
 Opens a new session, starts it, and prints the two names it is addressed by:
 
@@ -477,8 +478,9 @@ words `send` words it with, ticket included:
 ```
 Opened session "auth-fix" (claude) in project "lich", in worktree /home/you/.local/share/lich/worktrees/1a2b/auth-fix.
 It answers to "auth-fix" and to "auth-fix-9f8e". …
-auth-fix is still working. The message was delivered; a note will be typed at the
-sending session's prompt when its result is ready. To hold the line for it instead:
+auth-fix is still working. The errand is open — a message that session was not ready
+for is held until it is — and a note will be typed at the sending session's
+prompt when its result is ready. To hold the line for it instead:
   lich wait a1b2c3d4
 ```
 
@@ -488,7 +490,7 @@ absent without `--prompt`, so a reader that branches on it is never handed an
 empty one to interpret:
 
 ```json
-{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix","name":"auth-fix-9f8e","kind":"claude","path":"/wt/auth-fix","nextSeq":5,"originSessionId":"3c4d","originLabel":"planner","delivery":{"ticket":"a1b2c3d4","target":"auth-fix","status":"pending","answer":""}}
+{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix","name":"auth-fix-9f8e","kind":"claude","path":"/wt/auth-fix","nextSeq":5,"originSessionId":"3c4d","originLabel":"planner","confined":false,"folder":"","run":false,"delivery":{"ticket":"a1b2c3d4","target":"auth-fix","status":"pending","answer":""}}
 ```
 
 `originSessionId` and `originLabel` name the session this one was opened from —
@@ -516,7 +518,7 @@ reach the send exits 0 whatever its status, a ticket included: a session opened
 seconds ago is expected to hand one back, and the open is what this command
 does. `delivery.status` is where a script reads the rest.
 
-### `lich close [--project <name>] [--worktree keep|remove] [--force] [--json] <session>`
+### `lich close [--project <name-or-path>] [--worktree keep|remove] [--force] [--json] <session>`
 
 Closes a session, addressed by either of its names, and settles what happens to
 the checkout it was the last one in.
@@ -544,7 +546,7 @@ conversation back up.
 - Unlike `sessions`, this reaches a card whose terminal was never opened: it is
   still a session, and closing it is the one thing you can do with it.
 
-### `lich rename [--project <name>] [--json] [<session>] <label>`
+### `lich rename [--project <name-or-path>] [--json] [<session>] <label>`
 
 Renames a session — the name on its card, which is also the name it is addressed
 by. The window's rename, from outside the window.
@@ -567,7 +569,7 @@ Renamed "auth-fix" to "the login bug".
 - The provider's own idea of the session's name is untouched: nothing here runs
   `/rename` inside the terminal, exactly as the window's rename does not.
 
-### `lich control [--project <name>] [--json] <session> <action> [<value>] [<args>]`
+### `lich control [--project <name-or-path>] [--json] <session> <action> [<value>] [<args>]`
 
 Drives a running Claude Code session from outside its terminal, through the
 lich-plugin mod inside it (`docs/hooks/mod-control.md`).
@@ -615,7 +617,7 @@ $ lich control auth-fix command compact "keep the test plan"
 `{"id","project","label","action","value","command_id","state"}`, `value` absent
 when the action carried none; `state` is `done`, `delivered` or `ended`.
 
-### `lich ask [--project <name>] [--json] <session> <question...>`
+### `lich ask [--project <name-or-path>] [--json] <session> <question...>`
 
 Asks a running Claude Code session a side question and prints its answer. The
 session answers from its own conversation while its turn goes on, through the
@@ -642,7 +644,7 @@ Fixing the flaky login test: the fixture user expires before the assertion.
 
 `--json` prints `{"id","project","label","answer"}`.
 
-### `lich worktrees [--project <name>] [--json]`
+### `lich worktrees [--project <name-or-path>] [--json]`
 
 Lists a project's git worktrees — what each is called, whether it holds
 uncommitted work, and which sessions are open in it:
@@ -658,7 +660,7 @@ one whose fate that session's close decides, and a checkout with none is one
 nobody is working in. The project's own directory is not listed — it is the
 checkout every project has and the one that cannot be removed.
 
-### `lich folders [--project <name>] [--json]`
+### `lich folders [--project <name-or-path>] [--json]`
 
 Lists a project's sidebar folders and the sessions filed under each, in the
 order the sidebar draws the folders:
@@ -673,7 +675,7 @@ A folder is a name on a session and nothing else, so a folder with no session
 in it does not exist and is never listed. `--json` prints
 `[{"name":"Auth","sessions":["auth-fix","login-tests"]}]`.
 
-### `lich file [--project <name>] [--json] [<session>] <folder>`
+### `lich file [--project <name-or-path>] [--json] [<session>] <folder>`
 
 Moves a session into a sidebar folder: the window's "Move to folder", from
 outside the window.
@@ -694,7 +696,7 @@ Filed "auth-fix" under "Auth".
 - `--json` prints `{"id","project","label","folder","previous"}`, `previous`
   being the folder it left (`""` for none).
 
-### `lich rename-folder [--project <name>] [--json] <folder> <new-name>`
+### `lich rename-folder [--project <name-or-path>] [--json] <folder> <new-name>`
 
 Renames a folder across every session filed under it: the window's "Rename
 folder". An empty new name (`''`) takes the folder apart, the window's
@@ -713,7 +715,7 @@ Moved "auth-fix", "login-tests" from folder "Auth" to "Login".
 - Parked sessions follow the rename, so a resumed one comes back into the
   folder under its new name.
 
-### `lich color-folder [--project <name>] [--json] <folder> <color>`
+### `lich color-folder [--project <name-or-path>] [--json] <folder> <color>`
 
 Paints every session filed under a folder: the window's folder "Color". The
 color is one of `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet` or
@@ -836,7 +838,7 @@ at lich.
 |------|--------------|
 | `list_sessions` | The live sessions that can be given work, as JSON — each with the state it last reported, `waiting` among them. |
 | `send_to_session` | `session`, `prompt`, optional `project`, `timeout_seconds` and `private` (`lich send --private`). |
-| `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
+| `wait_for_answer` | optional `ticket`, `timeout_seconds` and `no_wait` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. `no_wait` is `lich wait --no-wait` and takes no ticket. |
 | `reply_to_session` | `answer`, optional `ticket` — what a relayed message asks for; without a ticket, the one request open against the calling session, and a refusal naming each open ticket when there are two. |
 | `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model`, `effort`, `ultracode`, `folder` — `lich open` — plus optional `prompt` and `private` — `lich open --prompt [--private]`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
@@ -907,9 +909,11 @@ lich v0.25.0 — linux/amd64
   ok    log          <1ms  /home/u/.config/lich/lich.log
   ok    listener     <1ms  port 47821 is held by the running lich (pid 4242)
   skip  store        <1ms  held by the running lich (pid 4242)
-  ok    browser       2ms  /usr/bin/chromium
+  ok    browser       2ms  /usr/lib/lich/shell/lich-shell
   ok    providers     3ms  4 of 8 on PATH: claude, codex, opencode, crush
   ok    sandbox      11ms  bubblewrap confines a session here
+  ok    git          <1ms  /usr/bin/git
+  ok    gh           <1ms  /usr/bin/gh
         total        17ms
 
 lich starts here — nothing is in the way.
@@ -926,6 +930,8 @@ The checks are in boot order, and each carries its own verdict:
 | `browser` | No window resolves — neither one beside the binary nor a `LICH_SHELL` pin. lich would run and show nothing. | — |
 | `providers` | — | None on PATH: the window opens, but no session can spawn. |
 | `sandbox` | — | The backend will not start (an AppArmor policy denying user namespaces, say), so a session opened with the sandbox on will not start either; or it starts and confines nothing, so a session marked confined runs on the machine. Skipped where the platform has no backend at all. |
+| `git` | Never. | Not on PATH: branches, diffs and worktrees stay empty. |
+| `gh` | Never. | Not on PATH: pull requests, checks and PR checkouts are unavailable. |
 
 A `fail` exits 1 and a clean run exits 0, which is the automation surface here —
 there is no `--json`. It needs no TTY, no running instance and no network.
@@ -963,7 +969,7 @@ own command line (`providers.AcceptsMCPServer`):
 | Codex | `-c mcp_servers.lich.command=…` and `…args=["mcp"]` | at spawn |
 | Antigravity | an `agy mcp add` the plugin install runs — its own supported interface, so lich never formats that document | with the plugin |
 | Crush | an `mcp add` line in the block the plugin install writes into `crushrc` | with the plugin |
-| opencode | its plugin defines the same eight as tools of its own — a plugin there cannot register an MCP server | with the plugin |
+| opencode | its plugin defines all fourteen as tools of its own (lich-plugin 0.18.4 or later; earlier releases define eight, without the folder tools, `control_session` and `ask_session`), since a plugin there cannot register an MCP server | with the plugin |
 | oh-my-pi | a `lich` entry merged into `mcp.json` beside the extension the plugin install writes | with the plugin |
 | Cursor CLI | a `lich` entry merged into `~/.cursor/mcp.json` by the install — its `mcp` subcommand only lists, enables and disables what is already there | with the plugin |
 | Kiro CLI | a `kiro-cli mcp add --agent lich` the plugin install runs, so the entry lands in the agent lich owns rather than in the user's global `mcp.json` | with the plugin |
@@ -1087,7 +1093,7 @@ distinction is the point: the receiving agent must not read either as its user
 speaking, and the two are not the same kind of "not your user".
 
 A target that **has** lich's tools is offered one first — Claude Code and Codex
-always, Antigravity, opencode, oh-my-pi and Crush once the installed plugin is
+always, Antigravity, opencode, oh-my-pi, Crush and Kiro once the installed plugin is
 new enough to carry them
 (`agentplugin.HasTools`) — Cursor among them, whose tools come from the document
 its install writes rather than from the plugin it borrows from Claude Code. A session pointed at a tool it does not have loses the
@@ -1113,7 +1119,7 @@ receiving agent only because this text describes it.
   `frontend/src/providers/projects.tsx`, in its own order.
 - **The card** — `session-opened` carries the whole session
   (`{id, projectId, project, label, name, kind, path, nextSeq, originSessionId,
-  originLabel}`) rather than an
+  originLabel, confined, folder, run}`) rather than an
   id to look up: the row is already written and the PTY is already running, so
   the window has nothing to fetch and nothing to spawn. `adoptSession`
   (`frontend/src/lib/session/sessions.ts`) appends it **without focusing it** —
@@ -1220,7 +1226,7 @@ whoever asked.
   every tool it has. This does not widen lich's trust boundary (`LICH_TOKEN` is
   already in every PTY, and any process in one can already write to any
   session), but it is the first feature that uses it, and there is no switch.
-- **The tools cost context in every session, used or not.** Eight tool
+- **The tools cost context in every session, used or not.** Fourteen tool
   definitions are in the prompt of every Claude Code and Codex session lich
   spawns, whether or not that session ever talks to another one. The command
   line costs nothing until it is called; the tools are what buy discovery, and

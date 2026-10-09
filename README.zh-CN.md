@@ -21,7 +21,7 @@
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
     <a href="https://github.com/sponsors/omartelo"><img alt="Sponsor" src="https://img.shields.io/github/sponsors/omartelo?color=ea4aaa&logo=githubsponsors&label=sponsors" /></a>
   </p>
-  <img src="docs/media/session.png" alt="同一面墙上并排的四个 Claude Code 会话，各自待在自己的 git worktree 里 —— 侧栏逐个列出它们的分支和 diff 徽标，底栏显示模型、套餐额度与分支" width="900" />
+  <img src="docs/media/session.png" alt="同一面墙上并排的四个 Claude Code 会话，各自待在自己的 git worktree 里 —— 侧栏逐个列出它们的分支和 diff 徽标，底栏显示模型、套餐额度与分支" width="1000" />
   <!-- sponsor-logos: company logos go here, between the screenshot and Why lich -->
 </div>
 
@@ -42,10 +42,13 @@
   [各智能体支持到什么程度](#各智能体支持到什么程度)是那张表。
 - **留住一个真正的终端。** 由 PTY 支撑的 shell，每个项目可以开好几个，在 GPU 上渲染
   —— 滚动缓冲区可以搜索，还能挺过整页刷新。给其中一个设一个入口命令 —— `lazygit`、
-  `k9s`、`pnpm dev` —— 它每次启动都会直接进到那个工具里。底栏跟随 `cd` 并标明分支
-  —— 对于 Claude Code 或 Codex 会话，还有模型和已占用的上下文窗口；对于这两者、
-  Antigravity、Cursor CLI 和 OpenCode Go 订阅，还有你的套餐额度还剩多少；Claude Code
-  会话还能 —— 如果你要求的话 —— 显示它花了多少钱。
+  `k9s`、`pnpm dev` —— 它每次启动都会直接进到那个工具里，在 Linux、macOS 和 Windows
+  上都一样：不会先加载 shell rc 或 PowerShell profile，所以对你管用的入口命令，对你分享给
+  的人也一样管用；把开发服务器写进 `.lich/run-worktree.sh`，每个检出目录都会为它多出一张
+  **Run** 卡片，跑在 lich 为那个 worktree 预留的端口上。底栏跟随 `cd` 并标明分支
+  —— 对于 Claude Code、Codex 或 Kiro CLI 会话，还有模型和已占用的上下文窗口；对于
+  Claude Code、Codex、Antigravity、Cursor CLI 和 OpenCode Go 订阅，还有你的套餐额度还剩
+  多少；如果你要求的话，还有会话花了多少钱，只要该智能体记下了这个数。
 - **让一个会话为另一个干活。** 把任务交给另一张卡片，答案由它自己的智能体写回来，两端
   各跑着什么都不影响：智能体通过启动时交予的工具够到其他会话 —— Claude Code 和 Codex
   走 MCP —— 其余的随插件获得。这整套能力同时也是任何 shell 里的 `lich` 命令，`--json`
@@ -57,16 +60,21 @@
   一个项目想留多少面都行，每面墙在侧栏里各占一块，可以折叠、重命名，也可以拆掉。
 - **免去配置地分出一个 worktree。** 从任意基础分支开一个，lich 会把你被 gitignore 掉的
   `.env*` 文件播种进去，派给它一个既不与其他检出目录重合、也没被机器上任何进程占用的
-  开发服务器端口，并在智能体启动前跑一遍按项目配置的初始化脚本。
+  开发服务器端口，并在智能体启动前跑一遍按项目配置的初始化脚本。也可以从当前检出目录
+  尚未提交的改动开一个，这些改动会一起带过去，未跟踪的文件也包括在内。
 - **让会话在沙箱里运行。** 一个智能体可以开在操作系统的沙箱里：一个只装着该 provider
   自身状态的空白 home，机器的其余部分只读，只有它被打开时所在的那个检出目录可写。你的
   ssh 密钥、你的云凭据以及磁盘上其他所有仓库，在里面根本不存在 —— 这正是放手让智能体
   跳过权限确认的那一头的配重。Linux 用 bubblewrap，macOS 用 `sandbox-exec`；它不是
   针对恶意代码的边界，[`docs/ceilings.md`](docs/ceilings.md) 写明了它挡不住什么。
-- **在读 diff 的地方审查它。** 一个 CodeMirror 面板在实时文件树旁展示工作区改动。右键
-  选中的内容就能针对这些行写评论；整批评论会作为一条 prompt 粘贴进会话，但不发送。
+- **在读 diff 的地方审查它。** 一个 CodeMirror 面板在实时文件树旁展示工作区改动，可以
+  按需折叠只改了空白的部分，改动过的图片或 PDF 会显示改动前后。右键选中的内容就能针对
+  这些行写评论；整批评论会作为一条 prompt 粘贴进会话，但不发送。它的 Code 标签页可以浏览
+  检出目录，并搜索其中文件的文本。
 - **在这里把 Pull Request 送到终点。** 列出仓库开启的 Pull Request，把其中一个检出到
   它专属的 worktree，然后阅读 diff、内联审查并合并它 —— 用基础分支实际接受的方式。
+  在还没有 Pull Request 的分支上，**Create with agent** 会让该分支的会话去开一个，
+  你按下回车之前什么都不会发送。
 
 除此之外：[主题](docs/themes.md)可以按 JSON 导入或从 git 仓库安装，`Ctrl`/`Cmd`+`K`
 命令面板既能按名字也能按对话里说过的内容跳转，某个会话在等你输入时会发一条桌面通知，
@@ -122,7 +130,7 @@ Claude Code 的 mod 实现，其他 CLI 内部都没有能让 lich 递交命令�
 mod 配上 lich-plugin 0.16.0，会报告 Claude Code 对自己量出的数；其他 CLI 的底栏，以及没有
 它的 Claude Code 会话，显示的是 lich 从 CLI 写下的记录里读出来的数。
 History 页的 **Outside lich** 分组列出在你某个项目的检出目录里跑过、而 lich 没有持有的对话。
-lich 打开过、又被你彻底关掉的会话不会出现在里面，只有本版本之前关掉的例外：lich 靠启动时
+lich 打开过、又被你彻底关掉的会话不会出现在里面，只有 0.62.0 之前关掉的例外：lich 靠启动时
 给 Claude Code 起的名字认出自己的对话，其他七个 CLI 没有写下任何能区分的东西，所以它们的
 这类对话会在那里出现一次。
 
@@ -139,7 +147,7 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 
 | 平台 | 安装方式 | 运行时依赖 |
 | --- | --- | --- |
-| **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `zenity` —— 窗口随软件包一起附带 |
+| **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `zenity`，以及随软件包附带的窗口所需的 glibc 2.34 或更新版本（Debian 12、Ubuntu 22.04、RHEL 9 及以上） |
 | **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | 无需任何东西 —— Apple Silicon 和 Intel 上窗口都随应用一起附带 |
 | **Windows** | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序或便携版 zip，或使用 Scoop：`scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json` | 无需任何东西，每种方式都自带窗口 |
 
@@ -156,8 +164,8 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
 2. **打开一个项目** —— 标签栏里的 `+` 会列出你最近关掉的项目，也能调起系统的文件夹
    选择器；指向一个 git 仓库即可。
 3. **把 lich 指向你的智能体** —— 首次启动会列出在你机器上找到的智能体；之后可以在
-   全局设置 › Providers 里设置各自的二进制文件路径，并选定默认用哪一个。项目可以沿用
-   这个默认，也可以在项目设置 › Providers 里选另一个 provider。
+   设置 › Providers 里设置各自的二进制文件路径，并选定默认用哪一个。项目可以沿用
+   这个默认，也可以在同一屏里选另一个 provider。
 4. **开一个会话** —— *New Session* 会在项目里启动一个跑着你的智能体的终端。每个
    checkout 的标题栏也有一个 `+` 菜单，可以在那个 checkout 里直接打开任意已启用的
    provider 或一个纯终端；点标题栏本身则会折叠或展开它下面的会话。
@@ -166,13 +174,12 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
 
 ## 配置
 
-- **智能体** —— 在全局设置 › Providers 里为每个 provider 设定二进制文件路径，并选定
-  全局默认。项目设置 › Providers 可以为单个项目覆盖这个选择；**Use default** 会移除
-  这层覆盖，之后全局默认的变化便会自动流过来。
-  lich 能读到套餐的 provider，其一节的开头是你的套餐还剩多少；Claude Code 和 Codex 两节
-  往下是底栏会说些什么的那一档梯子
-  —— 上下文圆环，以及 Claude Code 才有的费用读数；费用那一档默认关闭，因为只有当你按
-  token 计费时这个数字才有意义。
+- **智能体** —— 在设置 › Providers 里为每个 provider 设定二进制文件路径，并选定所有
+  项目的默认。那里当前项目的那一行可以覆盖这个选择；**Clear** 会移除这层覆盖，之后默认
+  的变化便会自动流过来。
+  lich 能读到套餐的 provider，其一节的开头是你的套餐还剩多少。底栏显示什么，在设置 ›
+  Appearance 里拖动它的各项来设定；费用读数一开始是隐藏的，因为只有当你按 token 计费时
+  这个数字才有意义。
 - **Worktree** —— 项目仓库里的 `.lich/setup-worktree.sh` 会在新 worktree 的终端里
   先于智能体运行；New worktree 对话框会展示这个脚本，若仓库没有则给出检测到的建议。
   `.worktreeinclude` 文件用来调整哪些被 gitignore 的文件会被复制过去。
@@ -183,9 +190,17 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
 
 ## 隐私与更新
 
-一切都跑在你自己的机器上。没有账号，不用登录，没有遥测 —— 后端是一个带 token 鉴权的
-本地回环监听器，除了更新检查之外没有任何东西离开 `localhost`：启动时以及每小时向 GitHub
-Releases 发一次版本查询。更新在 Windows/macOS 上就地应用，在 Arch 上通过 AUR 进行。
+一切都跑在你自己的机器上。没有账号，不用登录，没有遥测：后端是一个带 token 鉴权的本地
+回环监听器。lich 只会为下面这些事主动联网，除此之外没有别的：
+
+- **更新**：启动时以及每小时向 GitHub Releases 查询一次版本，启动时还会读取 GitHub 上
+  lich 插件的发布列表。
+- **套餐用量**：各 provider 自己的用量接口（Anthropic、OpenAI、Cursor、OpenCode Go），
+  用会话的 CLI 已有的登录，最多每五分钟一次。Antigravity 的套餐直接问 `agy` 本身。
+- **价格**：GitHub 上 LiteLLM 公开的价格表，只在内置价格表不认识某个模型时取一次。
+
+Windows 安装程序装的版本会就地更新；用 Homebrew、Scoop、AUR 或 Linux 软件包装的，
+则通过各自的包管理器更新，lich 会把命令递给你。
 设置 › 帮助会在你把日志附到 bug 报告之前，说明日志文件里都带了什么 —— 路径、项目名和
 分支名、你的 gh 登录名，绝不包含会话 token；`lich rage` 会把这份报告收进一个压缩包，
 而不上传其中任何内容。
@@ -196,8 +211,9 @@ Releases 发一次版本查询。更新在 Windows/macOS 上就地应用，在 A
 WebSocket）伺服内嵌的 React 18 / TypeScript / Vite 前端。终端是 xterm.js 配 WebGL
 插件；代码和 diff 界面是 CodeMirror 6。Chromium 外壳有一份决策记录：
 [`docs/chromium-shell.md`](docs/chromium-shell.md)。前置条件是 **Go 1.27.0+**、
-**Node + pnpm** 和 **[Task](https://taskfile.dev)** —— 不需要 C 工具链，也不需要
-系统开发库。
+**Node + pnpm** 和 **[Task](https://taskfile.dev)** —— Go 二进制文件不需要 C 工具链。
+窗口（`shell/`，基于 CEF 的 Rust）另外需要 Rust 工具链、CMake 和 Ninja，Linux 上还要
+Chromium 的开发库，Windows 上还要 MSVC；[CONTRIBUTING.md](CONTRIBUTING.md) 列出了它们。
 
 ```bash
 task dev      # 热重载开发模式（Vite 跑在 :9245）

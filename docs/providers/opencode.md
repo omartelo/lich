@@ -19,7 +19,7 @@ lich's side is visible in lich.
 ## Hooks
 
 opencode's `.asked` events carry only the thing being asked about (`permission`, `action`), so a waiting card
-reads a bare `edit` (`frontend/src/components/sidebar/SessionCard.tsx`; the mapping table is in
+reads a bare `edit` (`frontend/src/components/sidebar/SessionStatusRung.tsx`; the mapping table is in
 [`../hooks/session-state.md`](../hooks/session-state.md)). That says which card to open and not what it will ask.
 
 ## Transcript & cost
@@ -44,8 +44,8 @@ discovery that lags, which is the whole reason the tools exist.
 
 ## Account
 
-opencode runs on the user's own API keys, so there is no plan account to name (`internal/quota`, `Plan.Account`),
-which is the same reason it has no gauge.
+opencode runs on the user's own API keys unless an OpenCode Go key is stored; that subscription gets a gauge
+(`internal/quota`, `opencodePlan`) but names no account (`Plan.Account`), since its usage route returns none.
 
 ## Sandbox
 

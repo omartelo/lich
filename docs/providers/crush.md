@@ -15,7 +15,7 @@ per-spawn append flag, so the point the briefing makes exists only in lich's MCP
 Crush reports no session state at all (the mapping table is in
 [`../hooks/session-state.md`](../hooks/session-state.md)), so no turn ever opens or closes there. Two things
 follow. A waiting card sends no reason and keeps the generic "Waiting on you"
-(`frontend/src/components/sidebar/SessionCard.tsx`), which means the harness never spoke and not that the block
+(`frontend/src/components/sidebar/SessionStatusRung.tsx`), which means the harness never spoke and not that the block
 is trivial. And keep-awake has nothing to listen to (`internal/awake`, `turnLog.onOpen`): a Crush session left
 working behind a locked screen sleeps as it always did, and no card says so.
 
