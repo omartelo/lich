@@ -50,6 +50,66 @@ func (s *Service) WorkerAnswered(workerID, text string) {
 	s.finishIfTurnEnded(workerID)
 }
 
+// The reasons a worker's mod gives for a turn that ended with nothing left
+// running and no answer (docs/hooks/mod-answer.md, Unanswered turns).
+const (
+	UnansweredBlank   = "blank"
+	UnansweredError   = "error"
+	UnansweredRefusal = "refusal"
+)
+
+// unansweredWhy is what the caller reads about each reason, in the place a
+// report would be.
+var unansweredWhy = map[string]string{
+	UnansweredBlank:   "The worker's last turn ended without a message.",
+	UnansweredError:   "The worker's last turn ended in an API error.",
+	UnansweredRefusal: "The worker's last turn ended in a refusal.",
+}
+
+// IsUnansweredReason is whether reason is one the contract names.
+func IsUnansweredReason(reason string) bool {
+	_, ok := unansweredWhy[reason]
+	return ok
+}
+
+// WorkerUnanswered ends the one subagent errand open at workerID as
+// unanswered, the way a turn ending without a reply ends an ordinary errand:
+// its mod reported a turn that left nothing running and had no answer, so
+// nothing else ever would end it while the worker runs. It is ignored where
+// WorkerAnswered is, for an errand that already ended, and for an API error
+// while a usage limit's continuation is parked at the worker, since that
+// continuation is the turn that answers.
+//
+// The errand stays answerable by its ticket (lapseLocked) and the worker is not
+// finished: its user can still steer it to an answer from its card.
+func (s *Service) WorkerUnanswered(workerID, reason string) {
+	s.mu.Lock()
+	id, ok := s.subagentErrandLocked(workerID)
+	t := s.tickets[id]
+	resumes := reason == UnansweredError && s.resumes[workerID]
+	if !ok || t == nil || resumes || s.awaitsOutcomeLocked(workerID) {
+		s.mu.Unlock()
+		return
+	}
+	delete(s.tickets, id)
+	t.why = unansweredWhy[reason]
+	close(t.stalled)
+	s.lapseLocked(id, t, StatusUnanswered)
+	unattended := t.attended == 0
+	if unattended {
+		s.stashLocked(id, t, StatusUnanswered, t.why)
+	}
+	s.mu.Unlock()
+
+	s.clear(t)
+	if s.events != nil {
+		s.events.Emit(StalledEventName, StalledEvent{ID: t.fromID, TargetID: t.targetID, Target: t.target})
+	}
+	if unattended {
+		s.announceInbox(t.fromID)
+	}
+}
+
 // subagentErrandLocked is the single subagent errand at workerID that an answer
 // can still close: open and handed over, or lapsed. Called under s.mu.
 func (s *Service) subagentErrandLocked(workerID string) (string, bool) {

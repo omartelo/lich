@@ -512,8 +512,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the asker hears once per block when the worker waits on a permission, and the report comes back whole in a
   `[lich]` note through the asker's mod. The worker's own mod answers for it (docs/hooks/mod-answer.md), so it is
   handed the task with no ticket and its last message is its report; a worker whose mod had not polled when the
-  task went in, or runs a lich-plugin older than 0.17.0, is handed the ticket instead, and one whose final turn
-  ends blank, aborted, in an API error or a refusal leaves its errand open with nothing reported. A worker's report
+  task went in, or runs a lich-plugin older than 0.17.0, is handed the ticket instead. A final turn that ends blank
+  or in a refusal ends the errand `unanswered` with that reason (`relay.WorkerUnanswered`), once the plugin posts
+  it (docs/hooks/mod-answer.md, Unanswered turns); until then, and for a turn aborted with Esc or ended by an API
+  error, whose background list the plugin cannot read yet, the errand stays open with nothing reported while the
+  worker runs. An API error's `unanswered` can beat the parked usage-limit continuation it should yield to, and the
+  caller then hears `unanswered` before that continuation's report. A worker's report
   waits for the errands it sent itself (`relay.awaitsOutcomeLocked`), since Claude Code does not list them as
   background work; one of those that ages out on `ticketTTL` reaches no prompt, and the report then waits for the
   next turn something else starts in the worker. Closing a worker
