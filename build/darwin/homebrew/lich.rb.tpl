@@ -34,8 +34,6 @@ cask "lich" do
     window fail to open, lich opens as a tab in your default browser instead
     and keeps running after the tab is closed, so stop it from the terminal
     or by signalling the process.
-
-    macOS support is experimental — see the project README.
   EOS
 
   zap trash: [

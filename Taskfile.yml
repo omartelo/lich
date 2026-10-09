@@ -4,7 +4,7 @@ version: '3'
 # --app window — see docs/chromium-shell.md. That window is lich's own, an
 # embedded Chromium built out of shell/ (Rust, CEF) and launched like a
 # browser, on Linux, Windows and Apple Silicon; an Intel Mac still opens the
-# system browser. Linux first, Windows supported; the macOS build is experimental.
+# system browser. Linux first; Windows and macOS supported.
 
 vars:
   APP_NAME: "lich"
@@ -101,7 +101,7 @@ tasks:
       - cmd: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "{{.LDFLAGS}} -H=windowsgui" -o {{.BIN_DIR}}/{{.APP_NAME}}.exe .
 
   build:mac:
-    desc: Cross-compile the macOS binaries (experimental)
+    desc: Cross-compile the macOS binaries
     deps: [build:frontend]
     cmds:
       # Both arches: Apple Silicon (arm64) and Intel (amd64). Pure Go, so both

@@ -1,7 +1,7 @@
 # Installing lich
 
-lich targets Linux x86_64 and Windows x64, with the same window on both; an
-experimental macOS build ships alongside them. Every artifact comes from the
+lich targets Linux x86_64, Windows x64 and macOS (Apple Silicon and Intel), with
+the same window on all three. Every artifact comes from the
 [Releases](https://github.com/omartelo/lich/releases) page.
 
 Pick your system:
@@ -10,7 +10,7 @@ Pick your system:
 - [Fedora / RHEL](#fedora--rhel)
 - [Arch](#arch)
 - [Tarball (any distro)](#tarball)
-- [macOS (experimental)](#macos-experimental)
+- [macOS](#macos)
 - [Windows](#windows)
 - [Verifying checksums](#verifying-checksums)
 - [If it does not start](#if-it-does-not-start)
@@ -117,7 +117,7 @@ why. `zenity` still comes from your package manager. A tarball install updates
 by hand: the update prompt links the release page, since a package installed
 over it would leave the old binary first on your PATH.
 
-## macOS (experimental)
+## macOS
 
 From the [tap](https://github.com/omartelo/homebrew-tap) — Apple Silicon and
 Intel both:

@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   has none yet and a PR button shows where the PR number would be; clicking it
   types the request to open one at that session's prompt, ready to send.
 
+### Changed
+
+- **macOS is no longer experimental.** The Homebrew cask has held up in real
+  use on Apple Silicon and Intel, so the README, the install guide, the site
+  and the cask list macOS beside Linux and Windows as supported.
+
 ### Fixed
 
 - **A terminal opened from a session in the project's own directory joins that
