@@ -523,6 +523,7 @@ func TestAnUnansweredTurnLeavesAnOrdinaryErrandAlone(t *testing.T) {
 	svc.WorkerUnanswered("s2", UnansweredBlank)
 	expectOpen(t, svc, "t1")
 }
+
 // A worker that answers by its ticket and runs a subagent of its own in the
 // background ends its turn waiting for that subagent: the report reaching its
 // prompt is what resumes it. That turn ending is not the worker finishing
