@@ -78,8 +78,8 @@ var commands = []command{
 			"--private hands it over the way `send --private` does. --subagent opens\n" +
 			"it as this session's subagent: in this session's checkout unless\n" +
 			"--worktree names one, filed under a folder named after this session,\n" +
-			"its report handed back whole. Prints the name the new session is\n" +
-			"addressed by.",
+			"its report handed back whole (experimental: may change outside\n" +
+			"semver). Prints the name the new session is addressed by.",
 	},
 	{
 		name: "close",
@@ -105,7 +105,8 @@ var commands = []command{
 			"back to its own), or run one of its slash commands. Waits up to 10\n" +
 			"seconds (60 for a slash command) for the session to confirm. One it\n" +
 			"took and has not confirmed prints its id and exits 2: it still goes\n" +
-			"through. One it never took is withdrawn, and fails: nothing ran.",
+			"through. One it never took is withdrawn, and fails: nothing ran.\n" +
+			"Experimental: may change outside semver.",
 	},
 	{
 		name: "ask",
@@ -113,7 +114,8 @@ var commands = []command{
 		about: "Ask a running Claude Code session a side question and print its answer.\n" +
 			"It answers from its own conversation without stopping its turn, and\n" +
 			"neither the question nor the answer enters that conversation. Waits up\n" +
-			"to 90 seconds; an answer that comes later is dropped.",
+			"to 90 seconds; an answer that comes later is dropped.\n" +
+			"Experimental: may change outside semver.",
 	},
 	{
 		name: "worktrees",

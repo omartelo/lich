@@ -454,7 +454,9 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   `--private` hands it over the way `lich send --private` does, and is refused
   without `--prompt`, before anything is opened.
 - `--subagent` opens the session as the **calling session's subagent**, the way
-  lich-plugin's mod turns Claude Code's own `Agent` call into a card. It needs
+  lich-plugin's mod turns Claude Code's own `Agent` call into a card.
+  **Experimental**: it may change outside semver
+  ([stability.md](stability.md#what-is-experimental)). It needs
   `--prompt` and a calling session (`LICH_SESSION_ID`), and refuses `--project`,
   `--folder` and `--private`, all before anything is opened. The worker:
   - opens in the **caller's checkout** — its worktree, or the project directory
@@ -617,7 +619,8 @@ Renamed "auth-fix" to "the login bug".
 ### `lich control [--project <name-or-path>] [--json] <session> <action> [<value>] [<args>]`
 
 Drives a running Claude Code session from outside its terminal, through the
-lich-plugin mod inside it (`docs/hooks/mod-control.md`).
+lich-plugin mod inside it (`docs/hooks/mod-control.md`). **Experimental**: it may
+change outside semver ([stability.md](stability.md#what-is-experimental)).
 
 ```
 $ lich control auth-fix prompt "run the tests again"
@@ -667,7 +670,8 @@ when the action carried none; `state` is `done`, `delivered` or `ended`.
 Asks a running Claude Code session a side question and prints its answer. The
 session answers from its own conversation while its turn goes on, through the
 lich-plugin mod (`docs/hooks/mod-control.md`); neither the question nor the
-answer enters that conversation.
+answer enters that conversation. **Experimental**: it may change outside semver
+([stability.md](stability.md#what-is-experimental)).
 
 ```
 $ lich ask auth-fix what are you working on
@@ -888,8 +892,8 @@ at lich.
 | `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model`, `effort`, `ultracode`, `folder` — `lich open` — plus optional `prompt` and `private` — `lich open --prompt [--private]`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |
-| `control_session` | `session`, `action` (`prompt`, `abort`, `model`, `effort`, `command`), optional `value`, `args` (`command` only) and `project`. `lich control`. Delivered is a result, not an error; a command the session never took is withdrawn and fails. |
-| `ask_session` | `session`, `question`, optional `project`. `lich ask`: the answer is the result, and every way it ends without one is an error. |
+| `control_session` | Experimental. `session`, `action` (`prompt`, `abort`, `model`, `effort`, `command`), optional `value`, `args` (`command` only) and `project`. `lich control`. Delivered is a result, not an error; a command the session never took is withdrawn and fails. |
+| `ask_session` | Experimental. `session`, `question`, optional `project`. `lich ask`: the answer is the result, and every way it ends without one is an error. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |
 | `list_folders` | optional `project`: the folders and the sessions in each, as JSON. `lich folders`. |
 | `file_session` | `folder` (`""` takes the session out), optional `session` (omitted files the caller's own) and `project`. `lich file`. |

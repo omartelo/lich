@@ -553,7 +553,8 @@ func (c *client) open(args []string) error {
 // subagentFlagUsage describes --subagent on `lich open`.
 const subagentFlagUsage = "open the session as this session's subagent: in this session's checkout " +
 	"unless --worktree names one, filed under a folder named after this session, its report " +
-	"handed back whole, and no expiry while it runs; needs --prompt"
+	"handed back whole, and no expiry while it runs; needs --prompt. Experimental: may change " +
+	"outside semver"
 
 // checkSubagent refuses an `open --subagent` that cannot be one, before
 // anything is opened: a subagent works for the session asking, so it needs one
