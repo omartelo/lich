@@ -73,7 +73,7 @@ test("a project tab navigates without being a link, and its × closes without na
   expect(onClose).toHaveBeenCalledOnce()
   expect(pathname()).toBe("/start")
 
-  await click(mounted, '[title="/src/lich"]')
+  await click(mounted, "button")
   expect(pathname()).toBe("/projects/p1")
   await mounted.unmount()
 })

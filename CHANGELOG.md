@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Hovering a project tab shows a tooltip with the project's name and full
+  path.** It replaces the browser's plain title box and matches the tooltip on
+  a session card.
+
 ### Fixed
 
 - **The comment box on a diff shows its text cursor, and keeps it after your
