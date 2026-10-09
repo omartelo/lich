@@ -92,9 +92,14 @@ cross-project queue, and neither fits without widening the primitive for a singl
 ## Testing
 
 - vitest defaults to the **node environment**. The gate covers pure logic (stores, parsers, reducers,
-  `lib/*`); it does **not** render components, so a base-ui/DOM render crash passes the suite green.
-- So: verify any render-path change by hand in `task dev`, and check base-ui contracts (below). Assert the
-  empty/default/error branch of a component's data, not just the happy path.
+  `lib/*`); components render only where a suite opts into jsdom.
+- **Smoke**: `src/App.smoke.test.tsx` boots the whole app over a fake backend (`src/test/smoke-backend.ts`,
+  stubbed at fetch/WebSocket) and walks every screen reachable with no session open, failing on any
+  `console.error` or any RPC the scenario did not answer. A new screen, pane or route gets a step there; a
+  new RPC on one of those paths gets its answer in `backendFor`. It reaches no terminal (xterm needs a
+  canvas), so a render-path change inside a session still needs `task dev`.
+- Check base-ui contracts (below) and assert the empty/default/error branch of a component's data, not
+  just the happy path.
 - Coverage bar is 80% on the logic that *is* testable. Don't chase coverage by rendering in node.
 
 ### Render budgets
