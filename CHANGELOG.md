@@ -43,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports back "unanswered" as soon as that turn ends without a reply, instead
   of waiting for the deadline. Stopping a turn with Esc rings once.
 
+- **A subagent worker no longer stalls when a task it handed on goes
+  unanswered.** After the hour a task is kept open, the worker is told the task
+  expired and goes on to report back, instead of keeping its own report until
+  something else woke it.
+
 ## [0.64.0] - 2026-10-09
 
 ### Added

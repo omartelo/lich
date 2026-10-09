@@ -525,8 +525,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   worker runs. An API error's `unanswered` can beat the parked usage-limit continuation it should yield to, and the
   caller then hears `unanswered` before that continuation's report. A worker's report
   waits for the errands it sent itself (`relay.awaitsOutcomeLocked`), since Claude Code does not list them as
-  background work; one of those that ages out on `ticketTTL` reaches no prompt, and the report then waits for the
-  next turn something else starts in the worker. Closing a worker
+  background work; one of those that ages out on `ticketTTL` is filed in the worker's inbox as `expired`
+  (`relay.sweep`, run on the scheduled-prompt tick, so it lands up to 30 seconds late), and that notice starts
+  the turn whose report is the answer. Closing a worker
   ends its errand (`relay.SessionClosed`, wired before the PTY is killed so the SessionEnd its CLI reports finds
   nothing to call unanswered) without a word to an asker that closed it itself, as TaskStop does; closed from
   its card or by another session, the asker is told it `stopped`. Who closed it is the session `lich close` runs

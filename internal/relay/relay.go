@@ -122,6 +122,10 @@ const (
 	// holding the line, or when it is itself a worker somebody waits on; a
 	// worker anyone else closed has it filed in its caller's inbox.
 	StatusStopped = "stopped"
+	// StatusExpired means nobody answered within ticketTTL and the ticket was
+	// dropped (sweep). Only a sender that is itself a worker somebody waits on
+	// hears it, filed in its inbox; any other sender finds the ticket unknown.
+	StatusExpired = "expired"
 )
 
 // Session states the relay watches, spelled as the hook contract reports them
@@ -813,17 +817,24 @@ func lastActive(t *ticket) time.Time {
 // process. Called under the lock on the paths that already hold it, which is
 // often enough for a map that grows one entry per errand. A ticket a caller is
 // blocked on is never dropped: that caller would be told the errand is still
-// open on a ticket that is already gone.
+// open on a ticket that is already gone. A sender that is itself a worker
+// somebody waits on has its report held by the errand (awaitsOutcomeLocked),
+// so the expiry is filed in its inbox, where it resumes it, as SessionClosed
+// files a stop.
 func (s *Service) sweep() ([]*ticket, []string) {
 	var expired []*ticket
+	touched := map[string]bool{}
 	cutoff := s.now().Add(-ticketTTL)
 	for id, t := range s.tickets {
 		if t.attended == 0 && lastActive(t).Before(cutoff) && !s.workerHolds(t.subagent, t.targetID) {
 			delete(s.tickets, id)
 			expired = append(expired, t)
+			if !t.private && s.owesSubagentAnswerLocked(t.fromID) {
+				s.stashLocked(id, t, StatusExpired, "")
+				touched[t.fromID] = true
+			}
 		}
 	}
-	touched := map[string]bool{}
 	for id, e := range s.ready {
 		if e.ready.Before(cutoff) && !s.workerHolds(e.subagent, e.targetID) {
 			delete(s.ready, id)
@@ -849,6 +860,17 @@ func (s *Service) sweep() ([]*ticket, []string) {
 		senders = append(senders, fromID)
 	}
 	return expired, senders
+}
+
+// expireTickets runs sweep on the relay's own clock, so an errand ages out
+// even while nobody calls in: an outcome filed for it (sweep) has to reach its
+// sender without waiting for that sender's next call.
+func (s *Service) expireTickets() {
+	s.mu.Lock()
+	expired, senders := s.sweep()
+	s.mu.Unlock()
+	s.clearAll(expired)
+	s.announceInboxAll(senders)
 }
 
 // workerHolds is whether a subagent's worker is still running, which keeps its

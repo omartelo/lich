@@ -708,6 +708,8 @@ func mcpOutcome(result relay.Result) string {
 		return undeliveredText(result.Target)
 	case relay.StatusStopped:
 		return stoppedText(result.Target)
+	case relay.StatusExpired:
+		return expiredText(result.Target)
 	}
 	if result.Private {
 		return fmt.Sprintf(
@@ -747,6 +749,8 @@ func collectedText(collected relay.Collected) string {
 			parts = append(parts, undeliveredText(result.Target))
 		case relay.StatusStopped:
 			parts = append(parts, stoppedText(result.Target))
+		case relay.StatusExpired:
+			parts = append(parts, expiredText(result.Target))
 		}
 	}
 	if len(collected.Open) > 0 {
@@ -802,6 +806,17 @@ func stoppedText(target string) string {
 		"The %q session was closed before it answered, so the task was stopped and no "+
 			"answer is coming.",
 		target,
+	)
+}
+
+// expiredText is what both surfaces say about an errand nobody answered within
+// the hour a ticket lives: the ticket is gone, so a late answer has nowhere to
+// land, and the reader decides without it.
+func expiredText(target string) string {
+	return fmt.Sprintf(
+		"The %q session did not answer within the hour a task is kept open, so the task "+
+			"expired and no answer is coming. Open the %q card to see where it stands.",
+		target, target,
 	)
 }
 
