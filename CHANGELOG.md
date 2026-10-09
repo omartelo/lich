@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   use on Apple Silicon and Intel, so the README, the install guide, the site
   and the cask list macOS beside Linux and Windows as supported.
 
+- **Driving, asking and subagent cards are marked experimental.** `lich control`,
+  `lich ask`, `lich open --subagent` and the MCP tools `control_session` and
+  `ask_session` rest on Claude Code internals it does not document, so they may
+  change or stop working in a minor or patch release. The stability promise
+  gains an experimental tier that lists them, and `lich help`, docs/cli.md and
+  the tool descriptions now say so.
+
 ### Fixed
 
 - **A terminal opened from a session in the project's own directory joins that

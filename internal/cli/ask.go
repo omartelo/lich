@@ -49,7 +49,8 @@ var askTools = []mcpTool{
 			"goes on, and neither the question nor the answer enters that conversation. It sees " +
 			"the conversation as of its last finished reply, not the step it is taking right now, " +
 			"and cannot use tools to find out more. Waits up to 90 seconds; ask for a brief " +
-			"answer. Claude Code sessions only, and never your own.",
+			"answer. Claude Code sessions only, and never your own. " +
+			"Experimental: may change outside semver.",
 		Schema: schema(map[string]any{
 			"session": property("string",
 				"The session to ask, by the label on its card, the name it answers to or its lich id."),

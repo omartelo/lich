@@ -101,7 +101,8 @@ var controlTools = []mcpTool{
 			"nothing ran. Claude Code sessions only, and " +
 			"never your own. model and effort change that session only; the slash commands /model " +
 			"and /effort are refused because Claude Code would save them as the user's default for " +
-			"every new session.",
+			"every new session. " +
+			"Experimental: may change outside semver.",
 		Schema: schema(map[string]any{
 			"session": property("string",
 				"The session to drive, by the label on its card, the name it answers to or its lich id."),
