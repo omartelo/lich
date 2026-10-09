@@ -13,7 +13,7 @@ license = "AGPL-3.0-only"
 # key decision (kurogane#21), window_class / window_title / window_icon /
 # cache_dir (kurogane#11), the main window's geometry handed to the
 # delegate (kurogane#19) and Chromium's status bubble kept off the window
-# (e58b415, not proposed upstream yet); move back to 0x48piraj/kurogane once they land
+# (kurogane#23); move back to 0x48piraj/kurogane once they land
 # (build/linux/shell/README.md). CEF comes through it (kurogane::cef): a
 # dependency of our own would turn cef's default features back on for the
 # whole build.

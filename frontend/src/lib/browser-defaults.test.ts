@@ -96,6 +96,14 @@ describe("isAppContextMenu on real markup", () => {
     ).toBe(false)
   })
 
+  // A checkbox or a radio takes no text: the window would have nothing to put in
+  // the menu, and a browser tab would offer its page menu instead.
+  it("claims a checkbox and a radio, which are inputs without text", () => {
+    expect(isAppContextMenu(mount('<input type="checkbox" data-target>'))).toBe(true)
+    expect(isAppContextMenu(mount('<input type="radio" data-target>'))).toBe(true)
+    expect(isAppContextMenu(mount('<input type="number" data-target>'))).toBe(false)
+  })
+
   // A read-only CodeMirror view carries contenteditable="false": nothing to edit there.
   it("claims a contenteditable that is switched off", () => {
     expect(isAppContextMenu(mount('<div contenteditable="false" data-target>x</div>'))).toBe(true)
@@ -114,12 +122,13 @@ describe("isAppContextMenu on real markup", () => {
 // the matchers above — a keydown listener on the bubble phase reaches the browser
 // too late, and Ctrl+W closes the window, which quits lich.
 describe("installBrowserDefaults", () => {
-  const install = () => {
+  const install = (selectedText = "") => {
     const listeners = new Map<string, { handler: (event: unknown) => void; capture: unknown }>()
     const target = {
       addEventListener: (type: string, handler: (event: unknown) => void, capture?: unknown) => {
         listeners.set(type, { handler, capture })
       },
+      getSelection: () => ({ toString: () => selectedText }),
     } as unknown as Window
     installBrowserDefaults(target)
     const fire = (type: string, event: Record<string, unknown>) => {
@@ -151,6 +160,14 @@ describe("installBrowserDefaults", () => {
 
     expect(fire("contextmenu", { target: { closest: () => null } })).toHaveBeenCalled()
     expect(fire("contextmenu", { target: { closest: () => ({}) } })).not.toHaveBeenCalled()
+  })
+
+  // Selected text copies from the window's menu, wherever it sits: a path, an
+  // error, a PR description.
+  it("leaves the menu alone while text is selected, so Copy is offered", () => {
+    const { fire } = install("/home/you/src/lich")
+
+    expect(fire("contextmenu", { target: { closest: () => null } })).not.toHaveBeenCalled()
   })
 
   // Bubble phase, so a drop zone of our own runs first; unconditional, because

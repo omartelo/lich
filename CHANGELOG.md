@@ -47,8 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flashes the light theme first, custom themes included.
 - **The interface no longer selects like a web page.** Ctrl+A and stray drags no
   longer highlight the whole interface (paths, errors and PR text stay selectable),
-  text fields offer Cut, Copy and Paste on right-click, and images and links can't
-  be dragged out of the window.
+  text fields offer Cut, Copy and Paste on right-click, selected text offers Copy,
+  and images and links can't be dragged out of the window.
 
 ## [0.62.1] - 2026-10-08
 
