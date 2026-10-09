@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a session on the branch the project already has checked out, used to start a
   second group for the same directory, and closing that session offered to
   remove the project as if it were a worktree.
+- **The session sidebar no longer clips its own header at its narrowest.**
+  Dragged all the way in, the collapse button slid under the terminal; the
+  minimum width now fits New Session, the filter and the collapse button.
 
 ## [0.64.0] - 2026-10-09
 
