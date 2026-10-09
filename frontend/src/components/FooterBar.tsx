@@ -165,7 +165,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
           aria-label={side === "left" ? "Left footer" : "Right footer"}
           data-footer-side={side}
           className={cn(
-            "flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1",
+            "flex min-w-0 flex-wrap items-center gap-1",
             side === "right" && "ml-auto justify-end",
           )}
         >

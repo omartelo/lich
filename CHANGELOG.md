@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text.** On a dark theme the cursor was painted black and could not be
   seen, and every change the agent made to the file sent it back to the start of
   the comment.
+- **The footer's buttons sit as close together as the rest of the window's.**
+  They were three times further apart than the buttons in the tab bar and the
+  dock.
 
 ## [0.63.0] - 2026-10-09
 
