@@ -226,7 +226,8 @@ func TestKiroAgentWritesNoTimeout(t *testing.T) {
 
 // TestKiroScriptsAreFetchedOnce proves the install asks the release for each
 // script one time even though report-state is named by three events, and that
-// the touched report — which no kiroHooks row names — is fetched at all.
+// the touched report and the conversation-id parser the reports source — which
+// no kiroHooks row names — are fetched at all.
 func TestKiroScriptsAreFetchedOnce(t *testing.T) {
 	got := kiroScripts()
 	want := []string{
@@ -234,6 +235,7 @@ func TestKiroScriptsAreFetchedOnce(t *testing.T) {
 		"hooks/report-state.sh",
 		"hooks/report-tool.sh",
 		"hooks/report-touched.sh",
+		"hooks/conversation-id.sh",
 	}
 	slices.Sort(got)
 	slices.Sort(want)
@@ -275,6 +277,28 @@ func kiroTestHome(t *testing.T) (configDir, home string) {
 		t.Fatalf("config dir %q is outside the test's home %q", configDir, root)
 	}
 	return configDir, home
+}
+
+// From plugin 0.20 the state, tool and session-start reports source the
+// conversation-id parser instead of carrying it, so a script directory without
+// it reports no id and no session-start at all.
+func TestKiroInstallWritesTheSourcedConversationIDParser(t *testing.T) {
+	files := kiroFiles()
+	files[tagged("hooks/conversation-id.sh")] = "# sourced\n"
+	s, _ := fileServer(t, files)
+	t.Setenv(fakeCLIGuard, "1")
+	t.Setenv(fakeCLILog, filepath.Join(t.TempDir(), "cli.log"))
+	s.bins = stubBin(mustExecutable(t))
+	configDir, _ := kiroTestHome(t)
+
+	if err := s.Install(providers.Kiro); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	path := filepath.Join(configDir, "lich", "plugin", "hooks", providers.Kiro, "conversation-id.sh")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the parser the reports source was not installed: %v", err)
+	}
 }
 
 // kiroFiles is the release the fake server hands back: one body per script the

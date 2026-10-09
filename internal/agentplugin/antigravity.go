@@ -46,8 +46,9 @@ const (
 )
 
 // antigravityScripts is every file the registration runs or reads, fetched from
-// the release and written beside it. `detail.jq` is not a hook: the state and
-// tool reports read it with `jq -r -f`, so it has to land with them.
+// the release and written beside it. `detail.jq` and `conversation-id.sh` are
+// not hooks: the state and tool reports read the first with `jq -r -f`, and the
+// reports source the second, so both have to land with them.
 var antigravityScripts = []string{
 	"hooks/report-session-start.sh",
 	"hooks/report-state.sh",
@@ -55,6 +56,7 @@ var antigravityScripts = []string{
 	"hooks/report-tool.sh",
 	"hooks/report-touched.sh",
 	"hooks/detail.jq",
+	"hooks/conversation-id.sh",
 }
 
 func (s *Service) antigravityInstall() error {
