@@ -222,6 +222,9 @@ func (s *Service) endedErrands(sessionID, state string) ([]endedErrand, string) 
 // it. That is what skipTurns counts, and it is why the case a second task
 // arrives inside the first's turn is attributable rather than ambiguous.
 //
+// A turn the target ended awaiting an outcome of its own (awaitsOutcomeLocked)
+// has no candidate either.
+//
 // Called under s.mu. It consumes the skip counts and clears the busy marks, so
 // one turn ending is read exactly once and the next starts clean.
 func (s *Service) turnCandidates(sessionID string) []string {
@@ -250,6 +253,12 @@ func (s *Service) turnCandidates(sessionID string) []string {
 		if t.targetID == sessionID {
 			t.sawBusy = false
 		}
+	}
+	// A target awaiting an outcome of its own ended this turn to wait for it, a
+	// subagent of its own in the background: the outcome reaching its prompt
+	// resumes it, and that turn is the one that answers.
+	if s.awaitsOutcomeLocked(sessionID) {
+		return nil
 	}
 	sort.Slice(candidates, func(i, j int) bool {
 		return s.tickets[candidates[i]].deliverySeq < s.tickets[candidates[j]].deliverySeq
