@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { Bell, Check, LoaderCircle } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CloseButton } from "@/components/common/CloseButton"
@@ -27,6 +27,7 @@ export function ProjectTab({ project, sessionIds, to, active, onClose }: Project
   // thing, in more detail and per session.
   const status = useProjectStatus(sessionIds)
   const badge = active ? null : status
+  const navigate = useNavigate()
 
   return (
     <div
@@ -36,8 +37,9 @@ export function ProjectTab({ project, sessionIds, to, active, onClose }: Project
       {...attributes}
       {...listeners}
     >
-      <Link
-        to={to}
+      <button
+        type="button"
+        onClick={() => navigate(to)}
         title={project.path}
         className={cn(
           "group flex h-8 max-w-52 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:text-foreground",
@@ -50,16 +52,14 @@ export function ProjectTab({ project, sessionIds, to, active, onClose }: Project
         {badge === "done" && <Check className="size-3 shrink-0 text-tone-pass" />}
         {badge === "waiting" && <Bell className="size-3 shrink-0 text-tone-wait" />}
         <span className="truncate">{project.name}</span>
-        {/* preventDefault, not stopPropagation: the parent is a link, and the
-            click must not navigate to the tab being closed. */}
         <CloseButton
           label={`Close ${project.name}`}
           onClick={(event) => {
-            event.preventDefault()
+            event.stopPropagation()
             onClose()
           }}
         />
-      </Link>
+      </button>
     </div>
   )
 }

@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Dragging a footer item in Settings keeps its shape.** The chip under the pointer
   stays on one line at its own size instead of wrapping into a taller, narrower block.
+- **Hovering a project tab no longer shows a URL in the window corner.** The address
+  of the tab, session token included, used to pop up at the bottom left like a link
+  in a browser.
 
 ## [0.62.1] - 2026-10-08
 

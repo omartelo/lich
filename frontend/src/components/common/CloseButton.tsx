@@ -11,10 +11,9 @@ interface CloseButtonProps {
 }
 
 // The × that appears on hover over a card or tab. A span, not a button: every
-// caller nests it inside a <button> or an <a>, and a button inside a button is
-// invalid HTML the browser un-nests. The caller's own handler stops the click
-// from reaching that parent — how it does so differs (stopPropagation on a
-// button, preventDefault on a NavLink), so it stays with the caller.
+// caller nests it inside a <button>, and a button inside a button is invalid
+// HTML the browser un-nests. The caller's own handler stops the click from
+// reaching that parent.
 //
 // The parent must carry `group` for the hover reveal to fire.
 export function CloseButton({ label, onClick, className }: CloseButtonProps) {
