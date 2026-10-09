@@ -480,6 +480,9 @@ func (s *Service) onHookState(req hookRequest) {
 	// — a provider whose hooks report no state has no other way to say
 	// its agent is running.
 	s.beatHandsOn(req.SessionID, 0)
+	if !s.fromBoundConversation(req.SessionID, req.ProviderSessionID) {
+		return
+	}
 	// Dropped before the turn log and the relay see it: one ending told
 	// twice is still one turn.
 	if s.repeatedEnding(req.SessionID, req.State) {
@@ -565,6 +568,15 @@ func (s *Service) onSessionStart(sessionID, providerSessionID, provider string) 
 	// tool call — measured 2026.09.03 against Crush 0.88.0 — and is the
 	// only proof a Crush turn is running.
 	s.beatHandsOn(sessionID, 0)
+	nested, err := s.nestedStart(sessionID, providerSessionID)
+	if err != nil {
+		return err
+	}
+	if nested {
+		slog.Debug("terminal: session-start from a nested CLI dropped",
+			"session", sessionID, "provider_session", providerSessionID)
+		return nil
+	}
 	s.markStarted(sessionID)
 	if err := s.store.SetProviderSession(sessionID, providerSessionID); err != nil {
 		return err

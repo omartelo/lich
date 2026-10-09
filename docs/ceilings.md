@@ -509,6 +509,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   while the card was parked or never opened. The notice also lands as a delivery like any other, so a cleanup
   clicked in the second before it starts a turn finds no session mid-turn, asks nothing, and removes the checkout
   with the notice still on its way.
+- **A CLI run as a tool inside a session is told apart by conversation id, and Kiro has none to tell by**
+  (`internal/terminal/nested.go`, docs/hooks/session-state.md "Nested agent CLIs"): a `claude -p` the agent runs
+  inherits the card's `LICH_*` env and reports as it. A state report naming another conversation is dropped, and a
+  session-start naming one is dropped while the card's turn is open. A scripted Kiro CLI run (`--no-interactive`, how
+  an agent runs one) carries no id in any hook payload (measured on 2.21.0), so a nested `kiro-cli` still reports
+  as its host. The
+  start guard reads lich's own turn, so a host lich never sees open cannot use it: a Crush session reports no turn
+  at all, so a nested CLI's start can still move what its card resumes. A plugin older than 0.20 sends no id on state reports, which are then taken as
+  before.
 - **Only a Claude Code subagent becomes a lich card** (lich-plugin's `hooks/agent-cards.js`, its
   `docs/agent-cards.md`): the plugin's mod takes the model's general-purpose `Agent` call and runs it as a lich
   session with `lich open --subagent --prompt`, in the background. The card opens in the asking session's checkout

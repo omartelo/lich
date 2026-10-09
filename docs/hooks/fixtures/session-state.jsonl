@@ -13,6 +13,8 @@
 {"name":"a reason is trimmed","body":{"session_id":"s1","state":"waiting","reason":"  edit  "},"accept":{"session_id":"s1","state":"waiting","reason":"edit"}}
 {"name":"whitespace is not a reason","body":{"session_id":"s1","state":"waiting","reason":"   "},"accept":{"session_id":"s1","state":"waiting","reason":""}}
 {"name":"a reason outside waiting names nothing","body":{"session_id":"s1","state":"busy","reason":"Claude needs your permission to use Bash"},"accept":{"session_id":"s1","state":"busy","reason":""}}
+{"name":"names the conversation that reported","body":{"session_id":"s1","state":"busy","provider_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c01"},"accept":{"session_id":"s1","state":"busy","provider_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c01"}}
+{"name":"a plugin older than the conversation id","body":{"session_id":"s1","state":"idle"},"accept":{"session_id":"s1","state":"idle","provider_session_id":""}}
 {"name":"missing session_id","body":{"state":"busy"},"reject":"session_id is required"}
 {"name":"empty session_id","body":{"session_id":"","state":"busy"},"reject":"session_id is required"}
 {"name":"unknown state","body":{"session_id":"s1","state":"cooking"},"reject":"state must be one of busy, done, waiting, idle, compacting"}

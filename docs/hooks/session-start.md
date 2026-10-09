@@ -55,7 +55,10 @@ hook that stops reporting leaves those sessions unable to take typed work.
 
 `SessionStart` fires on startup, resume, `/clear` and compaction. A resume
 reports the resumed session's id and overwrites the stored value — lich always
-holds the id of the provider session currently in the card.
+holds the id of the provider session currently in the card. The one exception
+is a start that lands while the card's turn is open: that is an agent CLI the
+agent ran as a tool, not the card's own conversation, and it is dropped
+(session-state.md, Nested agent CLIs).
 
 The others report the same id from the earliest place each one offers it.
 **Antigravity has no session event at all**: its lifecycle is `PreInvocation`,
@@ -92,6 +95,10 @@ scripted run would have said this contract could not be closed.
   listener as terminal I/O, defaults an absent `provider` to `claude` and rejects
   an unregistered one, then forwards `(session_id, provider_session_id,
   provider)`.
+- **Rebind guard** — `internal/terminal/nested.go`, `nestedStart`: a report
+  naming a conversation other than the bound one while the session's turn is
+  open comes from an agent CLI run as a tool inside it, and is dropped before
+  anything below runs (session-state.md, Nested agent CLIs).
 - **Persistence** — `internal/store/mutations.go`, `Service.SetProviderSession`:
   `UPDATE sessions SET provider_session_id`. Surfaced on `store.Session`
   (`providerSessionId`) and returned by `LoadState`.

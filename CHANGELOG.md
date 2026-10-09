@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The session sidebar no longer clips its own header at its narrowest.**
   Dragged all the way in, the collapse button slid under the terminal; the
   minimum width now fits New Session, the filter and the collapse button.
+- **An agent CLI your agent runs as a tool no longer speaks for its session.**
+  A `claude -p` or `cursor-agent -p` started inside a session used to report as
+  that session: its exit could mark the card idle and close the errands handed
+  to it as unanswered, and its start could take over the conversation the card
+  resumes. lich now tells them apart by conversation id, and `/clear` still
+  moves the card to the new conversation. Needs lich-plugin 0.20 for the state
+  reports; the start is guarded with any release.
 
 - **A Claude Code subagent closed from its card now tells the session that
   asked for it.** The asking session used to keep waiting on a task that was
