@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { Home } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -12,9 +12,11 @@ interface HomeTabProps {
 // home directory. Icon-only and rendered outside the project reorder list, so
 // it is never draggable and never closable.
 export function HomeTab({ to, active }: HomeTabProps) {
+  const navigate = useNavigate()
   return (
-    <Link
-      to={to}
+    <button
+      type="button"
+      onClick={() => navigate(to)}
       title="Home"
       aria-label="Home"
       className={cn(
@@ -23,6 +25,6 @@ export function HomeTab({ to, active }: HomeTabProps) {
       )}
     >
       <Home className="size-4" />
-    </Link>
+    </button>
   )
 }
