@@ -1,6 +1,7 @@
 import { Bell, Check } from "lucide-react"
 import { useMatch, useNavigate } from "react-router-dom"
 
+import { CloseButton } from "@/components/common/CloseButton"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -12,7 +13,7 @@ import {
 import { notificationsFrom } from "@/lib/session/notifications"
 import { useProjects } from "@/providers/projects"
 import type { SessionStatus } from "@/lib/session/session-events"
-import { usePendingStatuses } from "@/lib/session/use-session-status"
+import { dismissSessionNotification, usePendingStatuses } from "@/lib/session/use-session-status"
 
 function StatusIcon({ status }: { status: SessionStatus }) {
   if (status === "waiting") {
@@ -83,14 +84,22 @@ export function NotificationsButton() {
           items.map((item) => (
             <DropdownMenuItem
               key={item.id}
-              className="gap-2"
+              className="group gap-2"
               onClick={() => open(item.projectId, item.id)}
             >
               <StatusIcon status={item.status} />
-              <span className="flex min-w-0 flex-col">
+              <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate">{item.sessionLabel}</span>
                 <span className="truncate text-xs text-muted-foreground">{item.projectName}</span>
               </span>
+              <CloseButton
+                label={`Dismiss ${item.sessionLabel}`}
+                className="group-data-highlighted:opacity-100"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  dismissSessionNotification(item.id)
+                }}
+              />
             </DropdownMenuItem>
           ))
         )}

@@ -697,3 +697,45 @@ describe("has this session ever reported", () => {
     expect(store.reported("s1")).toBe(true)
   })
 })
+
+// The bell's X: the user says "I have seen this, stop telling me" without
+// routing to the session.
+describe("dismiss", () => {
+  it("drops a done from the queue and marks it read", () => {
+    const { source, emit } = fakeSource()
+    const markRead = vi.fn()
+    const store = createSessionStatusStore(source, markRead)
+    emit(report("s1", "done"))
+    store.dismiss("s1")
+    expect(store.pendingAll()).toEqual([])
+    expect(store.unread("s1")).toBe(false)
+    expect(markRead).toHaveBeenCalledWith("s1")
+  })
+
+  it("drops a waiting from the queue but keeps its status and tab badge", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "waiting"))
+    store.dismiss("s1")
+    expect(store.pendingAll()).toEqual([])
+    expect(store.get("s1")).toBe("waiting")
+    expect(store.pendingOf(["s1"])).toBe("waiting")
+  })
+
+  it("queues the session again on its next report", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "waiting"))
+    store.dismiss("s1")
+    emit(report("s1", "busy"))
+    emit(report("s1", "done"))
+    expect(store.pendingAll()).toEqual([{ id: "s1", status: "done" }])
+  })
+
+  it("ignores a session it has never heard of", () => {
+    const { source } = fakeSource()
+    const store = createSessionStatusStore(source)
+    expect(() => store.dismiss("ghost")).not.toThrow()
+    expect(store.pendingAll()).toEqual([])
+  })
+})

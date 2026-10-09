@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Each notification under the bell has an X that dismisses it.** Clearing
+  one used to mean opening its session; a finished turn you dismiss also counts
+  as read.
+
 ### Changed
 
 - **Hovering a project tab shows a tooltip with the project's name and full
