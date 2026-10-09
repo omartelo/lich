@@ -518,11 +518,18 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   on its own worktree, pinned, stopped with Esc, holding another errand, or whose asker is gone stays open. Esc in
   the asker leaves its workers running, as it leaves Claude Code's own background agents (measured on 2.1.289);
   the mod's TaskStop stops one, Claude Code's `ctrl+x ctrl+k` does not, and the asker's status line counts them
-  from `lich sessions --json` every 5 seconds. The
-  worker spawns with `LICH_SUBAGENT_CARDS=off`, so its own subagents stay native. The other seven
+  from `lich sessions --json` every 5 seconds. Cards
+  nest two levels deep (`maxSubagentDepth`, internal/terminal): a worker turns its own subagents into cards,
+  and a worker it opened spawns with `LICH_SUBAGENT_CARDS=off`, so that one's stay native, and is briefed to fan
+  out with them rather than with new lich sessions; nothing but that briefing stops it opening plain sessions
+  with `lich open`. A worker needs lich-plugin 0.19.0 to nest, since an older mod tells a worker only by
+  `LICH_SUBAGENT_CARDS=off`; under one every worker keeps its subagents native. A nested card's report climbs
+  back through each worker above it, and each answers only once its own outcomes are in, so a card stopped deep
+  in the tree reaches its asker as a stop, not as silence. Closing a worker leaves the cards it opened running,
+  as it leaves its own. The other seven
   providers have no mod system, so nothing can take a subagent call from them, and their subagents stay inside their CLI. On Claude
-  Code too, a typed agent (Explore, Plan, a plugin's), a workflow step, another plugin's spawn, a remote one and a
-  worker's own subagents stay native, and the worker is reached with `send_to_session` or `lich send`, never with
+  Code too, a typed agent (Explore, Plan, a plugin's), a workflow step, another plugin's spawn, a remote one and the
+  subagents of a worker two levels down stay native, and the worker is reached with `send_to_session` or `lich send`, never with
   Claude Code's `SendMessage`. Settings › Providers › Claude Code turns it off with "Subagents as lich sessions"
   (`store.SubagentCards`), which reaches the mod as `LICH_SUBAGENT_CARDS=off` at spawn, so a session already
   running keeps the value it started with.

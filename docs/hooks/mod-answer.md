@@ -59,8 +59,10 @@ Both sides test against the payloads in
 | `classic.Stop` on the main loop, then `turn.complete` | none (no mod system) | none (no mod system) | none (no mod system) | none (no mod system) | none (no mod system) | none (no mod system) | none (no mod system) |
 
 The mod posts once per main-loop turn, and only from a worker: a session
-spawned with `LICH_SUBAGENT_CARDS=off` (README, Shared transport), which every
-`--subagent` session is. A turn is reported when all of these hold, measured on
+whose `LICH_SUBAGENT_DEPTH` is above 0 (README, Shared transport), which every
+`--subagent` session is. A mod from 0.19.0 under a lich that sets no depth, and
+every mod before 0.19.0, takes `LICH_SUBAGENT_CARDS=off` for that instead, which
+lich then sets on every worker. A turn is reported when all of these hold, measured on
 Claude Code 2.1.289:
 
 - `classic.Stop` fired without an `agent_id` (the main loop, not a subagent or

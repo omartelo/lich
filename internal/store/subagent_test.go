@@ -2,24 +2,27 @@ package store
 
 import "testing"
 
-func TestSessionSubagentRoundTripsAndSurvivesAResume(t *testing.T) {
+func TestSessionSubagentDepthRoundTripsAndSurvivesAResume(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
 	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2, "")
 	_ = svc.AddSession("p1", "wt1", "worker", "claude", "/wt/foo", 3, "")
 
-	if err := svc.SetSessionSubagent("wt1"); err != nil {
-		t.Fatalf("SetSessionSubagent: %v", err)
+	if err := svc.SetSessionSubagentDepth("wt1", 2); err != nil {
+		t.Fatalf("SetSessionSubagentDepth: %v", err)
 	}
-	if !svc.SessionSubagent("wt1") || svc.SessionSubagent("base") || svc.SessionSubagent("ghost") {
+	if got := svc.SessionSubagentDepth("wt1"); got != 2 {
+		t.Fatalf("SessionSubagentDepth(wt1) = %d, want 2", got)
+	}
+	if svc.SessionSubagentDepth("base") != 0 || svc.SessionSubagentDepth("ghost") != 0 {
 		t.Fatal("want only the marked session read as a subagent")
 	}
 	_ = svc.CloseSession("p1", "wt1", "base")
 	if _, err := svc.ReopenWorktreeSession("p1", "/wt/foo", "wt2"); err != nil {
 		t.Fatalf("ReopenWorktreeSession: %v", err)
 	}
-	if !svc.SessionSubagent("wt2") {
-		t.Error("the resumed worker lost its subagent mark")
+	if got := svc.SessionSubagentDepth("wt2"); got != 2 {
+		t.Errorf("the resumed worker is %d deep, want 2", got)
 	}
 }
 
@@ -41,9 +44,9 @@ func TestSessionBranchReadsTheSessionsCheckout(t *testing.T) {
 	}
 }
 
-// A fork of a subagent worker's conversation is marked a subagent too, found by
-// the provider conversation it branches, so the copy keeps its own subagents
-// native like the worker it was copied from.
+// A fork of a subagent worker's conversation is a subagent as deep as the
+// worker, found by the provider conversation it branches, so the copy opens
+// cards exactly as the worker it was copied from would.
 func TestInheritSubagentFollowsTheForkedConversation(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
@@ -53,18 +56,18 @@ func TestInheritSubagentFollowsTheForkedConversation(t *testing.T) {
 	_ = svc.AddSession("p1", "fork2", "Session 4", "claude", "", 5, "")
 	_ = svc.SetProviderSession("worker", "conv-worker")
 	_ = svc.SetProviderSession("plain", "conv-plain")
-	_ = svc.SetSessionSubagent("worker")
+	_ = svc.SetSessionSubagentDepth("worker", 2)
 
 	if err := svc.InheritSubagent("fork1", "conv-worker"); err != nil {
 		t.Fatalf("InheritSubagent: %v", err)
 	}
-	if !svc.SessionSubagent("fork1") {
-		t.Error("fork of a worker's conversation is not a subagent, want it marked")
+	if got := svc.SessionSubagentDepth("fork1"); got != 2 {
+		t.Errorf("fork of a worker's conversation is %d deep, want the worker's 2", got)
 	}
 	if err := svc.InheritSubagent("fork2", "conv-plain"); err != nil {
 		t.Fatalf("InheritSubagent: %v", err)
 	}
-	if svc.SessionSubagent("fork2") {
+	if svc.SessionSubagentDepth("fork2") != 0 {
 		t.Error("fork of a plain conversation is marked a subagent, want it left alone")
 	}
 }

@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/compact` or an automatic compaction shows "Compacting…" under the session's
   name with a spinner, instead of the finished turn's check or a spinner that
   names nothing. Needs the next lich-plugin release.
+- **A subagent card can open subagent cards of its own.** A Claude Code worker
+  that splits its task now opens each part as a card too, filed beside it, and
+  reports back once those parts are done. One level of that is allowed: a card
+  opened by a card keeps its own subagents inside Claude Code, and is told so
+  when it starts. Needs lich-plugin 0.19.0 or later; with an older plugin a
+  worker's subagents stay inside Claude Code as before.
 
 ### Changed
 

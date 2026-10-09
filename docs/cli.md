@@ -466,8 +466,13 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
     whose turn was stopped with Esc.
   - tells the caller, in one short note per block, when it is **waiting on a
     permission** prompt in its card.
-  - spawns with `LICH_SUBAGENT_CARDS=off` on every start, a resume included, so
-    its own subagents stay inside its CLI: a card does not open cards.
+  - runs **one level below the caller**, recorded on its row and handed to the
+    plugin as `LICH_SUBAGENT_DEPTH` on every start, a resume included. A
+    Claude Code worker one level down still turns its own general-purpose
+    subagents into cards (lich-plugin 0.19.0 or later); one two levels down, a
+    card a card opened, spawns with `LICH_SUBAGENT_CARDS=off` and keeps them
+    inside its CLI, and its briefing says so. Under an older plugin every
+    worker keeps them native.
   `--json` keeps its shape: the session and its `delivery`.
 - `--folder` files the new session under that sidebar folder, written before the
   window hears of the session, so the card arrives in the folder's block instead

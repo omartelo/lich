@@ -245,11 +245,15 @@ func (s *spawnStore) AddSessionFrom(_, _, _, _, _ string, _ int, _, _ string) er
 	return nil
 }
 
-func (s *spawnStore) SetSessionSubagent(string) error {
+func (s *spawnStore) SetSessionSubagentDepth(string, int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.subagent = true
 	return nil
+}
+
+func (s *spawnStore) SessionSubagentDepth(string) int {
+	return 0
 }
 
 func (s *spawnStore) SetSessionModel(_, model string) error {

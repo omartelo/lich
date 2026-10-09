@@ -20,6 +20,7 @@ import (
 
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/providers"
+	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/shquote"
 	"github.com/omartelo/lich/internal/store"
 )
@@ -50,9 +51,9 @@ type stubBins struct {
 	skipPerms         bool
 	ultracode         bool
 	subagentCardsOff  bool
-	subagentSession   bool
-	subagentParents   map[string]bool
-	inheritedSubagent map[string]bool
+	subagentDepth     int
+	subagentParents   map[string]int
+	inheritedSubagent map[string]int
 	// sessionUltracode is the per-session flag a session opened with ultracode
 	// carries on its row, apart from the provider-wide ultracode above.
 	sessionUltracode bool
@@ -128,12 +129,15 @@ func (s stubBins) SessionModel(_ string) string        { return s.model }
 func (s stubBins) SessionEffort(_ string) string       { return s.effort }
 func (s stubBins) Ultracode(_ string) bool             { return s.ultracode }
 func (s stubBins) SubagentCards(_ string) bool         { return !s.subagentCardsOff }
-func (s stubBins) SessionSubagent(id string) bool {
-	return s.subagentSession || s.inheritedSubagent[id]
+func (s stubBins) SessionSubagentDepth(id string) int {
+	if depth, ok := s.inheritedSubagent[id]; ok {
+		return depth
+	}
+	return s.subagentDepth
 }
 func (s stubBins) InheritSubagent(sessionID, forkedFrom string) error {
-	if s.subagentParents[forkedFrom] {
-		s.inheritedSubagent[sessionID] = true
+	if depth := s.subagentParents[forkedFrom]; depth > 0 {
+		s.inheritedSubagent[sessionID] = depth
 	}
 	return nil
 }
@@ -1315,7 +1319,7 @@ func spawnPins(t *testing.T, got []string, want ...string) {
 func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 	const bin = "/usr/bin/lich"
 
-	claude := providerArgs(providers.Claude, "", "", "", "", bin, "", false, false, false, false)
+	claude := providerArgs(providers.Claude, "", "", "", "", bin, "", false, false, false, relay.RouteSessions)
 	at := slices.Index(claude, "--mcp-config")
 	if at < 0 || at+1 >= len(claude) {
 		t.Fatalf("claude args = %v", claude)
@@ -1340,7 +1344,7 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 		t.Errorf("a secret reached the argv, which /proc exposes: %q", claude[at+1])
 	}
 
-	codex := providerArgs(providers.Codex, "", "", "", "", bin, "", false, false, false, false)
+	codex := providerArgs(providers.Codex, "", "", "", "", bin, "", false, false, false, relay.RouteSessions)
 	want := []string{
 		"-c", `mcp_servers.lich.command="/usr/bin/lich"`,
 		"-c", `mcp_servers.lich.args=["mcp"]`,
@@ -1355,7 +1359,7 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 // follows it, and Codex reads resume as a subcommand that every global option
 // must precede.
 func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
-	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "", "", "/usr/bin/lich", "", false, true, false, false)
+	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "", "", "/usr/bin/lich", "", false, true, false, relay.RouteSessions)
 	if claude[len(claude)-2] != "--mcp-config" {
 		t.Errorf("--mcp-config is not last, so it eats what follows: %v", claude)
 	}
@@ -1367,7 +1371,7 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 
 	// A resuming session is not named (nameArgs), so --name is pinned on the
 	// spawn that carries it: a session being born.
-	born := providerArgs(providers.Claude, "lich-4f2a", "", "", "", "/usr/bin/lich", "", false, true, false, false)
+	born := providerArgs(providers.Claude, "lich-4f2a", "", "", "", "/usr/bin/lich", "", false, true, false, relay.RouteSessions)
 	if born[len(born)-2] != "--mcp-config" {
 		t.Errorf("--mcp-config is not last, so it eats what follows: %v", born)
 	}
@@ -1375,7 +1379,7 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 		t.Errorf("claude args lost --name: %v", born)
 	}
 
-	codex := providerArgs(providers.Codex, "", "conv-1", "", "", "/usr/bin/lich", "", false, false, false, false)
+	codex := providerArgs(providers.Codex, "", "conv-1", "", "", "/usr/bin/lich", "", false, false, false, relay.RouteSessions)
 	resume := slices.Index(codex, "resume")
 	if resume < 0 {
 		t.Fatalf("codex args lost the resume subcommand: %v", codex)
@@ -1414,7 +1418,7 @@ func TestModelAndEffortAreBirthValues(t *testing.T) {
 			t.Errorf("%s at birth = %v, want %v", tc.kind, born, tc.born)
 		}
 		for _, fork := range []bool{false, true} {
-			args := providerArgs(tc.kind, "", "conv-1", tc.model, tc.effort, "", "", fork, false, false, false)
+			args := providerArgs(tc.kind, "", "conv-1", tc.model, tc.effort, "", "", fork, false, false, relay.RouteSessions)
 			for _, flag := range tc.born {
 				if slices.Contains(args, flag) {
 					t.Errorf("%s resume (fork=%v) = %v, carries birth value %q", tc.kind, fork, args, flag)
@@ -1446,7 +1450,7 @@ func TestProviderArgsWithoutARegistration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := providerArgs(tt.kind, "", "", "", "", tt.bin, "", false, false, false, false)
+			args := providerArgs(tt.kind, "", "", "", "", tt.bin, "", false, false, false, relay.RouteSessions)
 			if tt.bare && len(args) != 0 {
 				t.Errorf("args = %v, want none", args)
 			}
@@ -1471,7 +1475,7 @@ func TestTheBriefingGoesToTheProvidersThatTakeOne(t *testing.T) {
 	}
 	for kind, want := range briefed {
 		t.Run(kind, func(t *testing.T) {
-			args := providerArgs(kind, "", "", "", "", "/usr/bin/lich", "", false, false, false, false)
+			args := providerArgs(kind, "", "", "", "", "/usr/bin/lich", "", false, false, false, relay.RouteSessions)
 			flag := slices.Index(args, "--append-system-prompt")
 			if flag < 0 || flag+1 >= len(args) {
 				t.Fatalf("args = %v, want a briefing", args)
@@ -1484,7 +1488,7 @@ func TestTheBriefingGoesToTheProvidersThatTakeOne(t *testing.T) {
 
 	for _, kind := range []string{providers.Codex, providers.OpenCode, providers.Crush, KindShell} {
 		t.Run(kind+" takes none", func(t *testing.T) {
-			args := providerArgs(kind, "", "", "", "", "/usr/bin/lich", "", false, false, false, false)
+			args := providerArgs(kind, "", "", "", "", "/usr/bin/lich", "", false, false, false, relay.RouteSessions)
 			if slices.Contains(args, "--append-system-prompt") {
 				t.Errorf("args = %v, want no briefing: %s has no flag that appends one", args, kind)
 			}

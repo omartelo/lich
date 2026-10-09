@@ -40,32 +40,59 @@ import (
 // CommandLineToArgvW, cmd.exe does not read that as an escape, and the < and >
 // left outside quotes by it are redirection.
 //
-// agentCards is whether this is a Claude Code session whose lich-plugin mod
-// runs a general-purpose subagent as one of those cards. There the agent's own
-// Agent tool is the better route (in the background, its report back on its
-// own, stopped with TaskStop), so the briefing sends it there and keeps lich's
-// own route for what a subagent cannot be.
-func SpawnBriefing(hasTools, agentCards bool) string {
-	route := "Open one with `lich open --worktree BRANCH --prompt 'the task'`, which opens the " +
+// route is where this spawn's own subagents run (SubagentRoute), which decides
+// what the agent is sent to for fanning work out.
+func SpawnBriefing(hasTools bool, route SubagentRoute) string {
+	command := "Open one with `lich open --worktree BRANCH --prompt 'the task'`, which opens the " +
 		"session and hands it the task in one command."
 	if hasTools {
-		route = "The lich tools in your list open one and hand it the task."
+		command = "The lich tools in your list open one and hand it the task."
 	}
 	intro := "You are running inside lich, which runs coding-agent sessions side by side and can " +
 		"open more of them beside this one — each a card the user watches and can take over " +
 		"mid-task, in its own git worktree when the work needs its own checkout. "
-	if agentCards {
+	switch route {
+	case RouteCards:
 		return intro + "Here your own Agent tool opens them: a general-purpose subagent runs as " +
 			"one of those cards, in this checkout unless you ask for isolation 'worktree', " +
 			"in the background, and its report comes back to you on its own. Fan work out with " +
 			"it. Open a session yourself only for what a subagent cannot be: another agent " +
-			"kind, a branch the user named, or work that must outlive this session. " + route
+			"kind, a branch the user named, or work that must outlive this session. " + command
+	case RouteNative:
+		return intro + "This session is itself a subagent card another session opened, and here " +
+			"your own Agent tool runs a subagent inside this session rather than as a card. Fan " +
+			"work out with it rather than with new lich sessions: your final message is the " +
+			"report the session that opened you is waiting for."
+	default:
+		return intro + "When work is " +
+			"to be fanned out — several tasks at once, one per branch or checkout — those sessions " +
+			"are what to open, not the subagents your own harness runs: a subagent has no checkout, " +
+			"no card, and nothing the user can steer or resume. " + command
 	}
-	return intro + "When work is " +
-		"to be fanned out — several tasks at once, one per branch or checkout — those sessions " +
-		"are what to open, not the subagents your own harness runs: a subagent has no checkout, " +
-		"no card, and nothing the user can steer or resume. " + route
 }
+
+// SubagentRoute is where a spawned session's own subagents run, as far as its
+// briefing is concerned.
+type SubagentRoute int
+
+const (
+	// RouteSessions is every session whose subagents stay inside its harness and
+	// that may open lich sessions to fan out.
+	RouteSessions SubagentRoute = iota
+	// RouteCards is a Claude Code session whose lich-plugin mod runs a
+	// general-purpose subagent as one of those cards. There the agent's own
+	// Agent tool is the better route (in the background, its report back on its
+	// own, stopped with TaskStop), so the briefing sends it there and keeps
+	// lich's own route for what a subagent cannot be.
+	RouteCards
+	// RouteNative is a Claude Code card whose own subagents stay native, because
+	// it runs as deep as lich nests cards. lich's server instructions still say
+	// a subagent becomes a card in a session with the plugin, so the briefing
+	// says it does not here, and keeps the fan-out under this card rather than
+	// sending it to new sessions, which would nest cards past the limit by
+	// another door.
+	RouteNative
+)
 
 // compose is the message typed at the target's prompt. It names where the
 // request came from so the receiving agent knows this did not come from the

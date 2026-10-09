@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/omartelo/lich/internal/providers"
+	"github.com/omartelo/lich/internal/relay"
 )
 
 // The Kiro CLI side of a spawn: which agent it is told to run, and the shape of
@@ -134,7 +135,7 @@ func TestKiroSpawnsTheChatSubcommandBeforeEveryFlag(t *testing.T) {
 	for _, tt := range tests {
 		got := providerArgs(
 			providers.Kiro, "", tt.resume, tt.model, tt.effort, "/usr/bin/lich", tt.agent,
-			false, tt.skipPermissions, false, false,
+			false, tt.skipPermissions, false, relay.RouteSessions,
 		)
 		if !slices.Equal(got, tt.want) {
 			t.Errorf("%s: args = %v, want %v", tt.name, got, tt.want)

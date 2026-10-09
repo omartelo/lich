@@ -136,8 +136,8 @@ func TestOpenSubagentPassesTheOverridesThrough(t *testing.T) {
 	}
 }
 
-// The mark is on the row before the terminal starts, which reads it to keep the
-// worker's own subagents native.
+// The depth is on the row before the terminal starts, which reads it to decide
+// whether the worker's own subagents may still become cards.
 func TestOpenSubagentMarksTheRow(t *testing.T) {
 	svc, sessions, _, _, _ := newService(t)
 
@@ -145,11 +145,25 @@ func TestOpenSubagentMarksTheRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenSubagent: %v", err)
 	}
-	if !sessions.subagents[opened.ID] {
-		t.Errorf("subagents = %v, want the worker marked", sessions.subagents)
+	if sessions.subagents[opened.ID] != 1 {
+		t.Errorf("subagents = %v, want the worker one level deep", sessions.subagents)
 	}
-	if plain, _ := svc.Open("s1", "", "", "", "", "", "", "", false); sessions.subagents[plain.ID] {
+	if plain, _ := svc.Open("s1", "", "", "", "", "", "", "", false); sessions.subagents[plain.ID] != 0 {
 		t.Error("a plain Open was marked as a subagent")
+	}
+}
+
+// A worker a worker opened runs one level below the one that asked for it.
+func TestOpenSubagentFromAWorkerGoesOneLevelDeeper(t *testing.T) {
+	svc, sessions, _, _, _ := newService(t)
+	sessions.subagents = map[string]int{"s1": 1}
+
+	opened, err := svc.OpenSubagent("s1", "", "", "", "", "", false)
+	if err != nil {
+		t.Fatalf("OpenSubagent: %v", err)
+	}
+	if got := sessions.subagents[opened.ID]; got != 2 {
+		t.Errorf("the worker's worker is %d deep, want 2", got)
 	}
 }
 
