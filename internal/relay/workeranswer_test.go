@@ -383,3 +383,114 @@ func TestAWorkerWithAnErrandOfItsOwnOpenIsNotFinished(t *testing.T) {
 	svc.Observe("s2", stateDone)
 	expectNoneFinished(t, finished)
 }
+
+// A worker whose last turn ended with nothing to report (blank, an API error, a
+// refusal) leaves its mod nothing to answer with. Kept open past ticketTTL
+// while the worker runs, its errand would never end: the caller hears
+// unanswered, with why.
+func TestAWorkersUnansweredTurnEndsItsErrand(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+
+	svc.Observe("s2", stateBusy)
+	svc.Observe("s2", stateDone)
+	svc.WorkerUnanswered("s2", UnansweredRefusal)
+
+	collected, err := svc.CollectNow("s1")
+	if err != nil {
+		t.Fatalf("CollectNow: %v", err)
+	}
+	if len(collected.Results) != 1 {
+		t.Fatalf("collect = %+v, want the errand's outcome", collected)
+	}
+	got := collected.Results[0]
+	if got.Status != StatusUnanswered || !strings.Contains(got.Answer, "refusal") {
+		t.Errorf("result = %+v, want unanswered naming the refusal", got)
+	}
+}
+
+func TestACallerHoldingTheLineHearsAWorkerWentUnanswered(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+
+	waited := make(chan Result, 1)
+	go func() {
+		got, _ := svc.Wait(context.Background(), "t1", 5)
+		waited <- got
+	}()
+	awaitAttended(t, svc, "t1", 1)
+	svc.WorkerUnanswered("s2", UnansweredError)
+
+	select {
+	case got := <-waited:
+		if got.Status != StatusUnanswered || !strings.Contains(got.Answer, "error") {
+			t.Errorf("Wait = %+v, want unanswered naming the error", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the caller holding the line never heard")
+	}
+}
+
+// The worker's card stays open: its user can still steer it to an answer, and
+// that answer reaches the caller by the ticket.
+func TestAWorkersAnswerAfterAnUnansweredTurnStillReachesTheCaller(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+
+	svc.WorkerUnanswered("s2", UnansweredBlank)
+	svc.WorkerAnswered("s2", "the report after all")
+
+	expectAnswer(t, svc, "t1", "the report after all")
+}
+
+// An errand already ended is not ended twice: a second empty turn files no
+// second outcome.
+func TestASecondUnansweredTurnFilesNothingMore(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+
+	svc.WorkerUnanswered("s2", UnansweredBlank)
+	svc.WorkerUnanswered("s2", UnansweredBlank)
+
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	if len(svc.ready) != 1 {
+		t.Errorf("inbox = %v, want one outcome", svc.ready)
+	}
+}
+
+// An empty turn while an errand of the worker's own is out is the turn that
+// handed it off: the outcome reaching the worker resumes it.
+func TestAnUnansweredTurnWaitsForTheErrandsTheWorkerSent(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+	plant(svc, "t2", "s2", "s3", "api")
+
+	svc.WorkerUnanswered("s2", UnansweredBlank)
+	expectOpen(t, svc, "t1")
+}
+
+// A usage limit is an API error lich parks the continuation of, and that
+// continuation is the turn that answers.
+func TestAnErrorWhileAResumeIsParkedKeepsTheErrandOpen(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+	svc.markResume("s2")
+
+	svc.WorkerUnanswered("s2", UnansweredError)
+	expectOpen(t, svc, "t1")
+
+	svc.WorkerUnanswered("s2", UnansweredRefusal)
+	if _, err := svc.Wait(context.Background(), "t1", 1); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+}
+
+// An ordinary errand is not the mod's to end.
+func TestAnUnansweredTurnLeavesAnOrdinaryErrandAlone(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
+	plant(svc, "t1", "s1", "s2", "docs")
+
+	svc.WorkerUnanswered("s2", UnansweredBlank)
+	expectOpen(t, svc, "t1")
+}

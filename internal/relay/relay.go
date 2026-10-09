@@ -367,6 +367,9 @@ type ticket struct {
 	lapsed time.Time
 	// lapsedAs is the status the errand ended with: unanswered or unread.
 	lapsedAs string
+	// why is what an errand that ended unanswered says about it, when its
+	// worker's mod named the reason (WorkerUnanswered); empty otherwise.
+	why string
 	// undelivered closes when the message never got into the target's PTY at
 	// all. See queueDelivery.
 	undelivered chan struct{}

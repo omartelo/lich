@@ -2,7 +2,12 @@
 {"name":"a report keeps its lines","body":{"session_id":"s1","text":"Done.\n\n- a < b && c > d\n- `go test` green"},"accept":{"text":"Done.\n\n- a < b && c > d\n- `go test` green"}}
 {"name":"extra fields are ignored","body":{"session_id":"s1","text":"Done.","turn_id":"t"},"accept":{"text":"Done."}}
 {"name":"missing session_id","body":{"text":"Done."},"reject":"session_id is required"}
-{"name":"missing text","body":{"session_id":"s1"},"reject":"text is required"}
+{"name":"neither text nor unanswered","body":{"session_id":"s1"},"reject":"exactly one of text and unanswered"}
 {"name":"blank text","body":{"session_id":"s1","text":" \n\t"},"reject":"a blank text is no answer"}
 {"name":"text is not a string","body":{"session_id":"s1","text":42},"reject":"text must be a string"}
 {"name":"malformed json","raw":"{","reject":"body must be a JSON object"}
+{"name":"a blank turn","body":{"session_id":"s1","unanswered":"blank"},"accept":{"session_id":"s1","unanswered":"blank"}}
+{"name":"an api error","body":{"session_id":"s1","unanswered":"error"},"accept":{"unanswered":"error"}}
+{"name":"a refusal","body":{"session_id":"s1","unanswered":"refusal"},"accept":{"unanswered":"refusal"}}
+{"name":"an aborted turn is not reported","body":{"session_id":"s1","unanswered":"aborted"},"reject":"unanswered must be blank, error or refusal"}
+{"name":"text and unanswered together","body":{"session_id":"s1","text":"Done.","unanswered":"blank"},"reject":"exactly one of text and unanswered"}

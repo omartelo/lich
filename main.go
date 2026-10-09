@@ -299,6 +299,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// A worker's mod reports its answer, and a closed worker's errand ends
 	// without a word to its caller.
 	term.SetWorkerAnswer(rl.WorkerAnswered)
+	term.SetWorkerUnanswered(rl.WorkerUnanswered)
 	term.SetSessionClosed(rl.SessionClosed)
 	term.SetErrandStatus(rl.Status)
 	// Both questions the relay asks about a provider — whether its sessions
@@ -347,6 +348,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //     /hook: forging a SessionEnd here closes another session's errands.
 //   - relay.WorkerAnswered is a worker's answer, which arrives over
 //     /mod/answer: called here it answers another session's errand.
+//     relay.WorkerUnanswered arrives the same way and ends one unanswered.
 //   - relay.SessionClosed is what the terminal tells the relay as it closes a
 //     session: called here it ends a running worker's errand, in silence when
 //     the closer named is the worker's caller.
@@ -377,7 +379,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //     store.SetBranchOf, store.SetTranscriptOf, store.SetConversationsOf,
 //     store.SetCheckoutsOf, terminal.SetDropDir,
 //     terminal.SetRateLimitReports, terminal.SetUsageLimit, terminal.SetWorkerAnswer,
-//     terminal.SetStartReports and terminal.SetSessionClosed are startup wiring. Called with [null] they silently
+//     terminal.SetWorkerUnanswered, terminal.SetStartReports and terminal.SetSessionClosed are startup wiring. Called with [null] they silently
 //     nil what they wired (encoding/json leaves a func or pointer alone on
 //     null), and the write races the readers already serving — nilling
 //     SetProjects also disarms the guard that keeps two projects off the same
@@ -407,6 +409,7 @@ func denyInternal(d *rpc.Handler) {
 		"drop.SetPicker",
 		"relay.Observe",
 		"relay.WorkerAnswered",
+		"relay.WorkerUnanswered",
 		"relay.SessionClosed",
 		"terminal.CloseBy",
 		"relay.RunSchedules",
@@ -425,6 +428,7 @@ func denyInternal(d *rpc.Handler) {
 		"terminal.SetUsageLimit",
 		"terminal.RunLimitWatch",
 		"terminal.SetWorkerAnswer",
+		"terminal.SetWorkerUnanswered",
 		"terminal.SetSessionClosed",
 		"terminal.SetStartReports",
 		"terminal.EnqueueModCommand",

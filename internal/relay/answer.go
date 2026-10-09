@@ -35,7 +35,7 @@ func (s *Service) Wait(ctx context.Context, ticketID string, waitSeconds int) (R
 		s.mu.Unlock()
 		s.clearAll(expired)
 		s.announceInboxAll(senders)
-		return Result{Ticket: ticketID, Target: late.target, Status: late.lapsedAs, Private: late.private}, nil
+		return Result{Ticket: ticketID, Target: late.target, Status: late.lapsedAs, Answer: late.why, Private: late.private}, nil
 	}
 	t, ok := s.tickets[ticketID]
 	// Attending is claimed under the lock that found the ticket, so an answer
@@ -239,7 +239,7 @@ func (s *Service) await(ctx context.Context, id string, t *ticket, wait time.Dur
 		return Result{Ticket: id, Target: t.target, Status: StatusAnswered, Answer: t.answer}
 	case <-t.stalled:
 		s.leave(t)
-		return Result{Ticket: id, Target: t.target, Status: stalledStatus(t)}
+		return Result{Ticket: id, Target: t.target, Status: stalledStatus(t), Answer: t.why}
 	case <-t.unread:
 		s.leave(t)
 		return Result{Ticket: id, Target: t.target, Status: StatusUnread}

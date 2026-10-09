@@ -25,16 +25,26 @@ X-Lich-Plugin: <plugin release>
 ```
 
 - `session_id`: required, `LICH_SESSION_ID`.
-- `text`: required, the turn's final visible text, never blank. The mod cuts it
-  at 16,000 UTF-16 units and marks the cut `[truncated]`, as it does an
-  `ask`'s answer.
+- `text`: the turn's final visible text, never blank. The mod cuts it at
+  16,000 UTF-16 units and marks the cut `[truncated]`, as it does an `ask`'s
+  answer.
+- `unanswered`: why a turn with nothing left running ended without an answer
+  (see Unanswered turns below): `blank`, `error` or `refusal`.
+
+A body carries exactly one of `text` and `unanswered`. Any other value of
+`unanswered` is refused, so a mod newer than its lich hears `400` rather than
+reporting into nothing.
+
+```
+{"session_id": "<LICH_SESSION_ID>", "unanswered": "refusal"}
+```
 
 The body is held to 64 KiB, as an ack is.
 
 Responses: `204` taken · `401` invalid token · `400` invalid body · `405` not a
 POST.
 
-A `204` does not say the answer went anywhere. lich answers the errand only
+A `204` does not say the report went anywhere. lich answers the errand only
 when the session has exactly one open subagent errand, and ignores the report
 otherwise: an ordinary session, a worker whose errand was already answered
 (the first answer wins, whether it came from here or from the worker calling
@@ -77,12 +87,58 @@ Claude Code 2.1.289:
 - That `turn.complete` is not aborted and its `reason` is not `aborted`,
   `error` or `refusal`.
 
+## Unanswered turns
+
+A worker's turn that ended with nothing left running and no answer posts
+`unanswered` instead, so the caller hears `unanswered` rather than waiting on
+an errand that will never be answered. The mod posts it once per main-loop
+turn, from a worker only, on the same conditions as an answer except the last
+two:
+
+| `unanswered` | The main-loop turn ended | `background_tasks` read from |
+|--------------|--------------------------|------------------------------|
+| `blank`      | `classic.Stop` with a blank `last_assistant_message`, and the `turn.complete` after it not aborted | that `classic.Stop` |
+| `refusal`    | `turn.complete` with `reason` `refusal` | the main loop's `classic.Stop` of the same turn |
+| `error`      | an API error: Claude Code's `StopFailure`, or `turn.complete` with `reason` `error` | see the open point below |
+
+The rule all three share: **post only when the main-loop turn ended with
+`background_tasks` empty.** A turn that handed work to the background is
+resumed by Claude Code when that work finishes, and the resumed turn is the one
+that answers or posts `unanswered`. Posting for the turn that handed it off
+would tell the caller the errand failed while the worker is still on it.
+
+An aborted turn (Esc in the worker's card) posts nothing. Stopping a worker's
+turn is its user taking it over, and the turn they start next is the one that
+answers.
+
+**Open point for the plugin: where `background_tasks` is for an API error.**
+Not measured on a live failure. Read off the Claude Code 2.1.296 bundle, the
+`Stop` hook input is built with `background_tasks`, while the `StopFailure` one
+carries `error`, `error_details` and `last_assistant_message` and no
+`background_tasks`; and a turn an API error ended fires `StopFailure` instead
+of `Stop` (docs/hooks/session-state.md). The plugin side measures where a
+failed main-loop turn's background list can be read, if anywhere, before it
+posts `error`. Until it can tell the list was empty, it posts no `error`: a
+failed turn reports nothing, as before.
+
+lich ignores `unanswered` exactly where it ignores an answer (one open subagent
+errand, nothing of the worker's own still out), and also when the errand has
+already ended, and `error` while lich has parked the worker's continuation
+after a usage limit, since that continuation is the turn that answers.
+
 ## lich server side
 
 - **Endpoint** (`internal/terminal/modanswer.go`, `transport.modAnswer`):
   validates the token and body (`parseModAnswer`), read up to
   `modAckBodyLimit`, and hands the text to the relay (`relay.WorkerAnswered`,
   wired with `terminal.SetWorkerAnswer`).
+- **Unanswered** (`relay.WorkerUnanswered`, wired with the answer): ends the
+  one open subagent errand as `unanswered`, with a line naming the reason as
+  its text, the way a turn ending without a reply ends an ordinary errand: a
+  caller holding the line hears it at once, and one that is not finds it in
+  its inbox. The errand stays answerable by its ticket, so a worker its user
+  steers to an answer afterwards still reaches the caller. The worker is not
+  closed: its card holds the turn that failed.
 - **Answer** (`relay.WorkerAnswered`): finds the one open subagent errand at the
   session, delivered or lapsed, and answers it through `Reply`, so the caller
   gets the report the way it gets one sent with `reply_to_session`, unless the
@@ -108,9 +164,16 @@ Claude Code 2.1.289:
 - **Claude Code only.** The other seven harnesses have no mod system; their
   workers are handed the ticket and answer with `reply_to_session` or
   `lich reply`.
-- **A turn with nothing to say answers nothing.** A blank final message, an
-  aborted turn, an API error and a refusal post nothing, and the errand stays
-  open while the worker runs: the caller sees the worker's card, not a report.
+- **An aborted turn answers nothing.** The errand stays open while the worker
+  runs, and the caller sees the worker's card, not a report, until a later turn
+  answers.
+- **An API error is reported only once the plugin can read its background
+  list** (Unanswered turns, open point). Until then the errand of a worker
+  whose turn failed stays open while the worker runs.
+- **A usage limit's `error` can land before lich parks the continuation.**
+  The limit is read off the transcript on the turn's `done`, and nothing orders
+  that against the mod's post. The caller then hears `unanswered` first and the
+  report the continuation writes after it.
 - **AskUserQuestion holds the worker without a Stop.** A worker that asks its
   user a question with that tool blocks until someone answers in its card, and
   no turn ends, so nothing is reported until then.

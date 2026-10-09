@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quietly. `wait_for_answer` and `lich wait` also name a stopped task when they
   collect it, instead of returning nothing.
 
+- **A subagent whose last turn ends with nothing to say no longer leaves its
+  asker waiting.** When the worker's turn ends blank or in a refusal, the
+  asker hears the task went unanswered and why, instead of a task that stays
+  open for as long as the worker runs. Needs a lich-plugin release that reports
+  it.
+
 ## [0.64.0] - 2026-10-09
 
 ### Added

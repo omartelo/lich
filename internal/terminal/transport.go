@@ -145,6 +145,9 @@ type transport struct {
 	// workerAnswered receives a worker's reported answer (modanswer.go).
 	// Guarded by mu and wired by setWorkerAnswered, like modAborted.
 	workerAnswered func(id, text string)
+	// workerUnanswered receives why a worker's turn ended without an answer
+	// (modanswer.go). Guarded by mu and wired by setWorkerUnanswered.
+	workerUnanswered func(id, reason string)
 	// errandStatus reads a session's relay errands (modstatus.go). Guarded by
 	// mu and wired by setErrandStatus, like modAborted.
 	errandStatus func(id string) relay.Status
