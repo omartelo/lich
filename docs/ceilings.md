@@ -494,6 +494,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   prompt lost on the way (the mod reloading as the response lands) is reported unread, not sent twice. A hook that
   drops the prompt is reported undelivered with its reason, except at a session that was mid-turn, whose ack lich
   stops waiting for after the receipt window.
+- **Only a merge lich makes is announced, and only to a card running at that moment** (`internal/relay`,
+  `AnnounceMerge`; called from the Pulls screen's merge): a pull request merged on github.com, with `gh` in a
+  terminal or by an agent leaves every session in its checkout believing it is still open, and so does one merged
+  while the card was parked or never opened. The notice also lands as a delivery like any other, so a cleanup
+  clicked in the second before it starts a turn finds no session mid-turn, asks nothing, and removes the checkout
+  with the notice still on its way.
 - **Only a Claude Code subagent becomes a lich card** (lich-plugin's `hooks/agent-cards.js`, its
   `docs/agent-cards.md`): the plugin's mod takes the model's general-purpose `Agent` call and runs it as a lich
   session with `lich open --subagent --prompt`, in the background. The card opens in the asking session's checkout

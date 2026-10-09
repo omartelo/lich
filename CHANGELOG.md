@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opened by a card keeps its own subagents inside Claude Code, and is told so
   when it starts. Needs lich-plugin 0.19.0 or later; with an older plugin a
   worker's subagents stay inside Claude Code as before.
+- **Merging a pull request in lich tells the agents working on its branch.**
+  Every agent session open in the merged branch's checkout gets a short notice
+  that the pull request was merged, so its notes stop saying the work is still
+  waiting. Removing that worktree from the merge toast now asks first when one
+  of its sessions is still mid-turn.
 
 ### Changed
 

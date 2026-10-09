@@ -30,7 +30,7 @@ type Notification struct {
 
 // The statuses a Notification carries.
 const (
-	NotifyCompleted = "completed" // a subagent worker reported
+	NotifyCompleted = "completed" // a subagent worker reported, or a pull request merged
 	NotifyWaiting   = "waiting"   // a subagent worker is blocked on a permission
 )
 
