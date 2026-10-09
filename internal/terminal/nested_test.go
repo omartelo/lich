@@ -90,7 +90,7 @@ func nestedRig(t *testing.T, bound string) (*Service, *stateLog) {
 		t.Fatalf("transport: %v", svc.wsErr)
 	}
 	states := &stateLog{}
-	svc.SetSessionState(func(_, state string) { states.add(state) })
+	svc.SetSessionState(states.watch)
 	return svc, states
 }
 
@@ -115,23 +115,6 @@ func (s *boundStore) bound() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.id
-}
-
-type stateLog struct {
-	mu     sync.Mutex
-	states []string
-}
-
-func (l *stateLog) add(state string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.states = append(l.states, state)
-}
-
-func (l *stateLog) seen() []string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return slices.Clone(l.states)
 }
 
 func postReport(t *testing.T, svc *Service, body string) {
