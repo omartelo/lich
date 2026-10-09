@@ -67,10 +67,11 @@ import { useWorktreeDialogIntent } from "@/lib/use-sidebar-intent"
 import { type RunMenuAction, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 
 // Named here like every other `lich.*` pref rather than spelled at the call
-// site. The bounds go with it: wide enough for a session label and its branch,
-// capped short of crowding the terminal.
+// site. The bounds go with it: the floor is the header row's natural width
+// (New Session plus two icon buttons, ~13.6rem), capped short of crowding the
+// terminal.
 const WIDTH_KEY = "lich.sidebar.width"
-const MIN_REM = 12
+const MIN_REM = 14
 const MAX_REM = 30
 const DEFAULT_REM = 15
 
