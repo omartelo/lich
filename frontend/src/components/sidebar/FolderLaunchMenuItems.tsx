@@ -6,6 +6,8 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Trans } from "@/components/common/Trans"
+import { useT } from "@/lib/i18n/i18n"
 import type { ProviderState } from "@/lib/providers-store"
 import type { ProviderKind } from "@/lib/session/sessions"
 import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
@@ -37,13 +39,17 @@ export function FolderLaunchMenuItems({
   projectId,
   onNewSession,
 }: FolderLaunchMenuItemsProps) {
+  const t = useT()
   if (checkouts.length === 1) {
     const [only] = checkouts
     return (
       <>
         <DropdownMenuGroup>
           <DropdownMenuLabel>
-            New session in {folder}, <span className="whitespace-nowrap">on {only.label}</span>
+            <Trans
+              k="sidebar.folderLaunchMenuItems.newSessionInOn"
+              params={{ folder, checkout: <span className="whitespace-nowrap">{only.label}</span> }}
+            />
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <SessionLaunchMenuItems
@@ -57,7 +63,9 @@ export function FolderLaunchMenuItems({
   }
   return (
     <DropdownMenuGroup>
-      <DropdownMenuLabel>New session in {folder}</DropdownMenuLabel>
+      <DropdownMenuLabel>
+        {t("sidebar.folderLaunchMenuItems.newSessionIn", { folder })}
+      </DropdownMenuLabel>
       {checkouts.map((checkout) => (
         <DropdownMenuSub key={checkout.path}>
           <DropdownMenuSubTrigger>

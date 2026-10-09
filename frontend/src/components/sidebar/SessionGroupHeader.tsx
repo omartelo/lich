@@ -18,6 +18,7 @@ import type { ProviderKind } from "@/lib/session/sessions"
 import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { CARD_COLORS, type CardColor } from "@/lib/session/card-color"
 import { CardColorDropdownSub } from "./CardColorMenu"
+import { useT } from "@/lib/i18n/i18n"
 import { cn } from "@/lib/utils"
 import { FolderLaunchMenuItems, type LaunchCheckout } from "./FolderLaunchMenuItems"
 import { type RunMenuAction, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
@@ -108,13 +109,18 @@ function SessionGroupTitleButton({
   activatorProps,
   onClick,
 }: SessionGroupTitleButtonProps) {
+  const t = useT()
   return (
     <button
       ref={activatorRef}
       type="button"
       {...activatorProps}
       aria-expanded={!collapsed}
-      title={`${collapsed ? "Expand" : "Collapse"} ${name}`}
+      title={
+        collapsed
+          ? t("sidebar.sessionGroupHeader.expand", { name })
+          : t("sidebar.sessionGroupHeader.collapse", { name })
+      }
       onClick={onClick}
       className={cn(
         "group/collapse -ml-1 flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-accent/50",
@@ -152,7 +158,9 @@ function SessionGroupTitleButton({
           {/* The dot is the whole of it on screen; the words are what a reader
               hears in its place, since a colour is not an announcement. */}
           <span className="sr-only">
-            {mark === "wait" ? "a session here is waiting on you" : "an unread turn in here"}
+            {mark === "wait"
+              ? t("sidebar.sessionGroupHeader.waiting")
+              : t("sidebar.sessionGroupHeader.unread")}
           </span>
         </span>
       )}
@@ -188,6 +196,7 @@ export function SessionGroupHeader({
   onNewSession,
   run,
 }: SessionGroupHeaderProps) {
+  const t = useT()
   const [editing, setEditing] = useState(false)
 
   const commit = (value: string) => {
@@ -231,7 +240,7 @@ export function SessionGroupHeader({
           defaultValue={name}
           spellCheck={false}
           autoComplete="off"
-          aria-label="Group name"
+          aria-label={t("sidebar.sessionGroupHeader.groupName")}
           onFocus={(event) => event.currentTarget.select()}
           onKeyDown={onEditKeyDown}
           onBlur={(event) => commit(event.currentTarget.value)}
@@ -255,8 +264,8 @@ export function SessionGroupHeader({
       {launch && (
         <DropdownMenu>
           <DropdownMenuTrigger
-            aria-label={`New session in ${name}`}
-            title={`New session in ${name}`}
+            aria-label={t("sidebar.sessionGroupHeader.newSessionIn", { name })}
+            title={t("sidebar.sessionGroupHeader.newSessionIn", { name })}
             render={<Button variant="ghost" size="icon-xs" />}
           >
             <Plus />
@@ -290,8 +299,8 @@ export function SessionGroupHeader({
       {(onRename || onDissolve || onFileAll || onColor) && (
         <DropdownMenu>
           <DropdownMenuTrigger
-            aria-label={`Options for ${name}`}
-            title={`Options for ${name}`}
+            aria-label={t("sidebar.sessionGroupHeader.optionsFor", { name })}
+            title={t("sidebar.sessionGroupHeader.optionsFor", { name })}
             render={<Button variant="ghost" size="icon-xs" />}
           >
             <MoreHorizontal />
@@ -300,13 +309,15 @@ export function SessionGroupHeader({
             {onRename && (
               <DropdownMenuItem onClick={() => setEditing(true)}>
                 <Pencil />
-                {folder ? "Rename folder" : "Rename group"}
+                {folder
+                  ? t("sidebar.sessionGroupHeader.renameFolder")
+                  : t("sidebar.sessionGroupHeader.renameGroup")}
               </DropdownMenuItem>
             )}
             {onDissolve && (
               <DropdownMenuItem onClick={onDissolve}>
                 <Ungroup />
-                Ungroup
+                {t("sidebar.sessionGroupHeader.ungroup")}
               </DropdownMenuItem>
             )}
             {onColor && <CardColorDropdownSub current={color} onPick={onColor} />}
@@ -314,7 +325,7 @@ export function SessionGroupHeader({
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                   <Folder />
-                  Move group to folder
+                  {t("sidebar.sessionGroupHeader.moveToFolder")}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
                   {(folders ?? []).map((target) => (
@@ -326,7 +337,7 @@ export function SessionGroupHeader({
                   {(folders ?? []).length > 0 && <DropdownMenuSeparator />}
                   <DropdownMenuItem onClick={onNewFolder}>
                     <Plus />
-                    New folder&hellip;
+                    {t("sidebar.sessionGroupHeader.newFolder")}
                   </DropdownMenuItem>
                 </DropdownMenuSubContent>
               </DropdownMenuSub>

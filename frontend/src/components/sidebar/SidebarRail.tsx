@@ -1,6 +1,7 @@
 import { useMatch, useNavigate } from "react-router-dom"
 import { PanelLeft, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n/i18n"
 import { SIDEBAR_MORPH } from "@/lib/view-transition"
 import { useProjects } from "@/providers/projects"
 import { activeSessionId, sessionsOf, type Session } from "@/lib/session/sessions"
@@ -74,6 +75,7 @@ interface SidebarRailProps {
 // open sidebar already does better, so the rail sends you back to it instead of
 // growing a second, poorer copy of the card.
 export function SidebarRail({ onExpand }: SidebarRailProps) {
+  const t = useT()
   const { projects, sessions, newSession, activateSession } = useProjects()
   const match = useMatch("/projects/:projectId/*")
   const projectId = match?.params.projectId
@@ -117,14 +119,14 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
             <button
               type="button"
               onClick={onExpand}
-              aria-label="Expand sidebar"
+              aria-label={t("sidebar.sidebarRail.expand")}
               className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
             />
           }
         >
           <PanelLeft className="size-4" style={{ viewTransitionName: SIDEBAR_MORPH.toggle }} />
         </TooltipTrigger>
-        <TooltipContent side="right">Expand sidebar</TooltipContent>
+        <TooltipContent side="right">{t("sidebar.sidebarRail.expand")}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger
@@ -132,7 +134,7 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
             <button
               type="button"
               onClick={() => newSession(projectId)}
-              aria-label="New session"
+              aria-label={t("sidebar.sidebarRail.newSession")}
               className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
             />
           }
@@ -141,7 +143,7 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
         </TooltipTrigger>
         {/* No provider menu at this width: the plus spawns the default provider,
             the same session the New session shortcut makes. */}
-        <TooltipContent side="right">New session</TooltipContent>
+        <TooltipContent side="right">{t("sidebar.sidebarRail.newSession")}</TooltipContent>
       </Tooltip>
       <div className="flex w-full flex-1 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden">
         {groups.map((group, index) => (

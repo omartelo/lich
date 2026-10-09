@@ -1,5 +1,6 @@
 import { Play } from "lucide-react"
 import { ContextMenuItem } from "@/components/ui/context-menu"
+import { useT } from "@/lib/i18n/i18n"
 import type { Session } from "@/lib/session/sessions"
 
 interface SessionEntrypointItemProps {
@@ -14,13 +15,14 @@ interface SessionEntrypointItemProps {
 // withheld rather than missing — on a provider card the entrypoint *is* the
 // provider, and the store refuses one there anyway.
 export function SessionEntrypointItem({ session, onOpen }: SessionEntrypointItemProps) {
+  const t = useT()
   if (session.kind !== "shell") {
     return (
       <ContextMenuItem disabled>
         <Play />
         <span className="flex flex-col items-start">
-          Entrypoint…
-          <span className="text-xs">Entrypoints run in terminal sessions.</span>
+          {t("sidebar.sessionEntrypointItem.label")}
+          <span className="text-xs">{t("sidebar.sessionEntrypointItem.shellOnly")}</span>
         </span>
       </ContextMenuItem>
     )
@@ -28,7 +30,7 @@ export function SessionEntrypointItem({ session, onOpen }: SessionEntrypointItem
   return (
     <ContextMenuItem onClick={onOpen}>
       <Play />
-      Entrypoint…
+      {t("sidebar.sessionEntrypointItem.label")}
     </ContextMenuItem>
   )
 }

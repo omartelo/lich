@@ -1,5 +1,6 @@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { useT } from "@/lib/i18n/i18n"
 import { CONFINED_MEANS } from "@/lib/sandbox-copy"
 import type { SandboxChoice } from "@/lib/use-sandbox-choice"
 
@@ -12,6 +13,7 @@ import type { SandboxChoice } from "@/lib/use-sandbox-choice"
 // Absent on a machine with no backend for it, WorktreeScriptRows' rule: a control
 // that cannot change anything is worse than no control.
 export function WorktreeSandboxRow({ choice }: { choice: SandboxChoice }) {
+  const t = useT()
   if (!choice.available) {
     return null
   }
@@ -25,7 +27,7 @@ export function WorktreeSandboxRow({ choice }: { choice: SandboxChoice }) {
       />
       <div className="flex flex-col gap-0.5">
         <Label htmlFor="worktree-sandbox" className="text-sm font-medium">
-          Run confined
+          {t("sidebar.worktreeSandboxRow.runConfined")}
         </Label>
         <span className="text-xs text-muted-foreground">{CONFINED_MEANS}</span>
       </div>

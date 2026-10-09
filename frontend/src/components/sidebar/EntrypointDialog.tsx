@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Trans } from "@/components/common/Trans"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -10,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useT } from "@/lib/i18n/i18n"
 
 interface EntrypointDialogProps {
   open: boolean
@@ -32,6 +34,7 @@ export function EntrypointDialog({
   cwd,
   onSave,
 }: EntrypointDialogProps) {
+  const t = useT()
   const [value, setValue] = useState(entrypoint)
 
   // Reseed on every open: the dialog outlives one editing session, and a card
@@ -54,13 +57,11 @@ export function EntrypointDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Entrypoint</DialogTitle>
-          <DialogDescription>
-            Runs each time this terminal starts. Quit it and you are back in the shell.
-          </DialogDescription>
+          <DialogTitle>{t("sidebar.entrypointDialog.title")}</DialogTitle>
+          <DialogDescription>{t("sidebar.entrypointDialog.description")}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="session-entrypoint">Command</Label>
+          <Label htmlFor="session-entrypoint">{t("sidebar.entrypointDialog.command")}</Label>
           <Input
             id="session-entrypoint"
             value={value}
@@ -71,15 +72,17 @@ export function EntrypointDialog({
             className="font-mono"
           />
           <p className="text-xs text-muted-foreground">
-            Runs in <span className="font-mono select-text">{cwd}</span> without loading your
-            shell&rsquo;s rc file, so an alias is not a command. Leave empty for a plain shell.
+            <Trans
+              k="sidebar.entrypointDialog.hint"
+              params={{ cwd: <span className="font-mono select-text">{cwd}</span> }}
+            />
           </p>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("common.action.cancel")}
           </Button>
-          <Button onClick={commit}>Save</Button>
+          <Button onClick={commit}>{t("common.action.save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

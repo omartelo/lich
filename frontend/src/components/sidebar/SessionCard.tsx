@@ -48,6 +48,7 @@ import { type CardColor, CARD_COLORS, isCardColor, TINTED_FILL } from "@/lib/ses
 import { SessionForkItem } from "./SessionForkItem"
 import { SessionStatusIcon } from "./SessionStatusIcon"
 import { SIDEBAR_MORPH } from "@/lib/view-transition"
+import { useT } from "@/lib/i18n/i18n"
 import { SessionTooltip } from "./SessionTooltip"
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -180,6 +181,7 @@ export function SessionCard({
   sortable,
   delegateGroups,
 }: SessionCardProps) {
+  const t = useT()
   // Read here rather than threaded down as a prop: the `lich send` line names
   // the project only when another session shares this card's label, and that is
   // a question about every open project — not about the one this card sits in.
@@ -224,10 +226,10 @@ export function SessionCard({
   const scheduledAt = session.scheduledAt ?? 0
   const scheduledIn = scheduledAt ? timeUntil(scheduledAt, new Date()) : null
   const scheduleItem = !scheduledAt
-    ? "Schedule a prompt…"
+    ? t("sidebar.sessionCard.schedule")
     : scheduledIn
-      ? `Scheduled ${scheduledIn}…`
-      : "Scheduled…"
+      ? t("sidebar.sessionCard.scheduledIn", { when: scheduledIn })
+      : t("sidebar.sessionCard.scheduledDue")
   // The live working directory the backend's cwd watcher reports ("" until it
   // does): a `cd` in the terminal moves the card with it. Falls back to the
   // session's static start path — a worktree session lives in its own checkout,
@@ -262,7 +264,7 @@ export function SessionCard({
   const writeAtOwnPrompt = (text: string) => {
     onSelect()
     TerminalService.Write(session.id, text).catch((error) =>
-      toast.error(`Couldn’t hand this to the session: ${errorText(error)}`),
+      toast.error(t("sidebar.sessionCard.handOffFailed", { error: errorText(error) })),
     )
     requestTerminalFocus(session.id)
   }
@@ -278,7 +280,9 @@ export function SessionCard({
           queuePaste(onOpenTerminal(shownPath), `${command}\n`)
         }
       })
-      .catch((error) => toast.error(`Could not open the checkout: ${errorText(error)}`))
+      .catch((error) =>
+        toast.error(t("sidebar.sessionCard.openCheckoutFailed", { error: errorText(error) })),
+      )
   }
 
   // The line another terminal — or another agent — hands this session work
@@ -288,8 +292,9 @@ export function SessionCard({
   const copySendCommand = () => {
     const command = sendCommand(projects, sessions, session, isWindows)
     void navigator.clipboard.writeText(command).then(
-      () => toast(`Copied: ${command}`),
-      (error) => toast.error(`Could not copy the command: ${errorText(error)}`),
+      () => toast(t("sidebar.sessionCard.commandCopied", { command })),
+      (error) =>
+        toast.error(t("sidebar.sessionCard.copyCommandFailed", { error: errorText(error) })),
     )
   }
 
@@ -297,7 +302,7 @@ export function SessionCard({
   // report a checkout that is gone rather than launching at nothing.
   const openFolder = () => {
     void System.OpenFolder(shownPath).catch((error) =>
-      toast.error(`Could not open the folder: ${errorText(error)}`),
+      toast.error(t("sidebar.sessionCard.openFolderFailed", { error: errorText(error) })),
     )
   }
 
@@ -455,13 +460,17 @@ export function SessionCard({
                       confined session. */}
                   {confined ? (
                     <Shield
-                      aria-label={drift ? "Sandboxed, setting has moved" : "Sandboxed"}
+                      aria-label={
+                        drift
+                          ? t("sidebar.sessionCard.sandboxedDrift")
+                          : t("sidebar.sessionCard.sandboxed")
+                      }
                       className="size-3 shrink-0 text-muted-foreground"
                     />
                   ) : (
                     drift === "would-confine" && (
                       <ShieldOff
-                        aria-label="Not sandboxed, setting has moved"
+                        aria-label={t("sidebar.sessionCard.unsandboxedDrift")}
                         className="size-3 shrink-0 text-muted-foreground/60"
                       />
                     )
@@ -518,7 +527,7 @@ export function SessionCard({
                     {pr && (
                       <span
                         role="button"
-                        aria-label={`View pull request #${pr.number}`}
+                        aria-label={t("sidebar.sessionCard.viewPullRequest", { number: pr.number })}
                         onClick={(event) => {
                           event.stopPropagation()
                           onPulls()
@@ -535,7 +544,7 @@ export function SessionCard({
                       offersPullRequest(git.branch, git.base) && (
                         <span
                           role="button"
-                          aria-label="Ask the agent to open a pull request"
+                          aria-label={t("sidebar.sessionCard.askForPullRequest")}
                           onClick={(event) => {
                             event.stopPropagation()
                             writeAtOwnPrompt(createPullRequestPrompt(git.branch))
@@ -543,7 +552,7 @@ export function SessionCard({
                           className="flex items-center gap-1 rounded-sm opacity-0 transition-[color,opacity] hover:text-foreground group-hover:opacity-100"
                         >
                           <GitPullRequestCreate className="size-3 shrink-0" />
-                          PR
+                          {t("sidebar.sessionCard.pullRequestShort")}
                         </span>
                       )}
                     {git.files > 0 && <DiffStat added={git.added} deleted={git.deleted} />}
@@ -557,7 +566,11 @@ export function SessionCard({
             <span className="absolute right-2 top-2 flex items-center gap-1">
               <span
                 role="button"
-                aria-label={pinned ? `Unpin ${session.label}` : `Pin ${session.label}`}
+                aria-label={
+                  pinned
+                    ? t("sidebar.sessionCard.unpinNamed", { name: session.label })
+                    : t("sidebar.sessionCard.pinNamed", { name: session.label })
+                }
                 onClick={(event) => {
                   event.stopPropagation()
                   onPin(!pinned)
@@ -571,7 +584,7 @@ export function SessionCard({
               </span>
               {!pinned && (
                 <CloseButton
-                  label={`Close ${session.label}`}
+                  label={t("sidebar.sessionCard.closeNamed", { name: session.label })}
                   onClick={(event) => {
                     event.stopPropagation()
                     onClose()
@@ -589,11 +602,11 @@ export function SessionCard({
         <ContextMenuContent>
           <ContextMenuItem onClick={() => setEditing(true)}>
             <Pencil />
-            Rename
+            {t("sidebar.sessionCard.rename")}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => onPin(!pinned)}>
             {pinned ? <PinOff /> : <Pin />}
-            {pinned ? "Unpin" : "Pin"}
+            {pinned ? t("sidebar.sessionCard.unpin") : t("sidebar.sessionCard.pin")}
           </ContextMenuItem>
           <CardColorContextSub current={color} onPick={onColor} />
           {/* Beside the pin, because they are the same move at two scales: the
@@ -603,7 +616,7 @@ export function SessionCard({
             <ContextMenuSub>
               <ContextMenuSubTrigger>
                 <Folder />
-                Move to folder
+                {t("sidebar.sessionCard.moveToFolder")}
               </ContextMenuSubTrigger>
               <ContextMenuSubContent>
                 {folders.map((target) => (
@@ -615,13 +628,15 @@ export function SessionCard({
                 {session.folder && (
                   <ContextMenuItem onClick={() => onFile("")}>
                     <FolderMinus />
-                    <span className="truncate">Take out of {session.folder}</span>
+                    <span className="truncate">
+                      {t("sidebar.sessionCard.takeOutOf", { folder: session.folder })}
+                    </span>
                   </ContextMenuItem>
                 )}
                 {(folders.length > 0 || session.folder) && <ContextMenuSeparator />}
                 <ContextMenuItem onClick={onNewFolder}>
                   <Plus />
-                  New folder&hellip;
+                  {t("sidebar.sessionCard.newFolder")}
                 </ContextMenuItem>
               </ContextMenuSubContent>
             </ContextMenuSub>
@@ -630,22 +645,20 @@ export function SessionCard({
           {!active && (
             <ContextMenuItem onClick={onStageToggle}>
               <Columns2 />
-              {showing ? "Stop showing" : "Show beside"}
+              {showing ? t("sidebar.sessionCard.stopShowing") : t("sidebar.sessionCard.showBeside")}
             </ContextMenuItem>
           )}
           {delegateCount > 0 && (
             <ContextMenuItem onClick={onGroupDelegates}>
               <Columns2 />
-              {delegateCount === 1
-                ? "Show beside its 1 delegate"
-                : `Show beside its ${delegateCount} delegates`}
+              {t("sidebar.sessionCard.showBesideDelegates", { count: delegateCount })}
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
           {canDelegate && (
             <ContextMenuItem onClick={() => setDelegatePickerOpen(true)}>
               <ArrowRight />
-              Delegate to session…
+              {t("sidebar.sessionCard.delegate")}
             </ContextMenuItem>
           )}
           {/* Under delegation, because the two are the same move a beat apart:
@@ -660,41 +673,41 @@ export function SessionCard({
           <SessionForkItem session={session} onFork={onFork} />
           <ContextMenuItem onClick={copySendCommand}>
             <Copy />
-            Copy send command
+            {t("sidebar.sessionCard.copySendCommand")}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuSub>
             <ContextMenuSubTrigger>
               <FolderOpen />
-              Open in
+              {t("sidebar.sessionCard.openIn")}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent>
               {session.kind !== "shell" && (
                 <ContextMenuItem onClick={() => onOpenTerminal(shownPath)}>
                   <Terminal />
-                  Terminal
+                  {t("sidebar.sessionCard.terminal")}
                 </ContextMenuItem>
               )}
               <ContextMenuItem onClick={openFolderInEditor}>
                 <FolderCode />
-                Editor
+                {t("sidebar.sessionCard.editor")}
               </ContextMenuItem>
               <ContextMenuItem onClick={openFolder}>
                 <FolderOpen />
-                File manager
+                {t("sidebar.sessionCard.fileManager")}
               </ContextMenuItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
           <ContextMenuItem onClick={onPulls}>
             <GitPullRequestArrow />
-            Pull request
+            {t("sidebar.sessionCard.pullRequest")}
           </ContextMenuItem>
           {!pinned && (
             <>
               <ContextMenuSeparator />
               <ContextMenuItem variant="destructive" onClick={onClose}>
                 <X />
-                Close session
+                {t("sidebar.sessionCard.closeSession")}
               </ContextMenuItem>
             </>
           )}

@@ -118,6 +118,39 @@ once, so one background session waking the whole window is a real regression, an
 - Numbers moving is not a failure to paper over. Read the diff: fewer is a win to keep, more is the
   regression this suite exists to catch.
 
+## Translations (i18n)
+
+Two independent languages: the **interface** (this section) and the **prompt language**, the text lich hands
+agents, composed by the backend (`internal/prompt`; `lib/prompt-language-store.ts` is the setting). Never
+derive one from the other. No i18n library: `lib/i18n/` is the whole mechanism.
+
+- **Layout.** `lib/i18n/locales/en/<namespace>.ts` is the source of truth, written `as const`;
+  `locales/pt-br/<namespace>.ts` mirrors it with `satisfies Shape<typeof en>`, so a missing or extra key fails
+  `tsc`. One namespace per component folder (`sidebar`, `settings`, ...) plus `common`, registered in both
+  `locales/*/index.ts`. `i18n.test.ts` checks what tsc cannot: every locale uses the placeholders English uses.
+- **Keys** are `<folder>.<component>.<what>`, camelCase, the component named after its file
+  (`sidebar.newFolderDialog.title`). A key names the meaning, never the English words. A message goes to
+  `common` only once a second folder needs it.
+- **One sentence, one key.** Never build a sentence from fragments or concatenation: word order differs
+  between languages. Values go in through named placeholders, `"Close {name}"` with
+  `t("...", { name })`. Markup inside a sentence (a bold name, a code span) is a placeholder too, rendered by
+  `<Trans k="..." params={{ name: <b>{name}</b> }} />` (`components/common/Trans.tsx`). `{` in a message is
+  always a placeholder.
+- **Plurals** are an object of CLDR forms, `{ one: "{count} file", other: "{count} files" }`, picked by
+  `Intl.PluralRules` from `params.count`. Never branch on `n === 1` in a component. Portuguese counts 0 as
+  `one`. Dates and durations go through `Intl` (`lib/ago.ts`), never a hand-written unit.
+- **Calling it.** In a component, `const t = useT()` (re-renders on a language change); in a plain module,
+  `import { t } from "@/lib/i18n/i18n"`, read at call time, never at import time. A key built at runtime
+  must still be a typed template: `` t(`sidebar.cardColor.color.${name}`) `` with `name` a union.
+- **Not translated:** backend error text shown through `errorText()` (only the sentence around it is),
+  `CHANGELOG.md` and the What's new dialog, identifiers and names (providers, branches, commands, file
+  paths, `lich`, `Claude Code`), keyboard shortcuts, and a test's fixture data.
+- **Tests stay English.** The node suites and jsdom both resolve to `en`; a test asserting English text keeps
+  passing untouched. Assert another locale by calling `setLocale` in the test, never by editing an English
+  assertion.
+- The settings search (`lib/settings-index.ts`) still reads literal English titles out of the source; a
+  translated settings title is invisible to it until the index carries keys.
+
 ## Adapting a shadcn component to lich
 
 Never hand-write a `ui/` primitive — add it with the shadcn CLI (`pnpm dlx shadcn@latest add <name>`), then **adapt it to `DESIGN.md`
