@@ -5,6 +5,8 @@ export const settings = {
     promptTitle: "Prompt language",
     promptDescription:
       "The language of the text lich hands your agents: briefings, relayed messages and notices. Sessions started from now on use it everywhere; open ones get it in relayed messages only.",
+    uiSearchWords: "language locale translation english portuguese",
+    promptSearchWords: "language locale translation agent briefing relay english portuguese",
     promptSaveFailed: "Could not save the prompt language: {error}",
   },
 } as const

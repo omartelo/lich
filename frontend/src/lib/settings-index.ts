@@ -5,9 +5,14 @@
 // The index is written out rather than derived from the rendered tree: the
 // panes are React components whose blocks only exist once rendered, and the
 // suite runs in node. settings-index.test.ts is what keeps the two in step, by
-// reading the same literals out of the source and failing on a block that
-// nobody added here.
+// reading the same titles out of the source (a literal, or the catalog key a
+// translated block passes to t()) and failing on a block nobody added here.
+//
+// A translated block is indexed by its key, resolved when the search runs: it
+// matches in the interface language, and in English too, so a search typed
+// from memory of the English screens still lands after a language switch.
 import { HOTKEY_ACTIONS, HOTKEY_GROUPS } from "@/lib/hotkeys"
+import { type PlainMessageKey, t, tIn } from "@/lib/i18n/i18n"
 
 export interface SettingEntry {
   /** The nav section that opens it, by the id Settings.tsx gives it. */
@@ -25,16 +30,33 @@ export interface SettingEntry {
   perProvider?: boolean
   /** Narrows a per-provider block to the one provider whose screen has it. */
   onlyFor?: string
+  /** A translated entry's English title and keywords, which it also matches. */
+  english?: string
 }
 
+/** An entry as written in the index: a block still titled with an English
+ * literal, or a translated one named by the catalog keys its pane renders. */
+export type IndexedSetting = Omit<SettingEntry, "title" | "also" | "english"> &
+  ({ title: string; also?: string } | { titleKey: PlainMessageKey; alsoKey?: PlainMessageKey })
+
 // Every SettingBlock in the app, in the order its pane renders it.
-export const SETTING_ENTRIES: readonly SettingEntry[] = [
+export const SETTING_ENTRIES: readonly IndexedSetting[] = [
   { section: "appearance", title: "Theme", also: "colors dark light terminal palette" },
   { section: "appearance", title: "Zoom" },
   { section: "appearance", title: "Terminal text size" },
   { section: "appearance", title: "Terminal font", also: "typeface monospace" },
   { section: "appearance", title: "Footer", also: "status bar layout arrange" },
   { section: "appearance", title: "Spend ceiling", also: "cost budget usd" },
+  {
+    section: "appearance",
+    titleKey: "settings.language.uiTitle",
+    alsoKey: "settings.language.uiSearchWords",
+  },
+  {
+    section: "appearance",
+    titleKey: "settings.language.promptTitle",
+    alsoKey: "settings.language.promptSearchWords",
+  },
   { section: "notifications", title: "Notify me when a session needs input" },
   { section: "notifications", title: "Notify me when a session finishes working" },
   { section: "providers", title: "Default provider", also: "agent new session" },
@@ -125,9 +147,24 @@ function sectionEntries(): SettingEntry[] {
   return SETTING_SECTIONS.map((section) => ({ section: section.id, title: section.label }))
 }
 
+/** An entry with its keys read in the current language. Called at search
+ * time, never at import, so a language switch reaches the next search. */
+function resolveEntry(entry: IndexedSetting): SettingEntry {
+  if ("title" in entry) {
+    return entry
+  }
+  const { titleKey, alsoKey, ...rest } = entry
+  return {
+    ...rest,
+    title: t(titleKey),
+    also: alsoKey && t(alsoKey),
+    english: [tIn("en", titleKey), alsoKey && tIn("en", alsoKey)].join(" ").toLowerCase(),
+  }
+}
+
 /** Every searchable entry: the written-out blocks, the shortcuts, the panes. */
 export function allEntries(): SettingEntry[] {
-  return [...SETTING_ENTRIES, ...hotkeyEntries(), ...sectionEntries()]
+  return [...SETTING_ENTRIES.map(resolveEntry), ...hotkeyEntries(), ...sectionEntries()]
 }
 
 /** The entries a query matches, best first.
@@ -149,7 +186,7 @@ export function searchSettings<T extends SettingEntry>(query: string, entries: r
       scored.push({ entry, rank: 0 })
     } else if (title.includes(needle)) {
       scored.push({ entry, rank: 1 })
-    } else if (entry.also?.includes(needle)) {
+    } else if (entry.also?.toLowerCase().includes(needle) || entry.english?.includes(needle)) {
       scored.push({ entry, rank: 2 })
     }
   }

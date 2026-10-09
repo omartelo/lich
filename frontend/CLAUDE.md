@@ -148,8 +148,9 @@ derive one from the other. No i18n library: `lib/i18n/` is the whole mechanism.
 - **Tests stay English.** The node suites and jsdom both resolve to `en`; a test asserting English text keeps
   passing untouched. Assert another locale by calling `setLocale` in the test, never by editing an English
   assertion.
-- The settings search (`lib/settings-index.ts`) still reads literal English titles out of the source; a
-  translated settings title is invisible to it until the index carries keys.
+- **Settings search.** A translated `SettingBlock`/`SettingRow` title must be written `title={t("key")}`,
+  and its entry in `lib/settings-index.ts` names `titleKey` (and `alsoKey` for search words, a message of its
+  own) instead of `title`/`also`. `settings-index.test.ts` reads both forms out of the source.
 
 ## Adapting a shadcn component to lich
 

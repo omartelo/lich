@@ -89,7 +89,10 @@ function lookup(locale: Locale, key: string): string | PluralForms {
 /** The template a key resolves to for the current locale, the plural form
  * already chosen by params.count. */
 export function template(key: string, count: number | undefined): string {
-  const locale = getLocale()
+  return templateIn(getLocale(), key, count)
+}
+
+function templateIn(locale: Locale, key: string, count: number | undefined): string {
   const message = lookup(locale, key)
   if (typeof message === "string") return message
   if (count === undefined) {
@@ -122,12 +125,28 @@ export function interpolate<V>(text: string, params: Record<string, V>): (string
  * filled. A plural takes its form from params.count. */
 export function t<K extends MessageKey>(
   key: K,
+  ...params: ParamsArg<At<Messages, K>, string | number>
+): string {
+  return tIn(getLocale(), key, ...params)
+}
+
+/** t in a named locale rather than the current one: for matching what a user
+ * may type from memory of another language, never for display. */
+export function tIn<K extends MessageKey>(
+  locale: Locale,
+  key: K,
   ...[params]: ParamsArg<At<Messages, K>, string | number>
 ): string {
   const values = (params ?? {}) as Record<string, string | number>
   const count = typeof values.count === "number" ? values.count : undefined
-  return interpolate(template(key, count), values).join("")
+  return interpolate(templateIn(locale, key, count), values).join("")
 }
+
+/** The keys whose message takes no parameters: what a static table (the
+ * settings search index) can name and resolve later. */
+export type PlainMessageKey = {
+  [K in MessageKey]: ParamsArg<At<Messages, K>, string> extends [] ? K : never
+}[MessageKey]
 
 /** Resets the module between tests. */
 export function resetLocale(): void {
