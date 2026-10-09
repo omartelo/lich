@@ -45,8 +45,8 @@ type fakeSessions struct {
 	// ultracodes records each session row ultracode was turned on for.
 	ultracodes   map[string]bool
 	ultracodeErr error
-	// subagents records each session row marked as a subagent.
-	subagents   map[string]bool
+	// subagents records how deep each session row marked as a subagent runs.
+	subagents   map[string]int
 	subagentErr error
 	// entrypoints records the run command written on each session row, keyed by
 	// session id. Only a Run card gets one from this service, so a row in here is
@@ -257,15 +257,19 @@ func (f *fakeSessions) SetSessionUltracode(sessionID string) error {
 	return nil
 }
 
-func (f *fakeSessions) SetSessionSubagent(sessionID string) error {
+func (f *fakeSessions) SetSessionSubagentDepth(sessionID string, depth int) error {
 	if f.subagentErr != nil {
 		return f.subagentErr
 	}
 	if f.subagents == nil {
-		f.subagents = map[string]bool{}
+		f.subagents = map[string]int{}
 	}
-	f.subagents[sessionID] = true
+	f.subagents[sessionID] = depth
 	return nil
+}
+
+func (f *fakeSessions) SessionSubagentDepth(sessionID string) int {
+	return f.subagents[sessionID]
 }
 
 func (f *fakeSessions) SetRunEntrypoint(sessionID, entrypoint string) error {

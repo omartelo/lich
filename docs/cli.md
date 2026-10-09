@@ -452,17 +452,27 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
     `close_session`, the caller's TaskStop or the card's own close: the caller
     hears nothing and nothing waits in its inbox, since whoever closed it
     stopped the work. A caller holding the line on the ticket hears `stopped`
-    (exit 3).
+    (exit 3), and so does a caller that is itself a worker somebody waits on,
+    through its inbox: its own report waits for this outcome.
+  - **reports only after the work it handed off is back**: while an errand it
+    sent is open, or a result for it is unread, its mod's report is ignored,
+    and the turn that outcome starts is the one that answers.
   - **closes once it is done** when it runs in the caller's checkout: after it
     answers the errand and the turn it answered in ends, lich parks it the way
     `lich close` does, like a native subagent that returned its result. A worker
     on a worktree of its own stays open, since that checkout holds its work, and
     so does one the user pinned, one whose caller is gone, one with another
-    errand still open at it, and one whose turn was stopped with Esc.
+    errand still open at it, one with an errand of its own still out, and one
+    whose turn was stopped with Esc.
   - tells the caller, in one short note per block, when it is **waiting on a
     permission** prompt in its card.
-  - spawns with `LICH_SUBAGENT_CARDS=off` on every start, a resume included, so
-    its own subagents stay inside its CLI: a card does not open cards.
+  - runs **one level below the caller**, recorded on its row and handed to the
+    plugin as `LICH_SUBAGENT_DEPTH` on every start, a resume included. A
+    Claude Code worker one level down still turns its own general-purpose
+    subagents into cards (lich-plugin 0.19.0 or later); one two levels down, a
+    card a card opened, spawns with `LICH_SUBAGENT_CARDS=off` and keeps them
+    inside its CLI, and its briefing says so. Under an older plugin every
+    worker keeps them native.
   `--json` keeps its shape: the session and its `delivery`.
 - `--folder` files the new session under that sidebar folder, written before the
   window hears of the session, so the card arrives in the folder's block instead

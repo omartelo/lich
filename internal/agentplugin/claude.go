@@ -57,6 +57,25 @@ func runsSubagentCards(version string) bool {
 	return !semver.Less(version, SubagentCardsRelease)
 }
 
+// NestedSubagentCardsRelease is the first lich-plugin release whose mod tells a
+// worker by LICH_SUBAGENT_DEPTH rather than by LICH_SUBAGENT_CARDS=off
+// (hooks/worker-answer.js), so a worker can open cards of its own and still
+// answer its errand. An older one reads a worker without that variable as a
+// session that answers nothing.
+const NestedSubagentCardsRelease = "0.19.0"
+
+// ClaudeNestsSubagentCards reports whether the installed Claude Code plugin is a
+// release a worker can open cards from. It reads Claude Code's plugin state on
+// each call.
+func ClaudeNestsSubagentCards() bool {
+	version, ok := claudeInstalledVersion()
+	return ok && nestsSubagentCards(version)
+}
+
+func nestsSubagentCards(version string) bool {
+	return !semver.Less(version, NestedSubagentCardsRelease)
+}
+
 // claudeInstalledVersion reads the plugin's installed version from Claude
 // Code's plugin state, or ("", false) when absent or unreadable.
 func claudeInstalledVersion() (string, bool) {

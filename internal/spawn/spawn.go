@@ -89,7 +89,8 @@ type Sessions interface {
 	SetSessionModel(sessionID, model string) error
 	SetSessionEffort(sessionID, effort string) error
 	SetSessionUltracode(sessionID string) error
-	SetSessionSubagent(sessionID string) error
+	SetSessionSubagentDepth(sessionID string, depth int) error
+	SessionSubagentDepth(sessionID string) int
 	SetRunEntrypoint(sessionID, entrypoint string) error
 	RenameSession(sessionID, label string) error
 	SetSessionFolder(sessionID, folder string) error
@@ -233,8 +234,9 @@ func (s *Service) Open(
 //   - it is filed with the caller, so workers sit under whoever asked for them:
 //     in the caller's folder, or one named after the caller's label that the
 //     caller is filed under too (subagentFolder);
-//   - it is marked on its row (SetSessionSubagent), so every spawn of it keeps
-//     its own subagents native: a card does not open cards.
+//   - its row records how deep it runs, one level below the caller
+//     (SetSessionSubagentDepth), so every spawn of it knows whether its own
+//     subagents may still become cards (internal/terminal, subagentCardsOn).
 //
 // The project is always the caller's. A caller that is not a session lich holds
 // is refused before anything is opened: there is no checkout to share and no
@@ -249,7 +251,7 @@ func (s *Service) OpenSubagent(
 }
 
 // request is one Open or OpenSubagent call. subagent selects OpenSubagent's
-// placement, folder and row mark.
+// placement, folder and row depth.
 type request struct {
 	fromID, projectName, kind, worktree, base, model, effort, folder string
 	ultracode, subagent                                              bool
@@ -345,7 +347,7 @@ func (s *Service) openSession(req request) (Session, error) {
 	// default and the failure is reported once it is running.
 	callerErr := s.fileCaller(target.ID, callerToFile, folder)
 	overrideErr := s.recordOverrides(id, label, model, effort, req.ultracode)
-	markErr := s.markSubagent(id, label, req.subagent)
+	markErr := s.markSubagent(id, label, req)
 	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, false, at.setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)
 	}
@@ -403,18 +405,20 @@ func (s *Service) fileCaller(projectID, callerID, folder string) error {
 	return nil
 }
 
-// markSubagent records a subagent's mark on its row before its terminal starts,
-// which reads it back (internal/terminal, subagentCardsOn). A write that fails
-// is reported once the session is running, for the reason recordOverrides
-// gives.
-func (s *Service) markSubagent(id, label string, subagent bool) error {
-	if !subagent {
+// markSubagent records a subagent's depth on its row before its terminal
+// starts, which reads it back (internal/terminal, subagentCardsOn): one level
+// below the session that asked for it. A write that fails is reported once the
+// session is running, for the reason recordOverrides gives.
+func (s *Service) markSubagent(id, label string, req request) error {
+	if !req.subagent {
 		return nil
 	}
-	if err := s.sessions.SetSessionSubagent(id); err != nil {
+	depth := s.sessions.SessionSubagentDepth(req.fromID) + 1
+	if err := s.sessions.SetSessionSubagentDepth(id, depth); err != nil {
 		return fmt.Errorf(
-			"session %q is open, but it could not be marked as a subagent, so its own "+
-				"subagents may open cards: %w",
+			"session %q is open, but it could not be marked as a subagent, so it runs as "+
+				"a session nobody opened: its own subagents may open cards, and it does not "+
+				"report back by itself: %w",
 			label, err,
 		)
 	}

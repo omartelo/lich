@@ -2851,7 +2851,7 @@ func TestTheNudgeNamesTheToolOnlyWhereItExists(t *testing.T) {
 // has. Naming tools that are not in the list would leave that session believing
 // it has no way to open anything.
 func TestSpawnBriefingNamesTheRouteThisSpawnGave(t *testing.T) {
-	withTools, withCommand := SpawnBriefing(true, false), SpawnBriefing(false, false)
+	withTools, withCommand := SpawnBriefing(true, RouteSessions), SpawnBriefing(false, RouteSessions)
 
 	if strings.Contains(withTools, "lich open") {
 		t.Errorf("a session with the tools is sent to the command line:\n%s", withTools)
@@ -2882,7 +2882,7 @@ func TestSpawnBriefingNamesTheRouteThisSpawnGave(t *testing.T) {
 // report back on its own), so the briefing points at it instead of drawing a
 // line against it, and keeps open_session for what a subagent cannot be.
 func TestSpawnBriefingSendsCardsToTheAgentTool(t *testing.T) {
-	cards := SpawnBriefing(true, true)
+	cards := SpawnBriefing(true, RouteCards)
 	for _, want := range []string{"Agent tool", "card", "isolation", "tools in your list"} {
 		if !strings.Contains(cards, want) {
 			t.Errorf("the card briefing is missing %q:\n%s", want, cards)
@@ -2895,6 +2895,24 @@ func TestSpawnBriefingSendsCardsToTheAgentTool(t *testing.T) {
 	}
 	if strings.Contains(cards, "not the subagents your own harness runs") {
 		t.Errorf("the card briefing still steers away from the Agent tool:\n%s", cards)
+	}
+}
+
+// A card as deep as lich nests them is told its Agent tool stays inside it, and
+// is not sent to open sessions instead, which would nest cards by another door.
+func TestSpawnBriefingKeepsANativeCardsFanOutUnderIt(t *testing.T) {
+	for _, hasTools := range []bool{true, false} {
+		native := SpawnBriefing(hasTools, RouteNative)
+		for _, want := range []string{"Agent tool", "inside this session", "rather than with new lich sessions"} {
+			if !strings.Contains(native, want) {
+				t.Errorf("the native briefing is missing %q:\n%s", want, native)
+			}
+		}
+		for _, unwanted := range []string{"lich open", "tools in your list", `"`} {
+			if strings.Contains(native, unwanted) {
+				t.Errorf("the native briefing carries %q:\n%s", unwanted, native)
+			}
+		}
 	}
 }
 

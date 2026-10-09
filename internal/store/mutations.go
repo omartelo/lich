@@ -303,7 +303,7 @@ func (s *Service) ReopenSession(sessionID, newSessionID string) (*Session, error
 // reopen is the resume behind both doors: it finds one parked session with the
 // given WHERE clause and re-adds it to the workspace under a fresh id
 // (newSessionID), carrying over the old label, kind, path, provider session id,
-// label_auto flag, model, effort, ultracode, subagent mark, entrypoint, sandbox, pin, origin and scheduled prompt.
+// label_auto flag, model, effort, ultracode, subagent depth, entrypoint, sandbox, pin, origin and scheduled prompt.
 // The fresh id is deliberate: it makes the frontend treat the card as
 // never-spawned, so its resume prompt fires and the provider conversation
 // continues instead of starting cold.
@@ -315,7 +315,7 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// cycle — reinserting without it would reset to 1 and let the ai-title
 		// stomp the chosen name, breaking SetSessionTitle's contract.
 		//
-		// model, effort, ultracode, the subagent mark and entrypoint ride along for the same reason, one rung lower:
+		// model, effort, ultracode, the subagent depth and entrypoint ride along for the same reason, one rung lower:
 		// they are what the session was born with, and a resumed card that the
 		// user restarts as a new conversation starts on them again; a reinsert
 		// that dropped the entrypoint would put the terminal back on a bare shell
@@ -340,7 +340,8 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// session, and the row is what says where it belongs.
 		var labelAuto int
 		var projectID, model, effort, entrypoint, sandbox, folder, color string
-		var run, ultracode, subagent bool
+		var run, ultracode bool
+		var subagent int
 		var forkOffset float64
 		row := tx.QueryRow(
 			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
@@ -728,38 +729,44 @@ func (s *Service) SessionUltracode(sessionID string) bool {
 	return on
 }
 
-// SetSessionSubagent records that a session was opened as another session's
-// subagent (internal/spawn, OpenSubagent), so every spawn of it, a resume
-// included, keeps its own subagents native.
-func (s *Service) SetSessionSubagent(sessionID string) error {
+// SetSessionSubagentDepth records that a session was opened as another
+// session's subagent, depth levels below a session nobody opened as one
+// (internal/spawn, OpenSubagent), so every spawn of it, a resume included,
+// knows how deep it runs. The subagent column holds the depth; 0 is a session
+// nobody opened as a subagent, which is every row written before nesting.
+func (s *Service) SetSessionSubagentDepth(sessionID string, depth int) error {
 	if _, err := s.db.Exec(
-		`UPDATE sessions SET subagent = 1 WHERE id = ?`, sessionID,
+		`UPDATE sessions SET subagent = ? WHERE id = ?`, depth, sessionID,
 	); err != nil {
-		return fmt.Errorf("mark %q as a subagent: %w", sessionID, err)
+		return fmt.Errorf("mark %q as a subagent %d deep: %w", sessionID, depth, err)
 	}
 	return nil
 }
 
-// SessionSubagent reports whether a session was opened as a subagent. A read
-// failure answers false, which leaves the user's setting in charge.
-func (s *Service) SessionSubagent(sessionID string) bool {
-	var on bool
+// SessionSubagentDepth is how many subagent levels below a session nobody
+// opened as one this session runs, 0 for such a session. A read failure answers
+// 0, which leaves the user's setting in charge.
+func (s *Service) SessionSubagentDepth(sessionID string) int {
+	var depth int
 	if err := s.db.QueryRow(
 		`SELECT subagent FROM sessions WHERE id = ?`, sessionID,
-	).Scan(&on); err != nil {
-		return false
+	).Scan(&depth); err != nil {
+		return 0
 	}
-	return on
+	return depth
 }
 
-// InheritSubagent marks a fork a subagent when the session that ran the
-// conversation it branches, forkedFrom, was one. The fork's row is a fresh
-// insert, so without this a copy of a worker would open cards of its own.
+// InheritSubagent gives a fork the subagent depth of the session that ran the
+// conversation it branches, forkedFrom, when that one was a subagent. The
+// fork's row is a fresh insert, so without this a copy of a worker would open
+// cards a worker that deep does not.
 func (s *Service) InheritSubagent(sessionID, forkedFrom string) error {
 	if _, err := s.db.Exec(
-		`UPDATE sessions SET subagent = 1 WHERE id = ? AND EXISTS
-		   (SELECT 1 FROM sessions WHERE provider_session_id = ? AND subagent = 1)`,
-		sessionID, forkedFrom,
+		`UPDATE sessions SET subagent =
+		   (SELECT MAX(subagent) FROM sessions WHERE provider_session_id = ?)
+		 WHERE id = ? AND EXISTS
+		   (SELECT 1 FROM sessions WHERE provider_session_id = ? AND subagent > 0)`,
+		forkedFrom, sessionID, forkedFrom,
 	); err != nil {
 		return fmt.Errorf("inherit the subagent mark on %q: %w", sessionID, err)
 	}

@@ -41,6 +41,14 @@ otherwise: an ordinary session, a worker whose errand was already answered
 `reply_to_session` itself), and one holding two subagent errands, where nothing
 says which one the text belongs to.
 
+It also ignores the report of a worker still awaiting an outcome of its own:
+an errand it sent to another session (a subagent card of its own, or a
+`send_to_session` that handed back a ticket) is still open, or a result for it
+has not been read by a turn of its yet. None of those is in Claude Code's
+`background_tasks`, so the turn that handed the work off ends with the list
+empty and reports "I handed it off". The outcome reaches the worker's prompt
+and starts the turn whose report answers the errand.
+
 Both sides test against the payloads in
 [`fixtures/mod-answer.jsonl`](fixtures/mod-answer.jsonl).
 
@@ -51,8 +59,10 @@ Both sides test against the payloads in
 | `classic.Stop` on the main loop, then `turn.complete` | none (no mod system) | none (no mod system) | none (no mod system) | none (no mod system) | none (no mod system) | none (no mod system) | none (no mod system) |
 
 The mod posts once per main-loop turn, and only from a worker: a session
-spawned with `LICH_SUBAGENT_CARDS=off` (README, Shared transport), which every
-`--subagent` session is. A turn is reported when all of these hold, measured on
+whose `LICH_SUBAGENT_DEPTH` is above 0 (README, Shared transport), which every
+`--subagent` session is. A mod from 0.19.0 under a lich that sets no depth, and
+every mod before 0.19.0, takes `LICH_SUBAGENT_CARDS=off` for that instead, which
+lich then sets on every worker. A turn is reported when all of these hold, measured on
 Claude Code 2.1.289:
 
 - `classic.Stop` fired without an `agent_id` (the main loop, not a subagent or
@@ -75,9 +85,15 @@ Claude Code 2.1.289:
   wired with `terminal.SetWorkerAnswer`).
 - **Answer** (`relay.WorkerAnswered`): finds the one open subagent errand at the
   session, delivered or lapsed, and answers it through `Reply`, so the caller
-  gets the report the way it gets one sent with `reply_to_session`. A worker in
-  its caller's checkout is closed once the answer is in and its turn has
-  ended, whichever of the two lands first.
+  gets the report the way it gets one sent with `reply_to_session`, unless the
+  worker still awaits an outcome of its own (`relay.awaitsOutcomeLocked`). A
+  result counts as read once a turn of the worker's starts after the worker was
+  told about it (`inboxEntry.seen`). A worker in its caller's checkout is
+  closed once the answer is in, its turn has ended and nothing it sent is still
+  out, whichever lands last.
+- **A worker's own worker closed** (`relay.SessionClosed`): the stop is filed in
+  the inbox of a caller that is itself a worker somebody waits on, so it
+  resumes and answers instead of waiting on an errand that ended in silence.
 - **The task** (`relay.handOff`): a subagent errand handed to a worker whose
   mod polls from a plugin release that posts here (`agentplugin.ModAnswerRelease`)
   is composed without the ticket and the reply instructions, and is marked as
@@ -102,3 +118,7 @@ Claude Code 2.1.289:
   instructions; its mod still reports, and whichever answer lands first wins.
 - **A mod older than 0.17.0 does not post here.** Its worker is handed the
   ticket, as before.
+- **An errand the worker sent that ages out holds its answer.** An ordinary
+  errand with nobody holding the line is dropped after an hour without
+  activity (`ticketTTL`) and nothing reaches the worker's prompt, so its report
+  waits for the next turn something else starts there.

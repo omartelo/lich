@@ -30,6 +30,9 @@ func (s *Service) Observe(sessionID, state string) {
 	finished := s.finishedWorkerLocked(sessionID, state)
 	resumed := s.takeResumeLocked(sessionID, state)
 	s.recordState(sessionID, state)
+	if state == stateBusy {
+		s.seeNewsLocked(sessionID)
+	}
 	ended, notice := s.endedErrands(sessionID, state)
 	// A waiter still holding the line carries the news out through its own
 	// select; an errand nobody is attending is stashed for the sender instead,

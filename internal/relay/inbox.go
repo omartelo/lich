@@ -57,6 +57,9 @@ type inboxEntry struct {
 	// per entry: re-nudging on every turn end would start a turn per nudge,
 	// forever, for a sender that chose not to collect.
 	nudged bool
+	// seen is whether a turn of the sender's started after it was nudged, so
+	// the sender has read it or chose not to collect it (awaitsOutcomeLocked).
+	seen bool
 }
 
 // Collect drains every outcome waiting for fromID, oldest first. With nothing

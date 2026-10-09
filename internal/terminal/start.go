@@ -134,6 +134,8 @@ func (s *Service) spawnSession(
 	}
 	skipPermissions := s.store.SkipPermissions(kind, projectID, cwd)
 	ultracode := s.store.Ultracode(kind) || s.store.SessionUltracode(id)
+	depth := s.store.SessionSubagentDepth(id)
+	cardsOn := s.subagentCardsOn(kind, depth)
 	// The model and effort are read from the row rather than passed in, so every
 	// spawn that starts a conversation of its own gets them: the window's first
 	// view and a restart. A resume leaves them to the provider (modelArgs).
@@ -141,10 +143,10 @@ func (s *Service) spawnSession(
 		bin: resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
 		args: providerArgs(
 			kind, name, resume, s.store.SessionModel(id), s.store.SessionEffort(id), mcpBin,
-			kiroPluginAgent(kind), fork, skipPermissions, ultracode, s.briefsAgentCards(id, kind),
+			kiroPluginAgent(kind), fork, skipPermissions, ultracode, subagentRoute(kind, depth, cardsOn),
 		),
 		dir:  cwd,
-		env:  subagentCardsEnv(s.sessionEnv(id, projectID, cwd), kind, s.subagentCardsOn(id, kind)),
+		env:  subagentEnv(s.sessionEnv(id, projectID, cwd), kind, depth, cardsOn),
 		cols: cols,
 		rows: rows,
 	}

@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/compact` or an automatic compaction shows "Compacting…" under the session's
   name with a spinner, instead of the finished turn's check or a spinner that
   names nothing. Needs the next lich-plugin release.
+- **A subagent card can open subagent cards of its own.** A Claude Code worker
+  that splits its task now opens each part as a card too, filed beside it, and
+  reports back once those parts are done. One level of that is allowed: a card
+  opened by a card keeps its own subagents inside Claude Code, and is told so
+  when it starts. Needs lich-plugin 0.19.0 or later; with an older plugin a
+  worker's subagents stay inside Claude Code as before.
 
 ### Changed
 
@@ -23,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A subagent card reports back only once the work it handed off is back.** A
+  Claude Code worker that handed part of its task to another session used to
+  report "handed it off" as its result the moment its turn ended, and closed
+  before the other session answered. Its report now waits for that answer, and
+  for a result that reached it mid-turn, and the worker stays open until then.
+  If the session it handed work to is closed first, the worker is told so
+  instead of waiting forever.
 - **Dragging a footer item in Settings keeps its shape.** The chip under the pointer
   stays on one line at its own size instead of wrapping into a taller, narrower block.
 - **Hovering a project tab no longer shows a URL in the window corner.** The address
