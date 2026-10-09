@@ -118,6 +118,16 @@ describe("pendingOf", () => {
     expect(store.pendingOf(["ghost"])).toBeNull()
   })
 
+  it("badges a compaction as running, under busy and over done", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "done"))
+    emit(report("s2", "compacting"))
+    expect(store.pendingOf(["s1", "s2"])).toBe("compacting")
+    emit(report("s3", "busy"))
+    expect(store.pendingOf(["s1", "s2", "s3"])).toBe("busy")
+  })
+
   it("ranks waiting over busy over done", () => {
     const { source, emit } = fakeSource()
     const store = createSessionStatusStore(source)
@@ -367,7 +377,8 @@ describe("runningOf", () => {
     emit(report("s1", "busy"))
     emit(report("s2", "waiting"))
     emit(report("s3", "done"))
-    expect(store.runningOf(["s1", "s2", "s3"])).toEqual(["s1", "s2"])
+    emit(report("s4", "compacting"))
+    expect(store.runningOf(["s1", "s2", "s3", "s4"])).toEqual(["s1", "s2", "s4"])
   })
 
   it("only counts the sessions of the project asked about", () => {
@@ -553,12 +564,13 @@ describe("pendingAll / subscribeAll", () => {
     expect(store.pendingAll()).toEqual([])
   })
 
-  it("queues waiting and done, but never busy", () => {
+  it("queues waiting and done, but never busy or compacting", () => {
     const { source, emit } = fakeSource()
     const store = createSessionStatusStore(source)
     emit(report("s1", "waiting"))
     emit(report("s2", "busy"))
     emit(report("s3", "done"))
+    emit(report("s4", "compacting"))
     expect(store.pendingAll()).toEqual([
       { id: "s1", status: "waiting" },
       { id: "s3", status: "done" },

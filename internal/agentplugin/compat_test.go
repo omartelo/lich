@@ -16,7 +16,8 @@ func TestCompatible(t *testing.T) {
 		"0.16.0":       true,
 		"0.17.0":       true,
 		"0.18.0":       true,
-		"0.19.0":       false,
+		"0.19.0":       true,
+		"0.20.0":       false,
 		"1.0.0":        false,
 		"":             false,
 		"not-a-semver": false,
@@ -34,9 +35,9 @@ func TestNewestCompatible(t *testing.T) {
 		tags []string
 		want string
 	}{
-		{"newest in range wins over a newer one past it", []string{"0.19.0", "0.13.2", "0.13.10", "0.12.9"}, "0.13.10"},
+		{"newest in range wins over a newer one past it", []string{"0.20.0", "0.13.2", "0.13.10", "0.12.9"}, "0.13.10"},
 		{"order does not matter", []string{"0.13.0", "0.13.1"}, "0.13.1"},
-		{"nothing in range", []string{"0.19.0", "0.12.0"}, ""},
+		{"nothing in range", []string{"0.20.0", "0.12.0"}, ""},
 		{"no releases", nil, ""},
 	}
 	for _, tc := range tests {

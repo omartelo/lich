@@ -451,6 +451,35 @@ func TestPeersCarryTheStateEachSessionReported(t *testing.T) {
 	}
 }
 
+// A compaction moves neither the turn nor the roster: mid-turn the session is
+// still busy and errands keep reading it so, and a /compact at the prompt
+// leaves a finished turn finished. The report that closes it says the rest.
+func TestACompactionMovesNoState(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), nil)
+
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "compacting")
+	svc.Observe("s3", "done")
+	svc.Observe("s3", "compacting")
+
+	peers, err := svc.Peers("s1")
+	if err != nil {
+		t.Fatalf("Peers: %v", err)
+	}
+	want := map[string]string{"lich-s2": "busy", "lich-s3": "done"}
+	for _, p := range peers {
+		if p.State != want[p.Name] {
+			t.Errorf("%s state = %q, want %q", p.Name, p.State, want[p.Name])
+		}
+	}
+	svc.mu.Lock()
+	turn := svc.state["s2"]
+	svc.mu.Unlock()
+	if turn != stateBusy {
+		t.Errorf("turn state = %q, want %q: an auto-compaction is inside the turn", turn, stateBusy)
+	}
+}
+
 // The other half of that pair: a waiting reported after the turn ended is the
 // provider saying "your turn" to nobody in particular, not a session stuck on a
 // human. Published as waiting it would tell every caller reading the roster to

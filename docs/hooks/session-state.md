@@ -2,7 +2,8 @@
 
 Reports a session's processing state to lich so its card shows a spinner while
 the agent is working, a check when the turn ends, and a bell when it is blocked
-on the user — plus a toast that routes to the waiting card. A `busy` report may
+on the user — plus a toast that routes to the waiting card, and a "Compacting…"
+line while the conversation is being folded into a summary. A `busy` report may
 also name the tool the agent is about to run, and a `waiting` what it is blocked
 on; the card shows either one under the session's label.
 
@@ -15,12 +16,12 @@ See [README.md](README.md) for the shared transport (`LICH_PORT` / `LICH_TOKEN`
 POST http://127.0.0.1:${LICH_PORT}/hook?token=${LICH_TOKEN}
 Content-Type: application/json
 
-{"session_id": "<LICH_SESSION_ID>", "state": "<busy|done|waiting|idle>",
+{"session_id": "<LICH_SESSION_ID>", "state": "<busy|done|waiting|idle|compacting>",
  "tool": "<tool name>", "detail": "<what it acts on>",
  "reason": "<what the agent is blocked on>"}
 ```
 
-States: `busy`, `done`, `waiting`, `idle`. lich rejects anything else — the
+States: `busy`, `done`, `waiting`, `idle`, `compacting`. lich rejects anything else — the
 `interrupted` state it publishes to its own window included (see below).
 
 `tool` and `detail` are optional and belong to the pre-tool report alone (see
@@ -50,6 +51,7 @@ Both sides test against the payloads in
 | `Notification`     | `PermissionRequest` | —                | any `*.asked`            | —              | —          | —                  | —                  | `waiting` + `reason` |
 | `Stop`, `StopFailure` | `Stop`              | `Stop`           | `session.status` (`idle`) | `session_stop` | —          | —                  | `stop`             | `done`    |
 | `SessionEnd`       | —                   | —                | —                        | —              | —          | `SessionEnd`       | —                  | `idle`    |
+| mod `session.compact` | —                | —                | —                        | —              | —          | —                  | —                  | `compacting` |
 
 **Kiro closes four of the six rows and neither of the other two.** It has no
 permission event, so a Kiro session waiting on a confirmation reads as `busy`
@@ -146,6 +148,42 @@ on a dead session, and a `/clear` starts the next session with a clean card.
 question does not** — those resume by running a tool, so `PostToolUse → busy` is
 what re-arms the spinner after them. Every tool re-reports `busy` (idempotent);
 `Stop → done` ends the turn.
+
+## A conversation being compacted
+
+`compacting` says the agent is folding its conversation into a summary. It is
+the one state that brackets something rather than standing for where the turn
+is: the client reports it when the compaction starts, and when it settles
+(finished or failed) reports the state the session is back in. That closing
+report is what clears it, like any later state would.
+
+Only Claude Code sends it, from the plugin's mod, on `session.compact`. Measured
+on Claude Code 2.1.295 at a real PTY against a stub listener:
+
+| `e.trigger` | When it runs                                   | Took | Report that closes it |
+|-------------|------------------------------------------------|------|-----------------------|
+| `manual`    | `/compact`, at an idle prompt                  | ~6s  | `done`                |
+| `auto`      | mid-turn, after `UserPromptSubmit`, before the model call | ~14s | `busy`       |
+
+Without it the card says the wrong thing in both cases: a `/compact` raises no
+prompt event, so the card sits on the finished turn's check the whole time, and
+an auto-compaction is a bare spinner with no tool line for as long as it takes.
+The mod's handler awaits `next(e)`, which resolves only once the compaction is
+done (PreCompact, the summary, `SessionStart` with `source: compact`,
+PostCompact all run inside it), so the start and the end are the two edges of
+one call.
+
+No other harness has a start-of-compaction event wired, so the column for each
+of them is empty in the table above, and their cards show what they did before: whatever state
+the compaction began in.
+
+lich reads `compacting` as a bracket everywhere it keeps turn accounting: it
+neither opens nor closes a turn. Two consequences a client can rely on:
+
+- A `waiting` after `compacting` is read against the turn before it, so a
+  permission prompt right after an auto-compaction still rings the bell.
+- The `done` that closes a `/compact` does not raise a desktop "has finished
+  working" notification: the turn it follows was already announced.
 
 ## The tool a turn is running
 
@@ -283,6 +321,9 @@ missing reason never costs a bell.
   finished turn, an inbox count, nothing), which is what an unchanged session
   should show. `waiting` itself is not recorded: it interrupts a turn rather than
   replacing it, so two permission prompts in one turn are two blocks.
+  `compacting` is not recorded for the same reason: an auto-compaction runs
+  inside a turn and a `/compact` between two, and the report after it is read
+  against whichever it was.
 - **The interrupt lich reads itself** — `internal/terminal/draft.go` and
   `Service.noteInterrupt`: no harness event says "the user stopped this turn"
   (see Known ceilings below), so lich takes it from the keystrokes going into the
@@ -293,7 +334,7 @@ missing reason never costs a bell.
   only: the hook endpoint rejects it like any other unknown word, because it
   says something only lich is in a position to know. It is deliberately not
   `done` — stopping a turn is not finishing one, so an interrupted card must
-  not wear the check a completed turn earns. Consumers that know only the four
+  not wear the check a completed turn earns. Consumers that know only the
   contract states read it as "no state" and clear the indicator, which is the
   right reading for a session sitting at its prompt with nothing to show. And
   it is a fallback, never a source of truth: it only ever ends a turn lich
@@ -307,6 +348,8 @@ missing reason never costs a bell.
   same rule as `turnLog`: a `waiting` inside a turn is published, because it is
   the state that means "do not send work here", and one outside a turn is not,
   because a session idle at its prompt is the most available it will ever be.
+  `compacting` reaches neither: `Observe` drops it on arrival, so a session
+  compacting mid-turn keeps reading as `busy` to its errands and to its peers.
 - **The turn's window** — `internal/terminal/turnsnap.go`: reads the same stream
   for a third question, what the turn changed on disk. `busy` opens a window and
   `done` closes it, each taking a `git write-tree` snapshot of the session's
@@ -317,6 +360,8 @@ missing reason never costs a bell.
   report coming. lich's own `interrupted` closes one: a stopped turn is a turn
   that ended, and it changed files like any other. A provider that reports no
   state has no window here at all, which today is Crush and Cursor CLI.
+  `compacting` neither opens nor closes one, and the `done` that closes a
+  `/compact` finds no window open and closes nothing.
 - **Store** — `frontend/src/lib/session/session-status-store.ts`: one subscription taken
   at page load keeps the last state of every session, keyed by id. The card
   cannot hold it: the sidebar only renders cards for the active project, so
@@ -334,7 +379,7 @@ missing reason never costs a bell.
 - **Render** — `frontend/src/components/sidebar/SessionCard.tsx` and
   `SessionStatusRung.tsx`: read the stores
   (`useSessionStatus`, `useSessionTool`, `useSessionWaitingReason`) and show a
-  spinner (`busy`), check (`done`) or bell (`waiting`); any other value, including
+  spinner (`busy` and `compacting`), check (`done`) or bell (`waiting`); any other value, including
   `idle` and `interrupted`, clears the indicator. A `done` is drawn at two weights
   (`SessionStatusIcon`, `useSessionUnread`): solid while the finished turn is
   still unread, faded once the user has watched that card. It is the same mark
@@ -344,9 +389,11 @@ missing reason never costs a bell.
   spending the line on that phrase again would cost the card the only words on it
   the user does not already know. The tool line sits under the session's label and exists only while
   one is reported, so a card outside a turn is exactly the card it was before.
+  `compacting` takes that line for "Compacting…" (`SessionStatusRung.tsx`): the
+  spinner alone reads as a turn running a tool it does not name.
 - **Tab badge** — `frontend/src/components/tabs/ProjectTab.tsx`: reduces a
   project's sessions to one indicator (`useProjectStatus`, ranking `waiting` over
-  `busy` over `done`), shown only while the project is not the active one. A
+  `busy` over `compacting` over `done`, the middle two drawn as the same spinner), shown only while the project is not the active one. A
   `done` stops badging once *that session's* card has been watched, so a project
   left with three finished agents in it still badges for the two nobody opened;
   `busy` and `waiting` badge for as long as they hold, being live states rather
@@ -458,5 +505,13 @@ missing reason never costs a bell.
   and a 30ms read look identical. Nothing reports a tool finishing on its own:
   `PostToolUse` says `busy` with no tool, which by the rule above changes
   nothing.
-- Adding another state beyond `busy`/`done`/`waiting`/`idle` is a contract
+- **Only Claude Code says it is compacting.** It is the one harness whose
+  start-of-compaction event is wired (the mod's `session.compact`); on the other
+  seven, and on a Claude Code session without the mod, a compaction looks like
+  whatever state it started in: a finished turn's check for a `/compact`, a bare
+  spinner for one mid-turn.
+- **A compaction the mod never closes holds the card on "Compacting…"** until the
+  next report. The mod closes it when `next(e)` settles either way, so the window
+  is a mod killed mid-compaction, and the session's next turn clears it.
+- Adding another state beyond `busy`/`done`/`waiting`/`idle`/`compacting` is a contract
   change — see the versioning note in the README.

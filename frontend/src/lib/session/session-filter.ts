@@ -26,6 +26,7 @@ export function phaseOf(status: SessionStatus | null, unread: boolean): SessionP
     case "waiting":
       return "waiting"
     case "busy":
+    case "compacting":
       return "running"
     case "done":
       return unread ? "unread" : "idle"

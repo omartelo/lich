@@ -44,7 +44,9 @@ export function ProjectTab({ project, sessionIds, to, active, onClose }: Project
           active && "bg-sidebar font-medium text-foreground",
         )}
       >
-        {badge === "busy" && <LoaderCircle className="size-3 shrink-0 animate-spin" />}
+        {(badge === "busy" || badge === "compacting") && (
+          <LoaderCircle className="size-3 shrink-0 animate-spin" />
+        )}
         {badge === "done" && <Check className="size-3 shrink-0 text-tone-pass" />}
         {badge === "waiting" && <Bell className="size-3 shrink-0 text-tone-wait" />}
         <span className="truncate">{project.name}</span>

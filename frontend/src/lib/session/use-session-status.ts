@@ -72,7 +72,7 @@ export function useSessionWaitingReason(sessionId: string): string {
 // status, short and relative ("40s", "12m", "3h"), or "" for a status with no
 // clock worth reading.
 //
-// "busy" and "waiting" have one: both are live, and with several agents running
+// "busy", "compacting" and "waiting" have one: all three are live, and with several agents running
 // how long each has been in that state is what picks the one to deal with
 // first. "done" does not — the turn is over, nothing is accruing, and its
 // number would climb for hours on a card that has nothing left to say, pulling
@@ -84,7 +84,8 @@ export function useSessionStatusAge(sessionId: string): string {
     [sessionId],
   )
   const since = useSyncExternalStore(subscribe, () => store.since(sessionId))
-  const started = status === "busy" || status === "waiting" ? since : null
+  const started =
+    status === "busy" || status === "compacting" || status === "waiting" ? since : null
   const [now, setNow] = useState(() => Date.now())
   // One timer for every card on screen (see subscribeAge); a card in any other
   // state subscribes to nothing at all.

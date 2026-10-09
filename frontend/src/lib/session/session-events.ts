@@ -236,7 +236,9 @@ export interface SessionUsage {
 
 // The states a card renders an indicator for. The contract also defines "idle"
 // (SessionEnd), which maps to no indicator like any unknown value does.
-const RENDERED_STATUSES = ["busy", "done", "waiting"] as const
+// "compacting" is Claude Code's alone: the conversation being folded into a
+// summary, mid-turn or at a /compact.
+const RENDERED_STATUSES = ["busy", "done", "waiting", "compacting"] as const
 
 export type SessionStatus = (typeof RENDERED_STATUSES)[number]
 
@@ -711,7 +713,8 @@ export interface DesktopNotifyPrefs {
 // and there is no second question to put.
 //
 // A "done" repeated with no run in between is dropped: it is the same finished
-// turn reported again, not a new one to announce. That collapse lives here, off
+// turn reported again, not a new one to announce. So is the "done" that closes a
+// /compact: the compaction ran at the prompt, after the turn was announced. That collapse lives here, off
 // the caller's previous status, rather than in the status store the toast path
 // deliberately bypasses — "waiting" must keep notifying on every report, because
 // a second permission prompt is a second thing to answer.
@@ -724,7 +727,7 @@ export function decideStatusNotice(
   if (status === "waiting") {
     return decideDesktopNotice(windowFocused, prefs.attention)
   }
-  if (status === "done" && previous !== "done") {
+  if (status === "done" && previous !== "done" && previous !== "compacting") {
     return decideDesktopNotice(windowFocused, prefs.finishedTurn)
   }
   return "none"
