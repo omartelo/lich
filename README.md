@@ -217,12 +217,21 @@ needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
 
 ## Privacy & updates
 
-Everything runs on your machine. No account, no sign-in, no telemetry — the
-backend is a token-authenticated loopback listener, and nothing leaves
-`localhost` except the update check: a version ping to GitHub Releases at startup
-and hourly. The Windows installer's build updates in place; a Homebrew, Scoop,
-AUR or Linux package install updates through its package manager, and lich
-hands you the command.
+Everything runs on your machine. No account, no sign-in, no telemetry: the
+backend is a token-authenticated loopback listener. On its own, lich goes to the
+network for these and nothing else:
+
+- **Updates**: a version check against GitHub Releases at startup and hourly,
+  and the lich plugin's release list on GitHub at startup.
+- **Plan usage**: each provider's own usage endpoint (Anthropic, OpenAI, Cursor,
+  OpenCode Go), with the login the session's CLI already uses, at most every five
+  minutes. Antigravity's plan is read from `agy` itself.
+- **Prices**: LiteLLM's public price table on GitHub, once for a model the
+  bundled table does not know.
+
+The Windows installer's build updates in place; a Homebrew, Scoop, AUR or Linux
+package install updates through its package manager, and lich hands you the
+command.
 Settings › Help says what the log file carries — paths, project and branch names,
 your gh login, never a session token — before you attach it to a bug report, and
 `lich rage` collects that report into one archive without uploading any of it.

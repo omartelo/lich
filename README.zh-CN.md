@@ -189,10 +189,17 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
 
 ## 隐私与更新
 
-一切都跑在你自己的机器上。没有账号，不用登录，没有遥测 —— 后端是一个带 token 鉴权的
-本地回环监听器，除了更新检查之外没有任何东西离开 `localhost`：启动时以及每小时向 GitHub
-Releases 发一次版本查询。Windows 安装程序装的版本会就地更新；用 Homebrew、Scoop、AUR
-或 Linux 软件包装的，则通过各自的包管理器更新，lich 会把命令递给你。
+一切都跑在你自己的机器上。没有账号，不用登录，没有遥测：后端是一个带 token 鉴权的本地
+回环监听器。lich 只会为下面这些事主动联网，除此之外没有别的：
+
+- **更新**：启动时以及每小时向 GitHub Releases 查询一次版本，启动时还会读取 GitHub 上
+  lich 插件的发布列表。
+- **套餐用量**：各 provider 自己的用量接口（Anthropic、OpenAI、Cursor、OpenCode Go），
+  用会话的 CLI 已有的登录，最多每五分钟一次。Antigravity 的套餐直接问 `agy` 本身。
+- **价格**：GitHub 上 LiteLLM 公开的价格表，只在内置价格表不认识某个模型时取一次。
+
+Windows 安装程序装的版本会就地更新；用 Homebrew、Scoop、AUR 或 Linux 软件包装的，
+则通过各自的包管理器更新，lich 会把命令递给你。
 设置 › 帮助会在你把日志附到 bug 报告之前，说明日志文件里都带了什么 —— 路径、项目名和
 分支名、你的 gh 登录名，绝不包含会话 token；`lich rage` 会把这份报告收进一个压缩包，
 而不上传其中任何内容。
