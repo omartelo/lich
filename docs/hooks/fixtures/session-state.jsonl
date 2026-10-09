@@ -2,6 +2,7 @@
 {"name":"done","body":{"session_id":"s1","state":"done"},"accept":{"session_id":"s1","state":"done"}}
 {"name":"waiting","body":{"session_id":"s1","state":"waiting"},"accept":{"session_id":"s1","state":"waiting"}}
 {"name":"idle","body":{"session_id":"s1","state":"idle"},"accept":{"session_id":"s1","state":"idle"}}
+{"name":"compacting","body":{"session_id":"s1","state":"compacting"},"accept":{"session_id":"s1","state":"compacting"}}
 {"name":"busy names the tool it is about to run","body":{"session_id":"s1","state":"busy","tool":"Bash","detail":"pnpm test"},"accept":{"session_id":"s1","state":"busy","tool":"Bash","detail":"pnpm test"}}
 {"name":"a tool with nothing to say about it","body":{"session_id":"s1","state":"busy","tool":"Read"},"accept":{"session_id":"s1","state":"busy","tool":"Read","detail":""}}
 {"name":"each harness names its own tools","body":{"session_id":"s1","state":"busy","tool":"apply_patch","detail":"internal/terminal/usage.go"},"accept":{"session_id":"s1","state":"busy","tool":"apply_patch","detail":"internal/terminal/usage.go"}}
@@ -14,7 +15,7 @@
 {"name":"a reason outside waiting names nothing","body":{"session_id":"s1","state":"busy","reason":"Claude needs your permission to use Bash"},"accept":{"session_id":"s1","state":"busy","reason":""}}
 {"name":"missing session_id","body":{"state":"busy"},"reject":"session_id is required"}
 {"name":"empty session_id","body":{"session_id":"","state":"busy"},"reject":"session_id is required"}
-{"name":"unknown state","body":{"session_id":"s1","state":"cooking"},"reject":"state must be one of busy, done, waiting, idle"}
-{"name":"missing state","body":{"session_id":"s1"},"reject":"state must be one of busy, done, waiting, idle"}
-{"name":"state is case sensitive","body":{"session_id":"s1","state":"Busy"},"reject":"state must be one of busy, done, waiting, idle"}
+{"name":"unknown state","body":{"session_id":"s1","state":"cooking"},"reject":"state must be one of busy, done, waiting, idle, compacting"}
+{"name":"missing state","body":{"session_id":"s1"},"reject":"state must be one of busy, done, waiting, idle, compacting"}
+{"name":"state is case sensitive","body":{"session_id":"s1","state":"Busy"},"reject":"state must be one of busy, done, waiting, idle, compacting"}
 {"name":"malformed json","raw":"{","reject":"body must be a JSON object"}
