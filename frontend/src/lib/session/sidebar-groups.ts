@@ -302,6 +302,30 @@ export function neighborSessionId(
   return sessions[(index + step + sessions.length) % sessions.length].id
 }
 
+// nextWaitingSessionId returns the first session after `sessionId` that
+// `isWaiting` picks, walking the order neighborSessionId walks and wrapping
+// past the end. "" means no other session is waiting: the active session never
+// answers for itself, since landing on it again would move nothing.
+export function nextWaitingSessionId(
+  state: SessionState,
+  projectId: string,
+  sessionId: string,
+  isWaiting: (sessionId: string) => boolean,
+  stage: readonly PaneGroup[] = [],
+): string {
+  const sessions = sidebarGroups(sessionsOf(state, projectId), stage).flatMap(
+    (group) => group.sessions,
+  )
+  const start = sessions.findIndex((s) => s.id === sessionId)
+  for (let offset = 1; offset <= sessions.length; offset++) {
+    const candidate = sessions[(start + offset) % sessions.length]
+    if (candidate.id !== sessionId && isWaiting(candidate.id)) {
+      return candidate.id
+    }
+  }
+  return ""
+}
+
 // A worktree's sessions under one roof. `path` is the checkout root ("" for the
 // project's own directory); `sessions` keeps the group's flat relative order.
 export interface SessionGroup {

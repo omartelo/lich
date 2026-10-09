@@ -17,6 +17,7 @@ export type HotkeyId =
   | "delegate"
   | "nextSession"
   | "prevSession"
+  | "nextWaitingSession"
   | "focusTerminal"
   | "nextProject"
   | "prevProject"
@@ -142,6 +143,14 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     label: "Previous session",
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "ArrowUp" },
+  },
+  // Y for the yes a blocked agent is usually waiting on. It is one of the few
+  // letters the list above still leaves free.
+  {
+    id: "nextWaitingSession",
+    label: "Next session waiting for input",
+    group: "sessions",
+    combo: { mod: true, shift: true, alt: false, key: "y" },
   },
   // The cheapest chord in the app to take: Ctrl+Shift+Enter reaches the PTY as a
   // plain CR, indistinguishable from Enter, so nothing downstream can bind it

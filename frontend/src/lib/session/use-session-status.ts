@@ -187,6 +187,13 @@ export function runningSessions(sessionIds: readonly string[]): string[] {
   return store.runningOf(sessionIds)
 }
 
+// isSessionWaiting reports whether this session is blocked on the user right
+// now. Read imperatively for the same reason as runningSessions: a keypress
+// asks about this instant, and nothing needs to re-render to answer it.
+export function isSessionWaiting(sessionId: string): boolean {
+  return store.get(sessionId) === "waiting"
+}
+
 // useCollapsedMark is what a folded block draws for the cards it hides
 // (collapsedMark). An open block answers null without reading the queue, so it
 // never re-renders for a turn ending somewhere else; a folded one re-renders
