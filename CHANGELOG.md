@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Crush and Kiro CLI cards report everything again with lich-plugin 0.20.**
+  A Crush card never learned its conversation, so resuming it started a new
+  one; a Kiro card showed each tool without its detail line, such as the
+  command a shell call ran. lich now installs the two files those reports read.
+
 - **A terminal opened from a session in the project's own directory joins that
   session's group in the sidebar.** The terminal shortcut, and an agent opening
   a session on the branch the project already has checked out, used to start a

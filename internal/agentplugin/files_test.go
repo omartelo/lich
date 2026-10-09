@@ -478,6 +478,9 @@ func crushFiles() map[string]string {
 	for _, hook := range crushHooks {
 		files[tagged(hook.script)] = "#!/bin/sh\n# " + hook.name + "\nexit 0\n"
 	}
+	for _, script := range crushSourcedScripts {
+		files[tagged(script)] = "# " + script + "\n"
+	}
 	return files
 }
 
@@ -511,6 +514,21 @@ func TestCrushInstallWritesScriptsAndHooks(t *testing.T) {
 	// the poll it front-runs.
 	if !strings.Contains(rc, crushWriteTools) {
 		t.Errorf("crushrc registers the touched hook without its matcher:\n%s", rc)
+	}
+}
+
+// From plugin 0.20 the session-start report sources the conversation-id parser
+// instead of carrying it, so a script directory without it sends no
+// session-start and the card never binds its conversation.
+func TestCrushInstallWritesTheSourcedConversationIDParser(t *testing.T) {
+	files := crushFiles()
+	files[tagged("hooks/conversation-id.sh")] = "# sourced\n"
+	s, _ := fileServer(t, files)
+	_, scriptDir := installCrush(t, s, "")
+
+	path := filepath.Join(scriptDir, "conversation-id.sh")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the parser the reports source was not installed: %v", err)
 	}
 }
 
