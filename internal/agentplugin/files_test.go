@@ -956,6 +956,26 @@ func TestAntigravityInstallWritesTheCustomization(t *testing.T) {
 	}
 }
 
+// From plugin 0.20 the state, tool and session-start reports source the
+// conversation-id parser instead of carrying it, so a script directory without
+// it reports no id and no session-start at all.
+func TestAntigravityInstallWritesTheSourcedConversationIDParser(t *testing.T) {
+	dir := antigravityHome(t)
+	files := antigravityFiles()
+	files[tagged("hooks/conversation-id.sh")] = "# sourced\n"
+	s, _ := fileServer(t, files)
+	antigravityCLI(t, s)
+
+	if err := s.Install(providers.Antigravity); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	path := filepath.Join(dir, antigravityScriptDir, "conversation-id.sh")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the parser the reports source was not installed: %v", err)
+	}
+}
+
 // The manifest is what marks the directory as a plugin at all, and the version
 // in it is this install's only record of what it wrote.
 func TestAntigravityInstalledVersionRoundTrips(t *testing.T) {

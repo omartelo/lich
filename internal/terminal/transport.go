@@ -482,13 +482,15 @@ func servePostLimited[T hookBody](
 // run, and its own words for what that tool acts on. Both are absent from every
 // other report. Reason is the same kind of field for the other end of the
 // contract: what a `waiting` report is blocked on, absent from every state that
-// is not a question.
+// is not a question. ProviderSessionID is the conversation the reporting CLI
+// runs, absent from plugins that predate it (see fromBoundConversation).
 type hookRequest struct {
-	SessionID string `json:"session_id"`
-	State     string `json:"state"`
-	Tool      string `json:"tool"`
-	Detail    string `json:"detail"`
-	Reason    string `json:"reason"`
+	SessionID         string `json:"session_id"`
+	State             string `json:"state"`
+	Tool              string `json:"tool"`
+	Detail            string `json:"detail"`
+	Reason            string `json:"reason"`
+	ProviderSessionID string `json:"provider_session_id"`
 }
 
 // hookTextLimit bounds the free text a report may carry, in runes.

@@ -18,7 +18,8 @@ Content-Type: application/json
 
 {"session_id": "<LICH_SESSION_ID>", "state": "<busy|done|waiting|idle|compacting>",
  "tool": "<tool name>", "detail": "<what it acts on>",
- "reason": "<what the agent is blocked on>"}
+ "reason": "<what the agent is blocked on>",
+ "provider_session_id": "<the conversation that reported>"}
 ```
 
 States: `busy`, `done`, `waiting`, `idle`, `compacting`. lich rejects anything else — the
@@ -36,10 +37,37 @@ what the agent is blocked on, and no other state is a question. A `reason` on
 any other state is dropped, and one that is absent, empty or over-long is never
 a reason to refuse the report: the bell has to land either way.
 
-Responses: `204` ok · `401` invalid token · `400` invalid body.
+`provider_session_id` is optional: the provider's own id for the conversation
+that fired the hook, the same id `/session-start` reports (the stdin payload's
+`session_id`, or Antigravity's `conversationId`). lich drops a report whose id
+names a conversation other than the one bound to the session, and still answers
+`204`. A report without it is taken as before (see Nested agent CLIs below).
+
+Responses: `204` ok (a dropped report included) · `401` invalid token · `400`
+invalid body.
 
 Both sides test against the payloads in
 [`fixtures/session-state.jsonl`](fixtures/session-state.jsonl).
+
+## Nested agent CLIs
+
+An agent CLI the session's agent runs as a tool (`claude -p`, `cursor-agent -p`)
+inherits `LICH_SESSION_ID`, `LICH_PORT` and `LICH_TOKEN`, and a harness that runs
+the plugin's hooks reports from inside it too. Its reports name the host card:
+measured, a nested `cursor-agent -p` exiting sent `SessionEnd` as the host's
+`idle`, and the relay closed every errand delivered to the host.
+
+The conversation id is what tells them apart:
+
+- **State reports** carrying `provider_session_id` are dropped when it differs
+  from the id the session is bound to (`/session-start`). Nothing bound yet, or
+  no id on the report, and the report is taken.
+- **A `/session-start` naming another conversation** rebinds the session only
+  when no turn is open. `/clear`, `/resume` and a new conversation start at the
+  prompt, after the turn before them ended; a nested CLI is started by a tool
+  call, inside the host's turn, and its start is dropped (`204`). A turn is only
+  opened by a report from the bound conversation, so a nested CLI cannot hold
+  one open against a later `/clear`.
 
 ## Event → state mapping
 
@@ -315,7 +343,9 @@ missing reason never costs a bell.
   adds the three `LICH_*` vars to each PTY's environment.
 - **Endpoint** — `internal/terminal/transport.go`, `transport.hook`: validates
   the token and body (`parseHookRequest`) on the same loopback listener as
-  terminal I/O, then forwards the whole report. The free text is trimmed and
+  terminal I/O, then forwards the whole report. A report from another conversation is
+  dropped before anything else reads it (`fromBoundConversation`,
+  `internal/terminal/nested.go`); only the hands-on beat sees it. The free text is trimmed and
   capped there, and each field is dropped on the states it does not belong to:
   `detail` with no `tool`, `reason` on anything but `waiting`.
 - **UI push** — `internal/terminal/terminal.go`: emits the global app event
