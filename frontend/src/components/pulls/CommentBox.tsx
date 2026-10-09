@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -51,9 +52,17 @@ export function CommentBox({
   submitOnEnter = false,
 }: CommentBoxProps) {
   const empty = value.trim() === ""
+  const fieldRef = useRef<HTMLTextAreaElement>(null)
+  // A diff refetch remounts the box with its text already in it, and the browser
+  // would put the caret back before the first character.
+  useEffect(() => {
+    const field = fieldRef.current
+    field?.setSelectionRange(field.value.length, field.value.length)
+  }, [])
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <textarea
+        ref={fieldRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {

@@ -61,6 +61,9 @@ const diffTheme = EditorView.theme({
     tabSize: "unset",
     padding: "0.375rem 0.5rem",
     cursor: "auto",
+    // The editor's light base theme paints the caret black, which the box
+    // inherits and loses against a dark background.
+    caretColor: "auto",
     userSelect: "text",
   },
 })

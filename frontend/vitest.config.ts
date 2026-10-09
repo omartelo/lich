@@ -1,11 +1,11 @@
 import path from "node:path"
 import { defineConfig } from "vitest/config"
 
-// Standalone from vite.config.ts: the tested logic is pure, so a plain node
-// environment is enough — no need to drag the app's Vite plugins into the
-// test runner. The render budgets are the exception and ask for jsdom in their
-// own docblock, which is why the default stays node: one suite of four files
-// paying for a DOM should not slow the ninety that do not need one.
+// Standalone from vite.config.ts: most of the tested logic is pure, so a plain
+// node environment is enough, with no need to drag the app's Vite plugins into
+// the test runner. A suite that renders (the smoke, the render budgets, the
+// component suites) asks for jsdom in its own docblock, which is why the
+// default stays node: the suites that need a DOM pay for it, and the rest do not.
 export default defineConfig({
   resolve: {
     alias: {

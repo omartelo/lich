@@ -106,6 +106,12 @@ export function markSessionSeen(sessionId: string): void {
   store.markSeen(sessionId)
 }
 
+// dismissSessionNotification takes a session out of the notification queue
+// without opening it (see session-status-store.dismiss).
+export function dismissSessionNotification(sessionId: string): void {
+  store.dismiss(sessionId)
+}
+
 // restoreSessionUnread seeds the sessions the workspace came back with a finished
 // turn nobody has read, from the hydration call (store.Session.Unread). Called
 // from the provider with every session it just loaded, so a ring read before the

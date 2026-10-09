@@ -13,6 +13,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command runs in, with its label and lich id, which `lich sessions` leaves out.
   Every command and tool that takes a session (`send`, `close`, `rename`,
   `control`, `ask`, `file`) now also accepts that id in place of the label.
+- **Each notification under the bell has an X that dismisses it.** Clearing
+  one used to mean opening its session; a finished turn you dismiss also counts
+  as read.
+
+### Changed
+
+- **Hovering a project tab shows a tooltip with the project's name and full
+  path.** It replaces the browser's plain title box and matches the tooltip on
+  a session card.
+
+### Fixed
+
+- **The comment box on a diff shows its text cursor, and keeps it after your
+  text.** On a dark theme the cursor was painted black and could not be
+  seen, and every change the agent made to the file sent it back to the start of
+  the comment.
+- **The footer's buttons sit as close together as the rest of the window's.**
+  They were three times further apart than the buttons in the tab bar and the
+  dock.
 
 ## [0.63.0] - 2026-10-09
 
