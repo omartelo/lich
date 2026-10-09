@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A terminal opened from a session in the project's own directory joins that
+  session's group in the sidebar.** The terminal shortcut, and an agent opening
+  a session on the branch the project already has checked out, used to start a
+  second group for the same directory, and closing that session offered to
+  remove the project as if it were a worktree.
+
 ## [0.64.0] - 2026-10-09
 
 ### Added

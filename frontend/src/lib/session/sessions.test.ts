@@ -4,6 +4,7 @@ import {
   activeTarget,
   addSession,
   adoptSession,
+  checkoutPath,
   closeSession,
   delegatesOf,
   dropClosedSession,
@@ -96,6 +97,21 @@ function withClaudeSession(
     },
   }
 }
+
+describe("checkoutPath", () => {
+  // A terminal opened from a root session's card is handed its live cwd, the
+  // project's absolute path: stored as-is it keyed a second block for the same
+  // directory and read as a worktree session on close.
+  it("stores the project's own directory as the root", () => {
+    expect(checkoutPath("/home/me/app", "/home/me/app")).toBe("")
+  })
+
+  it("keeps any other directory", () => {
+    expect(checkoutPath("/wt/lucky-otter", "/home/me/app")).toBe("/wt/lucky-otter")
+    expect(checkoutPath("/home/me/app/src", "/home/me/app")).toBe("/home/me/app/src")
+    expect(checkoutPath("", "/home/me/app")).toBe("")
+  })
+})
 
 describe("addSession", () => {
   it("creates the project entry when absent, as one active Session 1", () => {
