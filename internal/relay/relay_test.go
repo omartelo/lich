@@ -1370,7 +1370,9 @@ func TestASessionThatEndedStopsTheWaitOutright(t *testing.T) {
 		got, _ := svc.Send(context.Background(), "s1", "docs", "", "hello", 30)
 		done <- got
 	}()
-	waitForTicket(svc)
+	// A ticket registered but not yet stamped is one an idle report leaves for
+	// awaitReady (endedErrands), so the session has to end after the message is in.
+	awaitDelivered(t, svc, 1)
 	svc.Observe("s2", "idle")
 
 	if got := <-done; got.Status != StatusUnanswered {
