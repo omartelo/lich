@@ -188,10 +188,6 @@ fn main() {
     // CEF re-executes this binary for the renderer, GPU and utility roles with
     // an argv of its own. Those roles exit inside run_or_exit before any window
     // exists, so a missing --url= is a subprocess, not an error.
-    // kurogane loads the CEF beside the executable before any CEF_PATH, so a
-    // CEF developer's override never reaches the window lich ships; a shell
-    // run from cargo's target has none beside it and takes CEF_PATH, which
-    // is how `task dev` and the tests run it.
     let launch = parse(std::env::args().skip(1));
     #[cfg(windows)]
     if let Some(class) = &launch.class {
