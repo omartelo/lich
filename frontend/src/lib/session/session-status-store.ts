@@ -44,6 +44,10 @@ interface Entry {
   // at, and the sessions beside it in the sidebar are exactly the ones whose
   // results nobody has collected yet (see the provider's markSessionSeen).
   seen: boolean
+  // Whether the user took the current status out of the notification queue with
+  // its X. Apart from `seen` because a dismissed "waiting" is still blocking:
+  // it leaves the queue but keeps badging its tab and drawing its card.
+  dismissed: boolean
   // Whether this session has ever reported a state at all — which is not the
   // same question as `status !== null`, since `idle` and `interrupted` both map
   // to no indicator. It is what tells a session whose provider will never report
@@ -85,6 +89,7 @@ export function createSessionStatusStore(
         reason: "",
         since: 0,
         seen: false,
+        dismissed: false,
         reported: false,
         listeners: new Set(),
       }
@@ -114,7 +119,7 @@ export function createSessionStatusStore(
       if (entry.status === null || entry.status === "busy" || entry.status === "compacting") {
         continue
       }
-      if (entry.status === "done" && entry.seen) {
+      if ((entry.status === "done" && entry.seen) || entry.dismissed) {
         continue
       }
       next.push({ id, status: entry.status })
@@ -166,6 +171,7 @@ export function createSessionStatusStore(
     entry.reason = reason
     // A fresh report is by definition unseen, whether or not the last one was.
     entry.seen = false
+    entry.dismissed = false
     notify(entry)
     refreshPending()
   })
@@ -189,6 +195,18 @@ export function createSessionStatusStore(
     refreshPending()
   }
 
+  // dismiss takes a session out of the notification queue until its next report,
+  // without routing to it. Dismissing a finished turn is reading it.
+  const dismiss = (id: string): void => {
+    const entry = entries.get(id)
+    if (!entry) {
+      return
+    }
+    entry.dismissed = true
+    markSeen(id)
+    refreshPending()
+  }
+
   // restoreUnread seeds the sessions the workspace database says came back
   // holding a finished turn nobody has read (store.Session.Unread), which is how
   // the ring outlives the page it was drawn in. The mark is enough to restore
@@ -209,6 +227,7 @@ export function createSessionStatusStore(
       // turn-shaped control asks before drawing itself (see Entry.reported).
       entry.reported = true
       entry.seen = false
+      entry.dismissed = false
       notify(entry)
     }
     refreshPending()
@@ -299,6 +318,7 @@ export function createSessionStatusStore(
     reason,
     since,
     markSeen,
+    dismiss,
     restoreUnread,
     pendingOf,
     runningOf,
