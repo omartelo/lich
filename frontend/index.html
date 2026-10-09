@@ -3,9 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Lets the canvas follow the OS before the stylesheet's color-scheme takes over. -->
+    <meta name="color-scheme" content="light dark" />
     <!-- SVG so the mark can invert with the scheme; Chrome ignores `media` on a PNG icon link. -->
     <link rel="icon" type="image/svg+xml" href="/appicon.svg" />
     <title>lich</title>
+    <!-- The selected theme, before first paint. SettingsProvider applies it only
+         once React runs, so without this a dark theme opens on the light boot
+         defaults and flashes on every launch and reload. A classic script, not
+         a module: modules are deferred past the first paint. Its keys and the
+         snapshot shape are written by src/lib/themes.ts (theme-boot.test.ts). -->
+    <script id="theme-boot">
+      (() => {
+        const root = document.documentElement
+        const selected = localStorage.getItem("lich.appearance.theme") ?? "system"
+        const boot = JSON.parse(localStorage.getItem("lich.appearance.boot") ?? "null")
+        if (selected !== "system" && boot?.theme === selected) {
+          for (const [token, value] of Object.entries(boot.app)) {
+            root.style.setProperty(`--${token}`, value)
+          }
+          root.classList.toggle("dark", boot.scheme === "dark")
+          return
+        }
+        const systemDark = matchMedia("(prefers-color-scheme: dark)").matches
+        root.classList.toggle("dark", selected === "dark" || (selected !== "light" && systemDark))
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

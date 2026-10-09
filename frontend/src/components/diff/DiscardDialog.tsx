@@ -21,7 +21,7 @@ export function DiscardDialog({ file, onCancel, onDiscard }: DiscardDialogProps)
       description={
         <>
           Revert all uncommitted changes to{" "}
-          <span className="break-all font-mono">{file?.newPath}</span>?
+          <span className="break-all font-mono select-text">{file?.newPath}</span>?
           {file?.status === "added" && " The file will be deleted from disk."} This cannot be
           undone.
         </>

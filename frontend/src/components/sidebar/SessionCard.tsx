@@ -415,6 +415,8 @@ export function SessionCard({
                   // biome-ignore lint/a11y/noAutofocus: the rename field replaces the label only once editing starts.
                   autoFocus
                   defaultValue={session.label}
+                  spellCheck={false}
+                  autoComplete="off"
                   onFocus={(event) => event.currentTarget.select()}
                   onClick={(event) => event.stopPropagation()}
                   onKeyDown={onEditKeyDown}

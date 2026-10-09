@@ -36,6 +36,9 @@ import {
   resolveTheme,
   themeAfterRemoval,
   SYSTEM_THEME,
+  THEME_BOOT_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+  themeBootSnapshot,
 } from "@/lib/themes"
 import type { Theme, ResolvedTheme } from "@/lib/themes"
 import type {
@@ -50,7 +53,6 @@ export { DEFAULT_THEME } from "@/lib/themes"
 
 const FONT_STORAGE_KEY = "lich.terminal.font"
 const TERMINAL_FONT_SIZE_STORAGE_KEY = "lich.terminal.fontSize"
-const THEME_STORAGE_KEY = "lich.appearance.theme"
 const ZOOM_STORAGE_KEY = "lich.appearance.zoom"
 // The terminal's own theme selection, from before one theme coloured both
 // surfaces. Nothing reads it, and it is dropped on every load rather than once:
@@ -519,22 +521,29 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // Apply the resolved theme's CSS variables and toggle `.dark` for existing
   // dark variants. For "system", follow the OS scheme and keep following it
   // live.
+  //
+  // A custom selection resolves to the system pair until the theme list lands.
+  // The page is left as index.html painted it until then: repainting it with
+  // the fallback would flash the wrong scheme and overwrite the boot snapshot
+  // the right colors came from.
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)")
     const apply = () => {
       const resolved = resolveTheme(theme, themes, media.matches)
+      setResolvedTheme(resolved)
+      if (!themesLoaded && reconcileTheme(theme, themes) !== theme) return
       applyAppTheme(resolved, document.documentElement)
       document.documentElement.classList.toggle(
         DARK_THEME_SCHEME,
         resolved.scheme === DARK_THEME_SCHEME,
       )
-      setResolvedTheme(resolved)
+      writePref(THEME_BOOT_STORAGE_KEY, themeBootSnapshot(theme, resolved))
     }
     apply()
     if (theme !== SYSTEM_THEME) return
     media.addEventListener("change", apply)
     return () => media.removeEventListener("change", apply)
-  }, [theme, themes])
+  }, [theme, themes, themesLoaded])
 
   // Scale the app by moving the root font size: every Tailwind spacing and type
   // utility resolves in rem (--spacing is 0.25rem, --text-* are rem), so one

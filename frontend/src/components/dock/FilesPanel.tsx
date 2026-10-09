@@ -217,7 +217,6 @@ function BrowseBox({ path, browse, onFocusList }: BrowseBoxProps) {
           onKeyDown={onKeyDown}
           placeholder={text ? "Search in files" : "Filter by name"}
           aria-label={text ? "Search in files" : "Filter files by name"}
-          spellCheck={false}
           className="h-7 text-xs"
         />
       </div>

@@ -149,7 +149,6 @@ export function PullsList({
               placeholder="Filter — try is:merged"
               aria-label="Filter pull requests"
               title={QUALIFIER_HELP}
-              spellCheck={false}
               className="h-8 pl-8 text-sm"
             />
           </div>

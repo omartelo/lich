@@ -444,7 +444,7 @@ export function PullRequestView({
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
           <StateStat state={detail.state} isDraft={detail.isDraft} />
-          <span className="flex items-center gap-1.5 font-mono text-muted-foreground">
+          <span className="flex items-center gap-1.5 font-mono text-muted-foreground select-text">
             <GitBranch className="size-3.5" />
             {detail.headRefName} → {detail.baseRefName}
           </span>

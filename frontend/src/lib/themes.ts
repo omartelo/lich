@@ -11,6 +11,11 @@ const CUSTOM_THEME_ORIGIN = "custom"
 export const DARK_THEME_SCHEME = "dark"
 export const THEME_TEMPLATE_FILENAME = "lich-theme-template.json"
 
+// Both keys are read by the inline script in index.html, before any module
+// loads: renaming one here leaves the window opening in the wrong colors.
+export const THEME_STORAGE_KEY = "lich.appearance.theme"
+export const THEME_BOOT_STORAGE_KEY = "lich.appearance.boot"
+
 export type Theme = typeof SYSTEM_THEME | string
 export type ResolvedTheme = ThemeDefinition
 
@@ -63,6 +68,14 @@ export function applyAppTheme(theme: ThemeDefinition, root: HTMLElement): void {
   for (const token of APP_COLOR_TOKENS) {
     root.style.setProperty(`--${token}`, theme.app[token])
   }
+}
+
+// themeBootSnapshot is what index.html repaints the next launch with before
+// React starts: a custom theme's colors otherwise only arrive over RPC, after
+// the first paint. Keyed by the selection, so a snapshot left by another one
+// is never applied.
+export function themeBootSnapshot(selected: Theme, resolved: ThemeDefinition): string {
+  return JSON.stringify({ theme: selected, scheme: resolved.scheme, app: resolved.app })
 }
 
 export function customThemes(themes: readonly ThemeDefinition[]): ThemeDefinition[] {

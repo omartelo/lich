@@ -60,7 +60,7 @@ const components: Components = {
 // remark-gfm adds tables, task lists, strikethrough and autolinks.
 export function Markdown({ children, className }: { children: string; className?: string }) {
   return (
-    <div className={cn(mdProse, className)}>
+    <div className={cn(mdProse, "select-text", className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {children}
       </ReactMarkdown>

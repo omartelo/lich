@@ -229,6 +229,8 @@ export function SessionGroupHeader({
           // biome-ignore lint/a11y/noAutofocus: the field replaces the title only once renaming starts.
           autoFocus
           defaultValue={name}
+          spellCheck={false}
+          autoComplete="off"
           aria-label="Group name"
           onFocus={(event) => event.currentTarget.select()}
           onKeyDown={onEditKeyDown}

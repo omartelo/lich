@@ -57,7 +57,7 @@ function ToolRow({ tool, icon: Icon, check }: ToolRowProps) {
           {gone ? (
             <span className="text-destructive">Not on $PATH</span>
           ) : (
-            <span className="font-mono">{check?.path}</span>
+            <span className="font-mono select-text">{check?.path}</span>
           )}
         </span>
         {gone && (
