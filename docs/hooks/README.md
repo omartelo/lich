@@ -88,6 +88,15 @@ is under an older lich, and falls back to reading `LICH_SUBAGENT_CARDS=off` as
 both "leave subagents native" and "this session may be a worker", the way every
 release before it did.
 
+`LICH_PROMPT_LANG` is the seventh, set on every session with a transport: the
+language the user picked for the text lich hands agents (Settings, "Prompt
+language"), as a BCP 47 tag, `en` or `pt-BR` today. Anything that composes text
+an agent reads from inside the session (the `lich` CLI, its MCP server, a hook)
+writes it in this language. An absent or unknown tag means English, so a plugin
+older or newer than the lich it runs under keeps working. It is read at spawn:
+changing the setting reaches the sessions started afterwards, not the ones
+already running.
+
 ### The plugin release
 
 Every hook request carries the plugin release it comes from in an

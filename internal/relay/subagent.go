@@ -21,7 +21,7 @@ import (
 // the inbox for the collect it names: typing a long report into a TUI is what
 // the mod route exists to avoid.
 func (s *Service) tellNews(fromID string, n news, hasTools bool) error {
-	nudge := nudgeNotice(n.count, n.labels, hasTools)
+	nudge := nudgeNotice(s.lang(), n.count, n.labels, hasTools)
 	if len(n.reports) == 0 {
 		return s.deliver(fromID, nudge, nil)
 	}
@@ -58,7 +58,7 @@ func (s *Service) reportNote(n news, hasTools bool) string {
 		parts = append(parts, subagentReport(e, s.sessions.SessionBranch(e.targetID)))
 	}
 	if rest := n.count - len(n.reports); rest > 0 {
-		parts = append(parts, nudgeNotice(rest, n.others, hasTools))
+		parts = append(parts, nudgeNotice(s.lang(), rest, n.others, hasTools))
 	}
 	return strings.Join(parts, "\n\n")
 }

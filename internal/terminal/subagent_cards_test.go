@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/omartelo/lich/internal/prompt"
 	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/relay"
 )
@@ -96,8 +97,8 @@ func TestSubagentRouteWithoutTheCardPlugin(t *testing.T) {
 // A Claude Code spawn whose subagents become lich cards is briefed to fan out
 // through its own Agent tool; every other spawn keeps the line against it.
 func TestBriefingFollowsSubagentCards(t *testing.T) {
-	cards := providerArgs(providers.Claude, "", "", "", "", "/usr/bin/lich", "", false, false, false, relay.RouteCards)
-	plain := providerArgs(providers.Claude, "", "", "", "", "/usr/bin/lich", "", false, false, false, relay.RouteSessions)
+	cards := providerArgs(providers.Claude, "", "", "", "", "/usr/bin/lich", "", false, false, false, relay.RouteCards, prompt.English)
+	plain := providerArgs(providers.Claude, "", "", "", "", "/usr/bin/lich", "", false, false, false, relay.RouteSessions, prompt.English)
 	briefing := func(args []string) string {
 		at := slices.Index(args, "--append-system-prompt")
 		if at < 0 || at+1 >= len(args) {

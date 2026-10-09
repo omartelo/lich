@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/omartelo/lich/internal/prompt"
 	"github.com/omartelo/lich/internal/store"
 )
 
@@ -677,7 +678,7 @@ func TestReplyInstructionOffersTheToolOnlyWhereItExists(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := replyInstruction(tt.tool, "a1b2c3d4")
+			got := replyInstruction(prompt.English, tt.tool, "a1b2c3d4")
 			if !strings.Contains(got, `"$LICH_BIN" reply a1b2c3d4`) {
 				t.Errorf("the command is missing:\n%s", got)
 			}
@@ -2853,7 +2854,7 @@ func TestTheNudgeNamesTheToolOnlyWhereItExists(t *testing.T) {
 // has. Naming tools that are not in the list would leave that session believing
 // it has no way to open anything.
 func TestSpawnBriefingNamesTheRouteThisSpawnGave(t *testing.T) {
-	withTools, withCommand := SpawnBriefing(true, RouteSessions), SpawnBriefing(false, RouteSessions)
+	withTools, withCommand := SpawnBriefing(prompt.English, true, RouteSessions), SpawnBriefing(prompt.English, false, RouteSessions)
 
 	if strings.Contains(withTools, "lich open") {
 		t.Errorf("a session with the tools is sent to the command line:\n%s", withTools)
@@ -2884,7 +2885,7 @@ func TestSpawnBriefingNamesTheRouteThisSpawnGave(t *testing.T) {
 // report back on its own), so the briefing points at it instead of drawing a
 // line against it, and keeps open_session for what a subagent cannot be.
 func TestSpawnBriefingSendsCardsToTheAgentTool(t *testing.T) {
-	cards := SpawnBriefing(true, RouteCards)
+	cards := SpawnBriefing(prompt.English, true, RouteCards)
 	for _, want := range []string{"Agent tool", "card", "isolation", "tools in your list"} {
 		if !strings.Contains(cards, want) {
 			t.Errorf("the card briefing is missing %q:\n%s", want, cards)
@@ -2904,7 +2905,7 @@ func TestSpawnBriefingSendsCardsToTheAgentTool(t *testing.T) {
 // is not sent to open sessions instead, which would nest cards by another door.
 func TestSpawnBriefingKeepsANativeCardsFanOutUnderIt(t *testing.T) {
 	for _, hasTools := range []bool{true, false} {
-		native := SpawnBriefing(hasTools, RouteNative)
+		native := SpawnBriefing(prompt.English, hasTools, RouteNative)
 		for _, want := range []string{"Agent tool", "inside this session", "rather than with new lich sessions"} {
 			if !strings.Contains(native, want) {
 				t.Errorf("the native briefing is missing %q:\n%s", want, native)

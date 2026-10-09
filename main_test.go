@@ -35,6 +35,8 @@ var denied = map[string]reflect.Type{
 	"relay.ParkResume":                reflect.TypeFor[*relay.Service](),
 	"agentplugin.RepairRegistrations": reflect.TypeFor[*agentplugin.Service](),
 	"relay.SetPlugins":                reflect.TypeFor[*relay.Service](),
+	"relay.SetPromptLanguage":         reflect.TypeFor[*relay.Service](),
+	"terminal.SetPromptLanguage":      reflect.TypeFor[*terminal.Service](),
 	"project.SetAccounts":             reflect.TypeFor[*project.Service](),
 	"project.SetProjects":             reflect.TypeFor[*project.Service](),
 	"terminal.SetDropDir":             reflect.TypeFor[*terminal.Service](),
@@ -65,6 +67,7 @@ func (stubService) SetUsageLimit() error       { return nil }
 func (stubService) RunLimitWatch() error       { return nil }
 func (stubService) RepairRegistrations() error { return nil }
 func (stubService) SetPlugins() error          { return nil }
+func (stubService) SetPromptLanguage() error   { return nil }
 func (stubService) SetAccounts() error         { return nil }
 func (stubService) SetProjects() error         { return nil }
 func (stubService) SetDropDir() error          { return nil }

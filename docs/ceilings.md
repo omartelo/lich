@@ -36,6 +36,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   card ends up popping out of its own last frames. The card's box also stops clipping while a card in the block is
   dragged (`SessionGroup.tsx`), because the drag carries the card out of that box: a drag that begins while another
   card is still opening will see that one overflow.
+- **The prompt language reaches a running session only through lich itself** (`internal/prompt`): text lich
+  composes in its own process (relay messages, nudges) follows the setting at once, but anything composed
+  inside the session (the `lich` CLI, its MCP results, the plugin's hooks) reads `LICH_PROMPT_LANG`, which is
+  fixed when the session spawns. Change the language and an open session can get relay messages in the new
+  language and CLI output in the old one until it is restarted. The spawn briefing is likewise fixed at spawn,
+  and only Claude Code and oh-my-pi receive one at all. Until the follow-up PRs land, the CLI, MCP and
+  `resumePrompt` text is English in every language.
 - **`LICH_WORKTREE_PORT` is reserved, never held** (`internal/terminal/worktreeport.go`): the number is a name the
   checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts. A
   Run card shortens that window rather than closing it — the process it starts is what binds the port, and

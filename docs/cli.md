@@ -57,6 +57,7 @@ exceptions: they read the machine, not a running lich.
 | `LICH_TOKEN`      | auth token (`?token=`)                           |
 | `LICH_SESSION_ID` | the card this command is running in — the sender |
 | `LICH_BIN`        | the path of the lich this session belongs to     |
+| `LICH_PROMPT_LANG`| language of text written for the agent (`en`)    |
 
 ```
 POST http://127.0.0.1:${LICH_PORT}/rpc/relay.<Method>?token=${LICH_TOKEN}

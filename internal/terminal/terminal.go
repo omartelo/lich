@@ -18,6 +18,7 @@ import (
 	"github.com/omartelo/lich/internal/awake"
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/pricing"
+	"github.com/omartelo/lich/internal/prompt"
 	"github.com/omartelo/lich/internal/quota"
 	"github.com/omartelo/lich/internal/store"
 )
@@ -267,6 +268,8 @@ type Service struct {
 	// env is the environment every spawned session inherits: the launch
 	// environment cleaned of AppImage runtime leakage (see childEnv), plus TERM.
 	env []string
+	// promptLang is the language of the text lich hands a spawn (SetPromptLanguage).
+	promptLang func() prompt.Lang
 	// ws is the local WebSocket transport for terminal I/O (see transport.go);
 	// nil when it failed to start, leaving /events and the RPC as the path.
 	ws *transport
@@ -734,6 +737,22 @@ func (s *Service) SetEnv(env []string) {
 	s.env = sessionBaseEnv(env)
 }
 
+// SetPromptLanguage wires where a spawn reads the language of the text lich
+// hands it: the briefing on its command line, and prompt.EnvVar for whatever
+// composes text inside the session. Read at every spawn, so a change in
+// Settings reaches the sessions started after it. Without it every spawn is
+// English, the default. Called at startup, before any session spawns.
+func (s *Service) SetPromptLanguage(lang func() prompt.Lang) {
+	s.promptLang = lang
+}
+
+func (s *Service) promptLanguage() prompt.Lang {
+	if s.promptLang == nil {
+		return prompt.English
+	}
+	return s.promptLang()
+}
+
 // sessionEnv is the environment for one PTY: the shared base, the project this
 // session belongs to, the dev-server port its checkout owns, and the loopback
 // coordinates a provider's hook needs to report this session's status back to
@@ -761,6 +780,7 @@ func (s *Service) sessionEnv(id, projectID, cwd string) []string {
 		"LICH_PORT="+strconv.Itoa(s.ws.port),
 		"LICH_TOKEN="+s.ws.token,
 		"LICH_SESSION_ID="+id,
+		prompt.EnvVar+"="+string(s.promptLanguage()),
 	)
 	if bin := lichBin(); bin != "" {
 		env = append(env, "LICH_BIN="+bin)
