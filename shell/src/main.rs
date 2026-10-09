@@ -11,7 +11,10 @@
 #![windows_subsystem = "windows"]
 use geometry::Geometry;
 use kurogane::cef::{self, ImplDisplay};
-use kurogane::{App, BrowserBounds, ClientAppBrowserDelegate, KeyDecision, WindowState};
+use kurogane::{
+    App, BrowserBounds, ChromeCommand, ClientAppBrowserDelegate, CommandDecision, KeyDecision,
+    WindowState,
+};
 use std::io::{ErrorKind, Read};
 use std::path::PathBuf;
 
@@ -113,6 +116,30 @@ fn key_decision(ctrl: bool, cmd: bool) -> KeyDecision {
         KeyDecision::PageFirst
     } else {
         KeyDecision::Default
+    }
+}
+
+/// Whether one of Chromium's page commands runs in the window. kurogane already
+/// refuses Chromium's browser UI; of what it lets through, these belong to a
+/// browser, not an application:
+///
+/// - Back and Forward walk the history the app's router writes on every screen
+///   change, so Alt+Left left the screen the user was on, possibly for a
+///   project they had closed. A mouse's back and forward buttons never become
+///   these commands (measured): the page refuses those itself.
+/// - Find opens Chromium's find bar over the app. The terminal's own Ctrl+F
+///   still works: the page sees the key first (key_decision) and keeps it.
+/// - Print prints the window's HTML.
+///
+/// Reload and DevTools stay: a reload recovers a wedged UI without touching
+/// the sessions, which live in the backend.
+fn command_decision(command: ChromeCommand) -> CommandDecision {
+    match command {
+        ChromeCommand::Back
+        | ChromeCommand::Forward
+        | ChromeCommand::Find
+        | ChromeCommand::Print => CommandDecision::Refuse,
+        _ => CommandDecision::Default,
     }
 }
 
@@ -226,6 +253,7 @@ fn main() {
         // not a browser has no use for them.
         .chromium_flag("disable-extensions")
         .on_key(|key, _| key_decision(key.modifiers().ctrl(), key.modifiers().meta()))
+        .on_chrome_command(|request, _| command_decision(request.command()))
         .delegate(Window {
             geometry: launch.profile_dir.as_deref().map(geometry::file),
         });
@@ -461,6 +489,40 @@ mod tests {
 
     fn args(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn refuses_the_commands_that_belong_to_a_browser() {
+        for command in [
+            ChromeCommand::Back,
+            ChromeCommand::Forward,
+            ChromeCommand::Find,
+            ChromeCommand::Print,
+        ] {
+            assert_eq!(
+                command_decision(command),
+                CommandDecision::Refuse,
+                "{command:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn lets_reload_devtools_and_editing_run() {
+        for command in [
+            ChromeCommand::Reload,
+            ChromeCommand::DevTools,
+            ChromeCommand::Copy,
+            ChromeCommand::Paste,
+            ChromeCommand::SelectAll,
+            ChromeCommand::Close,
+        ] {
+            assert_eq!(
+                command_decision(command),
+                CommandDecision::Default,
+                "{command:?}"
+            );
+        }
     }
 
     #[test]

@@ -22,6 +22,9 @@ or take it, never hand it to the page ahead of Chromium's reserved
 accelerators, which is the one thing this window asks of it:
 `KeyDecision::PageFirst`
 ([0x48piraj/kurogane#21](https://github.com/0x48piraj/kurogane/pull/21)).
+The main window also creates its browser with Chromium's status bubble off,
+which otherwise shows a hovered link's URL, token included, in the window's
+corner (`e58b415`, not submitted upstream yet).
 
 The rest of what the fork once carried is upstream's now, in upstream's own
 shape: the decision hooks that grew out of

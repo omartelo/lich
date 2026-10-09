@@ -397,8 +397,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   prompt, opens a `window.open` or a `target=_blank` to another site in the system browser instead of a window
   of its own, keeps a navigation to another origin out of the window, asks where to save a download, and draws
   a right-click menu of its own: editing items in a text field, nothing outside one, and no Inspect
-  (Ctrl+Shift+I still opens DevTools). The frontend uses none of the refused ones today. The trap is the
-  next feature that does: `navigator.clipboard.readText()`, a blob download or a popup works in a browser tab
+  (Ctrl+Shift+I still opens DevTools). It refuses Chromium's Back, Forward, Find and Print commands, and shows
+  no status bubble over a hovered link; a mouse's back and forward buttons never reach that command hook
+  (measured), so only the page can refuse those. The frontend uses none of the refused ones today. The trap is
+  the next feature that does: `navigator.clipboard.readText()`, a blob download or a popup works in a browser tab
   (a Mac whose window is missing or died at startup, `openWithoutWindow` in `main.go`) and fails silently in the bundled window until
   `shell/src/main.rs` answers the matching hook (`on_permission`, `on_download`, `on_new_window`,
   `on_navigation`). A second one: kurogane reports through `tracing` and the window installs no subscriber, so
