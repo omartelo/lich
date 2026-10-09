@@ -66,6 +66,7 @@ func TestControlRefusesBeforeReachingTheSession(t *testing.T) {
 		{"another CLI", "s1", "codex-run", "abort", "", "", "only a Claude Code session"},
 		{"another CLI, by the name the user knows it by", "s1", "pi-run", "abort", "", "", `"pi-run" runs oh-my-pi,`},
 		{"the caller itself", "s1", "Session 3", "abort", "", "", "cannot control itself"},
+		{"the caller itself, by its id", "s1", "s1", "abort", "", "", `"Session 3" is this session, and a session cannot control itself`},
 		{"a value on an abort", "s1", "auth-fix", "abort", "now", "", "takes nothing after it"},
 		{"args on a prompt", "s1", "auth-fix", "prompt", "go", "x", "only a command takes arguments"},
 		{"an empty prompt", "s1", "auth-fix", "prompt", " ", "", "needs its text"},
@@ -84,6 +85,17 @@ func TestControlRefusesBeforeReachingTheSession(t *testing.T) {
 				t.Fatalf("the refusal still reached the session: %+v", term.ran)
 			}
 		})
+	}
+}
+
+func TestControlReachesASessionByItsID(t *testing.T) {
+	svc, term := newControlService(t)
+	got, err := svc.Control(context.Background(), "s1", "s2", "", "abort", "", "")
+	if err != nil {
+		t.Fatalf("Control: %v", err)
+	}
+	if got.Label != "auth-fix" || len(term.ranOn) != 1 || term.ranOn[0] != "s2" {
+		t.Fatalf("Control = %+v on %v, want auth-fix on s2", got, term.ranOn)
 	}
 }
 

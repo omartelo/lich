@@ -423,7 +423,7 @@ var mcpTools = append([]mcpTool{
 			"own messaging tool instead of this one.",
 		Schema: schema(map[string]any{
 			"session": property("string",
-				"Label of the target session, exactly as list_sessions returns it. Not a peer-roster name."),
+				"Label of the target session, exactly as list_sessions returns it, or its id from there."),
 			"prompt": property("string",
 				"What to ask that session's agent to do. Capped at 8 KB: it is typed at a "+
 					"terminal prompt, so name the paths, branches and commits to read rather "+
@@ -573,7 +573,7 @@ var mcpTools = append([]mcpTool{
 			"you are running in.",
 		Schema: schema(map[string]any{
 			"session": property("string",
-				"The session to close, by the label on its card or the name it answers to."),
+				"The session to close, by the label on its card, the name it answers to or its lich id."),
 			"project": property("string",
 				"Project to narrow to, by name or by directory path, when the same label "+
 					"exists in more than one."),
@@ -606,7 +606,7 @@ var mcpTools = append([]mcpTool{
 		Schema: schema(map[string]any{
 			"label": property("string", "The new name for the card."),
 			"session": property("string",
-				"Session to rename, by the label on its card or the name it answers to. "+
+				"Session to rename, by the label on its card, the name it answers to or its lich id. "+
 					"Omit to rename the session you are running in."),
 			"project": property("string",
 				"Project to narrow to, by name or by directory path, when the same label "+

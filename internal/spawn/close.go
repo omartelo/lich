@@ -238,9 +238,11 @@ type located struct {
 	session store.Session
 }
 
-// findSession resolves a session by the label on its card or the name it answers
-// to in the peer roster, exactly as the relay does — an agent holding either
-// should not have to know which one it has. The label is tried first and wins a
+// findSession resolves a session by its lich id, the label on its card or the
+// name it answers to in the peer roster, exactly as the relay does — an agent
+// holding any of them should not have to know which one it has. An id names one
+// session and nothing else can be spelled like one, so it is matched before the
+// names. The label is tried next and wins a
 // tie against another session's roster name, because that is how `lich send`
 // reads the same name (relay.resolve); one product cannot disagree with itself
 // about which session a name addresses.
@@ -275,6 +277,9 @@ func findSession(
 			continue
 		}
 		for _, sess := range p.Sessions {
+			if sess.ID == target {
+				return located{project: p, session: sess}, nil
+			}
 			cwd := sess.Path
 			if cwd == "" {
 				cwd = p.Path

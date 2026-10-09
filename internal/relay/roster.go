@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,24 +33,46 @@ func (s *Service) roster(fromID string) ([]candidate, error) {
 			if sess.ID == fromID || !s.term.Live(sess.ID) {
 				continue
 			}
-			cwd := sess.Path
-			if cwd == "" {
-				cwd = p.Path
-			}
-			found = append(found, candidate{
-				ID: sess.ID,
-				Peer: Peer{
-					Label:   sess.Label,
-					Name:    RosterNameOf(s.term.AgentName(sess.ID), cwd, sess.ID),
-					Project: p.Name,
-					Kind:    sess.Kind,
-					State:   s.reportedState(sess.ID),
-					ID:      sess.ID,
-				},
-			})
+			found = append(found, candidate{ID: sess.ID, Peer: s.peerOf(p, sess)})
 		}
 	}
 	return found, nil
+}
+
+// Self is the caller's own entry, in the shape Peers lists everybody else's: the
+// one session the roster never shows it. It does not ask whether a process is
+// running there, since the caller asking is that process.
+func (s *Service) Self(id string) (Peer, error) {
+	if id == "" {
+		return Peer{}, errors.New("not running in a lich session (LICH_SESSION_ID is unset)")
+	}
+	projects, err := s.sessions.LoadState()
+	if err != nil {
+		return Peer{}, fmt.Errorf("read sessions: %w", err)
+	}
+	for _, p := range projects {
+		for _, sess := range p.Sessions {
+			if sess.ID == id {
+				return s.peerOf(p, sess), nil
+			}
+		}
+	}
+	return Peer{}, fmt.Errorf("lich has no session with id %q (LICH_SESSION_ID)", id)
+}
+
+func (s *Service) peerOf(p store.Project, sess store.Session) Peer {
+	cwd := sess.Path
+	if cwd == "" {
+		cwd = p.Path
+	}
+	return Peer{
+		Label:   sess.Label,
+		Name:    RosterNameOf(s.term.AgentName(sess.ID), cwd, sess.ID),
+		Project: p.Name,
+		Kind:    sess.Kind,
+		State:   s.reportedState(sess.ID),
+		ID:      sess.ID,
+	}
 }
 
 // reportedState is what a session last told lich it was doing, empty when it
@@ -75,11 +98,15 @@ func (s *Service) resolve(fromID, target, project string) (candidate, error) {
 		return candidate{}, err
 	}
 
-	// The label first, then the roster name. Both address this session, and an
-	// agent may have been handed either — a mention writes the roster name at
+	// The id first: it names one session and no name can be spelled like it.
+	// Then the label, then the roster name. Both names address this session, and
+	// an agent may have been handed either — a mention writes the roster name at
 	// the prompt, list_sessions prints both. The label wins a tie because it is
 	// the name the user chose and the one every message and error quotes.
-	matches := matching(found, target, project, func(c candidate) string { return c.Peer.Label })
+	matches := matching(found, target, project, func(c candidate) string { return c.ID })
+	if len(matches) == 0 {
+		matches = matching(found, target, project, func(c candidate) string { return c.Peer.Label })
+	}
 	if len(matches) == 0 {
 		matches = matching(found, target, project, func(c candidate) string { return c.Peer.Name })
 	}

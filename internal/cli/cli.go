@@ -138,6 +138,8 @@ func dispatch(args []string, c *client) int {
 	switch args[0] {
 	case "sessions":
 		return c.run(c.sessions, args[1:])
+	case "whoami":
+		return c.run(c.whoami, args[1:])
 	case "send":
 		return c.run(c.send, args[1:])
 	case "wait":
@@ -294,6 +296,29 @@ func (c *client) sessions(args []string) error {
 	for _, p := range peers {
 		fmt.Fprintf(c.stdout, "%s\t%s\t%s\t%s\t%s\n", p.Label, p.Project, p.Kind, p.Name, sessionState(p.State))
 	}
+	return nil
+}
+
+func (c *client) whoami(args []string) error {
+	flags := newFlagSet("whoami")
+	asJSON := flags.Bool("json", false, "print the result as JSON")
+	if err := c.parse(flags, args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return usageError("whoami")
+	}
+
+	var self relay.Peer
+	if err := c.call(context.Background(), "relay.Self", []any{c.sessionID()}, shortCall, &self); err != nil {
+		return err
+	}
+	if *asJSON {
+		return c.emit(self)
+	}
+	fmt.Fprintln(c.stdout, "session\tproject\tprovider\tname\tstate\tid")
+	fmt.Fprintf(c.stdout, "%s\t%s\t%s\t%s\t%s\t%s\n",
+		self.Label, self.Project, self.Kind, self.Name, sessionState(self.State), self.ID)
 	return nil
 }
 

@@ -130,7 +130,7 @@ guess at the one it resembles, and exit 1 — a typo does not open a window.
 Arguments the app itself takes still do: bare `lich`, `lich --shell <path>`, and
 `lich --` with the Chromium flags behind it.
 
-`--json` on `sessions`, `send`, `wait`, `open`, `close`, `rename`, `control`, `ask`, `worktrees`, `folders`, `file`,
+`--json` on `sessions`, `whoami`, `send`, `wait`, `open`, `close`, `rename`, `control`, `ask`, `worktrees`, `folders`, `file`,
 `rename-folder`, `color-folder`, `cost` and `version`
 replaces the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
@@ -174,6 +174,22 @@ hook (`docs/hooks/session-state.md`), and it is the same thing its card shows:
   Claude Code, and a session that has not had a turn yet has said nothing
   either), so an empty state says nothing about whether that session is free.
 
+### `lich whoami [--json]`
+
+Prints the session the command runs in: the one entry `sessions` never lists.
+Same columns as `sessions`, plus the lich id:
+
+```
+session	project	provider	name	state	id
+auth-fix	lich	claude	lich-a1b2	busy	0b9c…
+```
+
+`--json` prints one object in the `sessions` shape,
+`{"label","name","project","kind","state","id"}`. It is how a caller learns its
+own label and id without guessing: lich-plugin's Claude Code mod reads it to
+tell that a `control` aimed at a label is aimed at its own session. Run outside
+a lich session (`LICH_SESSION_ID` unset) it is an error, exit 1.
+
 ### `lich send [--project <name>] [--timeout <seconds>] [--private] [--json] <session> <prompt>`
 
 Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
@@ -193,6 +209,11 @@ collected is typed as usual.
   and lich reads it back off the session's own record, so both sides go on
   naming it the same thing; the name lich derived at spawn stops addressing it,
   exactly as it stops addressing it in `/list-agents`.
+- `<session>` can also be the session's lich id (`id` in `sessions --json`,
+  `LICH_SESSION_ID` in its process). It is matched before either name. The same
+  holds for every command that takes a `<session>`: `close`, `rename`,
+  `control`, `ask` and `file` resolve it the same way, and a caller naming
+  itself by id gets exactly what naming itself by label gets.
 - Labels are unique within a project, not across them: a label two live sessions
   answer to is an error naming both, and `--project` is what narrows it.
   Guessing which session a prompt lands in is the one mistake this must not

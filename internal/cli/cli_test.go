@@ -289,6 +289,36 @@ func TestSessionsJSONCarriesTheLichID(t *testing.T) {
 	}
 }
 
+// whoami is the one entry sessions leaves out, asked for by the caller's own id.
+func TestWhoamiPrintsTheCallersOwnSession(t *testing.T) {
+	f := newFakeLich(t, `{"label":"Session 3","name":"lich-s1","project":"lich","kind":"claude","state":"busy","id":"s1"}`)
+
+	code, stdout, stderr := run(t, f, "whoami")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	call := f.only(t)
+	if call.method != "relay.Self" || len(call.args) != 1 || call.args[0] != "s1" {
+		t.Errorf("called %s %v, want relay.Self with the caller's own id", call.method, call.args)
+	}
+	if !strings.Contains(stdout, "Session 3\tlich\tclaude\tlich-s1\tbusy\ts1") {
+		t.Errorf("output = %q", stdout)
+	}
+}
+
+func TestWhoamiJSONIsThePeerObject(t *testing.T) {
+	body := `{"label":"Session 3","name":"lich-s1","project":"lich","kind":"claude","state":"","id":"s1"}`
+	f := newFakeLich(t, body)
+
+	code, stdout, stderr := run(t, f, "whoami", "--json")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	if strings.TrimSpace(stdout) != body {
+		t.Errorf("output = %s, want %s", stdout, body)
+	}
+}
+
 func TestSessionsSaysWhenThereAreNone(t *testing.T) {
 	f := newFakeLich(t, `[]`)
 

@@ -2966,3 +2966,58 @@ func TestAnInterruptedTargetIsNotBusy(t *testing.T) {
 		t.Fatal("a session whose turn was interrupted still read as working")
 	}
 }
+
+// The lich id is a third address for a session, beside its two names: it is the
+// one a plugin already holds (LICH_SESSION_ID, lich whoami), and the one no
+// rename moves.
+func TestSendReachesASessionByItsID(t *testing.T) {
+	term := newFakeTerminal("s1", "s5")
+	svc := newRelay(workspace(), term, nil)
+
+	go func() { _ = svc.Reply("", waitForTicket(svc), "ok") }()
+	got, err := svc.Send(context.Background(), "s1", "s5", "", "hello", 30)
+	if err != nil {
+		t.Fatalf("Send by id: %v", err)
+	}
+	if got.Target != "api" || term.written("s5") == "" {
+		t.Fatalf("Send = %+v, want it typed at s5 under its label", got)
+	}
+}
+
+// A caller naming itself by id is refused exactly as by label: the roster never
+// holds the caller, whichever name it is looked up by.
+func TestSendRefusesTheCallersOwnIDLikeItsLabel(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
+
+	_, byLabel := svc.Send(context.Background(), "s1", "sender", "", "hello", 30)
+	_, byID := svc.Send(context.Background(), "s1", "s1", "", "hello", 30)
+	if byLabel == nil || byID == nil {
+		t.Fatalf("byLabel = %v, byID = %v, want both refused", byLabel, byID)
+	}
+	if !strings.HasPrefix(byID.Error(), "no live session named") {
+		t.Errorf("by id: %v, want the refusal the label gets (%v)", byID, byLabel)
+	}
+}
+
+func TestSelfIsTheCallersOwnEntry(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
+
+	got, err := svc.Self("s1")
+	if err != nil {
+		t.Fatalf("Self: %v", err)
+	}
+	want := Peer{Label: "sender", Name: "lich-s1", Project: "lich", Kind: "claude", ID: "s1"}
+	if got != want {
+		t.Fatalf("Self = %+v, want %+v", got, want)
+	}
+}
+
+func TestSelfRefusesACallerWithoutASession(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1"), nil)
+
+	for id, want := range map[string]string{"": "LICH_SESSION_ID is unset", "gone": `no session with id "gone"`} {
+		if _, err := svc.Self(id); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("Self(%q) err = %v, want one saying %q", id, err, want)
+		}
+	}
+}
