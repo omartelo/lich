@@ -7,13 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [0.63.0] - 2026-10-09
 
-- **lich's window runs Chromium 154.** The embedded Chromium (CEF) moved
-  from 150 to 154, and with it the window's title bar, icon, remembered
-  placement and keyboard handling are kurogane's own now rather than lich's
-  patches on it. On Linux, maximizing, closing and reopening the window puts
-  it back where it was and how it was, as before.
+### Added
 
 - **A Claude Code card says when its conversation is being compacted.** A
   `/compact` or an automatic compaction shows "Compacting…" under the session's
@@ -33,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **lich's window runs Chromium 154.** The embedded Chromium (CEF) moved
+  from 150 to 154, and with it the window's title bar, icon, remembered
+  placement and keyboard handling are kurogane's own now rather than lich's
+  patches on it. On Linux, maximizing, closing and reopening the window puts
+  it back where it was and how it was, as before.
 - **Search the terminal font list by name.** Settings › Appearance › Terminal
   font opens with a search field: type part of a name to narrow fontconfig's
   list, then pick with the arrow keys and Enter. Long family names no longer
@@ -5463,7 +5464,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.62.1...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.63.0...HEAD
+[0.63.0]: https://github.com/omartelo/lich/compare/v0.62.1...v0.63.0
 [0.62.1]: https://github.com/omartelo/lich/compare/v0.62.0...v0.62.1
 [0.62.0]: https://github.com/omartelo/lich/compare/v0.61.0...v0.62.0
 [0.61.0]: https://github.com/omartelo/lich/compare/v0.60.0...v0.61.0
