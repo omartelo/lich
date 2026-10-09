@@ -238,3 +238,148 @@ func TestAWorkerWhoseAnswerLandsMidTurnIsFinishedWhenItEnds(t *testing.T) {
 	svc.Observe("s2", stateDone)
 	expectFinished(t, finished, "s2")
 }
+
+// expectOpen fails unless the errand is still open: no answer reached it.
+func expectOpen(t *testing.T, svc *Service, id string) {
+	t.Helper()
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	if svc.tickets[id] == nil {
+		t.Fatalf("errand %s was closed", id)
+	}
+}
+
+func expectAnswer(t *testing.T, svc *Service, id, want string) {
+	t.Helper()
+	got, err := svc.Wait(context.Background(), id, 1)
+	if err != nil || got.Status != StatusAnswered || got.Answer != want {
+		t.Fatalf("Wait(%s) = %+v, %v, want answered %q", id, got, err, want)
+	}
+}
+
+// A worker that hands a task to a session of its own ends its turn with
+// nothing in Claude Code's background list, since that session is not one of
+// Claude Code's tasks. Its mod reports that turn, and the report is only "I
+// handed it off": the errand must wait for the turn that has the result.
+func TestAWorkersAnswerWaitsForTheErrandsItSent(t *testing.T) {
+	term := newFakeTerminal("s1", "s2", "s3")
+	svc := newRelay(workspace(), term, nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+	plantAnsweredByMod(svc, "t2", "s2", "s3", "api")
+
+	svc.Observe("s2", stateBusy)
+	svc.WorkerAnswered("s2", "handed the api part to a worker")
+	svc.Observe("s2", stateDone)
+	expectOpen(t, svc, "t1")
+
+	svc.WorkerAnswered("s3", "the api is done")
+	if !awaitWritten(term, "s2", "api") {
+		t.Fatal("the worker was never told its own worker finished")
+	}
+	svc.Observe("s2", stateBusy)
+	svc.WorkerAnswered("s2", "docs and api are done")
+	expectAnswer(t, svc, "t1", "docs and api are done")
+}
+
+// An ordinary errand the worker sent holds its answer the same way: its
+// outcome reaches the worker's prompt and starts the turn that answers.
+func TestAWorkersAnswerWaitsForAnOrdinaryErrandItSent(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+	plant(svc, "t2", "s2", "s3", "api")
+
+	svc.WorkerAnswered("s2", "asked api, waiting")
+	expectOpen(t, svc, "t1")
+}
+
+// A private errand reaches no prompt, so nothing would ever resume the worker
+// for it: it does not hold the answer.
+func TestAPrivateErrandDoesNotHoldAWorkersAnswer(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+	plant(svc, "t2", "s2", "s3", "api")
+	svc.mu.Lock()
+	svc.tickets["t2"].private = true
+	svc.mu.Unlock()
+
+	svc.WorkerAnswered("s2", "the report")
+	expectAnswer(t, svc, "t1", "the report")
+}
+
+// A result that lands while the worker is mid-turn is handed to it only when
+// that turn ends, so the turn's own report was written without it.
+func TestAWorkersAnswerWaitsForAResultItHasNotRead(t *testing.T) {
+	term := newFakeTerminal("s1", "s2", "s3")
+	svc := newRelay(workspace(), term, nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+	plantAnsweredByMod(svc, "t2", "s2", "s3", "api")
+
+	svc.Observe("s2", stateBusy)
+	svc.WorkerAnswered("s3", "the api is done")
+	svc.Observe("s2", stateDone)
+	svc.WorkerAnswered("s2", "still waiting on api")
+	expectOpen(t, svc, "t1")
+
+	if !awaitWritten(term, "s2", "api") {
+		t.Fatal("the worker was never told its own worker finished")
+	}
+	svc.Observe("s2", stateBusy)
+	svc.WorkerAnswered("s2", "docs and api are done")
+	expectAnswer(t, svc, "t1", "docs and api are done")
+}
+
+// A result the worker was told about and chose not to collect does not hold
+// its answer forever: the turn after the notice is the one that read it.
+func TestAResultTheWorkerWasToldAboutDoesNotHoldItsAnswer(t *testing.T) {
+	term := newFakeTerminal("s1", "s2", "s3")
+	svc := newRelay(workspace(), term, nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+	plant(svc, "t2", "s2", "s3", "api")
+
+	if err := svc.Reply("s3", "t2", "the api answer"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+	if !awaitWritten(term, "s2", "api") {
+		t.Fatal("the worker was never told the result is waiting")
+	}
+	svc.Observe("s2", stateBusy)
+	svc.WorkerAnswered("s2", "the report")
+	expectAnswer(t, svc, "t1", "the report")
+}
+
+// A worker whose own worker is closed under it would wait forever on an errand
+// that ended in silence. Someone is waiting on it, so it hears the errand
+// stopped, and that is what resumes it.
+func TestAWorkerHearsItsOwnWorkerStopped(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+	plantAnsweredByMod(svc, "t2", "s2", "s3", "api")
+
+	svc.SessionClosed("s3")
+
+	collected, err := svc.CollectNow("s2")
+	if err != nil {
+		t.Fatalf("CollectNow: %v", err)
+	}
+	if len(collected.Results) != 1 || collected.Results[0].Status != StatusStopped {
+		t.Fatalf("collect = %+v, want the errand stopped", collected)
+	}
+	svc.Observe("s2", stateBusy)
+	svc.WorkerAnswered("s2", "api was stopped; docs are done")
+	expectAnswer(t, svc, "t1", "api was stopped; docs are done")
+}
+
+// A worker that answered by its ticket while its own worker still runs is not
+// closed under that worker: the report it is owed would reach no one.
+func TestAWorkerWithAnErrandOfItsOwnOpenIsNotFinished(t *testing.T) {
+	svc, finished := finishing(t)
+	plantSubagent(svc, "t1", "s1", "s2", "docs")
+	plantSubagent(svc, "t2", "s2", "s3", "api")
+
+	svc.Observe("s2", stateBusy)
+	if err := svc.Reply("s2", "t1", "the report"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+	svc.Observe("s2", stateDone)
+	expectNoneFinished(t, finished)
+}

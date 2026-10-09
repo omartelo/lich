@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A subagent card reports back only once the work it handed off is back.** A
+  Claude Code worker that handed part of its task to another session used to
+  report "handed it off" as its result the moment its turn ended, and closed
+  before the other session answered. Its report now waits for that answer, and
+  for a result that reached it mid-turn, and the worker stays open until then.
+  If the session it handed work to is closed first, the worker is told so
+  instead of waiting forever.
 - **Dragging a footer item in Settings keeps its shape.** The chip under the pointer
   stays on one line at its own size instead of wrapping into a taller, narrower block.
 

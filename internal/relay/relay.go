@@ -119,7 +119,8 @@ const (
 	StatusUndelivered = "undelivered"
 	// StatusStopped means a subagent worker was closed before it answered: its
 	// caller stopped it (SessionClosed). Only a caller holding the line hears
-	// it; nothing is filed or announced.
+	// it, or a caller that is itself a worker somebody waits on, whose inbox it
+	// is filed in; otherwise nothing is filed or announced.
 	StatusStopped = "stopped"
 )
 

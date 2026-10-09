@@ -502,7 +502,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `[lich]` note through the asker's mod. The worker's own mod answers for it (docs/hooks/mod-answer.md), so it is
   handed the task with no ticket and its last message is its report; a worker whose mod had not polled when the
   task went in, or runs a lich-plugin older than 0.17.0, is handed the ticket instead, and one whose final turn
-  ends blank, aborted, in an API error or a refusal leaves its errand open with nothing reported. Closing a worker
+  ends blank, aborted, in an API error or a refusal leaves its errand open with nothing reported. A worker's report
+  waits for the errands it sent itself (`relay.awaitsOutcomeLocked`), since Claude Code does not list them as
+  background work; one of those that ages out on `ticketTTL` reaches no prompt, and the report then waits for the
+  next turn something else starts in the worker. Closing a worker
   ends its errand without a word to the asker (`relay.SessionClosed`, wired before the PTY is killed so the
   SessionEnd its CLI reports finds nothing to call unanswered). Both reach the asker the way Claude Code's own background agent's
   completion does, one `● lich session "…" finished` line on screen and the note whole in the model's context
@@ -511,7 +514,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   a prompt from the plugin. Without a mod polling there the note is typed short and the report waits
   for `wait_for_answer`, because typing a long report into a TUI is what the mod route exists to avoid. A worker in
   the asker's checkout is parked once it answered and the turn it answered in ended (`relay.SetWorkerFinished`,
-  `spawn.CloseFinishedWorker`), so typing into its card after its report means resuming it from the history; one
+  `spawn.CloseFinishedWorker`) with nothing it sent still out, so typing into its card after its report means resuming it from the history; one
   on its own worktree, pinned, stopped with Esc, holding another errand, or whose asker is gone stays open. Esc in
   the asker leaves its workers running, as it leaves Claude Code's own background agents (measured on 2.1.289);
   the mod's TaskStop stops one, Claude Code's `ctrl+x ctrl+k` does not, and the asker's status line counts them

@@ -154,9 +154,10 @@ func (s *Service) noteWorkerReportedLocked(t *ticket) {
 }
 
 // finishedWorkerLocked reads one state report for a worker that reported this
-// turn: a done finishes it unless another errand is still open at it, checked
-// before endedErrands takes this turn's errands off the table, since one of
-// those may still be answered late. An interrupt or the session ending clears
+// turn: a done finishes it unless another errand is still open at it, or one
+// it sent has not come back (a worker that answered by its ticket while its own
+// worker runs), checked before endedErrands takes this turn's errands off the
+// table, since one of those may still be answered late. An interrupt or the session ending clears
 // the mark without finishing it: whoever stopped that turn is still at its
 // card. Called under s.mu.
 func (s *Service) finishedWorkerLocked(sessionID, state string) bool {
@@ -172,7 +173,7 @@ func (s *Service) finishedWorkerLocked(sessionID, state string) bool {
 		return false
 	}
 	delete(s.reportedWorkers, sessionID)
-	return !s.errandOpenAtLocked(sessionID) && s.workerFinished != nil
+	return !s.errandOpenAtLocked(sessionID) && !s.awaitsOutcomeLocked(sessionID) && s.workerFinished != nil
 }
 
 func (s *Service) finishWorker(workerID string) {

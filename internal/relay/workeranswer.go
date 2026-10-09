@@ -25,11 +25,22 @@ func (s *Service) taskMessage(id string, t *ticket, kind string) string {
 // from a session whose subagents the user kept native, and nothing in the text
 // says which of two errands it answers. An errand answered already keeps its
 // first answer.
+//
+// A worker still awaiting an outcome of its own (awaitsOutcomeLocked) is
+// ignored too. The mod reports a turn that left nothing in Claude Code's
+// background list, and an errand the worker sent to another session is not in
+// that list, so the text is "I handed it off" rather than the result. The
+// outcome reaching the worker starts the turn whose report is the answer.
 func (s *Service) WorkerAnswered(workerID, text string) {
 	s.mu.Lock()
 	id, ok := s.subagentErrandLocked(workerID)
+	awaiting := s.awaitsOutcomeLocked(workerID)
 	s.mu.Unlock()
 	if !ok {
+		return
+	}
+	if awaiting {
+		slog.Debug("relay: a worker reported while an errand of its own is unread", "session", workerID)
 		return
 	}
 	if err := s.Reply(workerID, id, text); err != nil {
@@ -59,6 +70,63 @@ func (s *Service) subagentErrandLocked(workerID string) (string, bool) {
 	return found[0], true
 }
 
+// owesSubagentAnswerLocked is whether a subagent errand still waits on
+// sessionID's answer: someone opened it as their subagent and has not heard
+// back. Called under s.mu.
+func (s *Service) owesSubagentAnswerLocked(sessionID string) bool {
+	for _, t := range s.tickets {
+		if t.targetID == sessionID && t.subagent {
+			return true
+		}
+	}
+	for _, t := range s.lapsed {
+		if t.targetID == sessionID && t.subagent {
+			return true
+		}
+	}
+	return false
+}
+
+// awaitsOutcomeLocked is whether an outcome is still on its way to sessionID's
+// prompt: an errand it sent is open, or a result for it has not been read by a
+// turn of its own yet (inboxEntry.seen). A private errand never reaches that
+// prompt, so it is not counted: nothing would ever resume the session for it.
+// Called under s.mu.
+func (s *Service) awaitsOutcomeLocked(sessionID string) bool {
+	for _, t := range s.tickets {
+		if t.fromID == sessionID && !t.private {
+			return true
+		}
+	}
+	for _, e := range s.ready {
+		if e.fromID == sessionID && !e.seen {
+			return true
+		}
+	}
+	for _, e := range s.held {
+		if e.fromID == sessionID && !e.private && !e.seen {
+			return true
+		}
+	}
+	return false
+}
+
+// seeNewsLocked marks every result sessionID was already told about as read: a
+// turn starting after the notice is the one the notice started, or one that
+// came after it. Called under s.mu on a busy report.
+func (s *Service) seeNewsLocked(sessionID string) {
+	for _, e := range s.ready {
+		if e.fromID == sessionID && e.nudged {
+			e.seen = true
+		}
+	}
+	for _, e := range s.held {
+		if e.fromID == sessionID && e.nudged {
+			e.seen = true
+		}
+	}
+}
+
 // finishIfTurnEnded finishes a worker whose answer landed after the turn it
 // answered in had already ended: the mod reports from Stop, and the done report
 // of the same Stop races it. One landing mid-turn is finished by that done
@@ -66,7 +134,7 @@ func (s *Service) subagentErrandLocked(workerID string) (string, bool) {
 func (s *Service) finishIfTurnEnded(workerID string) {
 	s.mu.Lock()
 	finish := s.reportedWorkers[workerID] && s.state[workerID] != stateBusy &&
-		!s.errandOpenAtLocked(workerID) && s.workerFinished != nil
+		!s.errandOpenAtLocked(workerID) && !s.awaitsOutcomeLocked(workerID) && s.workerFinished != nil
 	if finish {
 		delete(s.reportedWorkers, workerID)
 	}
@@ -92,11 +160,15 @@ func (s *Service) errandOpenAtLocked(sessionID string) bool {
 // (TaskStop runs `lich close`), or the user doing the same from its card, and
 // neither has anything left to hear. A caller still holding the line hears
 // stopped; the ticket stays waitable as stopped, and nothing reaches the inbox.
+// The exception is a caller that is itself a worker somebody waits on
+// (owesSubagentAnswerLocked): its answer waits for this outcome
+// (WorkerAnswered), so the stop is filed in its inbox, where it resumes it.
 // The terminal calls this before the process dies (terminal.SetSessionClosed),
 // so the SessionEnd its CLI reports on the way out finds nothing to call
 // unanswered. Errands of any other kind end as they always did.
 func (s *Service) SessionClosed(sessionID string) {
 	var stopped []*ticket
+	var told []string
 	s.mu.Lock()
 	delete(s.reportedWorkers, sessionID)
 	for id, t := range s.tickets {
@@ -104,11 +176,17 @@ func (s *Service) SessionClosed(sessionID string) {
 			continue
 		}
 		delete(s.tickets, id)
-		s.lapseLocked(id, t, StatusStopped)
+		if t.attended == 0 && s.owesSubagentAnswerLocked(t.fromID) {
+			s.stashLocked(id, t, StatusStopped, "")
+			told = append(told, t.fromID)
+		} else {
+			s.lapseLocked(id, t, StatusStopped)
+		}
 		t.stopped = true
 		close(t.stalled)
 		stopped = append(stopped, t)
 	}
 	s.mu.Unlock()
 	s.clearAll(stopped)
+	s.announceInboxAll(told)
 }
