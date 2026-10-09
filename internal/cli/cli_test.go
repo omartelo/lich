@@ -1179,6 +1179,7 @@ func TestOpenSaysWhenTheSessionRunsConfined(t *testing.T) {
 func TestSendAndWaitExitOnTheirOutcome(t *testing.T) {
 	for status, want := range map[string]int{
 		"answered": 0, "pending": 2, "unread": 3, "unanswered": 3, "undelivered": 3, "stopped": 3,
+		"expired": 3,
 	} {
 		f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"`+status+`"}`)
 		for _, args := range [][]string{

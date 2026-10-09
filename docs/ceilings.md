@@ -472,8 +472,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `LICH_SESSION_ID`, and an MCP call carries nothing that names its caller (Claude Code 2.1.288 sends only
   `claudecode/toolUseId` and `progressToken`). One that sends without `private` is the session to lich: a sibling's
   no-ticket collect can take its result and the note lands at the session's prompt, both measured on 2026-10-03.
-  A private result is announced nowhere, so only its ticket recovers it and it expires silently with the ticket's
-  hour. It covers tickets, not ownership: the sessions and worktrees a step opens still come from the session, their
+  A private result is announced nowhere, so only its ticket recovers it, and when the ticket's hour runs out only a
+  wait on that ticket hears it expired: one that comes back after another hour, or never, is told nothing. It covers tickets, not ownership: the sessions and worktrees a step opens still come from the session, their
   marks and stalled toasts land on its card, and closing them is the workflow's own job. opencode's
   `send_to_session` takes `private` from lich-plugin 0.13.2; its `open_session` takes no task at all, so a private
   hand-off at open is `lich open --prompt --private` there.
@@ -525,8 +525,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   worker runs. An API error's `unanswered` can beat the parked usage-limit continuation it should yield to, and the
   caller then hears `unanswered` before that continuation's report. A worker's report
   waits for the errands it sent itself (`relay.awaitsOutcomeLocked`), since Claude Code does not list them as
-  background work; one of those that ages out on `ticketTTL` reaches no prompt, and the report then waits for the
-  next turn something else starts in the worker. Closing a worker
+  background work; one of those that ages out on `ticketTTL` is filed in the worker's inbox as `expired`
+  (`relay.sweep`, run on the scheduled-prompt tick, so it lands up to 30 seconds late), and that notice starts
+  the turn whose report is the answer. Closing a worker
   ends its errand (`relay.SessionClosed`, wired before the PTY is killed so the SessionEnd its CLI reports finds
   nothing to call unanswered) without a word to an asker that closed it itself, as TaskStop does; closed from
   its card or by another session, the asker is told it `stopped`. Who closed it is the session `lich close` runs

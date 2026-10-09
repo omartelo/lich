@@ -915,6 +915,10 @@ func (c *client) report(result relay.Result, asJSON bool) error {
 		fmt.Fprintln(c.stdout, stoppedText(result.Target))
 		return nil
 	}
+	if result.Status == relay.StatusExpired {
+		fmt.Fprintln(c.stdout, expiredText(result.Target))
+		return nil
+	}
 	if result.Private {
 		fmt.Fprintf(c.stdout,
 			"%s is still working. The errand is private: no note will be typed at the sending "+

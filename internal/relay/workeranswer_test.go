@@ -369,6 +369,35 @@ func TestAWorkerHearsItsOwnWorkerStopped(t *testing.T) {
 	expectAnswer(t, svc, "t1", "api was stopped; docs are done")
 }
 
+// An errand the worker sent that nobody answers within ticketTTL would hold
+// its report until something else started a turn there. Someone is waiting on
+// the worker, so it hears the errand expired, and that is what resumes it.
+func TestAWorkerHearsItsOwnErrandExpired(t *testing.T) {
+	term := newFakeTerminal("s1", "s2", "s3")
+	svc := newRelay(workspace(), term, nil)
+	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
+	plant(svc, "t2", "s2", "s3", "api")
+	svc.WorkerAnswered("s2", "asked api, waiting")
+
+	later := time.Now().Add(2 * ticketTTL)
+	svc.now = func() time.Time { return later }
+	svc.expireTickets()
+
+	if !awaitWritten(term, "s2", "api") {
+		t.Fatal("the worker was never told its errand expired")
+	}
+	collected, err := svc.CollectNow("s2")
+	if err != nil {
+		t.Fatalf("CollectNow: %v", err)
+	}
+	if len(collected.Results) != 1 || collected.Results[0].Status != StatusExpired {
+		t.Fatalf("collect = %+v, want the errand expired", collected)
+	}
+	svc.Observe("s2", stateBusy)
+	svc.WorkerAnswered("s2", "api never answered; docs are done")
+	expectAnswer(t, svc, "t1", "api never answered; docs are done")
+}
+
 // A worker that answered by its ticket while its own worker still runs is not
 // closed under that worker: the report it is owed would reach no one.
 func TestAWorkerWithAnErrandOfItsOwnOpenIsNotFinished(t *testing.T) {

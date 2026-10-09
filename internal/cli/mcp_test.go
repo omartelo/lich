@@ -313,7 +313,8 @@ func TestMCPSendPointsAtTheTicketWhenItRunsOut(t *testing.T) {
 func TestMCPWaitWithoutATicketCollectsEverything(t *testing.T) {
 	f := newFakeLich(t, `{"results":[
 		{"ticket":"t1","target":"auth","status":"answered","answer":"all green"},
-		{"ticket":"t2","target":"api","status":"unanswered","answer":""}],
+		{"ticket":"t2","target":"api","status":"unanswered","answer":""},
+		{"ticket":"t3","target":"db","status":"expired","answer":""}],
 		"open":["docs"]}`)
 
 	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
@@ -333,6 +334,7 @@ func TestMCPWaitWithoutATicketCollectsEverything(t *testing.T) {
 	for _, want := range []string{
 		`Answer from "auth" (ticket t1):`, "all green",
 		`The "api" session finished its turn`,
+		`The "db" session did not answer within the hour`,
 		`Still working: "docs"`,
 	} {
 		if !strings.Contains(text, want) {

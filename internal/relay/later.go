@@ -40,14 +40,16 @@ type ScheduleEvent struct {
 	Prompt string `json:"prompt,omitempty"`
 }
 
-// RunSchedules types due prompts at their sessions until the process ends.
-// Started once at launch: it holds nothing, so a workspace that never schedules
-// anything pays one read every scheduleTick and nothing else.
+// RunSchedules types due prompts at their sessions until the process ends,
+// and ages out errands on the same tick (expireTickets). Started once at
+// launch: it holds nothing, so a workspace that never schedules anything pays
+// one read every scheduleTick and nothing else.
 func (s *Service) RunSchedules() {
 	ticker := time.NewTicker(scheduleTick)
 	defer ticker.Stop()
 	for range ticker.C {
 		s.deliverDue()
+		s.expireTickets()
 	}
 }
 
