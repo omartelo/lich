@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The comment box on a diff shows its text cursor, and keeps it after your
+  text.** On a dark theme the cursor was painted black and could not be
+  seen, and every change the agent made to the file sent it back to the start of
+  the comment.
+
 ## [0.63.0] - 2026-10-09
 
 ### Added
