@@ -94,6 +94,7 @@ Claude Code 2.1.289:
 - **A worker's own worker closed** (`relay.SessionClosed`): the stop is filed in
   the inbox of a caller that is itself a worker somebody waits on, so it
   resumes and answers instead of waiting on an errand that ended in silence.
+  Any other caller has it filed too unless it closed the worker itself.
 - **The task** (`relay.handOff`): a subagent errand handed to a worker whose
   mod polls from a plugin release that posts here (`agentplugin.ModAnswerRelease`)
   is composed without the ticket and the reply instructions, and is marked as

@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Dragged all the way in, the collapse button slid under the terminal; the
   minimum width now fits New Session, the filter and the collapse button.
 
+- **A Claude Code subagent closed from its card now tells the session that
+  asked for it.** The asking session used to keep waiting on a task that was
+  gone; it now hears the task stopped, as it does when a worker is closed by
+  another session. Stopping your own subagent with TaskStop still ends it
+  quietly. `wait_for_answer` and `lich wait` also name a stopped task when they
+  collect it, instead of returning nothing.
+
 ## [0.64.0] - 2026-10-09
 
 ### Added

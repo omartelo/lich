@@ -469,11 +469,12 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
     `reply_to_session` itself is answered once: the first answer wins. Any
     other worker is handed the ticket and answers through it.
   - is **not dropped by the ticket's one-hour TTL** while its session runs.
-  - **ends its errand in silence when it is closed**, by `lich close`,
-    `close_session`, the caller's TaskStop or the card's own close: the caller
-    hears nothing and nothing waits in its inbox, since whoever closed it
-    stopped the work. A caller holding the line on the ticket hears `stopped`
-    (exit 3), and so does a caller that is itself a worker somebody waits on,
+  - **ends its errand when it is closed**. Closed by its own caller (TaskStop
+    runs `lich close` there), it ends in silence: the caller stopped the work
+    and nothing waits in its inbox. Closed by anyone else, from the card or by
+    another session, the caller is told at its prompt and collects `stopped`.
+    A caller holding the line on the ticket hears `stopped` (exit 3) either
+    way, and so does a caller that is itself a worker somebody waits on,
     through its inbox: its own report waits for this outcome.
   - **reports only after the work it handed off is back**: while an errand it
     sent is open, or a result for it is unread, its mod's report is ignored,

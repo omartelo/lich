@@ -41,6 +41,28 @@ func closer(t *testing.T) (*Service, *fakeSessions, *fakeWorktrees, *fakeTermina
 	return New(sessions, worktrees, term, events), sessions, worktrees, term, events
 }
 
+// The relay tells the caller of a closed worker it stopped unless the caller
+// closed it itself, so every close names who asked for it.
+func TestCloseTellsTheTerminalWhoClosedTheSession(t *testing.T) {
+	svc, _, _, term, _ := closer(t)
+
+	if _, err := svc.Close("s1", "shared-a", "", "", false); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if _, err := svc.Close("s1", "alone", "", RemoveWorktree, false); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if len(term.closers) == 0 {
+		t.Fatal("no terminal close was made")
+	}
+	for i, closerID := range term.closers {
+		if closerID != "s1" {
+			t.Errorf("close of %q named %q as its closer, want s1", term.closed[i], closerID)
+		}
+	}
+}
+
 func TestCloseTakesDownASessionWithNothingAtStake(t *testing.T) {
 	svc, sessions, worktrees, term, events := closer(t)
 

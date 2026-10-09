@@ -341,6 +341,24 @@ func TestMCPWaitWithoutATicketCollectsEverything(t *testing.T) {
 	}
 }
 
+// A worker closed by someone other than its caller is filed as stopped, and a
+// drain has to say so: a result with no words reads as nothing at all.
+func TestMCPWaitWithoutATicketSaysAStoppedWorkerStopped(t *testing.T) {
+	f := newFakeLich(t, `{"results":[
+		{"ticket":"t1","target":"docs","status":"stopped","answer":""}],"open":[]}`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"wait_for_answer","arguments":{}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	if want := stoppedText("docs"); !strings.Contains(text, want) {
+		t.Errorf("text = %q, want %q", text, want)
+	}
+}
+
 func TestMCPWaitWithNothingToCollectSaysSo(t *testing.T) {
 	f := newFakeLich(t, `{"results":[],"open":[]}`)
 

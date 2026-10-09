@@ -117,10 +117,10 @@ const (
 	// for a session that was not at one, and that session died or stayed busy
 	// past defaultDeliveryLimit. Nothing is queued anymore and nothing was read.
 	StatusUndelivered = "undelivered"
-	// StatusStopped means a subagent worker was closed before it answered: its
-	// caller stopped it (SessionClosed). Only a caller holding the line hears
-	// it, or a caller that is itself a worker somebody waits on, whose inbox it
-	// is filed in; otherwise nothing is filed or announced.
+	// StatusStopped means a subagent worker was closed before it answered
+	// (SessionClosed). A caller that closed it itself hears it only while
+	// holding the line, or when it is itself a worker somebody waits on; a
+	// worker anyone else closed has it filed in its caller's inbox.
 	StatusStopped = "stopped"
 )
 
