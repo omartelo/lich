@@ -399,7 +399,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   a right-click menu of its own: editing items in a text field, Copy on a selection, nothing elsewhere, and
   no Inspect (Ctrl+Shift+I still opens DevTools). The page cancels it everywhere but a text field and a
   terminal whose app does not read the mouse (`isAppContextMenu` in `frontend/src/lib/browser-defaults.ts`),
-  so selected text outside those copies with Ctrl+C only. It refuses Chromium's Back, Forward, Find and Print
+  and leaves it alone while text is selected, so Copy is there too. It refuses Chromium's Back, Forward, Find and Print
   commands, and shows no status bubble over a hovered link; a mouse's back and forward buttons never reach that
   command hook (measured), so the page cancels those itself (`browser-defaults.ts`, on mouseup). The frontend
   uses none of the refused ones today. The trap is the next feature that does: `navigator.clipboard.readText()`,

@@ -175,20 +175,6 @@ function Layout() {
 }
 
 function App() {
-  // A drop that misses a terminal must do nothing. The browser's default action
-  // for a file is to navigate to it, which in the --app window replaces lich
-  // with a file viewer — sessions keep running, but the only way back is a
-  // reload. Terminals stop the event before it reaches here (TerminalView).
-  useEffect(() => {
-    const swallow = (event: DragEvent) => event.preventDefault()
-    window.addEventListener("dragover", swallow)
-    window.addEventListener("drop", swallow)
-    return () => {
-      window.removeEventListener("dragover", swallow)
-      window.removeEventListener("drop", swallow)
-    }
-  }, [])
-
   return (
     <SettingsProvider>
       <HashRouter>

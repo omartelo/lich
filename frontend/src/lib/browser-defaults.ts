@@ -34,8 +34,10 @@ export function isBrowserChord(event: ChordState): boolean {
 }
 
 // A field the user types in. contenteditable="false" is a read-only CodeMirror
-// view, which has nothing to cut or paste.
-const TEXT_FIELD = 'input, textarea, [contenteditable]:not([contenteditable="false"])'
+// view, which has nothing to cut or paste, and base-ui's Switch and Checkbox
+// keep a hidden checkbox input.
+const TEXT_FIELD =
+  'input:not([type="checkbox"], [type="radio"]), textarea, [contenteditable]:not([contenteditable="false"])'
 
 // isAppContextMenu reports a right-click that Chromium's menu must not answer.
 // A plain terminal keeps it because that is where its Copy and Paste entries
@@ -71,8 +73,10 @@ export function installBrowserDefaults(target: Window): void {
     },
     true,
   )
+  // Selected text keeps the menu wherever it sits, for its Copy entry.
   target.addEventListener("contextmenu", (event) => {
-    if (isAppContextMenu(event.target)) {
+    const hasSelectedText = (target.getSelection()?.toString() ?? "") !== ""
+    if (isAppContextMenu(event.target) && !hasSelectedText) {
       event.preventDefault()
     }
   })
