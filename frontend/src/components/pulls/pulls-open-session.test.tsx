@@ -50,6 +50,10 @@ const calls = vi.hoisted(() => ({
   reopened: [] as string[],
   activated: [] as string[],
   removed: [] as string[],
+  /** Every merge announced to the sessions in a checkout, as [checkout, number]. */
+  announced: [] as Array<[string, number]>,
+  /** The sessions reading as mid-turn. */
+  running: new Set<string>(),
   /** Every toast raised, newest last, with the action a cleanup offer carries. */
   toasts: [] as Array<{ message: string; action?: () => void }>,
 }))
@@ -85,8 +89,19 @@ vi.mock("@/lib/rpc", () => ({
       return Promise.resolve(null)
     },
   },
+  Relay: {
+    AnnounceMerge: (checkout: string, number: number) => {
+      calls.announced.push([checkout, number])
+      return Promise.resolve(null)
+    },
+  },
   Store: { PurgeWorktreeSessions: () => Promise.resolve(null) },
   Terminal: { Write: () => Promise.resolve(null) },
+}))
+
+vi.mock("@/lib/session/use-session-status", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  runningSessions: (ids: readonly string[]) => ids.filter((id) => calls.running.has(id)),
 }))
 
 vi.mock("react-router-dom", () => ({
@@ -101,7 +116,7 @@ vi.mock("@/providers/projects", () => ({
     projects: [{ id: PROJECT_ID, path: PROJECT_PATH }],
     sessions: {
       [PROJECT_ID]: {
-        sessions: [{ id: LIVE_SESSION, path: WORKTREE.path }],
+        sessions: [{ id: LIVE_SESSION, label: "feature", path: WORKTREE.path }],
         activeId: LIVE_SESSION,
         nextSeq: 2,
       },
@@ -172,6 +187,8 @@ beforeEach(() => {
   calls.reopened = []
   calls.activated = []
   calls.removed = []
+  calls.announced = []
+  calls.running = new Set()
   calls.toasts = []
 })
 
@@ -235,5 +252,66 @@ it("goes to the session when the checkout is still there", async () => {
 
   expect(calls.activated).toEqual([LIVE_SESSION])
   expect(calls.created).toEqual([])
+  await mounted.unmount()
+})
+
+// The agents in the merged branch's checkout are the ones whose notes still say
+// the work is waiting on a merge; the checkout this screen stands in may be a
+// different one.
+it("tells the sessions in the merged branch's checkout about the merge", async () => {
+  calls.list = () => Promise.resolve([WORKTREE])
+  const mounted = await mountBudget(createElement(Pulls))
+  await mounted.act(() => {})
+
+  await mounted.act(() => click("Merge"))
+
+  expect(calls.announced).toEqual([[WORKTREE.path, DETAIL.number]])
+  await mounted.unmount()
+})
+
+// That notice starts a turn, and the toast's cleanup lands seconds later: the
+// removal would kill the turn recording the merge, so it asks first, as the
+// sidebar does before closing a card mid-turn.
+it("asks before removing a worktree whose session is mid-turn", async () => {
+  calls.list = () => Promise.resolve([WORKTREE])
+  calls.running = new Set([LIVE_SESSION])
+  const mounted = await mountBudget(createElement(Pulls))
+  await mounted.act(() => {})
+  await mounted.act(() => click("Merge"))
+
+  await mounted.act(() => lastToast()?.action?.())
+  expect(text()).toContain("Session is still running")
+  expect(calls.removed).toEqual([])
+
+  await mounted.act(() => click("Remove anyway"))
+  expect(calls.removed).toEqual([WORKTREE.path])
+  await mounted.unmount()
+})
+
+it("removes nothing when the mid-turn question is cancelled", async () => {
+  calls.list = () => Promise.resolve([WORKTREE])
+  calls.running = new Set([LIVE_SESSION])
+  const mounted = await mountBudget(createElement(Pulls))
+  await mounted.act(() => {})
+  await mounted.act(() => click("Merge"))
+  await mounted.act(() => lastToast()?.action?.())
+
+  await mounted.act(() => click("Cancel"))
+
+  expect(calls.removed).toEqual([])
+  expect(text()).not.toContain("Session is still running")
+  await mounted.unmount()
+})
+
+it("removes an idle worktree without asking", async () => {
+  calls.list = () => Promise.resolve([WORKTREE])
+  const mounted = await mountBudget(createElement(Pulls))
+  await mounted.act(() => {})
+  await mounted.act(() => click("Merge"))
+
+  await mounted.act(() => lastToast()?.action?.())
+
+  expect(text()).not.toContain("Session is still running")
+  expect(calls.removed).toEqual([WORKTREE.path])
   await mounted.unmount()
 })

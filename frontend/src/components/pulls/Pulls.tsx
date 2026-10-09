@@ -2,17 +2,20 @@ import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { GitPullRequestArrow } from "lucide-react"
 import { toast } from "sonner"
-import { ProjectService, Store } from "@/lib/rpc"
+import { ProjectService, Relay, Store } from "@/lib/rpc"
 import type { Worktree } from "@/lib/api-types"
 import { useProjects } from "@/providers/projects"
 import { baseName } from "@/lib/paths"
+import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { Notice } from "@/components/common/Notice"
+import { Button } from "@/components/ui/button"
 import { ToolMissing } from "@/components/common/ToolMissing"
 import { failed } from "@/lib/binary-layers"
 import { NO_SETTLE, useBinaryCheck } from "@/lib/use-binary-check"
 import { GH } from "@/lib/vcs-tools"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
-import { sessionsOf } from "@/lib/session/sessions"
+import { type Session, sessionsOf } from "@/lib/session/sessions"
+import { runningSessions } from "@/lib/session/use-session-status"
 import { useActiveSession } from "@/lib/session/use-active-session"
 import { queueSetup } from "@/lib/terminal/setup-queue"
 import { writeAtPrompt } from "@/lib/terminal/write-at-prompt"
@@ -134,6 +137,7 @@ export function Pulls({ list = false }: PullsProps) {
   const checkedOut = checkouts.find((c) => c.name === detail?.headRefName)
   const inject = useInject(sessionId)
   const [opening, setOpening] = useState(false)
+  const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null)
 
   // Written from the selection rather than from the click, so a pull request
   // reached by URL is remembered too.
@@ -215,11 +219,23 @@ export function Pulls({ list = false }: PullsProps) {
       toast.error("Worktree has uncommitted changes — remove it from the sidebar.")
       return
     }
-    // The PTYs living in the checkout must die before git pulls the directory
-    // out from under them, and no parked row may survive to offer a resume.
-    // Discarded, not closed: undoing one would restore a card rooted in the
-    // checkout this is removing.
-    for (const session of occupants) {
+    // The merge just told the agents in there about itself, so one of them is
+    // likely mid-turn recording it. Asked last: a question the refusals above
+    // would make moot is a click for nothing.
+    const running = occupants.filter((s) => runningSessions([s.id]).length > 0)
+    if (running.length > 0) {
+      setPendingRemoval({ wt, running })
+      return
+    }
+    await removeCheckout(projectId, wtPath)
+  }
+
+  // The PTYs living in the checkout must die before git pulls the directory out
+  // from under them, and no parked row may survive to offer a resume. Discarded,
+  // not closed: undoing one would restore a card rooted in the checkout this is
+  // removing.
+  const removeCheckout = async (projectId: string, wtPath: string) => {
+    for (const session of sessionsOf(sessions, projectId).filter((s) => s.path === wtPath)) {
       discardSession(projectId, session.id)
     }
     void Store.PurgeWorktreeSessions(projectId, wtPath)
@@ -245,6 +261,17 @@ export function Pulls({ list = false }: PullsProps) {
     // pull request belonging to a worktree next door, or to none at all. The
     // project's own directory is never offered: it is not a worktree, and git
     // would refuse to remove it.
+    if (checkedOut && detail) {
+      Relay.AnnounceMerge(
+        checkedOut.path,
+        detail.number,
+        detail.title,
+        detail.headRefName,
+        detail.baseRefName,
+      ).catch((err: unknown) => {
+        toast.error(`Couldn’t tell the sessions in ${baseName(checkedOut.path)}: ${errorText(err)}`)
+      })
+    }
     const wt = checkedOut?.path !== projectPath ? checkedOut : undefined
     if (!wt) {
       toast.success(merged)
@@ -420,7 +447,55 @@ export function Pulls({ list = false }: PullsProps) {
         />
       )}
       <div className="flex min-w-0 flex-1 flex-col">{body}</div>
+      <RunningRemovalDialog
+        pending={pendingRemoval}
+        onCancel={() => setPendingRemoval(null)}
+        onRemoveAnyway={() => {
+          setPendingRemoval(null)
+          if (projectId && pendingRemoval) {
+            void removeCheckout(projectId, pendingRemoval.wt.path)
+          }
+        }}
+      />
     </div>
+  )
+}
+
+/** A worktree removal held on the sessions still mid-turn inside it. */
+interface PendingRemoval {
+  wt: Worktree
+  running: Session[]
+}
+
+interface RunningRemovalDialogProps {
+  pending: PendingRemoval | null
+  onCancel: () => void
+  /** Remove it anyway, killing whatever those sessions were in the middle of. */
+  onRemoveAnyway: () => void
+}
+
+// The question the sidebar asks before closing a card mid-turn, asked of the
+// merge toast's cleanup: removing the checkout takes every card in it down with
+// it, and the turn in flight does not survive that.
+function RunningRemovalDialog({ pending, onCancel, onRemoveAnyway }: RunningRemovalDialogProps) {
+  const labels = pending?.running.map((s) => s.label).join(", ")
+  return (
+    <ConfirmDialog
+      open={pending !== null}
+      onCancel={onCancel}
+      title="Session is still running"
+      description={
+        <>
+          <span className="font-medium">{labels}</span> is mid-turn in{" "}
+          {baseName(pending?.wt.path ?? "")}. Removing the worktree stops it where it stands; the
+          turn in flight is lost.
+        </>
+      }
+    >
+      <Button variant="destructive" onClick={onRemoveAnyway}>
+        Remove anyway
+      </Button>
+    </ConfirmDialog>
   )
 }
 

@@ -634,6 +634,15 @@ export const Spawn = {
   Run: (projectId: string, cwd: string) => call<null>("spawn.Run", [projectId, cwd]),
 }
 
+export const Relay = {
+  /** Tell every live agent session in the checkout that its branch's pull
+   * request was merged. Who hears it is decided before this resolves; the
+   * delivery itself runs behind it, so a session that never takes the notice
+   * is only logged. Rejects when the workspace cannot be read. */
+  AnnounceMerge: (checkout: string, number: number, title: string, branch: string, base: string) =>
+    call<null>("relay.AnnounceMerge", [checkout, number, title, branch, base]),
+}
+
 export const Themes = {
   /** Bundled themes plus user-imported themes from the config dir. */
   List: () => call<ThemeDefinition[] | null>("themes.List", []),
