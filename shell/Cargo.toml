@@ -11,12 +11,13 @@ license = "AGPL-3.0-only"
 # (ba69cfd, the decision hooks: keys, Chromium's commands, new windows,
 # navigation, downloads, permissions, the context menu) plus the page-first
 # key decision (kurogane#21), window_class / window_title / window_icon /
-# cache_dir (kurogane#11) and the main window's geometry handed to the
-# delegate (kurogane#19); move back to 0x48piraj/kurogane once they land
+# cache_dir (kurogane#11), the main window's geometry handed to the
+# delegate (kurogane#19) and Chromium's status bubble kept off the window
+# (e58b415, not proposed upstream yet); move back to 0x48piraj/kurogane once they land
 # (build/linux/shell/README.md). CEF comes through it (kurogane::cef): a
 # dependency of our own would turn cef's default features back on for the
 # whole build.
-kurogane = { git = "https://github.com/omartelo/kurogane", rev = "0a2852152c15b9bfeb12ae0b13badf802046d2cf" }
+kurogane = { git = "https://github.com/omartelo/kurogane", rev = "e58b415915fba769f5a66fe681c407b13e67512c" }
 
 # Whether this machine can confine Chromium's subprocesses is asked the way
 # Chromium asks it (main.rs): a fork that tries a user namespace.
