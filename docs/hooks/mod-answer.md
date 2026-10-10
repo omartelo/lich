@@ -93,15 +93,16 @@ A worker's turn that ended with nothing left running and no answer posts
 `unanswered` instead, so the caller hears `unanswered` rather than waiting on
 an errand that will never be answered. The mod posts it once per main-loop
 turn, from a worker only, on the same conditions as an answer except the last
-two:
+two. The contract accepts three reasons; lich-plugin currently sends only
+`blank`:
 
 | `unanswered` | The main-loop turn ended | `background_tasks` read from |
 |--------------|--------------------------|------------------------------|
 | `blank`      | `classic.Stop` with a blank `last_assistant_message`, and the `turn.complete` after it not aborted | that `classic.Stop` |
-| `refusal`    | `turn.complete` with `reason` `refusal` | the main loop's `classic.Stop` of the same turn |
-| `error`      | an API error: Claude Code's `StopFailure`, or `turn.complete` with `reason` `error` | see the open point below |
+| `refusal`    | a refusal, through `Stop` | that `Stop`; not sent today, see below |
+| `error`      | an API error, through `Stop` | that `Stop`; not sent today, see below |
 
-The rule all three share: **post only when the main-loop turn ended with
+The rule every reason shares: **post only when the main-loop turn ended with
 `background_tasks` empty.** A turn that handed work to the background is
 resumed by Claude Code when that work finishes, and the resumed turn is the one
 that answers or posts `unanswered`. Posting for the turn that handed it off
@@ -111,15 +112,16 @@ An aborted turn (Esc in the worker's card) posts nothing. Stopping a worker's
 turn is its user taking it over, and the turn they start next is the one that
 answers.
 
-**Open point for the plugin: where `background_tasks` is for an API error.**
-Not measured on a live failure. Read off the Claude Code 2.1.296 bundle, the
-`Stop` hook input is built with `background_tasks`, while the `StopFailure` one
-carries `error`, `error_details` and `last_assistant_message` and no
-`background_tasks`; and a turn an API error ended fires `StopFailure` instead
-of `Stop` (docs/hooks/session-state.md). The plugin side measures where a
-failed main-loop turn's background list can be read, if anywhere, before it
-posts `error`. Until it can tell the list was empty, it posts no `error`: a
-failed turn reports nothing, as before.
+**Why the plugin sends only `blank`.** Measured on Claude Code 2.1.296, a
+turn ended by a refusal or an API error fires `StopFailure` (a refusal's
+`error` is `invalid_request`) and then `turn.complete` with `reason` `refusal`
+or `error`, and no `Stop`. `StopFailure` carries no `background_tasks`, and no
+mod engine call lists background shells, monitors or workflows, so the plugin
+cannot tell a failed turn with nothing running from one a background task will
+resume (measured: a background Bash or Agent followed by a 500 resumes later
+and answers normally); posting would report a failure the worker then answers.
+`refusal` and `error` stay in the contract for a Claude Code that ends those
+turns through `Stop`.
 
 lich ignores `unanswered` exactly where it ignores an answer (one open subagent
 errand, nothing of the worker's own still out), and also when the errand has
@@ -167,10 +169,10 @@ after a usage limit, since that continuation is the turn that answers.
 - **An aborted turn answers nothing.** The errand stays open while the worker
   runs, and the caller sees the worker's card, not a report, until a later turn
   answers.
-- **An API error is reported only once the plugin can read its background
-  list** (Unanswered turns, open point). Until then the errand of a worker
-  whose turn failed stays open while the worker runs.
-- **A usage limit's `error` can land before lich parks the continuation.**
+- **An API error or a refusal reports nothing** (Unanswered turns). The
+  errand of a worker whose turn failed stays open while the worker runs, until
+  a later turn answers or the worker is closed.
+- **A usage limit's `error`, from a plugin that sends one, can land before lich parks the continuation.**
   The limit is read off the transcript on the turn's `done`, and nothing orders
   that against the mod's post. The caller then hears `unanswered` first and the
   report the continuation writes after it.
