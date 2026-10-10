@@ -22,6 +22,7 @@
 import { DropService, endpoint } from "@/lib/rpc"
 import type { DropItem } from "@/lib/api-types"
 import { bracketedPaste } from "./bracketed-paste"
+import { t } from "@/lib/i18n/i18n"
 
 // Matches internal/drop's maxUpload: bigger than a screenshot or a log is a
 // mis-drag, and the backend refuses it anyway.
@@ -140,9 +141,7 @@ export async function resolveDroppedFiles(
 // in fact reach. A confined session's home is never searched, so the reverse
 // sentence would name a search that did not happen.
 function folderRefused(confined: boolean): string {
-  return confined
-    ? "folders outside this sandboxed session's checkout cannot be handed over; drop files"
-    : "folder not found under this session or your home; drop files"
+  return confined ? t("terminal.dropFiles.folderConfined") : t("terminal.dropFiles.folderMissing")
 }
 
 // uploadDroppedFile stores one file's bytes on the backend and answers with the

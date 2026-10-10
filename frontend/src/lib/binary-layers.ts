@@ -1,4 +1,5 @@
 import type { BinaryCheck } from "./api-types"
+import { t } from "@/lib/i18n/i18n"
 
 // Where a provider's binary can be set, in the order lich resolves it: the
 // project's own override, the global one, then whatever $PATH answers. Mirrors
@@ -48,10 +49,14 @@ export function parkedLabel(
 ): string {
   const names: string[] = []
   if (scope !== "project" && parked(project)) {
-    names.push(`${projectName ?? "project"} override off`)
+    names.push(
+      t("env.binary.parkedProject", {
+        name: projectName ?? t("env.binary.parkedProjectFallback"),
+      }),
+    )
   }
   if (scope === "path" && parked(global)) {
-    names.push("global override off")
+    names.push(t("env.binary.parkedGlobal"))
   }
   return names.map((name) => ` · ${name}`).join("")
 }
@@ -64,15 +69,17 @@ export function parkedLabel(
 export function checkLabel(check: BinaryCheck | null, bin: string): string {
   switch (check?.status) {
     case "ok":
-      return "executable"
+      return t("env.binary.executable")
     case "not-found":
-      return bin.includes("/") || bin.includes("\\") ? "no such file" : "not on $PATH"
+      return bin.includes("/") || bin.includes("\\")
+        ? t("env.binary.noSuchFile")
+        : t("env.binary.notOnPath")
     case "not-executable":
-      return "not executable"
+      return t("env.binary.notExecutable")
     case "home-shortcut":
-      return "~ is not expanded"
+      return t("env.binary.homeNotExpanded")
     case "relative":
-      return "relative path"
+      return t("env.binary.relativePath")
     default:
       return ""
   }
@@ -83,12 +90,12 @@ export function checkLabel(check: BinaryCheck | null, bin: string): string {
 export function checkDetail(check: BinaryCheck | null): string {
   switch (check?.status) {
     case "home-shortcut":
-      return "lich spawns the binary directly, so ~ is taken literally rather than expanded. Use the full path."
+      return t("env.binary.detailHomeShortcut")
     case "relative":
-      return "A relative path is resolved against each session's own working directory, so it names a different binary per session. Use a full path."
+      return t("env.binary.detailRelative")
     case "not-found":
     case "not-executable":
-      return "Sessions will not start until this is fixed. An override can also be switched off or cleared, falling back to the layer below."
+      return t("env.binary.detailBroken")
     default:
       return ""
   }

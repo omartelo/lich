@@ -11,6 +11,7 @@ import {
   type Hotkeys,
 } from "@/lib/hotkeys"
 import type { SessionKind, SessionState } from "./sessions"
+import { t } from "@/lib/i18n/i18n"
 
 // PaletteSession is one session flattened with the project it belongs to — what
 // a "jump to session" row shows and routes to.
@@ -284,7 +285,7 @@ export function historyAction(row: PaletteHistory): "resume" | "forget" {
 // the card it becomes. A provider that never titled it (a Kiro or Antigravity
 // conversation, a Claude Code run with no prompt yet) still needs a name.
 export function externalLabel(external: ExternalSession): string {
-  return external.title.trim() || "Untitled conversation"
+  return external.title.trim() || t("session.palette.untitledConversation")
 }
 
 // adoptedSession is the parked row AdoptExternalSession files, as the history's
@@ -338,11 +339,14 @@ export function paletteGroups(
   const groups = ((): PaletteGroup[] => {
     switch (tab) {
       case "Sessions":
-        return [group("Sessions", sessions, 0)]
+        return [group(t("session.palette.groupSessions"), sessions, 0)]
       case "Projects":
-        return [group("Open", open, 0), group("Closed", closed, 0, results.closedTotal)]
+        return [
+          group(t("session.palette.groupOpen"), open, 0),
+          group(t("session.palette.groupClosed"), closed, 0, results.closedTotal),
+        ]
       case "Messages":
-        return [group("Messages", said, 0)]
+        return [group(t("session.palette.groupMessages"), said, 0)]
       case "History":
         // The cut this header reports happened in the store, not in the slice
         // above: the query matched more parked sessions than one page carries.
@@ -351,12 +355,11 @@ export function paletteGroups(
         // boundary is.
         return [
           {
-            ...group("Closed sessions", history, 0),
+            ...group(t("session.palette.groupClosedSessions"), history, 0),
             total: Math.max(historyTotal, history.length),
-            note:
-              indexing > 0 ? `indexing ${indexing} session${indexing === 1 ? "" : "s"}` : undefined,
+            note: indexing > 0 ? t("session.palette.indexing", { count: indexing }) : undefined,
           },
-          group("Outside lich", external, 0),
+          group(t("session.palette.groupOutsideLich"), external, 0),
         ]
       // No closed projects or closed sessions here: bringing one back is not
       // what the palette is reached for mid-work, and the rows it costs are
@@ -364,9 +367,9 @@ export function paletteGroups(
       // own tabs list them whole, which is where somebody looking already goes.
       default:
         return [
-          group("Sessions", sessions, ALL_TAB_ROWS),
-          group("Projects", open, ALL_TAB_ROWS),
-          group("Messages", said, ALL_TAB_ROWS),
+          group(t("session.palette.groupSessions"), sessions, ALL_TAB_ROWS),
+          group(t("session.palette.groupProjects"), open, ALL_TAB_ROWS),
+          group(t("session.palette.groupMessages"), said, ALL_TAB_ROWS),
         ]
     }
   })()

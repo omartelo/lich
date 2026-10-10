@@ -4,6 +4,8 @@ import type { terminal as en } from "../en/terminal"
 export const terminal = {
   dropHint: {
     attachTo: "Anexar a {label}",
+    confined: "Fora do checkout, chega como uma cópia",
+    pasted: "O caminho é colado no prompt",
   },
   exitBanner: {
     restart: "Reiniciar",
@@ -27,5 +29,20 @@ export const terminal = {
   view: {
     restartFailed: "Falha ao reiniciar a sessão: {error}",
     startFailed: "Falha ao iniciar a sessão: {error}",
+  },
+  sessionExit: {
+    ended: "Sessão encerrada",
+    endedWithCode: "Sessão encerrada com código {code}",
+  },
+  dropFiles: {
+    folderConfined:
+      "pastas fora do checkout desta sessão em sandbox não podem ser entregues; solte arquivos",
+    folderMissing: "pasta não encontrada nesta sessão nem na sua home; solte arquivos",
+  },
+  copyToast: {
+    copied: {
+      one: "{count} caractere copiado para a área de transferência",
+      other: "{count} caracteres copiados para a área de transferência",
+    },
   },
 } satisfies Shape<typeof en>

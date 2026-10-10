@@ -1,21 +1,100 @@
+import { t } from "@/lib/i18n/i18n"
 import type { FooterVisibility } from "./footer-prefs"
 import { readPref, writePref } from "./prefs"
 
 export const FOOTER_ITEMS = [
-  { id: "attach", label: "Attach file", example: "Attach file" },
-  { id: "files", label: "File explorer", example: "Files" },
-  { id: "changes", label: "Changes", example: "3 · +10 −2" },
-  { id: "pr", label: "Pull request", example: "PR #123" },
-  { id: "checkout", label: "Branch", example: "feature/toolbar" },
-  { id: "path", label: "Working directory", example: "~/project" },
+  {
+    id: "attach",
+    get label() {
+      return t("footer.item.attach.label")
+    },
+    get example() {
+      return t("footer.item.attach.example")
+    },
+  },
+  {
+    id: "files",
+    get label() {
+      return t("footer.item.files.label")
+    },
+    get example() {
+      return t("footer.item.files.example")
+    },
+  },
+  {
+    id: "changes",
+    get label() {
+      return t("footer.item.changes.label")
+    },
+    example: "3 · +10 −2",
+  },
+  {
+    id: "pr",
+    get label() {
+      return t("footer.item.pr.label")
+    },
+    example: "PR #123",
+  },
+  {
+    id: "checkout",
+    get label() {
+      return t("footer.item.checkout.label")
+    },
+    example: "feature/toolbar",
+  },
+  {
+    id: "path",
+    get label() {
+      return t("footer.item.path.label")
+    },
+    example: "~/project",
+  },
   // No example of its own: the editor shows the model the active session is
   // running, and this is what it falls back to when no session has reported one.
-  { id: "model", label: "Model", example: "Model" },
-  { id: "context", label: "Context window", example: "42%" },
-  { id: "plan", label: "Plan usage", example: "5h 28%" },
-  { id: "cost", label: "Cost", example: "$1.25" },
-  { id: "handsOn", label: "Hands-on time", example: "12m" },
-  { id: "clock", label: "Date & time", example: "Sep 6 · 14:30" },
+  {
+    id: "model",
+    get label() {
+      return t("footer.item.model.label")
+    },
+    get example() {
+      return t("footer.item.model.example")
+    },
+  },
+  {
+    id: "context",
+    get label() {
+      return t("footer.item.context.label")
+    },
+    example: "42%",
+  },
+  {
+    id: "plan",
+    get label() {
+      return t("footer.item.plan.label")
+    },
+    example: "5h 28%",
+  },
+  {
+    id: "cost",
+    get label() {
+      return t("footer.item.cost.label")
+    },
+    example: "$1.25",
+  },
+  {
+    id: "handsOn",
+    get label() {
+      return t("footer.item.handsOn.label")
+    },
+    example: "12m",
+  },
+  {
+    id: "clock",
+    get label() {
+      return t("footer.item.clock.label")
+    },
+    example: "Sep 6 · 14:30",
+  },
 ] as const
 
 export type FooterItem = (typeof FOOTER_ITEMS)[number]["id"]

@@ -10,6 +10,7 @@
 import { matchesQuery } from "./command-palette"
 import type { SessionStatus } from "./session-events"
 import type { Session } from "./sessions"
+import { t } from "@/lib/i18n/i18n"
 
 // The states the filter's chips offer, in the order they are drawn: what blocks
 // the user first, then what is still moving, then what is new, then the rest.
@@ -115,8 +116,15 @@ export function phaseCounts(
 // card still there, which is why it is not simply "no results".
 export function noMatchNotice(query: string, phases: ReadonlySet<SessionPhase>): string {
   const trimmed = query.trim()
-  const picked = SESSION_PHASES.filter((phase) => phases.has(phase)).join(" or ")
-  const subject = picked === "" ? "No sessions" : `No ${picked} sessions`
-  const matching = trimmed === "" ? "" : ` match “${trimmed}”`
-  return `${subject}${matching}. The active session stays.`
+  const picked = SESSION_PHASES.filter((phase) => phases.has(phase))
+    .map((phase) => t(`session.filter.phase.${phase}`))
+    .join(t("session.filter.phaseJoiner"))
+  if (picked === "") {
+    return trimmed === ""
+      ? t("session.filter.noMatch")
+      : t("session.filter.noMatchQuery", { query: trimmed })
+  }
+  return trimmed === ""
+    ? t("session.filter.noMatchPhases", { phases: picked })
+    : t("session.filter.noMatchPhasesQuery", { phases: picked, query: trimmed })
 }

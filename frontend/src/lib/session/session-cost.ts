@@ -1,4 +1,5 @@
 import type { CostMiss } from "./session-events"
+import { t } from "@/lib/i18n/i18n"
 
 // formatCost renders a session's spend for the footer, where it sits beside the
 // context percent at 12px and has to stay readable at a glance.
@@ -47,6 +48,10 @@ export function budgetShare(usd: number, budget: number): number {
 // and how rates are refreshed are lich explaining itself, and they lived here
 // until a mockup showed the tooltip running three lines at footer size.
 export const COST_MISS_REASON: Record<CostMiss, string> = {
-  "mixed-models": "This conversation switched models, so lich cannot price it.",
-  "unpriced-model": "No price for this model yet — lich needs the network to fetch one.",
+  get "mixed-models"() {
+    return t("session.cost.mixedModels")
+  },
+  get "unpriced-model"() {
+    return t("session.cost.unpricedModel")
+  },
 }

@@ -1,7 +1,7 @@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { useT } from "@/lib/i18n/i18n"
-import { CONFINED_MEANS } from "@/lib/sandbox-copy"
+import { confinedMeans } from "@/lib/sandbox-copy"
 import type { SandboxChoice } from "@/lib/use-sandbox-choice"
 
 // WorktreeSandboxRow is the New-worktree dialog's confinement line: whether the
@@ -29,7 +29,7 @@ export function WorktreeSandboxRow({ choice }: { choice: SandboxChoice }) {
         <Label htmlFor="worktree-sandbox" className="text-sm font-medium">
           {t("sidebar.worktreeSandboxRow.runConfined")}
         </Label>
-        <span className="text-xs text-muted-foreground">{CONFINED_MEANS}</span>
+        <span className="text-xs text-muted-foreground">{confinedMeans()}</span>
       </div>
     </div>
   )

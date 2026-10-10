@@ -5,13 +5,16 @@
 import type { QuotaPlan } from "@/lib/api-types"
 import { hottestWindow, formatWindow } from "@/lib/quota/quota-format"
 import type { SessionState } from "@/lib/session/sessions"
+import { t } from "@/lib/i18n/i18n"
 
 /** What an installed provider's row says about where its binary came from. A
  * configured path is worth naming: it is the one that answers when `which` does
  * not, so a row reading a plain "Installed" on a machine with nothing on PATH
  * would look like a detection lich cannot explain. */
 export function installSummary(provider: { source: string }): string {
-  return provider.source === "setting" ? "Installed · custom path" : "Installed"
+  return provider.source === "setting"
+    ? t("env.providerSummary.installedCustomPath")
+    : t("env.providerSummary.installed")
 }
 
 /** How many open sessions across every project this provider is running. The
@@ -41,7 +44,7 @@ export function planSummary(plan: QuotaPlan | null): string {
     return ""
   }
   if (plan.status === "signed-out") {
-    return "Signed out"
+    return t("env.providerSummary.signedOut")
   }
   if (plan.status !== "ok") {
     return ""
@@ -51,5 +54,7 @@ export function planSummary(plan: QuotaPlan | null): string {
     return ""
   }
   const length = formatWindow(window.seconds)
-  return length ? `${window.percent}% of the ${length} window` : `${window.percent}% used`
+  return length
+    ? t("env.providerSummary.windowPercent", { percent: window.percent, length })
+    : t("env.providerSummary.percentUsed", { percent: window.percent })
 }
