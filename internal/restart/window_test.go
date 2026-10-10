@@ -3,6 +3,7 @@ package restart
 import (
 	"errors"
 	"os"
+	"slices"
 	"testing"
 	"time"
 )
@@ -13,12 +14,16 @@ type fakeWindow struct {
 	runs    chan chan error
 	ends    chan WindowEnd
 	focuses chan struct{}
+	// focused is the card each run was opened on, read only after its run
+	// has been received.
+	focused []string
 }
 
 func newFakeWindow() (*fakeWindow, *Window) {
 	f := &fakeWindow{runs: make(chan chan error, 4), ends: make(chan WindowEnd, 4), focuses: make(chan struct{}, 4)}
 	w := NewWindow(
-		func(onStart func(*os.Process)) error {
+		func(focus string, onStart func(*os.Process)) error {
+			f.focused = append(f.focused, focus)
 			onStart(&os.Process{Pid: 42})
 			closed := make(chan error)
 			f.runs <- closed
@@ -93,7 +98,7 @@ func TestWindowShowWhileStartingDoesNothing(t *testing.T) {
 	release := make(chan struct{})
 	focused := 0
 	w := NewWindow(
-		func(func(*os.Process)) error { <-release; return nil },
+		func(string, func(*os.Process)) error { <-release; return nil },
 		func() { focused++ },
 		func(WindowEnd) {},
 	)
@@ -158,4 +163,30 @@ func TestWindowClose(t *testing.T) {
 		}
 		closed <- nil
 	})
+}
+
+func TestWindowShowSessionOpensOnTheCard(t *testing.T) {
+	f, w := newFakeWindow()
+
+	w.ShowSession("s2")
+	closed := f.opened(t)
+	if !slices.Equal(f.focused, []string{"s2"}) {
+		t.Fatalf("opened on %q, want the window opened on s2's card", f.focused)
+	}
+	// An open window is brought forward and not opened again on the card.
+	w.ShowSession("s3")
+	select {
+	case <-f.focuses:
+	case <-time.After(time.Second):
+		t.Fatal("ShowSession on an open window did not focus it")
+	}
+	closed <- nil
+	f.ended(t)
+
+	w.Show()
+	f.opened(t) <- nil
+	f.ended(t)
+	if !slices.Equal(f.focused, []string{"s2", ""}) {
+		t.Fatalf("opened on %q, want a plain Show to open on no card", f.focused)
+	}
 }

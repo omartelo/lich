@@ -591,6 +591,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     setAskNotifications,
     activateSession,
     navigate,
+    launchHref: window.location.href,
   })
 
   const reorderProjects = useCallback((ids: string[]) => {

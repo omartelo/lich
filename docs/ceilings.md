@@ -1059,8 +1059,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   launch's first window failing within the 30-second startup grace exits lich. A crash later, or a reopened
   window that will not start, leaves the backend serving and shows "lich could not open its window"; the
   next launch tries again.
-- **`lich focus` on a windowless lich opens the window but not the card** (`relay.Focus`): the focus event is
-  emitted before the new page has connected to `/events`, and an event with no client is dropped.
 - **Logout and session end, per OS** (unverified on every OS; nothing here is measured): on Linux a lich
   launched from the desktop lives in the graphical session's scope, so logind or the user manager stopping
   it sends SIGTERM and lich quits cleanly; with `KillUserProcesses=no` and lingering it can outlive the logout,

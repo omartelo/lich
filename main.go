@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -314,7 +315,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	rl.SetPlugins(plugins)
 	// `lich focus` opens a card for someone outside the window, who then needs
 	// the window in front, or open again: what a second launch of lich asks for.
-	rl.SetRaiseWindow(window.Show)
+	rl.SetRaiseWindow(window.ShowSession)
 	// The language of the text lich types into sessions is read live from the
 	// settings table, by the relay at every message, by the terminal at
 	// every spawn and by drop at every copy notice.
@@ -525,6 +526,15 @@ type windowTarget struct {
 	class      string
 }
 
+// pageOn is the page opened on a session's card, which the page reads off its
+// focus parameter at load; an empty id is the plain page.
+func (t windowTarget) pageOn(focus string) string {
+	if focus == "" {
+		return t.url
+	}
+	return t.url + "&focus=" + url.QueryEscape(focus)
+}
+
 func newWindowTarget(info terminal.TransportInfo, configDir string) windowTarget {
 	// The token stays out of the logs on purpose: the log file persists
 	// across sessions, the token must not.
@@ -552,9 +562,9 @@ func newWindowTarget(info terminal.TransportInfo, configDir string) windowTarget
 func newWindow(info terminal.TransportInfo, configDir string, extra []string) *restart.Window {
 	target := newWindowTarget(info, configDir)
 	return restart.NewWindow(
-		func(onStart func(*os.Process)) error {
+		func(focus string, onStart func(*os.Process)) error {
 			slog.Info("chromium shell opening", "addr", target.addr)
-			return chromium.Run(target.url, target.profileDir, target.class, extra, onStart)
+			return chromium.Run(target.pageOn(focus), target.profileDir, target.class, extra, onStart)
 		},
 		func() { focusRunning(configDir, &singleton.Info{Port: info.Port, Token: info.Token}) },
 		func(end restart.WindowEnd) { windowEnded(end, target, configDir) },

@@ -37,9 +37,9 @@ type Window struct {
 	// closing is set once Close has run: lich is quitting, so no window opens
 	// again and the one closing is not reported as having ended.
 	closing bool
-	// run opens a window and blocks until it ends, handing its process to
-	// onStart once it is up (chromium.Run).
-	run func(onStart func(*os.Process)) error
+	// run opens a window on focus's card (none when empty) and blocks until it
+	// ends, handing its process to onStart once it is up (chromium.Run).
+	run func(focus string, onStart func(*os.Process)) error
 	// focus brings the open window to the front.
 	focus func()
 	// ended hears how each window ended.
@@ -47,10 +47,11 @@ type Window struct {
 	terminate func(*os.Process) error
 }
 
-// NewWindow returns a keeper with no window open. run opens one and blocks
-// until it ends, focus brings an open one forward, and ended is called, on the
-// window's own goroutine, each time one ends.
-func NewWindow(run func(onStart func(*os.Process)) error, focus func(), ended func(WindowEnd)) *Window {
+// NewWindow returns a keeper with no window open. run opens one, on a session's
+// card when it names one, and blocks until it ends; focus brings an open one
+// forward, and ended is called, on the window's own goroutine, each time one
+// ends.
+func NewWindow(run func(focus string, onStart func(*os.Process)) error, focus func(), ended func(WindowEnd)) *Window {
 	return &Window{run: run, focus: focus, ended: ended, terminate: terminateProcess}
 }
 
@@ -58,6 +59,14 @@ func NewWindow(run func(onStart func(*os.Process)) error, focus func(), ended fu
 // otherwise. A window still starting is left to finish: focusing it then would
 // race its own launch for the profile.
 func (w *Window) Show() {
+	w.ShowSession("")
+}
+
+// ShowSession is Show for someone pointing at one session's card. A window it
+// opens starts on that card: the event that opens a card in an open window is
+// sent before a new page is there to hear it. An open window is only brought
+// forward; the event is what moves it to the card.
+func (w *Window) ShowSession(id string) {
 	w.mu.Lock()
 	if w.closing {
 		w.mu.Unlock()
@@ -76,12 +85,12 @@ func (w *Window) Show() {
 	w.opened = true
 	w.exited = make(chan struct{})
 	w.mu.Unlock()
-	go w.keep(first)
+	go w.keep(first, id)
 }
 
-func (w *Window) keep(first bool) {
+func (w *Window) keep(first bool, focus string) {
 	started := time.Now()
-	err := w.run(w.started)
+	err := w.run(focus, w.started)
 	w.mu.Lock()
 	w.open = false
 	w.process = nil

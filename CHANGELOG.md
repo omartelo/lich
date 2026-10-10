@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a window opens on them, scrollback included. Run `lich quit` to end it for
   good. Restarting for an update still ends every session.
 
+### Fixed
+
+- **Launching lich from a terminal inside lich after an update shows the
+  running window.** Sessions of an updated lich used to carry a restart marker
+  that made the launch die on the busy port instead.
+
 ## [0.66.0] - 2026-10-10
 
 ### Added

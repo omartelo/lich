@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import type { Dispatch, MutableRefObject, SetStateAction } from "react"
 import type { NavigateFunction } from "react-router-dom"
 import { toast } from "sonner"
@@ -30,6 +30,7 @@ import {
   COLORED_EVENT,
   FILED_EVENT,
   FOCUS_EVENT,
+  launchFocus,
   OPENED_EVENT,
   PROJECT_OPENED_EVENT,
   RELAY_STALLED_EVENT,
@@ -86,6 +87,8 @@ export interface SessionEventDeps {
   setAskNotifications: Dispatch<SetStateAction<boolean>>
   activateSession: (projectId: string, sessionId: string) => void
   navigate: NavigateFunction
+  // The page's URL at launch, read for the card a window opened on (launchFocus).
+  launchHref: string
 }
 
 // useSessionEvents subscribes the provider to everything the backend announces
@@ -107,6 +110,7 @@ export function useSessionEvents({
   setAskNotifications,
   activateSession,
   navigate,
+  launchHref,
 }: SessionEventDeps): void {
   // A label changed outside the window: the auto-applied Claude ai-title (only
   // while the user has not renamed it), or `lich rename` and its MCP tool.
@@ -300,6 +304,27 @@ export function useSessionEvents({
     })
     return () => off()
   }, [navigate, activateSession])
+
+  // The same, for a window lich opened to show that card: the event went out
+  // before this page connected, so the card rides the URL instead. Applied
+  // once, as soon as the restored workspace holds it.
+  const pendingFocus = useRef<string | null | undefined>(undefined)
+  if (pendingFocus.current === undefined) {
+    pendingFocus.current = launchFocus(launchHref)
+  }
+  useEffect(() => {
+    const id = pendingFocus.current
+    if (!id) {
+      return
+    }
+    const projectId = projectOfSession(sessions, id)
+    if (!projectId) {
+      return
+    }
+    pendingFocus.current = null
+    navigate(`/projects/${projectId}`)
+    activateSession(projectId, id)
+  }, [sessions, navigate, activateSession])
 
   // Sessions an agent filed or took out of a folder, or whose folder it
   // renamed, through the CLI or its MCP tools: the rows are already written, so
