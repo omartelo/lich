@@ -25,10 +25,18 @@ func (s *Service) SetRaiseWindow(raise func()) {
 	s.raiseWindow = raise
 }
 
-// Focus opens the card of the session target names and brings the window to
+// FocusOptions is one Focus call, an object for the reason SendOptions is one.
+type FocusOptions struct {
+	From    string `json:"from"`
+	Target  string `json:"target"`
+	Project string `json:"project"`
+}
+
+// Focus opens the card of the session Target names and brings the window to
 // the front, for an editor that just pointed the person at that session.
-// target resolves the way Send's does.
-func (s *Service) Focus(fromID, target, project string) (Focused, error) {
+// Target resolves the way Send's does.
+func (s *Service) Focus(opts FocusOptions) (Focused, error) {
+	fromID, target, project := opts.From, opts.Target, opts.Project
 	dest, err := s.resolve(fromID, target, project)
 	if err != nil {
 		return Focused{}, err

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http/httptest"
@@ -557,10 +558,9 @@ func TestCloseOverTheRealDispatcher(t *testing.T) {
 	}
 }
 
-// TestRenameOverTheRealDispatcher proves the four arguments `lich rename` posts
-// land on spawn.Rename in the order it declares them. Target and label are two
-// strings side by side, and swapped the command renames the wrong session to the
-// name of the right one.
+// TestRenameOverTheRealDispatcher proves the options `lich rename` posts land
+// on spawn.Rename's fields. Target and label are two strings side by side, and
+// swapped the command renames the wrong session to the name of the right one.
 func TestRenameOverTheRealDispatcher(t *testing.T) {
 	env, rows, _ := wiredSpawn(t, &spawnGit{})
 
@@ -629,8 +629,8 @@ func TestAskOverTheRealDispatcher(t *testing.T) {
 }
 
 // TestWorktreesOverTheRealDispatcher proves `lich worktrees` posts the caller's
-// session before the project name: swapped, the app resolves the project by a
-// session id and finds none.
+// session and the project name in their own fields: swapped, the app resolves
+// the project by a session id and finds none.
 func TestWorktreesOverTheRealDispatcher(t *testing.T) {
 	git := &spawnGit{dirty: true, checkouts: []project.Worktree{{Name: "auth-fix", Path: "/wt/auth-fix"}}}
 	env, _, _ := wiredSpawn(t, git)
@@ -678,7 +678,7 @@ func TestFileWithoutATargetFilesTheCallersOwnSession(t *testing.T) {
 }
 
 // TestFoldersOverTheRealDispatcher proves `lich folders` posts the caller's
-// session before the project name, as `lich worktrees` does.
+// session and the project name in their own fields, as `lich worktrees` does.
 func TestFoldersOverTheRealDispatcher(t *testing.T) {
 	env, _, _ := wiredSpawn(t, &spawnGit{})
 
@@ -691,9 +691,9 @@ func TestFoldersOverTheRealDispatcher(t *testing.T) {
 	}
 }
 
-// TestRenameFolderOverTheRealDispatcher proves the four arguments
-// `lich rename-folder` posts land on spawn.RenameFolder in the order it declares
-// them: the old name and the new one swapped would match no folder.
+// TestRenameFolderOverTheRealDispatcher proves the options `lich rename-folder`
+// posts land on spawn.RenameFolder's fields: the old name and the new one
+// swapped would match no folder.
 func TestRenameFolderOverTheRealDispatcher(t *testing.T) {
 	env, rows, _ := wiredSpawn(t, &spawnGit{})
 
@@ -710,9 +710,9 @@ func TestRenameFolderOverTheRealDispatcher(t *testing.T) {
 	}
 }
 
-// TestColorFolderOverTheRealDispatcher proves the four arguments
-// `lich color-folder` posts land on spawn.ColorFolder in the order it declares
-// them: the folder and the color swapped would be refused as no such folder.
+// TestColorFolderOverTheRealDispatcher proves the options `lich color-folder`
+// posts land on spawn.ColorFolder's fields: the folder and the color swapped
+// would be refused as no such folder.
 func TestColorFolderOverTheRealDispatcher(t *testing.T) {
 	env, rows, _ := wiredSpawn(t, &spawnGit{})
 
@@ -761,14 +761,15 @@ func TestOpenAcrossVersions(t *testing.T) {
 }
 
 // postRaw posts body to method on dispatcher as a client of another release
-// would, and fails the test unless the call succeeds.
-func postRaw(t *testing.T, dispatcher *rpc.Handler, method, body string) {
+// would, fails the test unless the call succeeds, and returns what it answered.
+func postRaw(t *testing.T, dispatcher *rpc.Handler, method, body string) string {
 	t.Helper()
 	recorder := httptest.NewRecorder()
 	dispatcher.ServeHTTP(recorder, httptest.NewRequest("POST", "/rpc/"+method, strings.NewReader(body)))
 	if recorder.Code != 200 {
 		t.Fatalf("status = %d, body = %q", recorder.Code, recorder.Body.String())
 	}
+	return recorder.Body.String()
 }
 
 // TestSpawnCallsAcrossVersions is TestOpenAcrossVersions for the rest of the
@@ -777,31 +778,62 @@ func postRaw(t *testing.T, dispatcher *rpc.Handler, method, body string) {
 func TestSpawnCallsAcrossVersions(t *testing.T) {
 	cases := []struct {
 		method, body string
-		landed       func(*spawnStore, *spawnTerminal) bool
+		landed       func(rows *spawnStore, term *spawnTerminal, answer string) bool
 	}{
 		{
 			"spawn.Close",
 			`[{"from":"s1","target":"auth-fix","project":"lich","worktree":"remove","optionFromTheFuture":true}]`,
-			func(_ *spawnStore, term *spawnTerminal) bool { return term.closed == "s2" },
+			func(_ *spawnStore, term *spawnTerminal, _ string) bool { return term.closed == "s2" },
 		},
 		{
 			"spawn.Control",
 			`[{"from":"s1","target":"auth-fix","project":"lich","action":"command","value":"/compact","optionFromTheFuture":true}]`,
-			func(_ *spawnStore, term *spawnTerminal) bool {
+			func(_ *spawnStore, term *spawnTerminal, _ string) bool {
 				return term.ranOn == "s2" && term.ran.Name == "/compact"
 			},
 		},
 		{
 			"spawn.Ask",
 			`[{"from":"s1","target":"auth-fix","project":"lich","question":"why?","optionFromTheFuture":true}]`,
-			func(_ *spawnStore, term *spawnTerminal) bool {
+			func(_ *spawnStore, term *spawnTerminal, _ string) bool {
 				return term.ranOn == "s2" && term.ran.Question == "why?"
 			},
 		},
 		{
 			"spawn.File",
 			`[{"from":"s1","target":"auth-fix","folder":"Infra","optionFromTheFuture":true}]`,
-			func(rows *spawnStore, _ *spawnTerminal) bool { return rows.filed == [2]string{"s2", "Infra"} },
+			func(rows *spawnStore, _ *spawnTerminal, _ string) bool { return rows.filed == [2]string{"s2", "Infra"} },
+		},
+		{
+			"spawn.Rename",
+			`[{"from":"s1","target":"auth-fix","label":"planner","optionFromTheFuture":true}]`,
+			func(rows *spawnStore, _ *spawnTerminal, _ string) bool {
+				return rows.renamed == [2]string{"s2", "planner"}
+			},
+		},
+		{
+			"spawn.Folders",
+			`[{"from":"s1","optionFromTheFuture":true}]`,
+			func(_ *spawnStore, _ *spawnTerminal, answer string) bool { return strings.Contains(answer, "Apps") },
+		},
+		{
+			"spawn.RenameFolder",
+			`[{"from":"s1","folder":"Apps","to":"Applications","optionFromTheFuture":true}]`,
+			func(rows *spawnStore, _ *spawnTerminal, _ string) bool {
+				return rows.refolded == [3]string{"p1", "Apps", "Applications"}
+			},
+		},
+		{
+			"spawn.ColorFolder",
+			`[{"from":"s1","folder":"Apps","color":"teal","optionFromTheFuture":true}]`,
+			func(rows *spawnStore, _ *spawnTerminal, _ string) bool {
+				return rows.colored == [3]string{"p1", "Apps", "teal"}
+			},
+		},
+		{
+			"spawn.Worktrees",
+			`[{"from":"s1","optionFromTheFuture":true}]`,
+			func(_ *spawnStore, _ *spawnTerminal, answer string) bool { return strings.HasPrefix(answer, "[") },
 		},
 	}
 	for _, tc := range cases {
@@ -810,9 +842,9 @@ func TestSpawnCallsAcrossVersions(t *testing.T) {
 			dispatcher := rpc.New()
 			dispatcher.Register("spawn", spawn.New(rows, &spawnGit{}, term, nil))
 
-			postRaw(t, dispatcher, tc.method, tc.body)
-			if !tc.landed(rows, term) {
-				t.Errorf("the call did not land on the target: rows %+v, terminal %+v", rows, term)
+			answer := postRaw(t, dispatcher, tc.method, tc.body)
+			if !tc.landed(rows, term, answer) {
+				t.Errorf("the call did not land: rows %+v, terminal %+v, answer %q", rows, term, answer)
 			}
 		})
 	}
@@ -833,5 +865,59 @@ func TestSendsAcrossVersions(t *testing.T) {
 				t.Errorf("typed %q, want the prompt", term.message())
 			}
 		})
+	}
+}
+
+// TestRelayCallsAcrossVersions is the same for the rest of the relay calls a
+// session makes, each body with a field the backend does not know.
+func TestRelayCallsAcrossVersions(t *testing.T) {
+	cases := []struct {
+		method, body string
+		landed       func(term *wiredTerminal, answer string) bool
+	}{
+		{"relay.Peers", `[{"from":"s1","optionFromTheFuture":true}]`,
+			func(_ *wiredTerminal, answer string) bool { return strings.Contains(answer, `"docs"`) }},
+		{"relay.Self", `[{"from":"s1","optionFromTheFuture":true}]`,
+			func(_ *wiredTerminal, answer string) bool { return strings.Contains(answer, `"sender"`) }},
+		{"relay.Collect", `[{"from":"s1","optionFromTheFuture":true}]`,
+			func(_ *wiredTerminal, answer string) bool { return strings.HasPrefix(answer, "{") }},
+		{"relay.CollectNow", `[{"from":"s1","optionFromTheFuture":true}]`,
+			func(_ *wiredTerminal, answer string) bool { return strings.HasPrefix(answer, "{") }},
+		{"relay.Insert", `[{"from":"s1","target":"docs","text":"hello","optionFromTheFuture":true}]`,
+			func(term *wiredTerminal, _ string) bool { return strings.Contains(term.message(), "hello") }},
+		{"relay.Focus", `[{"from":"s1","target":"docs","optionFromTheFuture":true}]`,
+			func(_ *wiredTerminal, answer string) bool { return strings.Contains(answer, `"docs"`) }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.method, func(t *testing.T) {
+			term := &wiredTerminal{}
+			dispatcher := rpc.New()
+			dispatcher.Register("relay", relay.New(wiredSessions{}, term, nil))
+
+			if answer := postRaw(t, dispatcher, tc.method, tc.body); !tc.landed(term, answer) {
+				t.Errorf("the call did not land: typed %q, answer %q", term.message(), answer)
+			}
+		})
+	}
+}
+
+// TestErrandAcrossVersions takes one errand through relay.Wait and relay.Reply
+// as a client of another release would post them: the reply leaves the ticket
+// out, which answers the one errand open against the replier.
+func TestErrandAcrossVersions(t *testing.T) {
+	dispatcher := rpc.New()
+	dispatcher.Register("relay", relay.New(wiredSessions{}, &wiredTerminal{}, nil))
+
+	var sent relay.Result
+	answer := postRaw(t, dispatcher, "relay.Send", `[{"from":"s1","target":"docs","prompt":"run the tests","waitSeconds":1}]`)
+	if err := json.Unmarshal([]byte(answer), &sent); err != nil || sent.Ticket == "" {
+		t.Fatalf("send answered %q, want a ticket", answer)
+	}
+	postRaw(t, dispatcher, "relay.Wait", `[{"ticket":"`+sent.Ticket+`","waitSeconds":1,"optionFromTheFuture":true}]`)
+	postRaw(t, dispatcher, "relay.Reply", `[{"from":"s2","answer":"3 failures","optionFromTheFuture":true}]`)
+
+	waited := postRaw(t, dispatcher, "relay.Wait", `[{"ticket":"`+sent.Ticket+`","waitSeconds":1}]`)
+	if !strings.Contains(waited, "3 failures") {
+		t.Errorf("wait answered %q, want the reply", waited)
 	}
 }

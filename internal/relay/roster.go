@@ -39,10 +39,16 @@ func (s *Service) roster(fromID string) ([]candidate, error) {
 	return found, nil
 }
 
+// SelfOptions is one Self call, an object for the reason SendOptions is one.
+type SelfOptions struct {
+	From string `json:"from"`
+}
+
 // Self is the caller's own entry, in the shape Peers lists everybody else's: the
 // one session the roster never shows it. It does not ask whether a process is
 // running there, since the caller asking is that process.
-func (s *Service) Self(id string) (Peer, error) {
+func (s *Service) Self(opts SelfOptions) (Peer, error) {
+	id := opts.From
 	if id == "" {
 		return Peer{}, errors.New("not running in a lich session (LICH_SESSION_ID is unset)")
 	}

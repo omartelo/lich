@@ -28,7 +28,7 @@ func TestInsertPastesWithoutSubmitting(t *testing.T) {
 	term := newFakeTerminal("s1", "s2", "s3")
 	svc := newRelay(editorWorkspace("/src/lich", "/src/lich-wt"), term, nil)
 
-	got, err := svc.Insert("", "solo", "", "func main() {}\n", 0)
+	got, err := svc.Insert(InsertOptions{Target: "solo", Text: "func main() {}\n"})
 	if err != nil {
 		t.Fatalf("Insert = %v, want nil", err)
 	}
@@ -45,7 +45,7 @@ func TestInsertStripsWhatWouldBreakOutOfThePaste(t *testing.T) {
 	term := newFakeTerminal("s3")
 	svc := newRelay(editorWorkspace("/src/lich", "/src/lich-wt"), term, nil)
 
-	if _, err := svc.Insert("", "solo", "", "a\x1b[201~rm -rf /\r", 0); err != nil {
+	if _, err := svc.Insert(InsertOptions{Target: "solo", Text: "a\x1b[201~rm -rf /\r"}); err != nil {
 		t.Fatalf("Insert = %v, want nil", err)
 	}
 	if got := term.written("s3"); got != "\x1b[200~a[201~rm -rf /\x1b[201~" {
@@ -56,14 +56,14 @@ func TestInsertStripsWhatWouldBreakOutOfThePaste(t *testing.T) {
 func TestInsertRefusesWhatItCannotPaste(t *testing.T) {
 	svc := newRelay(editorWorkspace("/src/lich", "/src/lich-wt"), newFakeTerminal("s3"), nil)
 
-	if _, err := svc.Insert("", "solo", "", " \n\x1b ", 0); err == nil {
+	if _, err := svc.Insert(InsertOptions{Target: "solo", Text: " \n\x1b "}); err == nil {
 		t.Error("an empty text was accepted")
 	}
-	_, err := svc.Insert("", "solo", "", strings.Repeat("x", insertLimit+1), 0)
+	_, err := svc.Insert(InsertOptions{Target: "solo", Text: strings.Repeat("x", insertLimit+1)})
 	if err == nil || !strings.Contains(err.Error(), "limit") {
 		t.Errorf("Insert over the limit = %v, want an error naming it", err)
 	}
-	if _, err := svc.Insert("", "", "", "x", 0); err == nil {
+	if _, err := svc.Insert(InsertOptions{Text: "x"}); err == nil {
 		t.Error("a call naming neither session nor project was accepted")
 	}
 }
@@ -72,7 +72,7 @@ func TestInsertFindsTheSessionByProjectName(t *testing.T) {
 	term := newFakeTerminal("s3")
 	svc := newRelay(editorWorkspace("/src/lich", "/src/lich-wt"), term, nil)
 
-	got, err := svc.Insert("", "", "revu", "x", 0)
+	got, err := svc.Insert(InsertOptions{Project: "revu", Text: "x"})
 	if err != nil || got.ID != "s3" {
 		t.Errorf("Insert = %+v, %v, want the only session of revu", got, err)
 	}
@@ -87,12 +87,12 @@ func TestInsertByDirectoryPrefersTheSessionRunningThere(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	svc := newRelay(editorWorkspace(root, worktree), term, nil)
 
-	got, err := svc.Insert("", "", worktree, "x", 0)
+	got, err := svc.Insert(InsertOptions{Project: worktree, Text: "x"})
 	if err != nil || got.ID != "s2" {
 		t.Errorf("Insert at the worktree = %+v, %v, want the worktree's session", got, err)
 	}
 	// The project root has a session of its own, so it wins over the worktree's.
-	got, err = svc.Insert("", "", root+string(filepath.Separator), "x", 0)
+	got, err = svc.Insert(InsertOptions{Project: root + string(filepath.Separator), Text: "x"})
 	if err != nil {
 		t.Fatalf("Insert at the root = %v, want nil", err)
 	}
@@ -110,7 +110,7 @@ func TestInsertNamesEveryCandidateWhenTheDirectoryIsAmbiguous(t *testing.T) {
 	}}
 	svc := newRelay(work, newFakeTerminal("s1", "s2"), nil)
 
-	_, err := svc.Insert("", "", root, "x", 0)
+	_, err := svc.Insert(InsertOptions{Project: root, Text: "x"})
 	if err == nil || !strings.Contains(err.Error(), "first") || !strings.Contains(err.Error(), "second") {
 		t.Errorf("Insert = %v, want an error naming both sessions", err)
 	}
@@ -125,7 +125,7 @@ func TestInsertFallsBackToTheProjectsSessionsWhenNoneRunInTheDirectory(t *testin
 	}}
 	svc := newRelay(work, newFakeTerminal("s1"), nil)
 
-	got, err := svc.Insert("", "", root, "x", 0)
+	got, err := svc.Insert(InsertOptions{Project: root, Text: "x"})
 	if err != nil || got.ID != "s1" {
 		t.Errorf("Insert = %+v, %v, want the project's only session", got, err)
 	}
@@ -135,12 +135,12 @@ func TestInsertFindsNothingInAnUnknownProject(t *testing.T) {
 	svc := newRelay(editorWorkspace("/src/lich", "/src/lich-wt"), newFakeTerminal("s1"), nil)
 
 	for _, project := range []string{"nope", "/not/a/project"} {
-		if _, err := svc.Insert("", "", project, "x", 0); err == nil {
+		if _, err := svc.Insert(InsertOptions{Project: project, Text: "x"}); err == nil {
 			t.Errorf("Insert into %q succeeded", project)
 		}
 	}
 	// A session that is not running has nothing to paste into.
-	if _, err := svc.Insert("", "", "revu", "x", 0); err == nil {
+	if _, err := svc.Insert(InsertOptions{Project: "revu", Text: "x"}); err == nil {
 		t.Error("Insert into a project whose only session is stopped succeeded")
 	}
 }
@@ -150,7 +150,7 @@ func TestInsertGoesInBesideTheUsersDraft(t *testing.T) {
 	term.typeAt("s3", true)
 	svc := newRelay(editorWorkspace("/src/lich", "/src/lich-wt"), term, nil)
 
-	if _, err := svc.Insert("", "solo", "", "x", 0); err != nil {
+	if _, err := svc.Insert(InsertOptions{Target: "solo", Text: "x"}); err != nil {
 		t.Errorf("Insert = %v, want the text added to the draft", err)
 	}
 }
@@ -160,7 +160,7 @@ func TestInsertRefusesASessionBlockedOnAPermission(t *testing.T) {
 	svc := newRelay(editorWorkspace("/src/lich", "/src/lich-wt"), term, nil)
 	svc.reported["s3"] = stateWaiting
 
-	_, err := svc.Insert("", "solo", "", "x", 0)
+	_, err := svc.Insert(InsertOptions{Target: "solo", Text: "x"})
 	if err == nil || !strings.Contains(err.Error(), "permission") {
 		t.Errorf("Insert = %v, want a refusal naming the permission prompt", err)
 	}
@@ -188,7 +188,7 @@ func TestInsertSurfacesAWriteTheTerminalRefuses(t *testing.T) {
 	term.writeErr = os.ErrClosed
 	svc := newRelay(editorWorkspace("/src/lich", "/src/lich-wt"), term, nil)
 
-	if _, err := svc.Insert("", "solo", "", "x", 0); err == nil {
+	if _, err := svc.Insert(InsertOptions{Target: "solo", Text: "x"}); err == nil {
 		t.Error("a refused write was reported as inserted")
 	}
 }
@@ -196,7 +196,7 @@ func TestInsertSurfacesAWriteTheTerminalRefuses(t *testing.T) {
 func TestPeersCarryTheirDirectories(t *testing.T) {
 	svc := newRelay(editorWorkspace("/src/lich", "/src/lich-wt"), newFakeTerminal("s1", "s2"), nil)
 
-	peers, err := svc.Peers("")
+	peers, err := svc.Peers(PeersOptions{})
 	if err != nil || len(peers) != 2 {
 		t.Fatalf("Peers = %v, %v", peers, err)
 	}

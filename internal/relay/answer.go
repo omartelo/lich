@@ -8,12 +8,19 @@ import (
 	"time"
 )
 
+// WaitOptions is one Wait call, an object for the reason SendOptions is one.
+type WaitOptions struct {
+	Ticket      string `json:"ticket"`
+	WaitSeconds int    `json:"waitSeconds"`
+}
+
 // Wait blocks on an already-delivered ticket for another round, so a caller
 // whose first wait ran out can come back without sending the message twice.
 // An outcome already sitting in the inbox is handed over on the spot. ctx is
 // the caller's, as in Collect. An errand that ended without an answer and has
 // not had a late one yet answers with how it ended: its ticket is still alive.
-func (s *Service) Wait(ctx context.Context, ticketID string, waitSeconds int) (Result, error) {
+func (s *Service) Wait(ctx context.Context, opts WaitOptions) (Result, error) {
+	ticketID, waitSeconds := opts.Ticket, opts.WaitSeconds
 	s.mu.Lock()
 	expired, senders := s.sweep()
 	if e, ok := s.ready[ticketID]; ok {
@@ -61,16 +68,25 @@ func (s *Service) Wait(ctx context.Context, ticketID string, waitSeconds int) (R
 	return result, nil
 }
 
-// Reply hands an answer back to whoever is waiting on ticketID. It is what the
+// ReplyOptions is one Reply call, an object for the reason SendOptions is one.
+// From is the session replying.
+type ReplyOptions struct {
+	From   string `json:"from"`
+	Ticket string `json:"ticket"`
+	Answer string `json:"answer"`
+}
+
+// Reply hands an answer back to whoever is waiting on Ticket. It is what the
 // message composed by Send asks the receiving agent to run.
 //
-// An empty ticketID answers the one errand open against replierID, the way an
+// An empty Ticket answers the one errand open against From, the way an
 // empty ticket collects everything waiting for a sender (see Collect). The
 // ticket is written down in one place only — the message typed at the target's
 // prompt — so an agent whose context no longer reaches that message would
 // otherwise be holding an answer with no route home, and the sender blocked on
 // a ticket nobody can name. With two open it is refused: see errandOfLocked.
-func (s *Service) Reply(replierID, ticketID, answer string) error {
+func (s *Service) Reply(opts ReplyOptions) error {
+	replierID, ticketID, answer := opts.From, opts.Ticket, opts.Answer
 	answer = sanitize(answer)
 	if len(answer) > answerLimit {
 		// The cut is in bytes and can land inside a rune; the tail is typed into

@@ -330,8 +330,8 @@ func TestMCPWaitWithoutATicketCollectsEverything(t *testing.T) {
 	if call.method != "relay.Collect" {
 		t.Fatalf("method = %q, want relay.Collect", call.method)
 	}
-	if call.args[0] != "s1" || call.args[1] != float64(20) {
-		t.Errorf("args = %v", call.args)
+	if got := optionsOf[relay.CollectOptions](t, call); got != (relay.CollectOptions{From: "s1", WaitSeconds: 20}) {
+		t.Errorf("options = %+v", got)
 	}
 	for _, want := range []string{
 		`Answer from "auth" (ticket t1):`, "all green",
@@ -452,7 +452,8 @@ func TestMCPReplyToSession(t *testing.T) {
 		t.Fatalf("tool reported a failure: %s", text)
 	}
 	call := f.only(t)
-	if call.method != "relay.Reply" || call.args[1] != "a1b2c3d4" || call.args[2] != "done" {
+	if call.method != "relay.Reply" ||
+		optionsOf[relay.ReplyOptions](t, call) != (relay.ReplyOptions{From: "s1", Ticket: "a1b2c3d4", Answer: "done"}) {
 		t.Errorf("call = %+v", call)
 	}
 }
@@ -770,14 +771,9 @@ func TestMCPRenameSessionPassesTheTargetAndTheName(t *testing.T) {
 		t.Errorf("text = %q, want both ends of the change", text)
 	}
 	call := f.only(t)
-	want := []any{"s1", "auth-fix", "", "the login bug"}
-	if len(call.args) != len(want) {
-		t.Fatalf("args = %v, want %v", call.args, want)
-	}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	want := spawn.RenameOptions{From: "s1", Target: "auth-fix", Label: "the login bug"}
+	if got := optionsOf[spawn.RenameOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 }
 
@@ -791,14 +787,9 @@ func TestMCPRenameSessionWithoutATargetRenamesItsOwn(t *testing.T) {
 		{"name":"rename_session","arguments":{"label":"planner"}}}`)
 
 	call := f.only(t)
-	want := []any{"s1", "", "", "planner"}
-	if len(call.args) != len(want) {
-		t.Fatalf("args = %v, want %v", call.args, want)
-	}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	want := spawn.RenameOptions{From: "s1", Label: "planner"}
+	if got := optionsOf[spawn.RenameOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 }
 

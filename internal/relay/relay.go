@@ -563,10 +563,16 @@ func (s *Service) lang() prompt.Lang {
 	return s.promptLang()
 }
 
-// Peers lists the live sessions fromID may address, in the order the sidebar
+// PeersOptions is one Peers call, an object for the reason SendOptions is one.
+type PeersOptions struct {
+	From string `json:"from"`
+}
+
+// Peers lists the live sessions From may address, in the order the sidebar
 // shows them. A session with no PTY running is left out: there is nothing there
 // to type at, and offering it would only produce a message nobody ever reads.
-func (s *Service) Peers(fromID string) ([]Peer, error) {
+func (s *Service) Peers(opts PeersOptions) ([]Peer, error) {
+	fromID := opts.From
 	found, err := s.roster(fromID)
 	if err != nil {
 		return nil, err

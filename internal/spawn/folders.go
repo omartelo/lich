@@ -69,9 +69,17 @@ type Refiled struct {
 	Sessions []string `json:"sessions"`
 }
 
-// Folders lists a project's folders. project names it; empty takes the caller's
+// FoldersOptions is one Folders call, an object for the reason CloseOptions is
+// one.
+type FoldersOptions struct {
+	From    string `json:"from"`
+	Project string `json:"project"`
+}
+
+// Folders lists a project's folders. Project names it; empty takes the caller's
 // own, exactly as Worktrees does.
-func (s *Service) Folders(fromID, projectName string) ([]Folder, error) {
+func (s *Service) Folders(opts FoldersOptions) ([]Folder, error) {
+	fromID, projectName := opts.From, opts.Project
 	projects, err := s.sessions.LoadState()
 	if err != nil {
 		return nil, fmt.Errorf("read the workspace: %w", err)
@@ -149,8 +157,17 @@ func (s *Service) File(opts FileOptions) (Filed, error) {
 	}, nil
 }
 
-// RenameFolder renames one of a project's folders, or takes it apart when to is
-// empty: the window's "Rename folder" and "Ungroup" from outside it. project
+// RenameFolderOptions is one RenameFolder call, an object for the reason
+// CloseOptions is one. Folder is the name to change and To the new one.
+type RenameFolderOptions struct {
+	From    string `json:"from"`
+	Project string `json:"project"`
+	Folder  string `json:"folder"`
+	To      string `json:"to"`
+}
+
+// RenameFolder renames one of a project's folders, or takes it apart when To is
+// empty: the window's "Rename folder" and "Ungroup" from outside it. Project
 // names it; empty takes the caller's own.
 //
 // The name is matched exactly, as the store matches it. One no session carries
@@ -162,8 +179,9 @@ func (s *Service) File(opts FileOptions) (Filed, error) {
 // not this call's own read: a card filed under the old name in between is
 // rewritten too. Parked sessions move with the rest but have no card, so the
 // answer names the open ones.
-func (s *Service) RenameFolder(fromID, projectName, from, to string) (Refiled, error) {
-	from, to = strings.TrimSpace(from), strings.TrimSpace(to)
+func (s *Service) RenameFolder(opts RenameFolderOptions) (Refiled, error) {
+	fromID, projectName := opts.From, opts.Project
+	from, to := strings.TrimSpace(opts.Folder), strings.TrimSpace(opts.To)
 	if from == "" {
 		return Refiled{}, errors.New("no folder was named to rename")
 	}
@@ -192,16 +210,26 @@ type Colored struct {
 	Sessions []string `json:"sessions"`
 }
 
+// ColorFolderOptions is one ColorFolder call, an object for the reason
+// CloseOptions is one.
+type ColorFolderOptions struct {
+	From    string `json:"from"`
+	Project string `json:"project"`
+	Folder  string `json:"folder"`
+	Color   string `json:"color"`
+}
+
 // ColorFolder paints every session filed under one of a project's folders, the
 // window's folder "Color" from outside it; an empty colour hands them back to
-// the theme. project names it; empty takes the caller's own.
+// the theme. Project names it; empty takes the caller's own.
 //
 // The folder is matched exactly and refused when no session carries it, for the
 // reason RenameFolder gives. The colour is one of the window's palette names,
 // in any case; a name outside it is refused, since the window would draw it as
 // no colour and the caller would be told otherwise.
-func (s *Service) ColorFolder(fromID, projectName, folder, color string) (Colored, error) {
-	folder, color = strings.TrimSpace(folder), strings.ToLower(strings.TrimSpace(color))
+func (s *Service) ColorFolder(opts ColorFolderOptions) (Colored, error) {
+	fromID, projectName := opts.From, opts.Project
+	folder, color := strings.TrimSpace(opts.Folder), strings.ToLower(strings.TrimSpace(opts.Color))
 	if folder == "" {
 		return Colored{}, errors.New("no folder was named to color")
 	}

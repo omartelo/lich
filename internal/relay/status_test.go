@@ -123,7 +123,7 @@ func TestStatusReadsTheTargetsWaitingAsWaiting(t *testing.T) {
 func TestStatusListsReadyOutcomesWithoutCollectingThem(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
 	plant(svc, "t1", "s1", "s2", "docs")
-	if err := svc.Reply("", "t1", "all green"); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: "t1", Answer: "all green"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 
@@ -133,7 +133,7 @@ func TestStatusListsReadyOutcomesWithoutCollectingThem(t *testing.T) {
 	if !reflect.DeepEqual(got.Ready, want) || len(got.Open) != 0 {
 		t.Fatalf("Status = %+v, want t1 ready and nothing open", got)
 	}
-	collected, err := svc.CollectNow("s1")
+	collected, err := svc.CollectNow(CollectNowOptions{From: "s1"})
 	if err != nil {
 		t.Fatalf("CollectNow: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestStatusListsReadyOutcomesWithoutCollectingThem(t *testing.T) {
 func TestStatusLeavesAPrivateOutcomeOut(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
 	plantPrivate(svc, "t1", "s1", "s2", "docs")
-	if err := svc.Reply("", "t1", "done"); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: "t1", Answer: "done"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 

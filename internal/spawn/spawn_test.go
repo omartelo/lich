@@ -1088,7 +1088,7 @@ func TestWorktreesReportsAnUnreadableWorkspace(t *testing.T) {
 	svc, sessions, _, _, _ := newService(t)
 	sessions.loadErr = errors.New("database is locked")
 
-	if _, err := svc.Worktrees("s1", ""); err == nil {
+	if _, err := svc.Worktrees(WorktreesOptions{From: "s1"}); err == nil {
 		t.Fatal("listed the checkouts of a workspace it could not read")
 	}
 }
@@ -1097,7 +1097,7 @@ func TestWorktreesReportsAnUnreadableRepository(t *testing.T) {
 	svc, _, worktrees, _, _ := newService(t)
 	worktrees.listErr = errors.New("not a git repository")
 
-	if _, err := svc.Worktrees("s1", ""); err == nil {
+	if _, err := svc.Worktrees(WorktreesOptions{From: "s1"}); err == nil {
 		t.Fatal("listed the checkouts of a repository git refused to read")
 	}
 }

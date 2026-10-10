@@ -79,7 +79,7 @@ func TestOpenWithoutAFolderFilesNothing(t *testing.T) {
 func TestFoldersListsEachFolderWithItsSessions(t *testing.T) {
 	svc, _, _ := filer(t)
 
-	folders, err := svc.Folders("s1", "")
+	folders, err := svc.Folders(FoldersOptions{From: "s1"})
 	if err != nil {
 		t.Fatalf("Folders: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestFoldersOfAProjectWithNoneIsAnEmptyList(t *testing.T) {
 	svc, sessions, _ := filer(t)
 	sessions.projects[0].Sessions = closable()[0].Sessions
 
-	folders, err := svc.Folders("s1", "lich")
+	folders, err := svc.Folders(FoldersOptions{From: "s1", Project: "lich"})
 	if err != nil {
 		t.Fatalf("Folders: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestFileThatCannotBeWrittenAnnouncesNothing(t *testing.T) {
 func TestRenameFolderMovesEverySessionInIt(t *testing.T) {
 	svc, sessions, events := filer(t)
 
-	refiled, err := svc.RenameFolder("s1", "", "Apps", " Applications ")
+	refiled, err := svc.RenameFolder(RenameFolderOptions{From: "s1", Folder: "Apps", To: " Applications "})
 	if err != nil {
 		t.Fatalf("RenameFolder: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestRenameFolderAnnouncesWhatTheWriteMoved(t *testing.T) {
 	svc, sessions, events := filer(t)
 	sessions.moved = []string{"s2", "s3", "s4"}
 
-	refiled, err := svc.RenameFolder("s1", "", "Apps", "Applications")
+	refiled, err := svc.RenameFolder(RenameFolderOptions{From: "s1", Folder: "Apps", To: "Applications"})
 	if err != nil {
 		t.Fatalf("RenameFolder: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestRenameFolderAnnouncesWhatTheWriteMoved(t *testing.T) {
 func TestRenameFolderToNothingTakesItApart(t *testing.T) {
 	svc, sessions, events := filer(t)
 
-	if _, err := svc.RenameFolder("s1", "", "Infra", ""); err != nil {
+	if _, err := svc.RenameFolder(RenameFolderOptions{From: "s1", Folder: "Infra"}); err != nil {
 		t.Fatalf("RenameFolder: %v", err)
 	}
 	if !slices.Equal(sessions.refolded, [][3]string{{"p1", "Infra", ""}}) {
@@ -246,7 +246,7 @@ func TestRenameFolderToNothingTakesItApart(t *testing.T) {
 func TestRenameFolderRefusesANameNoSessionCarries(t *testing.T) {
 	svc, sessions, events := filer(t)
 
-	_, err := svc.RenameFolder("s1", "", "apps", "Applications")
+	_, err := svc.RenameFolder(RenameFolderOptions{From: "s1", Folder: "apps", To: "Applications"})
 	if err == nil {
 		t.Fatal("renamed a folder no session is filed under")
 	}
@@ -265,7 +265,7 @@ func TestRenameFolderRefusesANameNoSessionCarries(t *testing.T) {
 func TestRenameFolderRefusesAnEmptyName(t *testing.T) {
 	svc, sessions, _ := filer(t)
 
-	if _, err := svc.RenameFolder("s1", "", " ", "Everything"); err == nil {
+	if _, err := svc.RenameFolder(RenameFolderOptions{From: "s1", Folder: " ", To: "Everything"}); err == nil {
 		t.Fatal("renamed the unfiled sessions as if they were a folder")
 	}
 	if len(sessions.refolded) != 0 {
@@ -277,7 +277,7 @@ func TestRenameFolderThatCannotBeWrittenAnnouncesNothing(t *testing.T) {
 	svc, sessions, events := filer(t)
 	sessions.folderErr = errors.New("disk is gone")
 
-	if _, err := svc.RenameFolder("s1", "", "Apps", "Applications"); err == nil {
+	if _, err := svc.RenameFolder(RenameFolderOptions{From: "s1", Folder: "Apps", To: "Applications"}); err == nil {
 		t.Fatal("reported a rename the store refused")
 	}
 	if len(events.events) != 0 {
@@ -291,7 +291,7 @@ func TestRenameFolderInAProjectWithNoFoldersSaysSo(t *testing.T) {
 	svc, sessions, _ := filer(t)
 	sessions.projects[0].Sessions = closable()[0].Sessions
 
-	_, err := svc.RenameFolder("s1", "", "Apps", "Applications")
+	_, err := svc.RenameFolder(RenameFolderOptions{From: "s1", Folder: "Apps", To: "Applications"})
 	if err == nil || !strings.Contains(err.Error(), "It has no folders.") {
 		t.Fatalf("err = %v, want the refusal to say the project has no folders", err)
 	}
@@ -305,10 +305,10 @@ func TestRenameFolderInAProjectWithNoFoldersSaysSo(t *testing.T) {
 func TestFolderCallsRefuseAnUnknownProject(t *testing.T) {
 	svc, sessions, events := filer(t)
 
-	if _, err := svc.Folders("s1", "nowhere"); err == nil {
+	if _, err := svc.Folders(FoldersOptions{From: "s1", Project: "nowhere"}); err == nil {
 		t.Error("Folders listed a project that is not open")
 	}
-	if _, err := svc.RenameFolder("s1", "nowhere", "Apps", "Applications"); err == nil {
+	if _, err := svc.RenameFolder(RenameFolderOptions{From: "s1", Project: "nowhere", Folder: "Apps", To: "Applications"}); err == nil {
 		t.Error("RenameFolder renamed in a project that is not open")
 	}
 	if len(sessions.refolded) != 0 || len(events.events) != 0 {
@@ -323,13 +323,13 @@ func TestFolderCallsReportAWorkspaceThatCannotBeRead(t *testing.T) {
 	sessions.loadErr = errors.New("database is locked")
 
 	calls := map[string]func() error{
-		"Folders": func() error { _, err := svc.Folders("s1", ""); return err },
+		"Folders": func() error { _, err := svc.Folders(FoldersOptions{From: "s1"}); return err },
 		"File": func() error {
 			_, err := svc.File(FileOptions{From: "s1", Target: "alone", Folder: "Infra"})
 			return err
 		},
 		"RenameFolder": func() error {
-			_, err := svc.RenameFolder("s1", "", "Apps", "Applications")
+			_, err := svc.RenameFolder(RenameFolderOptions{From: "s1", Folder: "Apps", To: "Applications"})
 			return err
 		},
 	}
@@ -348,7 +348,7 @@ func TestFolderCallsReportAWorkspaceThatCannotBeRead(t *testing.T) {
 func TestColorFolderPaintsEverySessionInIt(t *testing.T) {
 	svc, sessions, events := filer(t)
 
-	colored, err := svc.ColorFolder("s1", "", " Apps ", " Teal ")
+	colored, err := svc.ColorFolder(ColorFolderOptions{From: "s1", Folder: " Apps ", Color: " Teal "})
 	if err != nil {
 		t.Fatalf("ColorFolder: %v", err)
 	}
@@ -371,7 +371,7 @@ func TestColorFolderPaintsEverySessionInIt(t *testing.T) {
 func TestColorFolderWithNoColorClearsIt(t *testing.T) {
 	svc, sessions, _ := filer(t)
 
-	if _, err := svc.ColorFolder("s1", "", "Infra", ""); err != nil {
+	if _, err := svc.ColorFolder(ColorFolderOptions{From: "s1", Folder: "Infra"}); err != nil {
 		t.Fatalf("ColorFolder: %v", err)
 	}
 	if !slices.Equal(sessions.colored, [][3]string{{"p1", "Infra", ""}}) {
@@ -384,7 +384,7 @@ func TestColorFolderWithNoColorClearsIt(t *testing.T) {
 func TestColorFolderRefusesAColorOutsideThePalette(t *testing.T) {
 	svc, sessions, events := filer(t)
 
-	_, err := svc.ColorFolder("s1", "", "Apps", "purple")
+	_, err := svc.ColorFolder(ColorFolderOptions{From: "s1", Folder: "Apps", Color: "purple"})
 	if err == nil {
 		t.Fatal("painted a folder with a colour the window cannot draw")
 	}
@@ -403,7 +403,7 @@ func TestColorFolderRefusesAColorOutsideThePalette(t *testing.T) {
 func TestColorFolderRefusesANameNoSessionCarries(t *testing.T) {
 	svc, sessions, events := filer(t)
 
-	_, err := svc.ColorFolder("s1", "", "apps", "red")
+	_, err := svc.ColorFolder(ColorFolderOptions{From: "s1", Folder: "apps", Color: "red"})
 	if err == nil || !strings.Contains(err.Error(), "Apps") {
 		t.Fatalf("err = %v, want a refusal naming the folders there are", err)
 	}
@@ -416,7 +416,7 @@ func TestColorFolderThatCannotBeWrittenAnnouncesNothing(t *testing.T) {
 	svc, sessions, events := filer(t)
 	sessions.folderErr = errors.New("disk full")
 
-	if _, err := svc.ColorFolder("s1", "", "Apps", "red"); err == nil {
+	if _, err := svc.ColorFolder(ColorFolderOptions{From: "s1", Folder: "Apps", Color: "red"}); err == nil {
 		t.Fatal("ColorFolder = nil, want the write's error")
 	}
 	if len(events.events) != 0 {

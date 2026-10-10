@@ -22,17 +22,18 @@ func TestAnAnswerAfterTheTurnEndedWithoutOneStillReachesTheSender(t *testing.T) 
 	}
 	svc.Observe("s2", "busy")
 	svc.Observe("s2", "done")
-	if stalled, err := svc.Wait(context.Background(), sent.Ticket, 1); err != nil || stalled.Status != StatusUnanswered {
+	stalled, err := svc.Wait(context.Background(), WaitOptions{Ticket: sent.Ticket, WaitSeconds: 1})
+	if err != nil || stalled.Status != StatusUnanswered {
 		t.Fatalf("Wait = %+v, %v, want the turn's end reported unanswered first", stalled, err)
 	}
 
-	if err := svc.Reply("s2", sent.Ticket, "green, after the background run"); err != nil {
+	if err := svc.Reply(ReplyOptions{From: "s2", Ticket: sent.Ticket, Answer: "green, after the background run"}); err != nil {
 		t.Fatalf("a late Reply = %v, want the answer accepted", err)
 	}
 	if !awaitWritten(term, "s1", "[lich]") {
 		t.Errorf("the sender was never told the late answer arrived: %q", term.written("s1"))
 	}
-	got, err := svc.Wait(context.Background(), sent.Ticket, 1)
+	got, err := svc.Wait(context.Background(), WaitOptions{Ticket: sent.Ticket, WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Wait for the late answer: %v", err)
 	}
@@ -48,10 +49,10 @@ func TestALateAnswerIsTakenOnce(t *testing.T) {
 	svc.Observe("s2", "busy")
 	svc.Observe("s2", "done")
 
-	if err := svc.Reply("s2", sent.Ticket, "first"); err != nil {
+	if err := svc.Reply(ReplyOptions{From: "s2", Ticket: sent.Ticket, Answer: "first"}); err != nil {
 		t.Fatalf("late Reply: %v", err)
 	}
-	if err := svc.Reply("s2", sent.Ticket, "second"); err == nil {
+	if err := svc.Reply(ReplyOptions{From: "s2", Ticket: sent.Ticket, Answer: "second"}); err == nil {
 		t.Error("a second late answer was accepted on the same ticket")
 	}
 }
@@ -73,24 +74,24 @@ func TestATicketBeingWaitedOnOutlivesItsHour(t *testing.T) {
 
 	waited := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Wait(context.Background(), "t1", 1)
+		got, _ := svc.Wait(context.Background(), WaitOptions{Ticket: "t1", WaitSeconds: 1})
 		waited <- got
 	}()
 	awaitAttended(t, svc, "t1", 1)
 	clockMu.Lock()
 	clock = start.Add(2 * ticketTTL)
 	clockMu.Unlock()
-	if _, err := svc.CollectNow("s9"); err != nil {
+	if _, err := svc.CollectNow(CollectNowOptions{From: "s9"}); err != nil {
 		t.Fatalf("CollectNow: %v", err)
 	}
 
 	if got := <-waited; got.Status != StatusPending {
 		t.Fatalf("Wait = %+v, want still pending", got)
 	}
-	if _, err := svc.CollectNow("s9"); err != nil {
+	if _, err := svc.CollectNow(CollectNowOptions{From: "s9"}); err != nil {
 		t.Fatalf("CollectNow: %v", err)
 	}
-	if err := svc.Reply("s2", "t1", "done"); err != nil {
+	if err := svc.Reply(ReplyOptions{From: "s2", Ticket: "t1", Answer: "done"}); err != nil {
 		t.Fatalf("Reply after the wait = %v, want the ticket still open: a waiter was just told so", err)
 	}
 }
@@ -117,7 +118,7 @@ func TestATicketlessAnswerSkipsAMessageStillBeingDelivered(t *testing.T) {
 		t.Fatalf("writes = %q, want the paste in and the Enter held back", term.writesTo("s2"))
 	}
 
-	err := svc.Reply("s2", "", "an answer to something else")
+	err := svc.Reply(ReplyOptions{From: "s2", Answer: "an answer to something else"})
 	if err == nil || !strings.Contains(err.Error(), "no open request") {
 		t.Errorf("ticketless Reply mid-delivery = %v, want it refused", err)
 	}
@@ -131,11 +132,12 @@ func TestAWaitOnALapsedTicketIsToldItWentUnanswered(t *testing.T) {
 	sent, _ := svc.SendPrivate(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	svc.Observe("s2", "busy")
 	svc.Observe("s2", "done")
-	if first, err := svc.Wait(context.Background(), sent.Ticket, 1); err != nil || first.Status != StatusUnanswered {
+	first, err := svc.Wait(context.Background(), WaitOptions{Ticket: sent.Ticket, WaitSeconds: 1})
+	if err != nil || first.Status != StatusUnanswered {
 		t.Fatalf("first Wait = %+v, %v, want the stall", first, err)
 	}
 
-	got, err := svc.Wait(context.Background(), sent.Ticket, 1)
+	got, err := svc.Wait(context.Background(), WaitOptions{Ticket: sent.Ticket, WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Wait on the lapsed ticket = %v, want it still known", err)
 	}
@@ -160,12 +162,12 @@ func TestALateAnswerSurvivesTheWaiterHangingUp(t *testing.T) {
 	svc.lapseLocked("tk1", tk, StatusUnanswered)
 	svc.mu.Unlock()
 
-	if err := svc.Reply("s2", "tk1", "green"); err != nil {
+	if err := svc.Reply(ReplyOptions{From: "s2", Ticket: "tk1", Answer: "green"}); err != nil {
 		t.Fatalf("late Reply: %v", err)
 	}
 	svc.abandon("tk1", tk)
 
-	got, err := svc.Wait(context.Background(), "tk1", 1)
+	got, err := svc.Wait(context.Background(), WaitOptions{Ticket: "tk1", WaitSeconds: 1})
 	if err != nil || got.Status != StatusAnswered || got.Answer != "green" {
 		t.Errorf("Wait = %+v, %v, want the late answer kept", got, err)
 	}
@@ -185,12 +187,13 @@ func TestAWaitOnAnExpiredTicketSaysItExpired(t *testing.T) {
 	later := time.Now().Add(2 * ticketTTL)
 	svc.now = func() time.Time { return later }
 	for id, target := range map[string]string{"open": "docs", "lapsed": "api"} {
-		got, err := svc.Wait(context.Background(), id, 1)
+		got, err := svc.Wait(context.Background(), WaitOptions{Ticket: id, WaitSeconds: 1})
 		if err != nil || got.Status != StatusExpired || got.Target != target {
 			t.Errorf("Wait(%s) = %+v, %v, want expired from %q", id, got, err, target)
 		}
 	}
-	if _, err := svc.Wait(context.Background(), "never", 1); err == nil || !strings.Contains(err.Error(), "unknown ticket") {
+	_, err := svc.Wait(context.Background(), WaitOptions{Ticket: "never", WaitSeconds: 1})
+	if err == nil || !strings.Contains(err.Error(), "unknown ticket") {
 		t.Errorf("Wait on a ticket that never existed = %v, want unknown ticket", err)
 	}
 }

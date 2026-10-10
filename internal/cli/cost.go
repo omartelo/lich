@@ -32,7 +32,8 @@ func (c *client) cost(args []string) error {
 	}
 
 	var report store.CostReport
-	if err := c.call(context.Background(), "store.CostTotals", []any{*project, *provider, from}, shortCall, &report); err != nil {
+	call := []any{store.CostTotalsOptions{Project: *project, Provider: *provider, Since: from}}
+	if err := c.call(context.Background(), "store.CostTotals", call, shortCall, &report); err != nil {
 		return err
 	}
 	report.Projects = asList(report.Projects)

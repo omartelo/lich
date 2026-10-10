@@ -391,7 +391,7 @@ var mcpTools = append([]mcpTool{
 		ReadOnly: true,
 		Run: func(ctx context.Context, c *client, _ mcpArgs) (string, error) {
 			var peers []relay.Peer
-			if err := c.call(ctx, "relay.Peers", []any{c.sessionID()}, shortCall, &peers); err != nil {
+			if err := c.call(ctx, "relay.Peers", []any{relay.PeersOptions{From: c.sessionID()}}, shortCall, &peers); err != nil {
 				return "", err
 			}
 			if len(peers) == 0 {
@@ -473,7 +473,8 @@ var mcpTools = append([]mcpTool{
 						"drop the ticket to look without waiting, or drop no_wait to wait on it")
 				}
 				var result relay.Result
-				if err := c.call(ctx, "relay.Wait", []any{ticket, timeout}, waitBudget(timeout), &result); err != nil {
+				call := []any{relay.WaitOptions{Ticket: ticket, WaitSeconds: timeout}}
+				if err := c.call(ctx, "relay.Wait", call, waitBudget(timeout), &result); err != nil {
 					return "", err
 				}
 				return mcpOutcome(c.lang(), result), nil
@@ -612,7 +613,10 @@ var mcpTools = append([]mcpTool{
 		}, "label"),
 		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			var renamed spawn.Renamed
-			call := []any{c.sessionID(), args.text("session"), args.text("project"), args.text("label")}
+			call := []any{spawn.RenameOptions{
+				From: c.sessionID(), Target: args.text("session"), Project: args.text("project"),
+				Label: args.text("label"),
+			}}
 			if err := c.call(ctx, "spawn.Rename", call, shortCall, &renamed); err != nil {
 				return "", err
 			}
@@ -632,7 +636,7 @@ var mcpTools = append([]mcpTool{
 		ReadOnly: true,
 		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			var checkouts []spawn.Checkout
-			call := []any{c.sessionID(), args.text("project")}
+			call := []any{spawn.WorktreesOptions{From: c.sessionID(), Project: args.text("project")}}
 			if err := c.call(ctx, "spawn.Worktrees", call, shortCall, &checkouts); err != nil {
 				return "", err
 			}
@@ -658,7 +662,7 @@ var mcpTools = append([]mcpTool{
 			"answer": property("string", "Your answer, in full — nothing else is sent back."),
 		}, "answer"),
 		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
-			call := []any{c.sessionID(), args.text("ticket"), args.text("answer")}
+			call := []any{relay.ReplyOptions{From: c.sessionID(), Ticket: args.text("ticket"), Answer: args.text("answer")}}
 			if err := c.call(ctx, "relay.Reply", call, shortCall, nil); err != nil {
 				return "", err
 			}

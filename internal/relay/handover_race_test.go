@@ -39,10 +39,10 @@ func TestAWaitAsTheAnswerLandsNeverSeesAnUnknownTicket(t *testing.T) {
 	plant(svc, "t1", "s1", "s2", "docs")
 
 	replied := make(chan error, 1)
-	go func() { replied <- svc.Reply("", "t1", "done") }()
+	go func() { replied <- svc.Reply(ReplyOptions{Ticket: "t1", Answer: "done"}) }()
 	<-events.reached
 
-	got, err := svc.Wait(context.Background(), "t1", 1)
+	got, err := svc.Wait(context.Background(), WaitOptions{Ticket: "t1", WaitSeconds: 1})
 	close(events.release)
 	if replyErr := <-replied; replyErr != nil {
 		t.Fatalf("Reply: %v", replyErr)
@@ -74,14 +74,14 @@ func TestAnAnswerAWaitCarriedOutIsNotAlsoFiled(t *testing.T) {
 
 	waited := make(chan Result, 1)
 	go func() {
-		got, err := svc.Wait(context.Background(), "t1", 1)
+		got, err := svc.Wait(context.Background(), WaitOptions{Ticket: "t1", WaitSeconds: 1})
 		if err != nil {
 			t.Errorf("Wait: %v", err)
 		}
 		waited <- got
 	}()
 	<-events.reached
-	if err := svc.Reply("", "t1", "done"); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: "t1", Answer: "done"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	close(events.release)
