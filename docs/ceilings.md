@@ -1047,10 +1047,16 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the one it had before.
 - **Closing the window does not quit lich** (`main.go` `serve`, `internal/restart.Window`): the backend keeps
   every session's process running with nothing on screen, and with them the pinned port (47821), the
-  keep-awake assertion while a session works, the providers' spend and the desktop notifications. There is no
-  tray icon or menu-bar item saying it runs. Launching lich again opens a window on it; `lich quit` (or SIGINT /
+  keep-awake assertion while a session works, the providers' spend and the desktop notifications. The tray
+  icon (below) is all that says it runs. Launching lich again opens a window on it; `lich quit` (or SIGINT /
   SIGTERM) ends it. `task dev` behaves the same: closing its window leaves the dev backend on 47822 until
   Ctrl+C or `LICH_DEV=1 go run . quit`.
+- **The tray icon is Linux and Windows only, and late** (`internal/tray`): macOS's menu-bar item needs cgo
+  and lich is built without it, so a windowless lich on a Mac shows nothing. On Linux it is a
+  StatusNotifierItem: GNOME draws none without the AppIndicator extension, and a desktop with no tray host
+  shows nothing either. Its words are the page's interface language, so it comes up once the page has
+  loaded and handed them over; a lich whose window never opened has no tray. `task dev` puts up a second
+  icon beside the installed lich's, with the same name.
 - **Restart and update end every running session, now with nobody watching** (`internal/restart.Coordinator`):
   /restart and an update stop this process and every PTY with it, as they always did. Before, the window
   closing explained that loss; a windowless lich restarted by `install.sh` from outside loses its sessions

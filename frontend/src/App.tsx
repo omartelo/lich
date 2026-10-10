@@ -36,6 +36,7 @@ import { UncleanExitGate } from "@/components/UncleanExitGate"
 import { CommandPalette } from "@/components/CommandPalette"
 import { ShortcutsOverlay } from "@/components/ShortcutsOverlay"
 import { QuitDialog } from "@/components/QuitDialog"
+import { syncTrayLabels } from "@/lib/tray"
 import { useT } from "@/lib/i18n/i18n"
 
 // Named here like every other `lich.*` pref rather than spelled at the call
@@ -180,6 +181,7 @@ function Layout() {
 }
 
 function App() {
+  useEffect(() => syncTrayLabels(), [])
   return (
     <SettingsProvider>
       <HashRouter>

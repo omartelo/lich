@@ -145,6 +145,11 @@ export const shell = {
     confirm: "Encerrar o lich",
     failed: "Não foi possível encerrar o lich",
   },
+  tray: {
+    show: "Mostrar o lich",
+    running: "Sessões rodando: {count}",
+    quit: "Encerrar o lich",
+  },
   uncleanExitGate: {
     title: "A execução anterior do lich terminou de forma inesperada",
     description: "Suas sessões foram restauradas, mas o que elas estavam executando parou junto.",

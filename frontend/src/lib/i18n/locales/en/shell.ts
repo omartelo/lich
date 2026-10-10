@@ -141,6 +141,11 @@ export const shell = {
     confirm: "Quit lich",
     failed: "Could not quit lich",
   },
+  tray: {
+    show: "Show lich",
+    running: "Sessions running: {count}",
+    quit: "Quit lich",
+  },
   uncleanExitGate: {
     title: "lich's previous run ended unexpectedly",
     description: "Your sessions were restored, but whatever they were running stopped with it.",

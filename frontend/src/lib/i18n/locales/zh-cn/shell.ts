@@ -140,6 +140,11 @@ export const shell = {
     confirm: "退出 lich",
     failed: "无法退出 lich",
   },
+  tray: {
+    show: "显示 lich",
+    running: "运行中的会话：{count}",
+    quit: "退出 lich",
+  },
   uncleanExitGate: {
     title: "lich 上次运行意外结束",
     description: "你的会话已恢复，但它们正在运行的内容已随之停止。",

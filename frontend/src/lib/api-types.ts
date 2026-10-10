@@ -638,6 +638,14 @@ export interface PatchNotes {
   groups: PatchNotesGroup[] | null
 }
 
+/** internal/tray.Labels — the tray menu's words, in the interface language.
+ * running carries a {count} placeholder. */
+export interface TrayLabels {
+  show: string
+  running: string
+  quit: string
+}
+
 /** internal/system.Diagnostics — what a bug report opens with. */
 export interface Diagnostics {
   /** "dev" outside a release build. */

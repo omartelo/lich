@@ -19,6 +19,7 @@ import type {
   CommitIdentity,
   DetectedProvider,
   Diagnostics as DiagnosticsData,
+  TrayLabels,
   DiffStats,
   DraftReviewComment,
   Attachment,
@@ -583,6 +584,11 @@ export const AppUpdate = {
 export const PatchNotes = {
   /** The running build's changelog section, for the "what's new" popup. */
   Current: () => call<PatchNotesData>("patchnotes.Current", []),
+}
+
+/** The system tray's menu, which the backend draws in the page's words. */
+export const Tray = {
+  SetLabels: (labels: TrayLabels) => call<null>("tray.SetLabels", [labels]),
 }
 
 export const System = {

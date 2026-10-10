@@ -145,6 +145,11 @@ export const shell = {
     confirm: "Salir de lich",
     failed: "No se pudo salir de lich",
   },
+  tray: {
+    show: "Mostrar lich",
+    running: "Sesiones en ejecución: {count}",
+    quit: "Salir de lich",
+  },
   uncleanExitGate: {
     title: "La ejecución anterior de lich terminó de forma inesperada",
     description: "Tus sesiones se restauraron, pero lo que estaban ejecutando se detuvo con ella.",

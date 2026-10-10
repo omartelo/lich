@@ -36,6 +36,7 @@ import (
 	"github.com/omartelo/lich/internal/system"
 	"github.com/omartelo/lich/internal/terminal"
 	"github.com/omartelo/lich/internal/themes"
+	"github.com/omartelo/lich/internal/tray"
 )
 
 // The frontend is embedded into the binary and served over the loopback
@@ -49,6 +50,14 @@ var assets embed.FS
 //
 //go:embed CHANGELOG.md
 var changelog string
+
+// The tray icon, in the encoding each platform's tray takes (internal/tray).
+var (
+	//go:embed build/appicon-256.png
+	trayPNG []byte
+	//go:embed build/windows/lich.ico
+	trayICO []byte
+)
 
 // version is the running build's version, injected at build time via
 // -ldflags "-X main.version=<git tag>" (see Taskfile.yml). Unset in dev builds
@@ -343,6 +352,10 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	rl.SetWorkerFinished(spawner.CloseFinishedWorker)
 	dispatcher.Register("spawn", spawner)
 	dispatcher.Register("themes", themes.New(version))
+	// The tray is what a lich with its window closed shows of itself; it comes
+	// up once the page hands it its words (tray.SetLabels).
+	dispatcher.Register("tray", tray.New(tray.Icons{PNG: trayPNG, ICO: trayICO},
+		window.Show, coord.Quit, term.LiveCount))
 	denyInternal(dispatcher)
 	term.Mount("/rpc/", dispatcher)
 	term.Mount("/drop", http.HandlerFunc(drops.Upload))
