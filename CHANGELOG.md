@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the agent would fold into a placeholder (`[Pasted text #1 +32 lines]`,
   `[Pasted ~32 lines]`, `32 lines ▸`) arrives as the full text instead. Off by
   default.
+- **Update all in Settings › Updates** updates the lich plugin in every CLI
+  that is behind, one click instead of one per CLI.
 - **`lich focus <session>` brings the lich window up with that session's card
   open**, as if you had clicked it. It is what an editor plugin calls to take
   you from a "finished its turn" notice straight to the session.

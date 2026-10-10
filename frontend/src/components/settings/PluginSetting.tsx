@@ -69,6 +69,23 @@ export function PluginSetting() {
     setBusy(false)
   }
 
+  const updateAll = async () => {
+    setBusy(true)
+    const outdated = (await refresh())?.filter((row) => row.installed && row.updateAvailable) ?? []
+    await run(
+      async () => {
+        for (const row of outdated) {
+          await AgentPlugin.Update(row.provider)
+        }
+        return null
+      },
+      t("settings.pluginSetting.updatingAll"),
+      t("settings.pluginSetting.updated"),
+      t("settings.pluginSetting.updateFailed"),
+    )
+    setBusy(false)
+  }
+
   const check = async () => {
     setBusy(true)
     setChecked(false)
@@ -81,6 +98,7 @@ export function PluginSetting() {
     checked &&
     (error ? t("settings.pluginSetting.checkFailed") : t("settings.pluginSetting.checked"))
 
+  const outdatedCount = statuses?.filter((s) => s.installed && s.updateAvailable).length ?? 0
   const spinner = <LoaderCircle className="size-4 animate-spin" />
   const showTrustHint = statuses?.some((s) => s.provider === "codex" && s.installed)
   const showCrushHint = statuses?.some((s) => s.provider === "crush" && s.installed)
@@ -154,6 +172,12 @@ export function PluginSetting() {
           <Button size="sm" variant="outline" onClick={() => void check()} disabled={busy}>
             {t("settings.pluginSetting.checkForUpdates")}
           </Button>
+          {outdatedCount > 1 && (
+            <Button size="sm" onClick={() => void updateAll()} disabled={busy}>
+              {busy ? spinner : null}
+              {t("settings.pluginSetting.updateAll")}
+            </Button>
+          )}
           {outcome && <span className="text-xs text-muted-foreground">{outcome}</span>}
         </div>
       </div>
