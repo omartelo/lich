@@ -16,7 +16,7 @@ Bugs and ideas are welcome, and so are patches. This file is the short version;
   for first.
 - **A security problem** → not an issue. See [SECURITY.md](SECURITY.md).
 - **The session hooks** (titles, git refresh, resume) ship from
-  [lich-plugin](https://github.com/omartelo/lich-plugin) — report those there.
+  [lich-plugin](https://github.com/lichdotdev/lich-plugin) — report those there.
 
 ## Getting it running
 

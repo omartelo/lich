@@ -2,7 +2,7 @@
 
 lich observes and drives provider sessions through **hooks**. Each hook runs
 inside a session (shipped by the companion plugin
-[`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin), which installs
+[`lichdotdev/lich-plugin`](https://github.com/lichdotdev/lich-plugin), which installs
 on Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush and Kiro CLI) and
 talks to lich over a shared local transport. On Claude Code, Codex, Antigravity,
 Crush and Kiro CLI it is a small script the harness runs; opencode and oh-my-pi load a JavaScript

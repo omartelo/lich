@@ -23,7 +23,7 @@ list, and the reply path has to work even where no server was registered.
 
 This document is **contract-first**, exactly as [`hooks/`](hooks/README.md) is.
 A flag, a tool name or an output line that moves here can break the companion
-plugin ([`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin)) and
+plugin ([`lichdotdev/lich-plugin`](https://github.com/lichdotdev/lich-plugin)) and
 whatever the user automated on top, neither of which this repo can see. Move the
 contract first.
 
