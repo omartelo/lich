@@ -1,22 +1,32 @@
 import type { SessionKind } from "@/lib/session/sessions"
 
-// Claude Code folds a large paste into a "[Pasted text #1 +32 lines]" chip the
-// user cannot edit, and unfolds it into the full text when the identical text
-// is pasted again while the chip is still in the prompt. lich pastes twice
-// whenever Claude Code would fold, so the text lands editable.
+// Two providers fold a long paste into a placeholder the user cannot edit, and
+// each unfolds it on a key of its own: Claude Code ("[Pasted text #1 +32
+// lines]") when the identical text is pasted again while the chip is in the
+// prompt, Kiro CLI ("32 lines ▸") on Tab. lich sends that key right after the
+// paste wherever the provider would fold, so the text lands editable.
 //
-// The rule is Claude Code's own, read off the 2.1.296 bundle (its prompt's
-// paste handler): fold above 800 characters or above min(rows - 10, 2)
-// newlines, counted after it turns CRLF/CR into LF and a tab into four spaces;
-// unfold only up to 100 000 characters. The second paste must match the first
-// exactly, and writing both back to back was measured to unfold on a real PTY.
-//
-// Mirroring it is the point and the risk: a paste lich thinks folds but Claude
-// Code does not lands twice (docs/ceilings.md).
+// Each rule is the provider's own, and mirroring it is the point and the risk:
+// a paste lich thinks folds but the provider does not gets the key anyway
+// (docs/ceilings.md).
+
+// Claude Code 2.1.296, read off its prompt's paste handler: fold above 800
+// characters or above min(rows - 10, 2) newlines, counted after it turns
+// CRLF/CR into LF and a tab into four spaces; unfold only up to 100 000
+// characters. Writing both pastes back to back was measured to unfold.
 const CLAUDE_FOLD_CHARS = 800
 const CLAUDE_FOLD_NEWLINES = 2
 const CLAUDE_FOLD_ROWS_RESERVED = 10
 const CLAUDE_UNFOLD_MAX_CHARS = 100_000
+
+// Kiro CLI 2.21.0, read off its chat bundle (`shouldCollapse:t>10||a>500`) and
+// measured at each edge: fold above 10 lines or above 500 UTF-16 units, counted
+// on the text as the terminal delivers it, where every newline is one CR. A
+// trailing newline opens an eleventh line. Tab expands the newest chip, and
+// writing it right behind the paste was measured to unfold.
+const KIRO_FOLD_LINES = 10
+const KIRO_FOLD_CHARS = 500
+const KIRO_UNFOLD_KEY = "\t"
 
 function claudeFolds(text: string, rows: number): boolean {
   const normalized = text.replace(/\r\n|\r/g, "\n").replace(/\t/g, "    ")
@@ -28,15 +38,26 @@ function claudeFolds(text: string, rows: number): boolean {
   return normalized.length > CLAUDE_FOLD_CHARS || newlines > newlineLimit
 }
 
+function kiroFolds(text: string): boolean {
+  const delivered = text.replace(/\r?\n/g, "\r")
+  return delivered.split("\r").length > KIRO_FOLD_LINES || delivered.length > KIRO_FOLD_CHARS
+}
+
+/** What unfolds a paste: the same text pasted again, or a key written after it. */
+export type PasteUnfold = { kind: "repaste" } | { kind: "key"; key: string }
+
 /**
- * pasteTimes answers how many times a text paste must be written for it to
- * land in the session's prompt as editable text: 2 where the agent folds it
- * and unfolds on a repeat, 1 everywhere else. `rows` is the terminal's height,
- * which Claude Code's newline limit depends on.
+ * pasteUnfold answers what to send right after a text paste for it to land in
+ * the session's prompt as editable text, or null where the agent keeps it as
+ * typed. `rows` is the terminal's height, which Claude Code's newline limit
+ * depends on.
  */
-export function pasteTimes(kind: SessionKind, text: string, rows: number): 1 | 2 {
+export function pasteUnfold(kind: SessionKind, text: string, rows: number): PasteUnfold | null {
   if (kind === "claude" && claudeFolds(text, rows)) {
-    return 2
+    return { kind: "repaste" }
   }
-  return 1
+  if (kind === "kiro" && kiroFolds(text)) {
+    return { kind: "key", key: KIRO_UNFOLD_KEY }
+  }
+  return null
 }

@@ -13,7 +13,7 @@ import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/terminal/term-transport"
 import { chordSequence, isSearchOpenChord, pastedImageSequence } from "@/lib/terminal/term-keys"
 import { takePaste } from "@/lib/terminal/paste-queue"
-import { pasteTimes } from "@/lib/terminal/paste-unfold"
+import { pasteUnfold } from "@/lib/terminal/paste-unfold"
 import { pasteUnfoldKey } from "@/lib/providers-store"
 import { takeFork } from "@/lib/terminal/fork-queue"
 import { takeSetup } from "@/lib/terminal/setup-queue"
@@ -403,7 +403,8 @@ export function TerminalView({
         return
       }
       const text = event.clipboardData?.getData("text/plain") ?? ""
-      if (pasteTimes(kind, text, term.rows) === 1) {
+      const unfold = pasteUnfold(kind, text, term.rows)
+      if (unfold === null) {
         return
       }
       // Asked at paste time rather than held, so a switch flipped in Settings
@@ -414,8 +415,13 @@ export function TerminalView({
       Store.GetSetting(pasteUnfoldKey(kind), "").then(
         (value) => {
           term.paste(text)
-          if (value === "true") {
+          if (value !== "true") {
+            return
+          }
+          if (unfold.kind === "repaste") {
             term.paste(text)
+          } else {
+            writeInput(unfold.key)
           }
         },
         (error: unknown) => {

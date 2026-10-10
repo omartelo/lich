@@ -134,6 +134,13 @@ export const SETTING_ENTRIES: readonly IndexedSetting[] = [
   },
   {
     section: "providers",
+    titleKey: "settings.pasteUnfoldSetting.title",
+    alsoKey: "settings.pasteUnfoldSetting.searchWords",
+    perProvider: true,
+    onlyFor: "kiro",
+  },
+  {
+    section: "providers",
     titleKey: "settings.restoreSetting.title",
     alsoKey: "settings.restoreSetting.searchWords",
     perProvider: true,

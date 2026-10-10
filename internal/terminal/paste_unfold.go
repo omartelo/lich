@@ -14,8 +14,9 @@ const opencodeConfigContentVar = "OPENCODE_CONFIG_CONTENT"
 
 // pasteUnfoldEnv turns off opencode's paste summary, the "[Pasted ~N lines]"
 // placeholder, when the user asked for long pastes to land unfolded. Claude Code
-// is answered in the window instead (frontend/src/lib/terminal/paste-unfold.ts),
-// and no other provider has a switch for its fold.
+// and Kiro CLI are answered in the window instead
+// (frontend/src/lib/terminal/paste-unfold.ts), and no other provider has a
+// switch for its fold.
 //
 // An OPENCODE_CONFIG_CONTENT the user already exports is extended rather than
 // replaced: the child keeps only the last value of a repeated key, so appending

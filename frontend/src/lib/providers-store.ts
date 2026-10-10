@@ -98,12 +98,12 @@ export function pasteUnfoldKey(id: string): string {
   return `provider.${id}.pasteUnfold`
 }
 
-// pasteUnfoldTiming is when a provider honours the flag: Claude Code on the next
-// paste, since the window does the unfolding (lib/terminal/paste-unfold.ts);
-// opencode at spawn, through its own config. Absent for a provider whose fold
-// nothing can turn off.
+// pasteUnfoldTiming is when a provider honours the flag: Claude Code and Kiro
+// CLI on the next paste, since the window does the unfolding
+// (lib/terminal/paste-unfold.ts); opencode at spawn, through its own config.
+// Absent for a provider whose fold nothing can undo.
 export function pasteUnfoldTiming(id: string): "nextPaste" | "nextSession" | null {
-  if (id === "claude") {
+  if (id === "claude" || id === "kiro") {
     return "nextPaste"
   }
   if (id === "opencode") {

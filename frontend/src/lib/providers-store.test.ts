@@ -87,8 +87,9 @@ describe("provider setting keys", () => {
 
   it("offers paste unfolding only where lich can undo the fold, and says when it applies", () => {
     expect(pasteUnfoldTiming("claude")).toBe("nextPaste")
+    expect(pasteUnfoldTiming("kiro")).toBe("nextPaste")
     expect(pasteUnfoldTiming("opencode")).toBe("nextSession")
-    for (const id of ["codex", "antigravity", "omp", "crush", "cursor", "kiro", "shell"]) {
+    for (const id of ["codex", "antigravity", "omp", "crush", "cursor", "shell"]) {
       expect(pasteUnfoldTiming(id)).toBeNull()
     }
   })
