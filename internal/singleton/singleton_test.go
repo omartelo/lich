@@ -1,6 +1,7 @@
 package singleton
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -235,6 +236,34 @@ func TestPing(t *testing.T) {
 	// A port nothing listens on must read as dead, not hang.
 	if Ping(1, token) {
 		t.Fatal("Ping unreachable port = true, want false")
+	}
+}
+
+// TestShow posts to a listener that mimics the RPC: the running lich's
+// system.ShowWindow behind the token, taking one options object.
+func TestShow(t *testing.T) {
+	const token = "sekret"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if r.Method != http.MethodPost || r.URL.Path != "/rpc/system.ShowWindow" ||
+			r.URL.Query().Get("token") != token || string(body) != "[{}]" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte("null"))
+	}))
+	defer srv.Close()
+	port := serverPort(t, srv)
+
+	if err := Show(&Info{Port: port, Token: token}); err != nil {
+		t.Fatalf("Show = %v, want nil", err)
+	}
+	// An older lich has no such call: the caller has to hear it failed.
+	if err := Show(&Info{Port: port, Token: "wrong"}); err == nil {
+		t.Fatal("Show refused by the listener = nil, want an error")
+	}
+	if err := Show(&Info{Port: 1, Token: token}); err == nil {
+		t.Fatal("Show to an unreachable port = nil, want an error")
 	}
 }
 

@@ -37,7 +37,7 @@ const bus = vi.hoisted(() => {
 
 vi.mock("@/lib/app-events", () => ({ onAppEvent: bus.on, dispatchEnvelope: () => {} }))
 
-async function mountWith(state: SessionState) {
+async function mountWith(state: SessionState, launchHref = "http://127.0.0.1:47821/?token=t") {
   const sessionsRef = { current: state }
   const commit = vi.fn((next: SessionState) => {
     sessionsRef.current = next
@@ -59,6 +59,7 @@ async function mountWith(state: SessionState) {
       setAskNotifications: vi.fn(),
       activateSession,
       navigate: navigate as unknown as NavigateFunction,
+      launchHref,
     })
     return null
   }
@@ -156,6 +157,27 @@ describe("session-focus", () => {
 
     expect(navigate).toHaveBeenCalledWith("/projects/p1")
     expect(activateSession).toHaveBeenCalledWith("p1", "s2")
+  })
+
+  it("opens the card a window was opened on, once the workspace holds it", async () => {
+    const { activateSession, navigate } = await mountWith(
+      workspace,
+      "http://127.0.0.1:47821/?token=t&focus=s3",
+    )
+
+    expect(navigate).toHaveBeenCalledWith("/projects/p1")
+    expect(activateSession).toHaveBeenCalledWith("p1", "s3")
+  })
+
+  it("leaves a window opened on no card, or on a card it does not have, where it is", async () => {
+    for (const href of [
+      "http://127.0.0.1:47821/?token=t",
+      "http://127.0.0.1:47821/?token=t&focus=parked",
+    ]) {
+      const { activateSession, navigate } = await mountWith(workspace, href)
+      expect(navigate).not.toHaveBeenCalled()
+      expect(activateSession).not.toHaveBeenCalled()
+    }
   })
 
   it("does nothing for a payload it cannot read or a card it does not have", async () => {

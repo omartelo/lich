@@ -895,6 +895,20 @@ func (s *Service) Live(id string) bool {
 	return s.ptyOf(id) != nil
 }
 
+// LiveCount is how many sessions have a process running right now, what the
+// tray says a windowless lich is keeping alive.
+func (s *Service) LiveCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	live := 0
+	for _, sess := range s.sessions {
+		if sess.pty != nil {
+			live++
+		}
+	}
+	return live
+}
+
 // ptyOf returns the PTY for a session, or nil if it is not running.
 func (s *Service) ptyOf(id string) ptyHandle {
 	s.mu.Lock()

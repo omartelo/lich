@@ -30,6 +30,7 @@ export const hotkeys = {
     settings: "Configurações",
     pulls: "Pull requests",
     shortcuts: "Atalhos de teclado",
+    quit: "Encerrar o lich",
   },
   terminalCost: {
     a: "Ctrl+{key} é o atalho do shell para ir ao início da linha; as sessões não o receberão mais.",

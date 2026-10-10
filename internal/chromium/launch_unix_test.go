@@ -56,16 +56,22 @@ func TestFocusReportsWhatTheWindowWroteBeforeItDied(t *testing.T) {
 	}
 }
 
-// Run hands the window process to onStart before waiting on it, which is what
-// the restart flow closes; a clean exit is the window closed by the user.
-func TestRunHandsTheWindowProcessToOnStart(t *testing.T) {
-	_, profile := standIn(t)
-	var started *os.Process
-	err := Run("http://127.0.0.1:1/", profile, "lichtest", []string{"--ozone-platform=x11"}, func(p *os.Process) { started = p })
-	if err != nil {
-		t.Fatalf("Run: %v", err)
+// Run hands onStart the window's close before waiting on it, which is what
+// quitting and restarting close it with: a write on the window's stdin, which
+// the stand-in here exits on, as lich-shell does.
+func TestRunClosesTheWindowThroughItsStdin(t *testing.T) {
+	exe := filepath.Join(t.TempDir(), "lich-shell")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\nhead -c 1 >/dev/null\n"), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	if started == nil {
-		t.Fatal("onStart never received the window process")
+	t.Setenv(OverrideEnv, exe)
+	err := Run("http://127.0.0.1:1/", filepath.Join(t.TempDir(), "chromium-profile"), "lichtest", nil,
+		func(close func() error) {
+			if err := close(); err != nil {
+				t.Errorf("close: %v", err)
+			}
+		})
+	if err != nil {
+		t.Fatalf("Run: %v, want the window closed cleanly", err)
 	}
 }

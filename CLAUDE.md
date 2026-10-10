@@ -43,6 +43,13 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
 
 ## Local Gate (before every commit / PR)
 
+- **Run from inside a lich session, the gate runs in a memory jail** (Linux, systemd): an unbounded
+  `go test ./...`, the cross-compile loop and the frontend build starve the lich window you are running in,
+  and its Chromium dies with SIGBUS (`docs/ceilings.md` › the gate kills the window). Run each step
+  sequentially through:
+  `T=/var/tmp/lich-gate; mkdir -p $T; systemd-run --user --scope --quiet -p MemoryMax=6G -p MemorySwapMax=2G --nice=10 env GOTMPDIR=$T TMPDIR=$T GOFLAGS=-p=2 <step>`.
+  Never start two gate steps at once. The directory stays short: `go test` hands GOTMPDIR to the tests as
+  their TMPDIR, and a deeper one pushes the sandbox suite's Unix sockets past the 108-byte path limit.
 - `gofmt -l .` clean (fix with `gofmt -w .`) and `go vet ./...` clean.
 - `cd frontend && pnpm exec biome ci .` **exit 0** — biome is the frontend's gofmt + vet (fix with
   `pnpm format`). Read the exit code, never the last lines: `pnpm check` ends on the same

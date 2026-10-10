@@ -120,7 +120,7 @@ describe("isAppContextMenu on real markup", () => {
 // The window is injected, so the wiring is checked without one: which phase each
 // listener takes, and which events it is allowed to cancel. Both matter more than
 // the matchers above — a keydown listener on the bubble phase reaches the browser
-// too late, and Ctrl+W closes the window, which quits lich.
+// too late, and Ctrl+W closes the window, leaving lich running with nothing on screen.
 describe("installBrowserDefaults", () => {
   const install = (selectedText = "") => {
     const listeners = new Map<string, { handler: (event: unknown) => void; capture: unknown }>()

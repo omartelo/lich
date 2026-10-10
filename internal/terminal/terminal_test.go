@@ -1885,3 +1885,29 @@ func TestSetEnvMovesTheSpawnBase(t *testing.T) {
 		t.Fatalf("spawn env lost TERM: %v", env)
 	}
 }
+
+// TestLiveCountCountsTheSessionsWithAProcess is what the tray reads: a session
+// counts while its process runs and stops counting once it is closed.
+func TestLiveCountCountsTheSessionsWithAProcess(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1"); _ = svc.Close("s2") })
+
+	if got := svc.LiveCount(); got != 0 {
+		t.Fatalf("LiveCount = %d before any spawn, want 0", got)
+	}
+	for _, id := range []string{"s1", "s2"} {
+		if err := svc.Start(id, "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
+			t.Fatalf("Start(%s) = %v", id, err)
+		}
+	}
+	if got := svc.LiveCount(); got != 2 {
+		t.Fatalf("LiveCount = %d with two running, want 2", got)
+	}
+	if err := svc.Close("s1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.LiveCount(); got != 1 {
+		t.Fatalf("LiveCount = %d after closing one, want 1", got)
+	}
+}

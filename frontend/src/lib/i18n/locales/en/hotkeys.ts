@@ -28,6 +28,7 @@ export const hotkeys = {
     settings: "Settings",
     pulls: "Pull requests",
     shortcuts: "Keyboard shortcuts",
+    quit: "Quit lich",
   },
   terminalCost: {
     a: "Ctrl+{key} is the shell's move to the start of the line; sessions will no longer see it.",

@@ -259,6 +259,24 @@ export const settings = {
     used: "used",
     resets: "resets",
   },
+  closeSetting: {
+    title: "When the window closes",
+    searchWords: "quit exit background close window tray keep running",
+    description:
+      "What lich does with its sessions when you close its window. With none running, closing the window quits lich.",
+    choice: {
+      ask: {
+        label: "Ask",
+        consequence: "lich asks each time whether to keep running in the background.",
+      },
+      background: {
+        label: "Keep running",
+        consequence:
+          "The window closes and the sessions keep working; opening lich again brings them back.",
+      },
+      quit: { label: "Quit", consequence: "Closing the window ends lich and every session in it." },
+    },
+  },
   restoreSetting: {
     title: "Restored sessions",
     searchWords: "resume conversation start new restart ask",

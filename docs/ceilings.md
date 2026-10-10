@@ -445,7 +445,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   command hook (measured), so the page cancels those itself (`browser-defaults.ts`, on mouseup). The frontend
   uses none of the refused ones today. The trap is the next feature that does: `navigator.clipboard.readText()`,
   a blob download or a popup works in a browser tab
-  (a Mac whose window is missing or died at startup, `openWithoutWindow` in `main.go`) and fails silently in the bundled window until
+  (a Mac whose window is missing or died at startup, `openTab` in `main.go`) and fails silently in the bundled window until
   `shell/src/main.rs` answers the matching hook (`on_permission`, `on_download`, `on_new_window`,
   `on_navigation`). A second one: kurogane reports through `tracing` and the window installs no subscriber, so
   a window CEF could not create after startup says nothing on the stderr lich reads; a failure to start still
@@ -1045,9 +1045,73 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   X11, Windows and macOS reopen it where it was. The geometry lives in `lich-window` in the Chromium
   profile directory, so `task dev` keeps its own, and a window killed outright (SIGKILL, a crash) keeps
   the one it had before.
-- **Opened as a tab there is no window lifecycle** (`main.go`, `openWithoutWindow`, macOS only): lich opens a
-  plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on. Closing
-  the tab leaves lich serving.
+- **Closing the window does not quit lich** (`main.go` `serve`, `internal/restart.Window`): with a session
+  running, the window asks whether lich keeps running in the background or quits, and the answer can be kept
+  (Settings › Appearance › When the window closes); with none running, closing it quits. Kept running, the
+  backend holds every session's process with nothing on screen, and with them the pinned port (47821), the
+  keep-awake assertion while a session works, the providers' spend and the desktop notifications. The tray
+  icon (below) is all that says it runs. Launching lich again opens a window on it; `lich quit` (or SIGINT /
+  SIGTERM) ends it. `task dev` behaves the same: kept running, the dev backend stays on 47822 until Ctrl+C or
+  `LICH_DEV=1 go run . quit`.
+- **A window closed before it was ever touched does not ask** (`frontend/src/lib/close-request.ts`): the
+  page holds the close by cancelling `beforeunload`, and Chromium ignores that on a page the user never
+  clicked or typed into, so a window closed straight after it opened keeps lich running without asking
+  (or quits, with no session running). Only lich's own window asks: the macOS tab fallback never holds
+  its close. The hold rests on `App::on_before_unload`, a hook on the `lich-close-prompt` branch of the
+  kurogane fork that is not upstream yet; lich-shell answers a reload and a close lich itself asked for
+  (quitting, restarting, through the window's stdin) with Leave, and everything else with Stay.
+- **The tray icon is Linux and Windows only, and late** (`internal/tray`): macOS's menu-bar item needs cgo
+  and lich is built without it, so a windowless lich on a Mac shows nothing. On Linux it is a
+  StatusNotifierItem: GNOME draws none without the AppIndicator extension, and a desktop with no tray host
+  shows nothing either. Its words are the page's interface language, so it comes up once the page has
+  loaded and handed them over; a lich whose window never opened has no tray. `task dev` puts up a second
+  icon beside the installed lich's, with the same name.
+- **Restart and update end every running session, now with nobody watching** (`internal/restart.Coordinator`):
+  /restart and an update stop this process and every PTY with it, as they always did. Before, the window
+  closing explained that loss; a windowless lich restarted by `install.sh` from outside loses its sessions
+  with no window to show it, and the successor opens a window even when its predecessor had none.
+- **A window that dies after the first one is up only gets a dialog** (`chromium.EndingOf`): only the
+  launch's first window failing within the 30-second startup grace exits lich. A crash later, or a reopened
+  window that will not start, leaves the backend serving and shows "lich could not open its window"; the
+  next launch tries again.
+- **Logout and session end, per OS** (unverified on every OS; nothing here is measured): on Linux a lich
+  launched from the desktop lives in the graphical session's scope, so logind or the user manager stopping
+  it sends SIGTERM and lich quits cleanly; with `KillUserProcesses=no` and lingering it can outlive the logout,
+  windowless with no display, and the next login's launch opens a window on it. A lich started from a
+  terminal dies on that terminal's SIGHUP without its clean exit, so the next launch reports an unclean exit.
+  On Windows a GUI-subsystem process with no window receives no console close event: logoff ends it without
+  the clean exit, which the next launch reports as unclean. On macOS logout quits user processes; whether
+  the backend gets SIGTERM first is not known. Whether the window holding its close for the question (above) can stall a
+  logout is not measured on any OS; Chromium is expected to skip `beforeunload` when the session ends.
+- **Reopening from the Dock or Finder is unverified on macOS, and Windows reopen is unmeasured**: a second
+  launch reaches the running lich over `system.ShowWindow` on every OS (`singleton.Show`), which the macOS
+  e2e exercises by running the binary in `Lich.app` directly. LaunchServices may instead activate the
+  running Lich.app without starting a second process, and lich answers no reopen Apple Event, so a Dock click
+  on a windowless lich may do nothing. On Windows the Start-menu launch is a new process and takes the same
+  path, and quitting closes the window with WM_CLOSE as restart did, but neither has run on Windows
+  hardware with the window closed first.
+- **The gate run inside lich kills lich's window** (measured 2026-10-10): `go vet`, `go test ./...`, the
+  cross-compile loop and `vitest` + `vite build` started together from a session ran the machine out of
+  memory, and every Chromium on it, the lich window and an unrelated browser alike, died with SIGBUS; the
+  window took the session that ran the gate down with it. `/tmp` is tmpfs on many distributions, so the Go
+  build's temporaries count as RAM too. Nothing in lich bounds what a session spends. The way around it is
+  in CLAUDE.md › Local Gate: one step at a time, in a `systemd-run --user --scope` with `MemoryMax`, with
+  `GOTMPDIR`/`TMPDIR` on a short path on disk (`/var/tmp/lich-gate`; under `~/.cache` the sandbox suite's
+  Unix sockets outgrew the 108-byte limit); there a step over the limit is the one killed. macOS and Windows have no
+  equivalent here.
+- **A rig needs its own HOME, not just its own config dir** (`internal/agentplugin.RepairRegistrations`): every
+  launch that is not `task dev` (`LICH_DEV`) or a `go run` binary repoints the provider MCP registrations it
+  finds to its own executable, and those live under HOME, not under the config dir: `~/.cursor/mcp.json`,
+  `~/.omp/agent/mcp.json`, `~/.gemini/config/mcp_config.json` and Kiro's agent. A built binary launched
+  with only `XDG_CONFIG_HOME` (or `APPDATA`) moved rewrites the developer's real agents to point at a scratch
+  binary that is deleted later. Give a rig its own `HOME` and `XDG_*` both, and check those files afterwards.
+  Two side effects of that HOME: a `node` reached through a mise shim stops trusting the developer's mise
+  config and exits, so call the real binary (`mise which node`); and a rig given its own D-Bus
+  (`dbus-run-session`, so its tray stays off the developer's bar) activates portals and a notification
+  daemon that outlive it, which are found by their `DBUS_SESSION_BUS_ADDRESS` and stopped by PID.
+- **Opened as a tab lich cannot close it or tell it closed** (`main.go`, `openTab`, macOS only): lich serves a
+  plain tab it did not spawn, so `lich quit` leaves the tab open on a dead page, and a second launch opens
+  another tab rather than raising the first.
 - **The tab fallback cannot tell "opened" from "nothing happened"** (`internal/system.OpenURL`): `open` is
   started and never waited on — waiting would block for the life of the browser they
   hand off to. A desktop with a URL handler installed but no browser behind it therefore looks like success:

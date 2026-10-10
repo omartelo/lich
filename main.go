@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -35,6 +36,7 @@ import (
 	"github.com/omartelo/lich/internal/system"
 	"github.com/omartelo/lich/internal/terminal"
 	"github.com/omartelo/lich/internal/themes"
+	"github.com/omartelo/lich/internal/tray"
 )
 
 // The frontend is embedded into the binary and served over the loopback
@@ -48,6 +50,14 @@ var assets embed.FS
 //
 //go:embed CHANGELOG.md
 var changelog string
+
+// The tray icon, in the encoding each platform's tray takes (internal/tray).
+var (
+	//go:embed build/appicon-256.png
+	trayPNG []byte
+	//go:embed build/windows/lich.ico
+	trayICO []byte
+)
 
 // version is the running build's version, injected at build time via
 // -ldflags "-X main.version=<git tag>" (see Taskfile.yml). Unset in dev builds
@@ -111,11 +121,13 @@ func main() {
 	// session was worked in this run is still in memory until something writes
 	// it (internal/terminal.handsOn).
 	defer term.FlushHandsOn()
-	coord := registerServices(db, term, hub, configDir, logPath, env, launchEnv)
+	coord := newCoordinator()
+	window := newWindow(term.Transport(), configDir, chromiumArgs, term.LiveCount, coord.Quit)
+	registerServices(db, term, hub, configDir, logPath, env, launchEnv, window, coord)
 
 	term.SetRestart(coord.Do)
 
-	runChromium(term, configDir, chromiumArgs, coord)
+	runChromium(term, configDir, coord, window)
 }
 
 // pinShellFlag carries --shell in the environment rather than passing it down:
@@ -134,7 +146,8 @@ func pinShellFlag(pinnedShell string) {
 // resolveEnv returns the environment lich was launched in and the one its
 // children get, and pins the listener port into both.
 //
-// The launch environment is snapshotted before any tweak, because spawned
+// The launch environment is snapshotted before any tweak, minus the restart
+// marker that is this process's alone (restart.WithoutMarker), because spawned
 // terminal sessions must inherit what the user launched lich with (see
 // terminal.childEnv) and because a re-check resolves from it again, exactly as
 // this does (providers.Service.RefreshPath). ResolveShellEnv recovers the
@@ -146,7 +159,7 @@ func pinShellFlag(pinnedShell string) {
 // every spawned session agree on the origin the page's localStorage is keyed by
 // (singleton.DefaultPort).
 func resolveEnv() (launchEnv, env []string) {
-	launchEnv = os.Environ()
+	launchEnv = restart.WithoutMarker(os.Environ())
 	env = terminal.ResolveShellEnv(launchEnv)
 	terminal.PinPath(env)
 	if os.Getenv("LICH_LISTEN_PORT") == "" {
@@ -162,11 +175,8 @@ func resolveEnv() (launchEnv, env []string) {
 // in the order main built them: a service that hands another one a callback has
 // to exist first. It is lifted out of main only for its length; nothing here
 // runs anywhere else.
-//
-// It returns the restart coordinator because the terminal takes it after the
-// mounts below, and main is where the run ends.
 func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub,
-	configDir, logPath string, env, launchEnv []string) *restart.Coordinator {
+	configDir, logPath string, env, launchEnv []string, window *restart.Window, coord *restart.Coordinator) {
 	proj := project.New(project.ZenityPicker{})
 	// gh has one active account per host; a project can name a different one.
 	proj.SetAccounts(db.GHAccountForPath)
@@ -227,16 +237,6 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	plugins := agentplugin.New(db)
 	dispatcher.Register("agentplugin", plugins)
 	go plugins.RepairRegistrations()
-	// In-place restart: the update flow (install.sh) POSTs /restart after
-	// replacing the binary. os.Environ() here carries the pinned LICH_LISTEN_PORT
-	// so the successor rebinds the same port. A missing executable path only
-	// disables restart; the app still runs.
-	exe, err := os.Executable()
-	if err != nil {
-		slog.Warn("resolve executable — restart disabled", "err", err)
-		exe = ""
-	}
-	coord := restart.New(exe, os.Environ())
 	dispatcher.Register("appupdate", appupdate.New(version, coord.Install, hub.Emit))
 	dispatcher.Register("patchnotes", patchnotes.New(version, changelog))
 	dispatcher.Register("store", db)
@@ -245,6 +245,11 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// restored workspace looks exactly like one closed on purpose.
 	uncleanExit := singleton.UncleanExit(configDir, os.Getenv(restart.WaitEnv))
 	sys := system.New(env, logPath, version, uncleanExit)
+	// A second launch of lich asks for the window here, and `lich quit` is the
+	// one way to end a lich whose window is closed.
+	sys.SetShowWindow(window.Show)
+	sys.SetQuit(coord.Quit)
+	sys.SetCloseWindow(window.Dismiss)
 	dispatcher.Register("system", sys)
 	// Deleting a session for good takes any prompt parked on it, and the row is
 	// the only copy of what the user wrote. Both channels are used, and neither
@@ -307,11 +312,8 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// the plugin put there.
 	rl.SetPlugins(plugins)
 	// `lich focus` opens a card for someone outside the window, who then needs
-	// the window in front: the same raise a second launch of lich asks for.
-	rl.SetRaiseWindow(func() {
-		info := term.Transport()
-		focusRunning(configDir, &singleton.Info{Port: info.Port, Token: info.Token})
-	})
+	// the window in front, or open again: what a second launch of lich asks for.
+	rl.SetRaiseWindow(window.ShowSession)
 	// The language of the text lich types into sessions is read live from the
 	// settings table, by the relay at every message, by the terminal at
 	// every spawn and by drop at every copy notice.
@@ -339,12 +341,15 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	rl.SetWorkerFinished(spawner.CloseFinishedWorker)
 	dispatcher.Register("spawn", spawner)
 	dispatcher.Register("themes", themes.New(version))
+	// The tray is what a lich with its window closed shows of itself; it comes
+	// up once the page hands it its words (tray.SetLabels).
+	dispatcher.Register("tray", tray.New(tray.Icons{PNG: trayPNG, ICO: trayICO},
+		window.Show, coord.Quit, term.LiveCount))
 	denyInternal(dispatcher)
 	term.Mount("/rpc/", dispatcher)
 	term.Mount("/drop", http.HandlerFunc(drops.Upload))
 	term.Mount("/blob", http.HandlerFunc(proj.ServeBlob))
 	term.Mount("/events", hub)
-	return coord
 }
 
 // denyInternal hides the methods that exist for Go callers inside this process
@@ -387,6 +392,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //   - spawn.CloseFinishedWorker closes a session with none of spawn.Close's
 //     checks; the relay calls it for a worker that reported back.
 //   - relay.SetPlugins, relay.SetWorkerFinished, relay.SetPromptLanguage, drop.SetPromptLanguage, project.SetAccounts, project.SetProjects,
+//     system.SetShowWindow, system.SetQuit, system.SetCloseWindow,
 //     quota.SetSessions, store.SetSessionGone, store.SetScheduleForfeited,
 //     store.SetBranchOf, store.SetTranscriptOf, store.SetConversationsOf,
 //     store.SetCheckoutsOf, terminal.SetDropDir,
@@ -409,6 +415,9 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 func denyInternal(d *rpc.Handler) {
 	for _, method := range []string{
 		"store.Close",
+		"system.SetShowWindow",
+		"system.SetQuit",
+		"system.SetCloseWindow",
 		"store.SetSessionGone",
 		"store.SetScheduleForfeited",
 		"store.SetBranchOf",
@@ -454,16 +463,12 @@ func denyInternal(d *rpc.Handler) {
 	}
 }
 
-// runChromium serves the embedded frontend on the loopback listener and opens
-// it in a Chromium --app window — lich's own on Linux, the system browser
-// elsewhere (internal/chromium); the browser process exiting is the app
-// lifecycle. Extra CLI args after `--` pass through to Chromium
-// (e.g. `lich -- --ozone-platform=wayland`).
-//
-// LICH_DEV_URL points the window at the Vite dev server instead of the
-// embedded frontend (see `task dev`); the token and the backend port ride the
-// query string so the page can find the RPC listener across the origin split.
-func runChromium(term *terminal.Service, configDir string, extra []string, coord *restart.Coordinator) {
+// runChromium serves the embedded frontend on the loopback listener, opens it
+// in a Chromium --app window (lich's own on Linux, the system browser
+// elsewhere, internal/chromium) and serves until lich is told to quit. The
+// window is not the app's lifecycle: closing it leaves every session running,
+// and a second launch opens a new one on them (handleBindFailure).
+func runChromium(term *terminal.Service, configDir string, coord *restart.Coordinator, window *restart.Window) {
 	info := term.Transport()
 	if info.Port == 0 {
 		handleBindFailure(configDir, term.TransportError()) // never returns
@@ -471,10 +476,9 @@ func runChromium(term *terminal.Service, configDir string, extra []string, coord
 
 	// The runtime file lets install.sh reach a running lich for /restart when it
 	// runs outside a lich terminal (no LICH_PORT/LICH_TOKEN in the env), and lets
-	// a second launch find this instance to focus it instead of dying (see
-	// handleBindFailure). Removed on the clean window-close exit; a stale file
-	// from a crash is harmless (the token check rejects a mismatched or dead
-	// listener).
+	// a second launch find this instance to show its window instead of dying (see
+	// handleBindFailure). Removed on the clean exit; a stale file from a crash is
+	// harmless (the token check rejects a mismatched or dead listener).
 	if path, err := singleton.Write(configDir, info.Port, info.Token); err != nil {
 		slog.Warn("runtime file", "err", err)
 	} else {
@@ -488,80 +492,177 @@ func runChromium(term *terminal.Service, configDir string, extra []string, coord
 	}
 	term.MountPublic("/", http.FileServerFS(dist))
 
-	profileDir := filepath.Join(configDir, "lich", "chromium-profile")
+	serve(coord, window)
+}
 
+// serve opens the window and returns when lich is told to quit (`lich quit`,
+// a restart, SIGINT or SIGTERM), so the caller's defers still run. The window
+// is closed on the way out rather than left to die with the process, so
+// Chromium flushes its profile first.
+func serve(coord *restart.Coordinator, window *restart.Window) {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(stop)
+	coord.SetStop(func() {
+		// A second quit while the first is unwinding has nothing left to do.
+		select {
+		case stop <- os.Interrupt:
+		default:
+		}
+	})
+	window.Show()
+	<-stop
+	slog.Info("quitting")
+	window.Close()
+}
+
+// windowTarget is what every window this lich opens points at.
+//
+// LICH_DEV_URL points the window at the Vite dev server instead of the
+// embedded frontend (see `task dev`); the token and the backend port ride the
+// query string so the page can find the RPC listener across the origin split.
+type windowTarget struct {
+	// url carries the token; addr is the same page without it, for the logs.
+	url, addr  string
+	profileDir string
+	class      string
+}
+
+// pageOn is the page lich's own window opens, on a session's card when focus
+// names one (the page reads it off its focus parameter at load). shell=1 says
+// the page is in lich's window, whose close it can ask about; a plain tab of the
+// macOS fallback cannot answer it, and would show the browser's own dialog.
+func (t windowTarget) pageOn(focus string) string {
+	page := t.url + "&shell=1"
+	if focus != "" {
+		page += "&focus=" + url.QueryEscape(focus)
+	}
+	return page
+}
+
+func newWindowTarget(info terminal.TransportInfo, configDir string) windowTarget {
 	// The token stays out of the logs on purpose: the log file persists
 	// across sessions, the token must not.
 	addr := fmt.Sprintf("http://127.0.0.1:%d/", info.Port)
-	url := addr + "?token=" + info.Token
-	class := "lich"
+	target := windowTarget{
+		url:        addr + "?token=" + info.Token,
+		addr:       addr,
+		profileDir: filepath.Join(configDir, "lich", "chromium-profile"),
+		class:      "lich",
+	}
 	if dev := os.Getenv("LICH_DEV_URL"); dev != "" {
-		addr = dev + "/"
-		url = fmt.Sprintf("%s/?token=%s&backend=%d", dev, info.Token, info.Port)
-		profileDir = filepath.Join(configDir, "lich", "chromium-profile-dev")
+		target.addr = dev + "/"
+		target.url = fmt.Sprintf("%s/?token=%s&backend=%d", dev, info.Token, info.Port)
+		target.profileDir = filepath.Join(configDir, "lich", "chromium-profile-dev")
 		// Own WM_CLASS: compositor rules for the daily driver must not
 		// capture the dev window.
-		class = "lichdev"
+		target.class = "lichdev"
 	}
-	slog.Info("chromium shell opening", "addr", addr)
+	return target
+}
 
-	err = chromium.Run(url, profileDir, class, extra, coord.SetWindow)
-	switch {
-	case err == nil:
-		slog.Info("window closed, exiting")
-	case errors.Is(err, chromium.ErrNoShell) && chromium.TabFallback:
-		openWithoutWindow(url, addr, configDir, coord)
-	default:
-		slog.Error("chromium shell", "err", err)
-		// Same silence as handleBindFailure: a launcher start has no terminal,
-		// so without a dialog a browser that will not launch reads as lich
-		// doing nothing (#409). Best effort — where no dialog backend answers,
-		// the log line above still has the story.
-		_ = zenity.Error(fmt.Sprintf(
-			"lich could not open its window.\n\n%s\n\nLog: %s",
-			chromium.Why(err), logging.Path(filepath.Join(configDir, "lich"))),
-			zenity.Title("lich"))
+// newCoordinator is the in-place restart: the update flow (install.sh) POSTs
+// /restart after replacing the binary. os.Environ() here carries the pinned
+// LICH_LISTEN_PORT so the successor rebinds the same port. A missing executable
+// path only disables restart; the app still runs.
+func newCoordinator() *restart.Coordinator {
+	exe, err := os.Executable()
+	if err != nil {
+		slog.Warn("resolve executable — restart disabled", "err", err)
+		exe = ""
+	}
+	return restart.New(exe, os.Environ())
+}
+
+// newWindow builds the keeper of this lich's window. Extra CLI args after `--`
+// pass through to Chromium (e.g. `lich -- --ozone-platform=wayland`), on every
+// window it opens. live counts the sessions with a process, and quit ends lich:
+// a window closed with none running leaves nothing to keep it for.
+func newWindow(info terminal.TransportInfo, configDir string, extra []string,
+	live func() int, quit func() error) *restart.Window {
+	target := newWindowTarget(info, configDir)
+	return restart.NewWindow(
+		func(focus string, onStart func(close func() error)) error {
+			slog.Info("chromium shell opening", "addr", target.addr)
+			return chromium.Run(target.pageOn(focus), target.profileDir, target.class, extra, onStart)
+		},
+		func() { focusRunning(configDir, &singleton.Info{Port: info.Port, Token: info.Token}) },
+		func(end restart.WindowEnd) {
+			windowEnded(end, target, configDir)
+			quitIfIdle(end, live, quit)
+		},
+	)
+}
+
+// quitIfIdle ends lich when the user closed its window with no session running:
+// the backend outlives the window to keep sessions alive, and there are none.
+func quitIfIdle(end restart.WindowEnd, live func() int, quit func() error) {
+	if chromium.EndingOf(end.Err, end.First, end.Uptime) != chromium.WindowClosed || live() > 0 {
+		return
+	}
+	slog.Info("window closed with no session running, quitting")
+	if err := quit(); err != nil {
+		slog.Warn("quit after the window closed", "err", err)
+	}
+}
+
+// windowEnded performs what chromium.EndingOf says a window's end means.
+func windowEnded(end restart.WindowEnd, target windowTarget, configDir string) {
+	switch chromium.EndingOf(end.Err, end.First, end.Uptime) {
+	case chromium.WindowClosed:
+		slog.Info("window closed, lich keeps running")
+	case chromium.WindowTabInstead:
+		openTab(target, configDir)
+	case chromium.WindowFailed:
+		slog.Error("chromium shell", "err", end.Err)
+		reportWindowFailure(end.Err, configDir,
+			"lich is still running with its sessions: launch it again to reopen the window, "+
+				"or run `lich quit` to end it.")
+	case chromium.WindowNeverOpened:
+		slog.Error("chromium shell", "err", end.Err)
+		reportWindowFailure(end.Err, configDir, "")
 		os.Exit(1)
 	}
 }
 
-// openWithoutWindow is macOS's last rung (chromium.TabFallback), the one that
-// keeps a product on a Mac whose window is missing or died at startup: lich
-// hands its URL to the default browser and goes on serving it. The window is
-// lost, lich is not.
-//
-// It returns when the process is signalled, so the caller's defers still run.
-// Every other launch ends when the window closes; a tab lich did not spawn
-// cannot be waited on, so nothing here ends on its own — closing the tab leaves
-// lich running, which the notification says.
-func openWithoutWindow(url, addr, configDir string, coord *restart.Coordinator) {
-	slog.Warn("no window of its own, opening a plain tab", "addr", addr)
-	// stdout rather than the log: the URL carries the session token, and the
-	// log file outlives this run (see the addr/url split above). A terminal
-	// launch reads it here; a launcher launch reads the notification below.
-	fmt.Println("lich is running at", url)
+// reportWindowFailure is the dialog for a window that would not open or died.
+// A launcher start has no terminal, so without it a browser that will not
+// launch reads as lich doing nothing (#409). Best effort — where no dialog
+// backend answers, the log line the caller wrote still has the story.
+func reportWindowFailure(err error, configDir, after string) {
+	text := fmt.Sprintf("lich could not open its window.\n\n%s\n\n", chromium.Why(err))
+	if after != "" {
+		text += after + "\n\n"
+	}
+	text += "Log: " + logging.Path(filepath.Join(configDir, "lich"))
+	_ = zenity.Error(text, zenity.Title("lich"))
+}
 
-	if err := system.OpenURL(url); err != nil {
+// openTab is macOS's last rung (chromium.TabFallback), the one that keeps a
+// product on a Mac whose window is missing or died at startup: lich hands its
+// URL to the default browser and goes on serving it, as it does after any
+// window closes. A tab lich did not spawn cannot be closed on quit, nor told
+// apart from a closed one, so a second launch opens another tab.
+func openTab(target windowTarget, configDir string) {
+	slog.Warn("no window of its own, opening a plain tab", "addr", target.addr)
+	// stdout rather than the log: the URL carries the session token, and the
+	// log file outlives this run (see windowTarget). A terminal launch reads
+	// it here; a launcher launch reads the notification below.
+	fmt.Println("lich is running at", target.url)
+
+	if err := system.OpenURL(target.url); err != nil {
 		slog.Error("no browser to open at all", "err", err)
 		_ = zenity.Error(fmt.Sprintf(
 			"lich is running, but found no browser to show it in.\n\n"+
 				"Open this URL in any browser:\n%s\n\nLog: %s",
-			url, logging.Path(filepath.Join(configDir, "lich"))),
+			target.url, logging.Path(filepath.Join(configDir, "lich"))),
 			zenity.Title("lich"))
-		os.Exit(1)
+		return
 	}
 	_ = zenity.Notify(
-		"lich is running at "+addr+" — opened in your default browser. "+
+		"lich is running at "+target.addr+" — opened in your default browser. "+
 			"This Mac has no lich window of its own: closing the tab leaves lich running.",
 		zenity.Title("lich"))
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(stop)
-	coord.SetStop(func() { stop <- os.Interrupt })
-	slog.Info("serving without a window", "addr", addr)
-	<-stop
-	slog.Info("signal received, exiting")
 }
 
 // handleBindFailure runs when the pinned listener would not bind, and never
@@ -579,9 +680,9 @@ func handleBindFailure(configDir string, cause error) {
 		running, _ = singleton.Detect(configDir, want, singleton.Ping)
 	}
 	if singleton.BindFailureVerdict(restartWait, running) == singleton.BindFailureIsDuplicate {
-		slog.Info("lich already running, focusing existing window",
+		slog.Info("lich already running, showing its window",
 			"pid", running.PID, "port", running.Port)
-		focusRunning(configDir, running)
+		showRunning(configDir, running)
 		os.Exit(0)
 	}
 	// No "is the port free?" here: on Windows the answer is regularly yes and
@@ -599,6 +700,19 @@ func handleBindFailure(configDir string, cause error) {
 		port, cause, logging.Path(filepath.Join(configDir, "lich"))),
 		zenity.Title("lich"))
 	os.Exit(1)
+}
+
+// showRunning asks the running lich for its window: it opens one when the user
+// had closed it, and brings the open one forward otherwise. The running lich
+// owns that window, so it is tied to that backend and not to this launch,
+// which exits. A lich from before the backend outlived its window has no such
+// call, and always has its window open: focusing it through the profile lock
+// is what reaches it.
+func showRunning(configDir string, running *singleton.Info) {
+	if err := singleton.Show(running); err != nil {
+		slog.Warn("show the running lich's window, focusing it instead", "err", err)
+		focusRunning(configDir, running)
+	}
 }
 
 // focusRunning brings the already-running lich's window to the front by handing

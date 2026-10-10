@@ -186,6 +186,13 @@ var commands = []command{
 			"MCP client at lich.",
 	},
 	{
+		name: "quit",
+		args: "",
+		about: "End the running lich: its window closes and every session in it ends.\n" +
+			"Closing the window does not quit lich; its sessions keep running and\n" +
+			"launching lich again opens a window on them. Returns once lich is gone.",
+	},
+	{
 		name: "rage",
 		args: "[--output <path>]",
 		about: "Collect a bug report — versions, browser, providers, plugin state and\n" +

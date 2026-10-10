@@ -134,6 +134,35 @@ export const shell = {
     rebind: "Reatribua em Configurações › Atalhos",
     close: "fechar",
   },
+  quitDialog: {
+    title: "Encerrar o lich?",
+    description:
+      "Todas as sessões terminam junto. Fechar a janela, em vez disso, as mantém rodando em segundo plano.",
+    working: {
+      one: "{count} sessão está no meio de um turno e o perde:",
+      other: "{count} sessões estão no meio de um turno e o perdem:",
+    },
+    confirm: "Encerrar o lich",
+    failed: "Não foi possível encerrar o lich",
+  },
+  tray: {
+    show: "Mostrar o lich",
+    running: "Sessões rodando: {count}",
+    quit: "Encerrar o lich",
+  },
+  closeDialog: {
+    title: "Manter o lich rodando?",
+    running: {
+      one: "{count} sessão está rodando. Em segundo plano ela continua trabalhando, e abrir o lich de novo a traz de volta à tela.",
+      other:
+        "{count} sessões estão rodando. Em segundo plano elas continuam trabalhando, e abrir o lich de novo as traz de volta à tela.",
+    },
+    dontAsk: "Não perguntar de novo",
+    changeInSettings: "· mude em Configurações › Aparência",
+    keep: "Manter rodando",
+    quit: "Encerrar o lich",
+    failed: "Não foi possível fechar a janela",
+  },
   uncleanExitGate: {
     title: "A execução anterior do lich terminou de forma inesperada",
     description: "Suas sessões foram restauradas, mas o que elas estavam executando parou junto.",

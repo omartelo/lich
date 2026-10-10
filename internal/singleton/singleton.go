@@ -3,7 +3,9 @@
 // the running instance's loopback coordinates ({pid,port,token}) — and, when a
 // fresh launch cannot bind, uses it to tell "another live lich already holds my
 // port" (a duplicate launch, exit cleanly and focus it) apart from "the port is
-// taken by something else" (a real error). The pinned port bind is itself the
+// taken by something else" (a real error). A duplicate launch asks the running
+// lich for its window (Show), which opens one when the user had closed it: the
+// backend outlives its window. The pinned port bind is itself the
 // lock; this package is only the detection and the read/write of the file.
 package singleton
 
@@ -16,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -66,7 +69,7 @@ func fileName(dev bool) string {
 
 // Write records this process as the running instance. Mode 0600: the token is a
 // loopback credential and the file persists across sessions. Returns the path so
-// the caller can remove it on the clean window-close exit.
+// the caller can remove it on the clean exit.
 func Write(configDir string, port int, token string) (string, error) {
 	p := path(configDir)
 	data, err := json.Marshal(Info{PID: os.Getpid(), Port: port, Token: token})
@@ -79,9 +82,9 @@ func Write(configDir string, port int, token string) (string, error) {
 	return p, nil
 }
 
-// UncleanExit reports whether the run before this one ended without closing its
-// window. Write records the runtime file at startup and the clean window-close
-// exit removes it, so a file still on disk when a fresh launch is about to write
+// UncleanExit reports whether the run before this one ended without quitting
+// cleanly. Write records the runtime file at startup and the clean exit (`lich
+// quit`, a signal, a restart) removes it, so a file still on disk when a fresh launch is about to write
 // its own is the previous run's — it crashed, was killed, or the machine went
 // down under it. Call it before Write, which overwrites the evidence.
 //
@@ -143,7 +146,7 @@ const (
 	// which legitimately expects a busy port and retries the bind itself (so a
 	// failure here is genuine).
 	BindFailureIsReal BindVerdict = iota
-	// BindFailureIsDuplicate: another live lich holds the port — focus its
+	// BindFailureIsDuplicate: another live lich holds the port: show its
 	// window and exit 0. Re-launching an app you already have open should give
 	// you the window, not an error.
 	BindFailureIsDuplicate
@@ -174,4 +177,28 @@ func Ping(port int, token string) bool {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode == http.StatusNoContent
+}
+
+// showWindowMethod is the running lich's system.ShowWindow, posted with its
+// options object.
+const (
+	showWindowMethod = "system.ShowWindow"
+	showWindowBody   = "[{}]"
+)
+
+// Show asks the running lich to open its window, or to bring the open one to
+// the front. An older lich answers it with an error: it has no such call, and
+// always has a window open, which the caller then focuses the old way.
+func Show(running *Info) error {
+	client := http.Client{Timeout: pingTimeout}
+	url := fmt.Sprintf("http://127.0.0.1:%d/rpc/%s?token=%s", running.Port, showWindowMethod, running.Token)
+	resp, err := client.Post(url, "application/json", strings.NewReader(showWindowBody))
+	if err != nil {
+		return fmt.Errorf("ask the running lich for its window: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("ask the running lich for its window: %s", resp.Status)
+	}
+	return nil
 }

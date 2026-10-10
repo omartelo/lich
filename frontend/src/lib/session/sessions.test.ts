@@ -28,6 +28,7 @@ import {
   setSessionSchedule,
   type Session,
   type SessionKind,
+  sessionLabels,
   type SessionState,
 } from "./sessions"
 import {
@@ -1388,5 +1389,28 @@ describe("setSessionSandboxed shape", () => {
     const cleared = setSessionSandboxed(confined, "s1", false)
     const session = cleared[P]?.sessions[0]
     expect(session && "sandboxed" in session).toBe(false)
+  })
+})
+
+describe("sessionLabels", () => {
+  const state: SessionState = {
+    p1: {
+      activeId: "a",
+      nextSeq: 3,
+      sessions: [
+        { id: "a", label: "planner", kind: "claude" },
+        { id: "b", label: "auth-fix", kind: "codex" },
+      ],
+    },
+    p2: { activeId: "c", nextSeq: 2, sessions: [{ id: "c", label: "infra", kind: "claude" }] },
+  }
+
+  it("names the sessions asked for, in workspace order", () => {
+    expect(sessionLabels(state, ["c", "b"])).toEqual(["auth-fix", "infra"])
+  })
+
+  it("leaves out an id no project holds and answers nothing for no ids", () => {
+    expect(sessionLabels(state, ["gone"])).toEqual([])
+    expect(sessionLabels(state, [])).toEqual([])
   })
 })

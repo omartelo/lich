@@ -3,7 +3,6 @@
 package restart
 
 import (
-	"os"
 	"os/exec"
 	"syscall"
 )
@@ -16,10 +15,4 @@ func startDetached(exe string, env, args []string) error {
 	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	return cmd.Start()
-}
-
-// terminateProcess asks the window to close gracefully (SIGTERM) so Chromium
-// clears its profile lock before exiting — a clean exit unwinds main's defers.
-func terminateProcess(p *os.Process) error {
-	return p.Signal(syscall.SIGTERM)
 }

@@ -162,8 +162,9 @@ jobs:
       # silently, lich.exe finds the window beside itself and opens it, the page
       # it serves loads (read over CDP: alive alone is not proof, a crash keeps
       # a process around while its dump is written), the window closes on a
-      # plain close request, which is what the restart flow sends, and lich
-      # exits with it. Its config lives under an APPDATA of its own.
+      # plain close request while lich keeps its sessions running, a launch
+      # opens a new window on it, and `lich quit` ends it. Its config lives
+      # under an APPDATA of its own.
       - name: Install and run lich end to end
         env:
           MSYS_NO_PATHCONV: "1"
@@ -212,13 +213,32 @@ jobs:
           curl -sf http://127.0.0.1:9334/json > "$RUNNER_TEMP/pages.json"
           pages=$(grep -c '"type": *"page"' "$RUNNER_TEMP/pages.json" || true)
           [ "$pages" = 1 ] || { echo "::error::the forwarded launch left $pages pages in the window, expected one"; cat "$RUNNER_TEMP/pages.json"; cat "$APPDATA/lich/lich.log"; exit 1; }
-          # A close request, not a kill: the same WM_CLOSE the restart flow posts.
+          # Closing the window leaves lich running with its sessions; with none
+          # running it would quit, so one is opened first, through the CLI as an
+          # agent would. A close request, not a kill: what the user's close is.
+          mkdir -p "$RUNNER_TEMP/proj"
+          "$app/lich.exe" open --project "$RUNNER_TEMP/proj" --kind shell || { echo "::error::lich open exited $?"; cat "$APPDATA/lich/lich.log"; exit 1; }
           taskkill /IM lich-shell.exe > /dev/null
-          for _ in $(seq 1 15); do sleep 1; tasklist | grep -q '^lich.exe' || break; done
-          if tasklist | grep -q '^lich.exe'; then
-            echo "::error::lich.exe is still running after its window closed"; cat "$APPDATA/lich/lich.log"; exit 1
+          for _ in $(seq 1 15); do sleep 1; tasklist | grep -q lich-shell.exe || break; done
+          if tasklist | grep -q lich-shell.exe; then
+            echo "::error::the window outlived its close request"; cat "$APPDATA/lich/lich.log"; exit 1
           fi
-          grep -q 'window closed, exiting' "$APPDATA/lich/lich.log" || { echo "::error::lich did not log the window closing"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          sleep 2
+          tasklist | grep -q '^lich.exe' || { echo "::error::lich exited with its window"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          grep -q 'window closed, lich keeps running' "$APPDATA/lich/lich.log" || { echo "::error::lich did not log the window closing"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          # Launched again, lich asks the running one for its window, and that
+          # backend opens it: the same extra switches, so the page is on CDP again.
+          "$app/lich.exe" || { echo "::error::the reopening launch exited $?"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          for _ in $(seq 1 30); do
+            sleep 1
+            curl -sf http://127.0.0.1:9334/json > "$RUNNER_TEMP/pages.json" 2>/dev/null && grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" && break
+          done
+          grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" || { echo "::error::a second launch did not reopen the window on the running lich"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          "$app/lich.exe" quit || { echo "::error::lich quit exited $?"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          for _ in $(seq 1 10); do tasklist | grep -q '^lich.exe' || break; sleep 1; done
+          if tasklist | grep -q '^lich.exe'; then
+            echo "::error::lich.exe is still running after lich quit"; cat "$APPDATA/lich/lich.log"; exit 1
+          fi
           cat "$RUNNER_TEMP/pages.json"
 
       - name: Assemble Windows assets

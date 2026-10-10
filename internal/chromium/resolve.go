@@ -11,7 +11,7 @@ import (
 // ErrNoShell is an install with no window of its own: nothing at shellPaths
 // and no pin. It is a sentinel because the caller answers it differently from
 // every other failure: on macOS lich still runs, in a plain tab of the default
-// browser (main.go's openWithoutWindow), while everywhere else it is the error
+// browser (main.go's openTab), while everywhere else it is the error
 // the user has to see: a package missing its window, or a binary copied out of
 // the package it shipped in.
 var ErrNoShell = errors.New(

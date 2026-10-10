@@ -354,6 +354,7 @@ pasted into, or one that just finished its turn.
 - Raising the window is best effort, the same hand-off a second launch of lich
   makes; the card is switched either way. See `docs/ceilings.md` for where the
   window is not raised.
+- With the window closed, it opens a new one already on that card.
 - Prints `Focused "<label>" (<project>).`; `--json` prints
   `{"id","label","project"}`. Exit 1 when no session was focused.
 
@@ -971,6 +972,24 @@ may auto-allow them.
 `folder`, `to` or `color`, rather than reading the missing field as empty: an
 empty name takes a session out of its folder, or a folder apart, an empty color
 clears a folder's, and a model that forgot the field did not ask for that.
+
+### `lich quit`
+
+Ends the running lich: its window closes, every session's process ends with it,
+and the process exits. Closing the window does not do this: the backend keeps
+serving its sessions with no window on screen, and launching lich again opens a
+window on them. This is the way out of a lich whose window is closed.
+
+```
+lich has quit.
+```
+
+It returns once nothing listens on lich's port any more, so a script can
+launch lich again straight after; it gives up after 15 seconds and exits 1. A
+lich that exits before its reply leaves still counts as quit. Run inside a
+session, it ends that session too, with all the others. There is no `--json`
+and no MCP tool: an agent ending every session at once, its own included, is
+not something to hand it as a tool.
 
 ### `lich rage [--output <path>]`
 

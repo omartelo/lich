@@ -256,6 +256,19 @@ export const settings = {
     used: "已用",
     resets: "重置于",
   },
+  closeSetting: {
+    title: "关闭窗口时",
+    searchWords: "退出 关闭 后台 窗口 托盘 继续运行",
+    description: "关闭窗口时 lich 如何处理其会话。若没有正在运行的会话，关闭窗口即退出 lich。",
+    choice: {
+      ask: { label: "询问", consequence: "lich 每次都会询问是否在后台继续运行。" },
+      background: {
+        label: "继续运行",
+        consequence: "窗口关闭，会话继续工作；再次打开 lich 即可回到屏幕上。",
+      },
+      quit: { label: "退出", consequence: "关闭窗口即退出 lich 并结束其中所有会话。" },
+    },
+  },
   restoreSetting: {
     title: "恢复的会话",
     searchWords: "恢复 继续 对话 新建 重启 询问",

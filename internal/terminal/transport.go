@@ -224,12 +224,12 @@ func newTransport(
 
 // bindTimeout / restartBindTimeout / bindRetryInterval bound the wait any
 // launch spends retrying the pinned port while a just-exited lich still holds
-// it: closing the window ends the process, but on Windows its child processes
+// it: quitting ends the process, but on Windows its child processes
 // (Chromium, the PTYs) can take a moment longer to release the port than the
 // parent takes to exit, so even a plain relaunch can lose that race. A
 // restarting lich (restart.WaitEnv set) gets the longer bound: install.sh
 // hands off immediately after spawning it, before the predecessor it is
-// replacing has even been told to close its window.
+// replacing has even been told to stop.
 const (
 	bindTimeout        = 2 * time.Second
 	restartBindTimeout = 10 * time.Second
