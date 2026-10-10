@@ -508,6 +508,40 @@ describe("sidebarGroups", () => {
     ])
   })
 
+  // A wall can reach into another project. Its members from there ride along
+  // as guests, in pane order, and stay out of the block's own cards: those are
+  // what the drag, the keyboard walk and the pull request cards read, and all
+  // three speak for this project only.
+  it("carries a wall's members from other projects as guests, never as its cards", () => {
+    const state = buildState(2)
+    const away = { id: "x1", label: "X1", kind: "claude" as const }
+    const [block] = sidebarGroups(
+      sessionsOf(state, P),
+      [wall("g1", ["s1", "x1", "s2"])],
+      new Map([["x1", away]]),
+    )
+    expect(block.sessions.map((s) => s.id)).toEqual(["s1", "s2"])
+    expect(block.guests).toEqual([away])
+  })
+
+  it("draws no block in a project that has no card on the wall", () => {
+    const state = buildState(1)
+    const away = { id: "x1", label: "X1", kind: "claude" as const }
+    const away2 = { id: "x2", label: "X2", kind: "claude" as const }
+    expect(
+      ids(
+        sidebarGroups(
+          sessionsOf(state, P),
+          [wall("g1", ["x1", "x2"])],
+          new Map([
+            ["x1", away],
+            ["x2", away2],
+          ]),
+        ),
+      ),
+    ).toEqual([[ROOT_GROUP_KEY, ["s1"]]])
+  })
+
   it("draws no block for a wall with nothing live left in it", () => {
     const state = buildState(2)
     expect(ids(sidebarGroups(sessionsOf(state, P), [wall("g1", ["gone"])]))).toEqual([

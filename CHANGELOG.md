@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A split can show sessions from different projects side by side.** Show
+  another session beside this one (Ctrl+Shift+G, or the + on a pane's header)
+  opens a list of the sessions of every open project to pick from, and in the
+  command palette Alt+Enter on a session does the same in one step. Clicking
+  the pane of another project's session switches to that project and keeps the
+  split on screen.
 - **`lich quit` ends lich and every session in it.** It is the way out now that
   closing the window no longer is, and it returns once lich is gone, so a
   script can start it again right after.
@@ -18,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Show another session beside this one asks which session** instead of
+  taking the next card in the sidebar.
 - **Closing the window can keep your sessions running.** With a session
   running, lich asks whether to keep going in the background or quit; kept
   running, every agent and terminal goes on working, and launching lich again

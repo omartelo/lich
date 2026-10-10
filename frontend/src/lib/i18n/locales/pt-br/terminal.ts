@@ -25,6 +25,17 @@ export const terminal = {
     stopShowing: "Parar de mostrar {name}",
     paneName: "O painel {name}",
     rememberFailed: "Não foi possível lembrar a escolha: {error}",
+    showBeside: "Mostrar uma sessão ao lado desta",
+    noRoom: "Não cabe outro painel",
+  },
+  showBesidePicker: {
+    title: "Mostrar ao lado",
+    placeholder: "Buscar sessões para mostrar ao lado…",
+    search: "Buscar sessões para mostrar ao lado",
+    results: "Sessões que podem ser mostradas ao lado",
+    pick: "mostrar",
+    noMatch: "Nenhuma sessão corresponde a {query}",
+    onWall: "em {group}",
   },
   view: {
     restartFailed: "Falha ao reiniciar a sessão: {error}",

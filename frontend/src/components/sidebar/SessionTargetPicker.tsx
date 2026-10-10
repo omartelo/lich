@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import type { KeyboardEvent } from "react"
+import type { KeyboardEvent, ReactNode } from "react"
 import { GitBranchPlus } from "lucide-react"
 import { useSessionStatus, useSessionUnread } from "@/lib/session/use-session-status"
 import { filterTargetRows, flattenTargetGroups, groupTargetRows } from "@/lib/session/target-picker"
@@ -140,16 +140,19 @@ export function SessionTargetPicker({
   )
 }
 
-function TargetRowView({
+export function TargetRowView({
   target,
   selected,
   onSelect,
   onPick,
+  trailing,
 }: {
   target: DelegateTarget
   selected: boolean
   onSelect: () => void
   onPick: () => void
+  /** A short note at the row's end, before the Enter mark. */
+  trailing?: ReactNode
 }) {
   const status = useSessionStatus(target.id)
   const unread = useSessionUnread(target.id)
@@ -157,6 +160,9 @@ function TargetRowView({
     <PickerRow selected={selected} onSelect={onSelect} onRun={onPick}>
       <SessionStatusIcon kind={target.kind} status={status} unread={unread} />
       <span className="truncate text-sm">{target.label}</span>
+      {trailing && (
+        <span className="ml-auto shrink-0 text-xs text-muted-foreground">{trailing}</span>
+      )}
     </PickerRow>
   )
 }

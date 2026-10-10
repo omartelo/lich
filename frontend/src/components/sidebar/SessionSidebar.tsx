@@ -9,11 +9,9 @@ import { toast } from "sonner"
 import { ProjectService, Spawn, Terminal as TerminalService } from "@/lib/rpc"
 import { errorText } from "@/lib/utils"
 import { useT } from "@/lib/i18n/i18n"
-import { Trans } from "@/components/common/Trans"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { delegateTargets } from "@/lib/session/delegate-targets"
-import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { usePanes } from "@/lib/session/use-panes"
 import { useStageToggle } from "@/lib/session/use-stage-toggle"
 import {
@@ -45,7 +43,13 @@ import {
 } from "@/lib/session/session-filter"
 import { useSessionPhases } from "@/lib/session/use-session-status"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
-import { activeSessionId, foldersOf, sessionsOf, type Session } from "@/lib/session/sessions"
+import {
+  activeSessionId,
+  foldersOf,
+  sessionsOf,
+  type Session,
+  workspaceSessions,
+} from "@/lib/session/sessions"
 import {
   dragOrder,
   folderKey,
@@ -198,11 +202,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // The menu entry is a toggle on one card: a session already on the stage takes
   // itself off it, any other joins it. Adding is refused — quietly, the way the
   // shortcut is — when one more pane would leave them all too small to read.
-  // Adding a session that is already on another wall takes it off that one —
-  // somebody else's arrangement, changed by a click aimed at this one. So the
-  // decision goes to the user rather than being made under them; `add` refuses
-  // the move until they have answered.
-  const { moving, toggleStage, cancelMove, confirmMove } = useStageToggle(panes, list)
+  // Taking a session off another wall asks first (StageMoveDialog).
+  const { toggleStage } = useStageToggle(panes, list)
   // Gathering an orchestrator and its workers is the one action that builds a
   // whole wall at once. A delegate already on another wall stays there — it is
   // the user's arrangement and taking it is the destructive reading — so the
@@ -232,7 +233,14 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   )
   // The split's own block is built from the members, not from what is on screen:
   // a parked wall is exactly the case the user could not see before.
-  const groups = sidebarGroups(visible, panes.groups)
+  // Members of a wall that belong to other projects ride along in its block.
+  const own = new Set(list.map((session) => session.id))
+  const elsewhere = new Map(
+    workspaceSessions(sessions)
+      .filter((session) => !own.has(session.id))
+      .map((session) => [session.id, session]),
+  )
+  const groups = sidebarGroups(visible, panes.groups, elsewhere)
   const pullsHomes = pullsCheckoutHomes(groups)
   // The Pulls screen reviews the active session's checkout (useActiveSession).
   const activeCheckout = list.find((session) => session.id === realActiveId)?.path || path
@@ -322,8 +330,16 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     // A split block is a wall, so a drag in it arranges that wall rather than
     // the stored session list — the same arrangement the drag inside the stage
     // itself makes, from the other end.
+    // Its guests are not in the drag, being arranged from their own project's
+    // sidebar, so the dragged order fills the slots of this project's own cells
+    // and every guest keeps its pane.
     if (group.stage) {
-      panes.reorderCells(group.stage.id, ids)
+      const drawn = new Set(group.sessions.map((session) => session.id))
+      const queue = [...ids]
+      panes.reorderCells(
+        group.stage.id,
+        group.stage.cells.map((id) => (drawn.has(id) ? (queue.shift() ?? id) : id)),
+      )
       return
     }
     // The slots the drag may fill are the cards this block drew, asked of the
@@ -465,6 +481,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         projectId={projectId}
         path={group.path}
         sessions={group.sessions}
+        guests={group.guests}
+        onStopShowing={panes.remove}
         projectPath={path}
         activeId={activeId}
         stageIds={stageIds}
@@ -676,33 +694,6 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
           setNaming(null)
         }}
       />
-      <ConfirmDialog
-        open={!!moving}
-        onCancel={cancelMove}
-        // "this split" only when there is one: adding to no wall starts a new
-        // one around the active session, and naming a split the user cannot see
-        // is the same lie as the entry that promised to stop showing a card.
-        title={
-          panes.current
-            ? t("sidebar.sessionSidebar.moveTitle", { name: moving?.session.label ?? "" })
-            : t("sidebar.sessionSidebar.showBesideTitle", { name: moving?.session.label ?? "" })
-        }
-        description={
-          moving?.from.cells.length === 2 ? (
-            <Trans
-              k="sidebar.sessionSidebar.moveEndsGroup"
-              params={{ group: <strong>{moving.from.name}</strong> }}
-            />
-          ) : (
-            <Trans
-              k="sidebar.sessionSidebar.moveLeavesSplit"
-              params={{ group: <strong>{moving?.from.name}</strong> }}
-            />
-          )
-        }
-      >
-        <Button onClick={confirmMove}>{t("sidebar.sessionSidebar.moveConfirm")}</Button>
-      </ConfirmDialog>
 
       <ResizeHandle
         edge="right"

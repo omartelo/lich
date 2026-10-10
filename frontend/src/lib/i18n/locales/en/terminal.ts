@@ -23,6 +23,17 @@ export const terminal = {
     stopShowing: "Stop showing {name}",
     paneName: "The {name} pane",
     rememberFailed: "Couldn't remember the choice: {error}",
+    showBeside: "Show a session beside this one",
+    noRoom: "No room for another pane",
+  },
+  showBesidePicker: {
+    title: "Show beside",
+    placeholder: "Search sessions to show beside…",
+    search: "Search sessions to show beside",
+    results: "Sessions that can be shown beside",
+    pick: "show",
+    noMatch: "No sessions match {query}",
+    onWall: "on {group}",
   },
   view: {
     restartFailed: "Session failed to restart: {error}",

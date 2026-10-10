@@ -1,11 +1,23 @@
 import { useEffect, useRef, useState } from "react"
-import { HashRouter, Outlet, Route, Routes, useLocation, useMatch } from "react-router-dom"
+import {
+  HashRouter,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useMatch,
+  useNavigate,
+} from "react-router-dom"
 import { SettingsProvider } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
 import { parseBoolPref, readPref, writePref } from "@/lib/prefs"
 import { ProjectsProvider, useProjects } from "@/providers/projects"
 import { activeSessionId, sessionsOf } from "@/lib/session/sessions"
 import { usePanes } from "@/lib/session/use-panes"
+import { useShowBeside } from "@/lib/session/use-show-beside"
+import { stageSize } from "@/lib/session/panes-store"
+import { fits } from "@/lib/session/pane-grid"
+import { toast } from "sonner"
 import { Terminal as TerminalService } from "@/lib/rpc"
 import { reapTerminals } from "@/lib/terminal/terminal-registry"
 import { morph, SIDEBAR_MORPH } from "@/lib/view-transition"
@@ -34,6 +46,8 @@ import { GitMissingGate } from "@/components/GitMissingGate"
 import { ProviderSetupGate } from "@/components/ProviderSetupGate"
 import { UncleanExitGate } from "@/components/UncleanExitGate"
 import { CommandPalette } from "@/components/CommandPalette"
+import { StageMoveDialog } from "@/components/sidebar/StageMoveDialog"
+import { ShowBesidePicker } from "@/components/ShowBesidePicker"
 import { ShortcutsOverlay } from "@/components/ShortcutsOverlay"
 import { QuitDialog } from "@/components/QuitDialog"
 import { CloseDialog } from "@/components/CloseDialog"
@@ -50,6 +64,7 @@ const SIDEBAR_KEY = "lich.sidebar.open"
 // top of the terminals.
 function Layout() {
   const t = useT()
+  const navigate = useNavigate()
   const { sessions } = useProjects()
   const match = useMatch("/projects/:projectId/*")
   const location = useLocation()
@@ -115,15 +130,28 @@ function Layout() {
     setDock("files")
     requestFileSearch()
   })
-  // Nothing left to show, no room left to show it in, or no second pane to move
-  // the cursor to: each declines rather than being swallowed for nothing, the
-  // rule every card shortcut above follows.
+  // Nothing to show a session beside, or no second pane to move the cursor to:
+  // each declines rather than being swallowed for nothing, the rule every card
+  // shortcut above follows. No room for one more pane is said instead, since the
+  // chord did reach the stage.
   const panes = usePanes(projectId)
-  useHotkey("splitBeside", () => {
-    if (!panes.add()) {
+  const showBeside = useShowBeside(projectId)
+  // The picker of sessions to show beside, from the shortcut, the palette's
+  // action and a pane's +. Mounted only from opening to the end of its close, so
+  // a project switch does not repaint a list nobody has open.
+  const [beside, setBeside] = useState<"open" | "closing" | null>(null)
+  const openBeside = () => {
+    if (!showBeside) {
       return false
     }
-  })
+    const { width, height } = stageSize()
+    if (!fits(panes.cells.length + 1, width, height)) {
+      toast(t("terminal.host.noRoom"))
+      return
+    }
+    setBeside("open")
+  }
+  useHotkey("splitBeside", openBeside)
   useHotkey("otherPane", () => panes.split && panes.focusStep(1))
   return (
     <div className="flex h-screen w-screen flex-col bg-canvas">
@@ -155,7 +183,7 @@ function Layout() {
                 retry={t("shell.app.reloadStage")}
                 className="absolute inset-0"
               >
-                <TerminalHost />
+                <TerminalHost onShowBeside={openBeside} />
               </ErrorBoundary>
               <ErrorBoundary
                 label={t("shell.app.screen")}
@@ -176,6 +204,23 @@ function Layout() {
           </div>
           <FooterBar dock={dock} onDock={toggleDock} />
         </main>
+        <StageMoveDialog panes={panes} />
+        {showBeside && beside && (
+          <ShowBesidePicker
+            open={beside === "open"}
+            onOpenChange={(open) => setBeside(open ? "open" : "closing")}
+            onClosed={() => setBeside(null)}
+            projectId={projectId}
+            onScreen={panes.cells}
+            groups={panes.groups}
+            onPick={(sessionId) => {
+              showBeside(sessionId)
+              // From Settings or Pulls the stage is behind the screen; the pane
+              // is only worth something once it is in front.
+              navigate(`/projects/${projectId}`)
+            }}
+          />
+        )}
       </div>
     </div>
   )

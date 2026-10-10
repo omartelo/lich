@@ -1,6 +1,13 @@
 import { useSyncExternalStore } from "react"
-import { readPref, writePref } from "@/lib/prefs"
-import { formatGroups, groupsKey, type PaneGroup, parseGroups } from "./panes"
+import { prefKeys, readPref, removePref, writePref } from "@/lib/prefs"
+import {
+  formatGroups,
+  GROUPS_KEY,
+  LEGACY_GROUPS_PREFIX,
+  mergeGroups,
+  type PaneGroup,
+  parseGroups,
+} from "./panes"
 
 // Where the split groups live between mounts. localStorage is the store itself,
 // not a cache in front of one: a second copy in module state would be one more
@@ -10,9 +17,8 @@ import { formatGroups, groupsKey, type PaneGroup, parseGroups } from "./panes"
 // (root CLAUDE.md) — a wall is a property of this window, the way the sidebar's
 // width and the dock's tab are.
 //
-// One listener set rather than one per project: the subscribers are the terminal
-// host, the sidebar and the layout's shortcuts, and a fan-out keyed by project
-// would be machinery for three of them.
+// One key for the whole window: a wall can hold sessions of several projects,
+// so it belongs to none of them.
 const listeners = new Set<() => void>()
 
 function notify(): void {
@@ -33,41 +39,52 @@ function subscribe(listener: () => void): () => void {
 // parse is kept beside the raw string it came from and handed back until that
 // string changes — the cache is for React's identity check, never for the value,
 // which still comes from the pref on every read.
-const cache = new Map<string, { raw: string | null; value: PaneGroup[] }>()
+let cache: { raw: string | null; value: PaneGroup[] } | null = null
 
-/** The stored groups, unreconciled — put them through resolveGroups with the
- * project's live sessions before drawing anything. Outside React too, for the
- * neighbour walk, which orders cards the way the sidebar draws them. A component
- * takes useStoredGroups instead: this read holds no listener, so what it returns
- * goes stale the moment a pane moves. */
-export function storedGroups(projectId: string): PaneGroup[] {
-  if (!projectId) {
-    return EMPTY
-  }
-  const key = groupsKey(projectId)
-  const raw = readPref(key)
-  const last = cache.get(key)
-  if (last && last.raw === raw) {
-    return last.value
-  }
-  const value = parseGroups(raw)
-  cache.set(key, { raw, value })
-  return value
-}
+// Walls used to be stored one key per project. The first read of a window that
+// still has those carries them into the one key and drops the old ones, so no
+// wall is lost to the upgrade. It runs inside a read because every path to the
+// walls starts with one, and it is idempotent: once the old keys are gone there
+// is nothing left for a second call to do. The flag keeps every later snapshot
+// from walking the whole of localStorage to find that out.
+let migrated = false
 
-// One frozen array for every project with nothing stored, so the snapshot of a
-// project with no walls is identity-stable too.
-const EMPTY: PaneGroup[] = []
-
-export function useStoredGroups(projectId: string): PaneGroup[] {
-  return useSyncExternalStore(subscribe, () => storedGroups(projectId))
-}
-
-export function writeGroups(projectId: string, groups: readonly PaneGroup[]): void {
-  if (!projectId) {
+function migrateLegacyGroups(): void {
+  if (migrated) {
     return
   }
-  writePref(groupsKey(projectId), formatGroups(groups))
+  migrated = true
+  const legacy = prefKeys(LEGACY_GROUPS_PREFIX)
+  if (legacy.length === 0) {
+    return
+  }
+  const carried = legacy.map((key) => parseGroups(readPref(key)))
+  writePref(GROUPS_KEY, formatGroups(mergeGroups([parseGroups(readPref(GROUPS_KEY)), ...carried])))
+  for (const key of legacy) {
+    removePref(key)
+  }
+}
+
+/** The stored groups, unreconciled — put them through resolveGroups with the
+ * workspace's live sessions before drawing anything. A component takes
+ * useStoredGroups instead: this read holds no listener, so what it returns goes
+ * stale the moment a pane moves. */
+export function storedGroups(): PaneGroup[] {
+  migrateLegacyGroups()
+  const raw = readPref(GROUPS_KEY)
+  if (cache && cache.raw === raw) {
+    return cache.value
+  }
+  cache = { raw, value: parseGroups(raw) }
+  return cache.value
+}
+
+export function useStoredGroups(): PaneGroup[] {
+  return useSyncExternalStore(subscribe, storedGroups)
+}
+
+export function writeGroups(groups: readonly PaneGroup[]): void {
+  writePref(GROUPS_KEY, formatGroups(groups))
   notify()
 }
 

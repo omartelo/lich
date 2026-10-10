@@ -25,6 +25,17 @@ export const terminal = {
     stopShowing: "不再显示 {name}",
     paneName: "{name} 窗格",
     rememberFailed: "无法记住该选择：{error}",
+    showBeside: "在此会话旁显示另一个会话",
+    noRoom: "没有空间再放一个窗格",
+  },
+  showBesidePicker: {
+    title: "在旁边显示",
+    placeholder: "搜索要在旁边显示的会话…",
+    search: "搜索要在旁边显示的会话",
+    results: "可在旁边显示的会话",
+    pick: "显示",
+    noMatch: "没有匹配 {query} 的会话",
+    onWall: "在 {group} 中",
   },
   view: {
     restartFailed: "会话重新启动失败：{error}",

@@ -104,13 +104,18 @@ export const sidebar = {
     },
     issueHandoffFailed: "Não foi possível entregar a issue à sessão: {error}",
     forkPruned: "{name} não tem mais conversa para bifurcar: o {provider} a descartou.",
-    moveTitle: "Mover {name} para este split?",
+  },
+  stageMoveDialog: {
+    title: "Mover {name} para este split?",
     showBesideTitle: "Mostrar {name} ao lado desta sessão?",
-    moveEndsGroup:
+    endsGroup:
       "Ela é uma de apenas duas sessões em {group}, então esse grupo acaba quando ela sair. Nenhuma sessão é fechada em nenhum dos casos.",
-    moveLeavesSplit:
+    leavesSplit:
       "Ela está em {group}, e uma sessão só pode estar em um split por vez, então ela sai de lá. Nenhuma sessão é fechada em nenhum dos casos.",
-    moveConfirm: "Mover",
+    confirm: "Mover",
+  },
+  wallGuestCard: {
+    stopShowing: "Parar de mostrar {name}",
   },
   sidebarRail: {
     expand: "Expandir barra lateral",

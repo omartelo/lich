@@ -11,6 +11,7 @@ export const palette = {
     forgetFailed: "无法忘记 {label}：{error}",
     resumeFailed: "无法恢复 {label}：{error}",
     actionUnavailable: "{label} 在此处不可用",
+    showBeside: "在旁边显示",
     nothingClosed: "还没有关闭的内容",
     nothingClosedHint: "关闭的会话会保留在这里，包括它的分支、智能体和对话，直到它的工作树被移除。",
     noMatches: "没有与 {query} 匹配的结果",

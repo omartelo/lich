@@ -11,6 +11,7 @@ export const palette = {
     forgetFailed: "No se pudo olvidar {label}: {error}",
     resumeFailed: "No se pudo reanudar {label}: {error}",
     actionUnavailable: "{label} no está disponible aquí",
+    showBeside: "mostrar al lado",
     nothingClosed: "Todavía no hay nada cerrado",
     nothingClosedHint:
       "Cierra una sesión y espera aquí, con su rama, su agente y su conversación, hasta que se elimine su worktree.",

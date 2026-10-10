@@ -9,6 +9,7 @@ export const palette = {
     forgetFailed: "Could not forget {label}: {error}",
     resumeFailed: "Could not resume {label}: {error}",
     actionUnavailable: "{label} is not available here",
+    showBeside: "show beside",
     nothingClosed: "Nothing closed yet",
     nothingClosedHint:
       "Close a session and it waits here — its branch, its agent and its conversation — until its worktree is removed.",

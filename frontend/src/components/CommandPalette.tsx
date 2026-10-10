@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useMatch, useNavigate } from "react-router-dom"
 import {
   ChevronRight,
   Folder,
@@ -45,6 +45,7 @@ import { useClosedProjects } from "@/lib/session/use-closed-projects"
 import { useExternalSessions } from "@/lib/session/use-external-sessions"
 import { useHistorySearch } from "@/lib/session/use-history-search"
 import { useTranscriptSearch } from "@/lib/session/use-transcript-search"
+import { useShowBeside } from "@/lib/session/use-show-beside"
 import { toast } from "sonner"
 import { PickerDialog, PickerEmpty, PickerGroup, PickerRow } from "@/components/common/PickerDialog"
 import { agoLabel } from "@/lib/ago"
@@ -78,6 +79,12 @@ export function CommandPalette() {
   // The action Enter picked, run once the palette has finished closing: its
   // focus trap would pull back any focus the action moves while it is still up.
   const picked = useRef<HotkeyAction | null>(null)
+  // The session Alt+Enter asked to show beside the one on screen, put there once
+  // the palette has closed for the same reason: the move dialog it may raise
+  // would open under this one's focus trap.
+  const pickedBeside = useRef("")
+  const routed = useMatch("/projects/:projectId/*")?.params.projectId ?? ""
+  const showBeside = useShowBeside(routed)
   // Non-null while the query asks for actions: the list is then the actions and
   // nothing else, so the stores are not searched for a term that starts with ">".
   const term = actionTerm(query)
@@ -248,8 +255,20 @@ export function CommandPalette() {
   // falls through to the terminal, but a row that does nothing just looks broken.
   const runPicked = (isOpen: boolean) => {
     const action = picked.current
+    const beside = pickedBeside.current
     picked.current = null
-    if (isOpen || !action) {
+    pickedBeside.current = ""
+    if (isOpen) {
+      return
+    }
+    if (beside && showBeside) {
+      showBeside(beside)
+      // From Settings or Pulls the stage is behind the screen; the add is only
+      // worth something once it is in front.
+      navigate(`/projects/${routed}`)
+      return
+    }
+    if (!action) {
       return
     }
     if (!runHotkey(action.id)) {
@@ -295,6 +314,13 @@ export function CommandPalette() {
     } else if (event.key === "ArrowUp") {
       event.preventDefault()
       setSelected(Math.max(active - 1, 0))
+    } else if (event.key === "Enter" && event.altKey) {
+      event.preventDefault()
+      const row = rows[active]
+      if (row?.kind === "session" && showBeside) {
+        pickedBeside.current = row.session.sessionId
+        close()
+      }
     } else if (event.key === "Enter") {
       event.preventDefault()
       runIndex(active)
@@ -321,6 +347,11 @@ export function CommandPalette() {
       onQueryChange={setQuery}
       onKeyDown={onInputKeyDown}
       actionHint={actionHint}
+      secondaryHint={
+        rows[active]?.kind === "session" && showBeside
+          ? { keys: [isMac ? "⌥" : "Alt", "↵"], label: t("palette.commandPalette.showBeside") }
+          : undefined
+      }
       filters={term === null ? <FilterTabs tab={tab} counts={counts} onPick={setTab} /> : undefined}
     >
       {total === 0 ? (

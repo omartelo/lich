@@ -45,6 +45,10 @@ export interface SidebarGroup {
   // gathered blocks.
   path: string
   sessions: Session[]
+  // A wall's members that belong to another open project, in pane order. Kept
+  // out of `sessions` on purpose: that list is what the drag, the keyboard walk
+  // and the pull request cards read, and all three speak for this project only.
+  guests: Session[]
 }
 
 // Which block a session is drawn in — asked once and used by both the bucketing
@@ -96,9 +100,9 @@ function blockKey(session: Session, where: Block, wall: PaneGroup | undefined): 
 function block(
   key: string,
   sessions: Session[],
-  of: Partial<Pick<SidebarGroup, "pinned" | "stage" | "folder" | "path">> = {},
+  of: Partial<Pick<SidebarGroup, "pinned" | "stage" | "folder" | "path" | "guests">> = {},
 ): SidebarGroup {
-  return { key, pinned: false, stage: null, folder: "", path: "", sessions, ...of }
+  return { key, pinned: false, stage: null, folder: "", path: "", sessions, guests: [], ...of }
 }
 
 // The sessions filed under each folder name, each keeping the stored order.
@@ -144,9 +148,14 @@ function folderMembers(
 // mark either way. A wall or a folder with nothing left in it draws nothing: a
 // folder is the set of sessions carrying its name, so the last card leaving is
 // what ends it.
+//
+// `elsewhere` holds the sessions of every other open project, for the walls
+// that reach into them: a wall is drawn in each project it has a card in, and
+// in each one its other projects' members ride along as guests.
 export function sidebarGroups(
   sessions: Session[],
   stage: readonly PaneGroup[] = [],
+  elsewhere: ReadonlyMap<string, Session> = new Map(),
 ): SidebarGroup[] {
   const byId = new Map(sessions.map((session) => [session.id, session]))
   const wallOf = wallMembers(stage, byId)
@@ -178,7 +187,8 @@ export function sidebarGroups(
     drawn.add(key)
     if (where === "wall" && wall) {
       const cells = wall.cells.flatMap((id) => byId.get(id) ?? [])
-      blocks.push(block(key, cells, { stage: wall }))
+      const guests = wall.cells.flatMap((id) => elsewhere.get(id) ?? [])
+      blocks.push(block(key, cells, { stage: wall, guests }))
       continue
     }
     if (where === "folder") {
