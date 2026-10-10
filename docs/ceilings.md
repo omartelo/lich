@@ -1059,19 +1059,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   without systemd logs one warning per burst of work and sleeps, and a desktop that ignores logind idle
   inhibitors sleeps silently. The hold was measured on Linux only; on Windows and macOS CI proves the request
   is registered (`powercfg /requests`, `pmset -g assertions`), not that the machine stays up.
-- **A `lich` upgraded under a running lich is refused by any call whose argument list changed**
-  (`internal/rpc/rpc.go`): the RPC matches arguments by position and count, and a package manager replaces the
-  binary without restarting the backend it is serving, so the new CLI, and the `lich mcp` of every session
-  opened after the upgrade, speaks to an older backend until lich is restarted. The calls that grow with
-  options are out of this trap: `spawn.Open`, `spawn.OpenSubagent`, `spawn.Close`, `spawn.Control`,
-  `spawn.Ask`, `spawn.File` and the three `relay.Send` calls each take one options object
-  (`spawn.OpenOptions` and its siblings, `relay.SendOptions`), so an option the backend does not know yet is
-  dropped and one an older client does not send is its zero value. That holds between releases that both
-  carry the object; the release that moved a call to it is refused by a lich from before it, once, with
-  "want 1 arguments, got N" (or the other way round). Every other call is still positional and breaks the
-  same way when its argument list changes (`spawn.Rename`, the folder calls, `relay.Collect`, `relay.Wait`,
-  `relay.Reply`, `relay.Insert`, `relay.Focus`); one that only grows a result field does not, and a new method
-  breaks only itself: a `lich` older than the method has it refused as unknown, and every other call works.
+- **A `lich` upgraded under a running lich is refused by a call the backend does not have**
+  (`internal/rpc/rpc.go`): a package manager replaces the binary without restarting the backend it is serving,
+  so the new CLI, and the `lich mcp` of every session opened after the upgrade, speaks to an older backend until
+  lich is restarted. Every call they make takes one options object (`spawn.OpenOptions`, `relay.SendOptions`,
+  `store.CostTotalsOptions` and their siblings), so an option the backend does not know yet is dropped and one
+  an older client does not send is its zero value. What is left: a method newer than the backend is refused as
+  unknown, and the release that moved the calls to the object is refused by a lich from before it, once, with
+  "want 1 arguments, got N" (or the other way round). The RPC itself still matches arguments by position and
+  count: a call `lich` makes that goes back to positional arguments reopens the trap, which is why
+  `internal/cli/wire_test.go` posts each one as a client of another release. The window's own calls stay
+  positional, since the page ships in the backend's binary and cannot be of another release.
 - **A reasoning effort reaches five providers, and Cursor only through its model name**
   (`internal/terminal/command.go`, `effortFlags`): `lich open --effort` and `open_session`'s `effort` are refused
   for opencode, whose `--variant` lives on `run` only (1.18.31), and for Crush, which has no such option

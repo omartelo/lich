@@ -80,14 +80,12 @@ func TestMCPRenameFolderPostsItsArgumentsInOrder(t *testing.T) {
 		t.Fatalf("tool reported a failure: %s", text)
 	}
 	call := f.only(t)
-	want := []any{"s1", "", "Apps", "Applications"}
-	if call.method != "spawn.RenameFolder" || len(call.args) != len(want) {
-		t.Fatalf("call = %s %v, want spawn.RenameFolder %v", call.method, call.args, want)
+	if call.method != "spawn.RenameFolder" {
+		t.Fatalf("method = %q, want spawn.RenameFolder", call.method)
 	}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	want := spawn.RenameFolderOptions{From: "s1", Folder: "Apps", To: "Applications"}
+	if got := optionsOf[spawn.RenameFolderOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 	if !strings.Contains(text, `"a", "b"`) {
 		t.Errorf("result = %q, want every session that moved", text)
@@ -120,14 +118,12 @@ func TestMCPColorFolderPostsItsArgumentsInOrder(t *testing.T) {
 		t.Fatalf("tool reported a failure: %s", text)
 	}
 	call := f.only(t)
-	want := []any{"s1", "", "Apps", "teal"}
-	if call.method != "spawn.ColorFolder" || len(call.args) != len(want) {
-		t.Fatalf("call = %s %v, want spawn.ColorFolder %v", call.method, call.args, want)
+	if call.method != "spawn.ColorFolder" {
+		t.Fatalf("method = %q, want spawn.ColorFolder", call.method)
 	}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	want := spawn.ColorFolderOptions{From: "s1", Folder: "Apps", Color: "teal"}
+	if got := optionsOf[spawn.ColorFolderOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 	if !strings.Contains(text, `"a", "b"`) {
 		t.Errorf("result = %q, want every session painted", text)
@@ -177,7 +173,7 @@ func TestMCPListFoldersReturnsThemAsJSON(t *testing.T) {
 	if failed {
 		t.Fatalf("tool reported a failure: %s", text)
 	}
-	if call := f.only(t); call.method != "spawn.Folders" || call.args[1] != "lich" {
+	if call := f.only(t); call.method != "spawn.Folders" || optionsOf[spawn.FoldersOptions](t, call).Project != "lich" {
 		t.Errorf("call = %s %v, want spawn.Folders for the project named", call.method, call.args)
 	}
 	if strings.TrimSpace(text) != "[]" {

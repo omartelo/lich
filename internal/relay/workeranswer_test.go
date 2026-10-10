@@ -104,7 +104,7 @@ func TestAWorkersModAnswersItsErrand(t *testing.T) {
 
 	svc.WorkerAnswered("s2", "the report")
 
-	got, err := svc.Wait(context.Background(), "t1", 1)
+	got, err := svc.Wait(context.Background(), WaitOptions{Ticket: "t1", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Wait: %v", err)
 	}
@@ -155,12 +155,12 @@ func TestTheFirstAnswerWins(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
 	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
 
-	if err := svc.Reply("s2", "t1", "the agent's own reply"); err != nil {
+	if err := svc.Reply(ReplyOptions{From: "s2", Ticket: "t1", Answer: "the agent's own reply"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	svc.WorkerAnswered("s2", "the mod's copy")
 
-	got, err := svc.Wait(context.Background(), "t1", 1)
+	got, err := svc.Wait(context.Background(), WaitOptions{Ticket: "t1", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Wait: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestATurnEndingWithoutTheModsAnswerKeepsTheErrandOpen(t *testing.T) {
 
 	svc.Observe("s2", stateBusy)
 	svc.WorkerAnswered("s2", "finished after the sleep")
-	got, err := svc.Wait(context.Background(), "t1", 1)
+	got, err := svc.Wait(context.Background(), WaitOptions{Ticket: "t1", WaitSeconds: 1})
 	if err != nil || got.Answer != "finished after the sleep" {
 		t.Errorf("Wait = %+v, %v, want the answer from the resumed turn", got, err)
 	}
@@ -251,7 +251,7 @@ func expectOpen(t *testing.T, svc *Service, id string) {
 
 func expectAnswer(t *testing.T, svc *Service, id, want string) {
 	t.Helper()
-	got, err := svc.Wait(context.Background(), id, 1)
+	got, err := svc.Wait(context.Background(), WaitOptions{Ticket: id, WaitSeconds: 1})
 	if err != nil || got.Status != StatusAnswered || got.Answer != want {
 		t.Fatalf("Wait(%s) = %+v, %v, want answered %q", id, got, err, want)
 	}
@@ -336,7 +336,7 @@ func TestAResultTheWorkerWasToldAboutDoesNotHoldItsAnswer(t *testing.T) {
 	plantAnsweredByMod(svc, "t1", "s1", "s2", "docs")
 	plant(svc, "t2", "s2", "s3", "api")
 
-	if err := svc.Reply("s3", "t2", "the api answer"); err != nil {
+	if err := svc.Reply(ReplyOptions{From: "s3", Ticket: "t2", Answer: "the api answer"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	if !awaitWritten(term, "s2", "api") {
@@ -357,7 +357,7 @@ func TestAWorkerHearsItsOwnWorkerStopped(t *testing.T) {
 
 	svc.SessionClosed("s3", "s2")
 
-	collected, err := svc.CollectNow("s2")
+	collected, err := svc.CollectNow(CollectNowOptions{From: "s2"})
 	if err != nil {
 		t.Fatalf("CollectNow: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestAWorkerHearsItsOwnErrandExpired(t *testing.T) {
 	if !awaitWritten(term, "s2", "api") {
 		t.Fatal("the worker was never told its errand expired")
 	}
-	collected, err := svc.CollectNow("s2")
+	collected, err := svc.CollectNow(CollectNowOptions{From: "s2"})
 	if err != nil {
 		t.Fatalf("CollectNow: %v", err)
 	}
@@ -406,7 +406,7 @@ func TestAWorkerWithAnErrandOfItsOwnOpenIsNotFinished(t *testing.T) {
 	plantSubagent(svc, "t2", "s2", "s3", "api")
 
 	svc.Observe("s2", stateBusy)
-	if err := svc.Reply("s2", "t1", "the report"); err != nil {
+	if err := svc.Reply(ReplyOptions{From: "s2", Ticket: "t1", Answer: "the report"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	svc.Observe("s2", stateDone)
@@ -425,7 +425,7 @@ func TestAWorkersUnansweredTurnEndsItsErrand(t *testing.T) {
 	svc.Observe("s2", stateDone)
 	svc.WorkerUnanswered("s2", UnansweredRefusal)
 
-	collected, err := svc.CollectNow("s1")
+	collected, err := svc.CollectNow(CollectNowOptions{From: "s1"})
 	if err != nil {
 		t.Fatalf("CollectNow: %v", err)
 	}
@@ -444,7 +444,7 @@ func TestACallerHoldingTheLineHearsAWorkerWentUnanswered(t *testing.T) {
 
 	waited := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Wait(context.Background(), "t1", 5)
+		got, _ := svc.Wait(context.Background(), WaitOptions{Ticket: "t1", WaitSeconds: 5})
 		waited <- got
 	}()
 	awaitAttended(t, svc, "t1", 1)
@@ -510,7 +510,7 @@ func TestAnErrorWhileAResumeIsParkedKeepsTheErrandOpen(t *testing.T) {
 	expectOpen(t, svc, "t1")
 
 	svc.WorkerUnanswered("s2", UnansweredRefusal)
-	if _, err := svc.Wait(context.Background(), "t1", 1); err != nil {
+	if _, err := svc.Wait(context.Background(), WaitOptions{Ticket: "t1", WaitSeconds: 1}); err != nil {
 		t.Fatalf("Wait: %v", err)
 	}
 }
@@ -539,7 +539,7 @@ func TestATurnEndingWhileTheWorkerAwaitsItsOwnErrandKeepsItsErrandOpen(t *testin
 
 			svc.Observe("s2", stateBusy)
 			if reportFirst {
-				if err := svc.Reply("s3", "t2", "the api is done"); err != nil {
+				if err := svc.Reply(ReplyOptions{From: "s3", Ticket: "t2", Answer: "the api is done"}); err != nil {
 					t.Fatalf("Reply: %v", err)
 				}
 			}
@@ -547,7 +547,7 @@ func TestATurnEndingWhileTheWorkerAwaitsItsOwnErrandKeepsItsErrandOpen(t *testin
 			expectOpen(t, svc, "t1")
 
 			if !reportFirst {
-				if err := svc.Reply("s3", "t2", "the api is done"); err != nil {
+				if err := svc.Reply(ReplyOptions{From: "s3", Ticket: "t2", Answer: "the api is done"}); err != nil {
 					t.Fatalf("Reply: %v", err)
 				}
 			}
@@ -555,7 +555,7 @@ func TestATurnEndingWhileTheWorkerAwaitsItsOwnErrandKeepsItsErrandOpen(t *testin
 				t.Fatal("the worker was never told its own worker finished")
 			}
 			svc.Observe("s2", stateBusy)
-			if err := svc.Reply("s2", "t1", "docs and api are done"); err != nil {
+			if err := svc.Reply(ReplyOptions{From: "s2", Ticket: "t1", Answer: "docs and api are done"}); err != nil {
 				t.Fatalf("Reply: %v", err)
 			}
 			expectAnswer(t, svc, "t1", "docs and api are done")

@@ -290,7 +290,7 @@ func (c *client) sessions(args []string) error {
 	}
 
 	var peers []relay.Peer
-	if err := c.call(context.Background(), "relay.Peers", []any{c.sessionID()}, shortCall, &peers); err != nil {
+	if err := c.call(context.Background(), "relay.Peers", []any{relay.PeersOptions{From: c.sessionID()}}, shortCall, &peers); err != nil {
 		return err
 	}
 	peers = asList(peers)
@@ -323,7 +323,7 @@ func (c *client) whoami(args []string) error {
 	}
 
 	var self relay.Peer
-	if err := c.call(context.Background(), "relay.Self", []any{c.sessionID()}, shortCall, &self); err != nil {
+	if err := c.call(context.Background(), "relay.Self", []any{relay.SelfOptions{From: c.sessionID()}}, shortCall, &self); err != nil {
 		return err
 	}
 	if *asJSON {
@@ -407,7 +407,9 @@ func (c *client) insert(args []string) error {
 	}
 
 	var inserted relay.Inserted
-	call := []any{c.sessionID(), *session, *project, text, *timeout}
+	call := []any{relay.InsertOptions{
+		From: c.sessionID(), Target: *session, Project: *project, Text: text, WaitSeconds: *timeout,
+	}}
 	if err := c.call(context.Background(), "relay.Insert", call, waitBudget(*timeout), &inserted); err != nil {
 		return err
 	}
@@ -434,7 +436,7 @@ func (c *client) focus(args []string) error {
 	}
 
 	var focused relay.Focused
-	call := []any{c.sessionID(), flags.Arg(0), *project}
+	call := []any{relay.FocusOptions{From: c.sessionID(), Target: flags.Arg(0), Project: *project}}
 	if err := c.call(context.Background(), "relay.Focus", call, shortCall, &focused); err != nil {
 		return err
 	}
@@ -549,7 +551,8 @@ func (c *client) wait(args []string) error {
 	}
 
 	var result relay.Result
-	if err := c.call(context.Background(), "relay.Wait", []any{flags.Arg(0), *timeout}, waitBudget(*timeout), &result); err != nil {
+	call := []any{relay.WaitOptions{Ticket: flags.Arg(0), WaitSeconds: *timeout}}
+	if err := c.call(context.Background(), "relay.Wait", call, waitBudget(*timeout), &result); err != nil {
 		return err
 	}
 	if err := c.report(result, *asJSON); err != nil {
@@ -562,9 +565,9 @@ func (c *client) wait(args []string) error {
 // unless noWait asks for only what is ready.
 func (c *client) collect(ctx context.Context, noWait bool, timeout int, out *relay.Collected) error {
 	if noWait {
-		return c.call(ctx, "relay.CollectNow", []any{c.sessionID()}, shortCall, out)
+		return c.call(ctx, "relay.CollectNow", []any{relay.CollectNowOptions{From: c.sessionID()}}, shortCall, out)
 	}
-	return c.call(ctx, "relay.Collect", []any{c.sessionID(), timeout}, waitBudget(timeout), out)
+	return c.call(ctx, "relay.Collect", []any{relay.CollectOptions{From: c.sessionID(), WaitSeconds: timeout}}, waitBudget(timeout), out)
 }
 
 func (c *client) reply(args []string) error {
@@ -582,7 +585,8 @@ func (c *client) reply(args []string) error {
 	if flags.NArg() == 2 {
 		ticket, answer = flags.Arg(0), flags.Arg(1)
 	}
-	if err := c.call(context.Background(), "relay.Reply", []any{c.sessionID(), ticket, answer}, shortCall, nil); err != nil {
+	call := []any{relay.ReplyOptions{From: c.sessionID(), Ticket: ticket, Answer: answer}}
+	if err := c.call(context.Background(), "relay.Reply", call, shortCall, nil); err != nil {
 		return err
 	}
 	fmt.Fprintln(c.stdout, "Answer sent.")
@@ -932,7 +936,7 @@ func (c *client) rename(args []string) error {
 	}
 
 	var renamed spawn.Renamed
-	call := []any{c.sessionID(), target, *project, label}
+	call := []any{spawn.RenameOptions{From: c.sessionID(), Target: target, Project: *project, Label: label}}
 	if err := c.call(context.Background(), "spawn.Rename", call, shortCall, &renamed); err != nil {
 		return err
 	}
@@ -964,7 +968,8 @@ func (c *client) worktrees(args []string) error {
 	}
 
 	var checkouts []spawn.Checkout
-	if err := c.call(context.Background(), "spawn.Worktrees", []any{c.sessionID(), *project}, shortCall, &checkouts); err != nil {
+	call := []any{spawn.WorktreesOptions{From: c.sessionID(), Project: *project}}
+	if err := c.call(context.Background(), "spawn.Worktrees", call, shortCall, &checkouts); err != nil {
 		return err
 	}
 	checkouts = asList(checkouts)

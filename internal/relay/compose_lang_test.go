@@ -62,7 +62,7 @@ func TestTheRelayTypesInThePromptLanguageReadLive(t *testing.T) {
 	svc.SetPromptLanguage(func() prompt.Lang { return lang })
 	lang = prompt.PortugueseBR
 
-	go func() { _ = svc.Reply("", waitForTicket(svc), "ok") }()
+	go func() { _ = svc.Reply(ReplyOptions{Ticket: waitForTicket(svc), Answer: "ok"}) }()
 	if _, err := svc.Send(context.Background(), SendOptions{Target: "docs", Prompt: "hello", WaitSeconds: 30}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}

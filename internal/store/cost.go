@@ -313,6 +313,17 @@ func costSource(priced, reported int) string {
 	return string(providers.CostSourceNone)
 }
 
+// CostTotalsOptions is one CostTotals call. It travels as a single JSON object
+// rather than as positional arguments because a package manager replaces the
+// lich binary under a running backend: a filter a newer `lich cost` adds is
+// dropped by an older backend, and one an older `lich cost` does not send is no
+// filter, where a positional list refuses both on its count.
+type CostTotalsOptions struct {
+	Project  string `json:"project"`
+	Provider string `json:"provider"`
+	Since    int64  `json:"since"`
+}
+
 // CostTotals sums the ledger by project. project narrows it to one by name,
 // case-insensitively; provider to one session kind; either empty means all of
 // them. since, in unix seconds, keeps only the sessions active on or after it,
@@ -329,7 +340,8 @@ func costSource(priced, reported int) string {
 // Only sessions lich still holds a row for are in reach at all: a deleted
 // session took its ledger with it (ON DELETE CASCADE) and is in no total,
 // neither counted nor excluded.
-func (s *Service) CostTotals(project, provider string, since int64) (CostReport, error) {
+func (s *Service) CostTotals(opts CostTotalsOptions) (CostReport, error) {
+	project, provider, since := opts.Project, opts.Provider, opts.Since
 	// Read before the rows are open: the store holds a single connection, and a
 	// second query while one is being walked waits on a connection its own
 	// caller is holding.

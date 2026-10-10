@@ -21,13 +21,21 @@ type Checkout struct {
 	Sessions []string `json:"sessions"`
 }
 
-// Worktrees lists a project's checkouts. project names it; empty takes the
+// WorktreesOptions is one Worktrees call, an object for the reason CloseOptions
+// is one.
+type WorktreesOptions struct {
+	From    string `json:"from"`
+	Project string `json:"project"`
+}
+
+// Worktrees lists a project's checkouts. Project names it; empty takes the
 // caller's own, exactly as Open does.
 //
 // The project's own directory is not one of them: it is the checkout every
 // project has, it cannot be removed, and offering it in a list whose point is
 // "what can be opened or closed" would invite exactly that.
-func (s *Service) Worktrees(fromID, projectName string) ([]Checkout, error) {
+func (s *Service) Worktrees(opts WorktreesOptions) ([]Checkout, error) {
+	fromID, projectName := opts.From, opts.Project
 	projects, err := s.sessions.LoadState()
 	if err != nil {
 		return nil, fmt.Errorf("read the workspace: %w", err)

@@ -32,7 +32,8 @@ func (c *client) folders(args []string) error {
 	}
 
 	var folders []spawn.Folder
-	if err := c.call(context.Background(), "spawn.Folders", []any{c.sessionID(), *project}, shortCall, &folders); err != nil {
+	call := []any{spawn.FoldersOptions{From: c.sessionID(), Project: *project}}
+	if err := c.call(context.Background(), "spawn.Folders", call, shortCall, &folders); err != nil {
 		return err
 	}
 	folders = asList(folders)
@@ -98,7 +99,9 @@ func (c *client) renameFolder(args []string) error {
 	}
 
 	var refiled spawn.Refiled
-	call := []any{c.sessionID(), *project, flags.Arg(0), flags.Arg(1)}
+	call := []any{spawn.RenameFolderOptions{
+		From: c.sessionID(), Project: *project, Folder: flags.Arg(0), To: flags.Arg(1),
+	}}
 	if err := c.call(context.Background(), "spawn.RenameFolder", call, shortCall, &refiled); err != nil {
 		return err
 	}
@@ -123,7 +126,9 @@ func (c *client) colorFolder(args []string) error {
 	}
 
 	var colored spawn.Colored
-	call := []any{c.sessionID(), *project, flags.Arg(0), flags.Arg(1)}
+	call := []any{spawn.ColorFolderOptions{
+		From: c.sessionID(), Project: *project, Folder: flags.Arg(0), Color: flags.Arg(1),
+	}}
 	if err := c.call(context.Background(), "spawn.ColorFolder", call, shortCall, &colored); err != nil {
 		return err
 	}
@@ -183,7 +188,7 @@ var folderTools = []mcpTool{
 		ReadOnly: true,
 		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			var folders []spawn.Folder
-			call := []any{c.sessionID(), args.text("project")}
+			call := []any{spawn.FoldersOptions{From: c.sessionID(), Project: args.text("project")}}
 			if err := c.call(ctx, "spawn.Folders", call, shortCall, &folders); err != nil {
 				return "", err
 			}
@@ -247,7 +252,10 @@ var folderTools = []mcpTool{
 				return "", errors.New("name the folder's new name; an empty one takes the folder apart")
 			}
 			var refiled spawn.Refiled
-			call := []any{c.sessionID(), args.text("project"), args.text("folder"), args.text("to")}
+			call := []any{spawn.RenameFolderOptions{
+				From: c.sessionID(), Project: args.text("project"), Folder: args.text("folder"),
+				To: args.text("to"),
+			}}
 			if err := c.call(ctx, "spawn.RenameFolder", call, shortCall, &refiled); err != nil {
 				return "", err
 			}
@@ -274,7 +282,10 @@ var folderTools = []mcpTool{
 				return "", errors.New("name the color to paint the folder; an empty one clears it")
 			}
 			var colored spawn.Colored
-			call := []any{c.sessionID(), args.text("project"), args.text("folder"), args.text("color")}
+			call := []any{spawn.ColorFolderOptions{
+				From: c.sessionID(), Project: args.text("project"), Folder: args.text("folder"),
+				Color: args.text("color"),
+			}}
 			if err := c.call(ctx, "spawn.ColorFolder", call, shortCall, &colored); err != nil {
 				return "", err
 			}

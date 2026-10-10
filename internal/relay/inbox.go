@@ -62,7 +62,14 @@ type inboxEntry struct {
 	seen bool
 }
 
-// Collect drains every outcome waiting for fromID, oldest first. With nothing
+// CollectOptions is one Collect call, an object for the reason SendOptions is
+// one.
+type CollectOptions struct {
+	From        string `json:"from"`
+	WaitSeconds int    `json:"waitSeconds"`
+}
+
+// Collect drains every outcome waiting for From, oldest first. With nothing
 // ready and errands still open it holds the line for the next one; with
 // nothing ready and nothing open it returns empty at once. It is the batch
 // half of the nudge: one call picks up what any number of workers produced.
@@ -71,15 +78,21 @@ type inboxEntry struct {
 // handed to a caller that hung up (an interrupted tool call, a killed `lich
 // wait`) is a result nobody reads, and the nudge that would have announced it
 // was skipped for this very collector.
-func (s *Service) Collect(ctx context.Context, fromID string, waitSeconds int) (Collected, error) {
-	return s.collect(ctx, fromID, waitFor(waitSeconds))
+func (s *Service) Collect(ctx context.Context, opts CollectOptions) (Collected, error) {
+	return s.collect(ctx, opts.From, waitFor(opts.WaitSeconds))
+}
+
+// CollectNowOptions is one CollectNow call, an object for the reason
+// SendOptions is one.
+type CollectNowOptions struct {
+	From string `json:"from"`
 }
 
 // CollectNow is Collect without the wait: what is ready and who still owes one,
 // at once. It is how a sender deep in a turn of its own checks in at a decision
 // point, where holding the line would stall the work it is doing.
-func (s *Service) CollectNow(fromID string) (Collected, error) {
-	return s.collect(context.Background(), fromID, 0)
+func (s *Service) CollectNow(opts CollectNowOptions) (Collected, error) {
+	return s.collect(context.Background(), opts.From, 0)
 }
 
 func (s *Service) collect(ctx context.Context, fromID string, wait time.Duration) (Collected, error) {

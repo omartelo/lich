@@ -40,8 +40,18 @@ type Inserted struct {
 	Bytes int `json:"bytes"`
 }
 
-// Insert pastes text at the prompt of the session target names, without
-// sending it. target resolves the way Send's does. Left empty, project must
+// InsertOptions is one Insert call, an object for the reason SendOptions is
+// one.
+type InsertOptions struct {
+	From        string `json:"from"`
+	Target      string `json:"target"`
+	Project     string `json:"project"`
+	Text        string `json:"text"`
+	WaitSeconds int    `json:"waitSeconds"`
+}
+
+// Insert pastes Text at the prompt of the session Target names, without
+// sending it. Target resolves the way Send's does. Left empty, Project must
 // name where to look — a project by name, or an absolute directory — and the
 // session is the one live there: the directory of a session itself wins over
 // the root of its project, so an editor open on a worktree reaches the session
@@ -52,7 +62,8 @@ type Inserted struct {
 // permission prompt is refused: what is typed there is read by the dialog, not
 // the prompt. A person's half-written line is not a reason to refuse; the text
 // is added to the end of it, which is where it was meant to go.
-func (s *Service) Insert(fromID, target, project, text string, waitSeconds int) (Inserted, error) {
+func (s *Service) Insert(opts InsertOptions) (Inserted, error) {
+	fromID, target, project, text, waitSeconds := opts.From, opts.Target, opts.Project, opts.Text, opts.WaitSeconds
 	wait := defaultInsertWait
 	if waitSeconds > 0 {
 		wait = min(time.Duration(waitSeconds)*time.Second, MaxWait)

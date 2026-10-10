@@ -15,7 +15,7 @@ func TestFocusOpensTheCardAndRaisesTheWindow(t *testing.T) {
 		}
 	})
 
-	got, err := svc.Focus("", "feature", "")
+	got, err := svc.Focus(FocusOptions{Target: "feature"})
 	if err != nil {
 		t.Fatalf("Focus = %v, want nil", err)
 	}
@@ -36,7 +36,7 @@ func TestFocusNamesTheLiveSessionsWhenTheTargetIsUnknown(t *testing.T) {
 	raised := false
 	svc.SetRaiseWindow(func() { raised = true })
 
-	_, err := svc.Focus("", "feature", "")
+	_, err := svc.Focus(FocusOptions{Target: "feature"})
 	if err == nil || !strings.Contains(err.Error(), "main") || !strings.Contains(err.Error(), "solo") {
 		t.Fatalf("Focus = %v, want an error listing the live sessions", err)
 	}
@@ -48,7 +48,7 @@ func TestFocusNamesTheLiveSessionsWhenTheTargetIsUnknown(t *testing.T) {
 func TestFocusWorksWithoutAWindow(t *testing.T) {
 	svc := newRelay(editorWorkspace("/src/lich", "/src/lich-wt"), newFakeTerminal("s3"), nil)
 
-	if got, err := svc.Focus("", "solo", "revu"); err != nil || got.ID != "s3" {
+	if got, err := svc.Focus(FocusOptions{Target: "solo", Project: "revu"}); err != nil || got.ID != "s3" {
 		t.Errorf("Focus = %+v, %v, want s3", got, err)
 	}
 }

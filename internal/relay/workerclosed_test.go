@@ -26,7 +26,7 @@ func TestClosingAWorkerEndsItsErrandSilently(t *testing.T) {
 	if len(events.stalled()) != 0 {
 		t.Errorf("stalled events = %+v, want none", events.stalled())
 	}
-	collected, err := svc.CollectNow("s1")
+	collected, err := svc.CollectNow(CollectNowOptions{From: "s1"})
 	if err != nil {
 		t.Fatalf("CollectNow: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestAWorkerClosedByAnotherHandTellsItsCallerItStopped(t *testing.T) {
 			if !awaitWritten(term, "s1", "[lich]") {
 				t.Fatal("the caller was never told its worker stopped")
 			}
-			collected, err := svc.CollectNow("s1")
+			collected, err := svc.CollectNow(CollectNowOptions{From: "s1"})
 			if err != nil {
 				t.Fatalf("CollectNow: %v", err)
 			}
@@ -85,7 +85,7 @@ func TestAWaiterOnAClosedWorkerHearsItStopped(t *testing.T) {
 	if got.Status != StatusStopped {
 		t.Errorf("status = %q, want %q", got.Status, StatusStopped)
 	}
-	again, err := svc.Wait(context.Background(), "t1", 1)
+	again, err := svc.Wait(context.Background(), WaitOptions{Ticket: "t1", WaitSeconds: 1})
 	if err != nil || again.Status != StatusStopped {
 		t.Errorf("a later Wait = %+v, %v, want it stopped", again, err)
 	}

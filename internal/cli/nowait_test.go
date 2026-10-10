@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/omartelo/lich/internal/prompt"
+	"github.com/omartelo/lich/internal/relay"
 )
 
 // Collecting without waiting is how a sender busy in a turn of its own looks in
@@ -23,8 +24,8 @@ func TestWaitNoWaitCollectsWhatIsReadyWithoutHoldingTheLine(t *testing.T) {
 	if call.method != "relay.CollectNow" {
 		t.Fatalf("method = %q, want relay.CollectNow", call.method)
 	}
-	if len(call.args) != 1 || call.args[0] != "s1" {
-		t.Errorf("args = %v, want the session alone", call.args)
+	if got := optionsOf[relay.CollectNowOptions](t, call); got.From != "s1" {
+		t.Errorf("options = %+v, want the session alone", got)
 	}
 	if !strings.Contains(stdout, `Still working: "docs"`) {
 		t.Errorf("stdout = %q, want who still owes", stdout)

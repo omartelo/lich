@@ -146,7 +146,7 @@ func TestNarrowingTakesAPathToo(t *testing.T) {
 	sessions.projects[1].Sessions = []store.Session{{ID: "s2", Label: "Session 3"}}
 
 	// "Session 3" is a label both projects hold, which is what --project is for.
-	renamed, err := svc.Rename("s1", "Session 3", dir, "review")
+	renamed, err := svc.Rename(RenameOptions{From: "s1", Target: "Session 3", Project: dir, Label: "review"})
 	if err != nil {
 		t.Fatalf("Rename: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestWorktreesTakeAPathToo(t *testing.T) {
 	sessions.projects[1].Path = dir
 	worktrees.checkouts = []project.Worktree{{Name: "feature", Path: "/wt/feature"}}
 
-	found, err := svc.Worktrees("s1", dir)
+	found, err := svc.Worktrees(WorktreesOptions{From: "s1", Project: dir})
 	if err != nil {
 		t.Fatalf("Worktrees: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestWorktreesTakeAPathToo(t *testing.T) {
 	}
 
 	elsewhere := t.TempDir()
-	if _, err := svc.Worktrees("s1", elsewhere); err == nil ||
+	if _, err := svc.Worktrees(WorktreesOptions{From: "s1", Project: elsewhere}); err == nil ||
 		!strings.Contains(err.Error(), "no open project at") {
 		t.Errorf("Worktrees(%q) = %v, want it to say no project is open there", elsewhere, err)
 	}

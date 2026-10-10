@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/omartelo/lich/internal/store"
 )
 
 // costBody is a report the fake lich hands back: two projects, one session in
@@ -92,17 +94,13 @@ func TestCostPassesItsFilters(t *testing.T) {
 		t.Fatalf("exit = %d (%s)", code, stderr)
 	}
 
-	args := f.only(t).args
-	if len(args) != 3 || args[0] != "lich" || args[1] != "codex" {
-		t.Fatalf("args = %#v, want the project and provider through", args)
-	}
-	from, ok := args[2].(float64)
-	if !ok {
-		t.Fatalf("since = %#v, want a unix second", args[2])
+	opts := optionsOf[store.CostTotalsOptions](t, f.only(t))
+	if opts.Project != "lich" || opts.Provider != "codex" {
+		t.Fatalf("options = %+v, want the project and provider through", opts)
 	}
 	want := time.Now().Add(-7 * 24 * time.Hour).Unix()
-	if diff := int64(from) - want; diff < -5 || diff > 5 {
-		t.Errorf("since = %d, want about %d (7d ago)", int64(from), want)
+	if diff := opts.Since - want; diff < -5 || diff > 5 {
+		t.Errorf("since = %d, want about %d (7d ago)", opts.Since, want)
 	}
 }
 

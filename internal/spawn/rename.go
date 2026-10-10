@@ -33,11 +33,20 @@ type Renamed struct {
 	Previous string `json:"previous"`
 }
 
+// RenameOptions is one Rename call, an object for the reason CloseOptions is
+// one.
+type RenameOptions struct {
+	From    string `json:"from"`
+	Target  string `json:"target"`
+	Project string `json:"project"`
+	Label   string `json:"label"`
+}
+
 // Rename gives a session the name on its card, the window's rename from outside
 // the window. Like the window's, it makes the name the user's: the provider's
 // ai-title never stomps a chosen name again (store.RenameSession).
 //
-// target is the session to rename, by either of the names it answers to; empty
+// Target is the session to rename, by either of the names it answers to; empty
 // renames the caller's own, which is the one form an agent can reach without
 // discovery — list_sessions shows it every session but itself.
 //
@@ -45,8 +54,9 @@ type Renamed struct {
 // written, because two sessions under one label is the one thing `lich send`
 // cannot resolve. The window has no such rule: it renames what the user is
 // pointing at, and the user can see which card they meant.
-func (s *Service) Rename(fromID, target, projectName, label string) (Renamed, error) {
-	label = strings.TrimSpace(label)
+func (s *Service) Rename(opts RenameOptions) (Renamed, error) {
+	fromID, target, projectName := opts.From, opts.Target, opts.Project
+	label := strings.TrimSpace(opts.Label)
 	if label == "" {
 		return Renamed{}, errors.New("a rename needs a name, and none was given")
 	}

@@ -93,7 +93,7 @@ func answerAndCheckTheInbox(t *testing.T, env func(string) string, svc *relay.Se
 	// lands; its request finishing is the sign it is done taking.
 	awaitSignal(gate.left, time.Second)
 
-	collected, err := svc.CollectNow("s1")
+	collected, err := svc.CollectNow(relay.CollectNowOptions{From: "s1"})
 	if err != nil {
 		t.Fatalf("CollectNow: %v", err)
 	}

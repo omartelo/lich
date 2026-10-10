@@ -143,7 +143,7 @@ func TestATaskToASessionWithAModIsHandedToItNotTyped(t *testing.T) {
 		t.Fatal("the cards were never marked")
 	}
 	ticketID := waitForTicket(svc)
-	if err := svc.Reply("", ticketID, "all green"); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: ticketID, Answer: "all green"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	if got := <-done; got.Status != StatusAnswered || got.Answer != "all green" {
@@ -196,10 +196,10 @@ func TestATaskTheModCollectedIsNeverTypedAgain(t *testing.T) {
 		t.Fatalf("status = %q, want unread", got.Status)
 	}
 	assertNotTyped(t, term, "s2")
-	if err := svc.Reply("", got.Ticket, "done after all"); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: got.Ticket, Answer: "done after all"}); err != nil {
 		t.Fatalf("a late answer = %v, want it filed", err)
 	}
-	if again, _ := svc.Wait(context.Background(), got.Ticket, 1); again.Status != StatusAnswered {
+	if again, _ := svc.Wait(context.Background(), WaitOptions{Ticket: got.Ticket, WaitSeconds: 1}); again.Status != StatusAnswered {
 		t.Errorf("Wait = %+v, want the late answer", again)
 	}
 }
@@ -337,7 +337,7 @@ func TestANudgeReachesASenderThroughItsMod(t *testing.T) {
 	svc := viaMod(term, nil)
 	plant(svc, "t1", "s1", "s2", "docs")
 
-	if err := svc.Reply("", "t1", "all green"); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: "t1", Answer: "all green"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	if !awaitPrompts(term, "s1", 1) {
@@ -359,7 +359,7 @@ func TestANudgeTheModRefusedIsSentAgain(t *testing.T) {
 	svc := viaMod(term, nil)
 	plant(svc, "t1", "s1", "s2", "docs")
 
-	if err := svc.Reply("", "t1", "all green"); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: "t1", Answer: "all green"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	if !awaitPrompts(term, "s1", 1) {
@@ -378,7 +378,7 @@ func TestANudgeNoPollCollectedIsTyped(t *testing.T) {
 	svc := viaMod(term, nil)
 	plant(svc, "t1", "s1", "s2", "docs")
 
-	if err := svc.Reply("", "t1", "all green"); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: "t1", Answer: "all green"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	if !awaitWritten(term, "s1", "[lich]") {
@@ -460,7 +460,7 @@ func TestAStateReportDoesNotWaitOnTheNudgesAck(t *testing.T) {
 	svc.modAckWait = 5 * time.Second
 	svc.Observe("s1", stateBusy)
 	plant(svc, "t1", "s1", "s2", "docs")
-	if err := svc.Reply("", "t1", "all green"); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: "t1", Answer: "all green"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 

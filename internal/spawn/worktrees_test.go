@@ -15,7 +15,7 @@ func TestWorktreesReportsWhatIsInEachCheckout(t *testing.T) {
 		[]project.Worktree{{Name: "main", Path: "/src/lich"}}, worktrees.checkouts...,
 	)
 
-	found, err := svc.Worktrees("s1", "")
+	found, err := svc.Worktrees(WorktreesOptions{From: "s1"})
 	if err != nil {
 		t.Fatalf("Worktrees: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestWorktreesNamesAnEmptyCheckoutAsEmpty(t *testing.T) {
 	svc, _, worktrees, _, _ := closer(t)
 	worktrees.checkouts = []project.Worktree{{Name: "parked", Path: "/wt/parked"}}
 
-	found, err := svc.Worktrees("s1", "")
+	found, err := svc.Worktrees(WorktreesOptions{From: "s1"})
 	if err != nil {
 		t.Fatalf("Worktrees: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestWorktreesNamesAnEmptyCheckoutAsEmpty(t *testing.T) {
 func TestWorktreesRefusesAProjectItCannotResolve(t *testing.T) {
 	svc, _, _, _, _ := closer(t)
 
-	if _, err := svc.Worktrees("", ""); err == nil {
+	if _, err := svc.Worktrees(WorktreesOptions{}); err == nil {
 		t.Fatal("listed the worktrees of no project in particular")
 	}
 }

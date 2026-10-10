@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -280,8 +279,8 @@ func TestSessionsListsPeers(t *testing.T) {
 	if call.token != "tok en" {
 		t.Errorf("token = %q — it must survive URL encoding", call.token)
 	}
-	if len(call.args) != 1 || call.args[0] != "s1" {
-		t.Errorf("args = %v, want the caller's own session id", call.args)
+	if got := optionsOf[relay.PeersOptions](t, call); got.From != "s1" {
+		t.Errorf("options = %+v, want the caller's own session id", got)
 	}
 	// Both names travel: a surface that shows only one is what once made an
 	// agent treat a single session as two. The state travels with them, and a
@@ -319,7 +318,7 @@ func TestWhoamiPrintsTheCallersOwnSession(t *testing.T) {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr)
 	}
 	call := f.only(t)
-	if call.method != "relay.Self" || len(call.args) != 1 || call.args[0] != "s1" {
+	if call.method != "relay.Self" || optionsOf[relay.SelfOptions](t, call).From != "s1" {
 		t.Errorf("called %s %v, want relay.Self with the caller's own id", call.method, call.args)
 	}
 	if !strings.Contains(stdout, "Session 3\tlich\tclaude\tlich-s1\tbusy\ts1") {
@@ -426,8 +425,8 @@ func TestWaitPicksUpAnAnswer(t *testing.T) {
 	if call.method != "relay.Wait" {
 		t.Errorf("method = %q", call.method)
 	}
-	if call.args[0] != "a1b2c3d4" {
-		t.Errorf("ticket = %v", call.args[0])
+	if got := optionsOf[relay.WaitOptions](t, call).Ticket; got != "a1b2c3d4" {
+		t.Errorf("ticket = %v", got)
 	}
 	if strings.TrimSpace(stdout) != "late but here" {
 		t.Errorf("stdout = %q", stdout)
@@ -450,8 +449,8 @@ func TestWaitWithoutATicketCollectsEverything(t *testing.T) {
 	if call.method != "relay.Collect" {
 		t.Fatalf("method = %q, want relay.Collect", call.method)
 	}
-	if call.args[0] != "s1" {
-		t.Errorf("session = %v", call.args[0])
+	if got := optionsOf[relay.CollectOptions](t, call).From; got != "s1" {
+		t.Errorf("session = %v", got)
 	}
 	for _, want := range []string{`Answer from "auth" (ticket t1):`, "all green", `Still working: "docs"`} {
 		if !strings.Contains(stdout, want) {
@@ -472,8 +471,8 @@ func TestReplySendsTheAnswerHome(t *testing.T) {
 	if call.method != "relay.Reply" {
 		t.Errorf("method = %q", call.method)
 	}
-	if call.args[1] != "a1b2c3d4" || call.args[2] != "3 failures in foo_test" {
-		t.Errorf("args = %v", call.args)
+	if got := optionsOf[relay.ReplyOptions](t, call); got.Ticket != "a1b2c3d4" || got.Answer != "3 failures in foo_test" {
+		t.Errorf("options = %+v", got)
 	}
 	if !strings.Contains(stdout, "Answer sent.") {
 		t.Errorf("stdout = %q", stdout)
@@ -492,8 +491,8 @@ func TestReplyWithoutATicketSendsTheSessionsOwnErrandHome(t *testing.T) {
 	}
 
 	call := f.only(t)
-	if call.args[1] != "" || call.args[2] != "3 failures in foo_test" {
-		t.Errorf("args = %v, want an empty ticket and the answer", call.args)
+	if got := optionsOf[relay.ReplyOptions](t, call); got.Ticket != "" || got.Answer != "3 failures in foo_test" {
+		t.Errorf("options = %+v, want an empty ticket and the answer", got)
 	}
 	if !strings.Contains(stdout, "Answer sent.") {
 		t.Errorf("stdout = %q", stdout)
@@ -649,8 +648,8 @@ func TestOutsideASessionTheRuntimeFileIsUsed(t *testing.T) {
 	if call.token != "tok" {
 		t.Errorf("token = %q, want the one from the runtime file", call.token)
 	}
-	if len(call.args) != 1 || call.args[0] != "" {
-		t.Errorf("args = %v, want an empty sender: this caller has no session", call.args)
+	if got := optionsOf[relay.PeersOptions](t, call); got.From != "" {
+		t.Errorf("options = %+v, want an empty sender: this caller has no session", got)
 	}
 	if !strings.Contains(stdout.String(), "docs") {
 		t.Errorf("stdout = %q", stdout.String())
@@ -1272,9 +1271,9 @@ func TestInsertTakesTheTextFromItsArgument(t *testing.T) {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr)
 	}
 	call := f.only(t)
-	want := []any{"s1", "", "/src/lich", "hello", float64(0)}
-	if call.method != "relay.Insert" || !reflect.DeepEqual(call.args, want) {
-		t.Errorf("called %s %v, want relay.Insert %v", call.method, call.args, want)
+	want := relay.InsertOptions{From: "s1", Project: "/src/lich", Text: "hello"}
+	if call.method != "relay.Insert" || optionsOf[relay.InsertOptions](t, call) != want {
+		t.Errorf("called %s %v, want relay.Insert %+v", call.method, call.args, want)
 	}
 	if !strings.Contains(stdout, `"docs"`) || !strings.Contains(stdout, "Nothing was sent") {
 		t.Errorf("output = %q, want where it went and that it was not sent", stdout)
@@ -1291,7 +1290,7 @@ func TestInsertReadsStdinWhenTheTextIsLeftOutOrADash(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("%v: exit = %d, stderr = %q", args, code, stderr)
 		}
-		if got := f.only(t).args[3]; got != "line one\nline two\n" {
+		if got := optionsOf[relay.InsertOptions](t, f.only(t)).Text; got != "line one\nline two\n" {
 			t.Errorf("%v: text = %q, want the whole of stdin", args, got)
 		}
 	}
@@ -1342,9 +1341,9 @@ func TestFocusNamesTheSessionItBroughtUp(t *testing.T) {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr)
 	}
 	call := f.only(t)
-	want := []any{"s1", "docs", "lich"}
-	if call.method != "relay.Focus" || !reflect.DeepEqual(call.args, want) {
-		t.Errorf("called %s %v, want relay.Focus %v", call.method, call.args, want)
+	want := relay.FocusOptions{From: "s1", Target: "docs", Project: "lich"}
+	if call.method != "relay.Focus" || optionsOf[relay.FocusOptions](t, call) != want {
+		t.Errorf("called %s %v, want relay.Focus %+v", call.method, call.args, want)
 	}
 	if stdout != "Focused \"docs\" (lich).\n" {
 		t.Errorf("output = %q, want the session it brought up", stdout)

@@ -59,7 +59,7 @@ func TestASubagentReportReachesItsCallerWholeThroughTheMod(t *testing.T) {
 	plantSubagent(svc, "t1", "s1", "s2", "docs")
 
 	report := "Rewrote docs/cli.md; " + strings.Repeat("detail ", 400) + "nothing remains."
-	if err := svc.Reply("", "t1", report); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: "t1", Answer: report}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	if !awaitPrompts(term, "s1", 1) {
@@ -79,12 +79,12 @@ func TestASubagentReportReachesItsCallerWholeThroughTheMod(t *testing.T) {
 
 	// Delivered once: a collect does not hand it over again, and the card's
 	// count drops with it.
-	collected, err := svc.CollectNow("s1")
+	collected, err := svc.CollectNow(CollectNowOptions{From: "s1"})
 	if err != nil || len(collected.Results) != 0 {
 		t.Errorf("collect = %+v, %v; want nothing left to collect", collected, err)
 	}
 	// Its ticket still names it, for a caller that asks by number.
-	got, err := svc.Wait(context.Background(), "t1", 1)
+	got, err := svc.Wait(context.Background(), WaitOptions{Ticket: "t1", WaitSeconds: 1})
 	if err != nil || got.Status != StatusAnswered || got.Answer != report || got.Private {
 		t.Errorf("wait = %+v, %v; want the report under its ticket", got, err)
 	}
@@ -97,7 +97,7 @@ func TestASubagentReportIsNotTypedAtACallerWithoutAMod(t *testing.T) {
 	svc := newRelay(branched(), term, nil)
 	plantSubagent(svc, "t1", "s1", "s2", "docs")
 
-	if err := svc.Reply("", "t1", "the long report"); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: "t1", Answer: "the long report"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	if !awaitWritten(term, "s1", "[lich]") {
@@ -106,7 +106,7 @@ func TestASubagentReportIsNotTypedAtACallerWithoutAMod(t *testing.T) {
 	if strings.Contains(term.written("s1"), "the long report") {
 		t.Errorf("the report was typed: %q", term.written("s1"))
 	}
-	collected, err := svc.CollectNow("s1")
+	collected, err := svc.CollectNow(CollectNowOptions{From: "s1"})
 	if err != nil || len(collected.Results) != 1 || collected.Results[0].Answer != "the long report" {
 		t.Errorf("collect = %+v, %v; want the report waiting", collected, err)
 	}
@@ -120,7 +120,7 @@ func TestASubagentReportNoPollCollectedStaysCollectable(t *testing.T) {
 	svc := viaMod(term, nil)
 	plantSubagent(svc, "t1", "s1", "s2", "docs")
 
-	if err := svc.Reply("", "t1", "the long report"); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: "t1", Answer: "the long report"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	if !awaitWritten(term, "s1", "[lich]") {
@@ -129,7 +129,7 @@ func TestASubagentReportNoPollCollectedStaysCollectable(t *testing.T) {
 	if strings.Contains(term.written("s1"), "the long report") {
 		t.Errorf("the report was typed: %q", term.written("s1"))
 	}
-	collected, err := svc.CollectNow("s1")
+	collected, err := svc.CollectNow(CollectNowOptions{From: "s1"})
 	if err != nil || len(collected.Results) != 1 {
 		t.Errorf("collect = %+v, %v; want the report still waiting", collected, err)
 	}
@@ -143,10 +143,10 @@ func TestASubagentReportCollectedFirstIsNotAlsoDelivered(t *testing.T) {
 	svc.Observe("s1", stateBusy)
 	plantSubagent(svc, "t1", "s1", "s2", "docs")
 
-	if err := svc.Reply("", "t1", "the report"); err != nil {
+	if err := svc.Reply(ReplyOptions{Ticket: "t1", Answer: "the report"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
-	collected, err := svc.CollectNow("s1")
+	collected, err := svc.CollectNow(CollectNowOptions{From: "s1"})
 	if err != nil || len(collected.Results) != 1 {
 		t.Fatalf("collect = %+v, %v; want the report", collected, err)
 	}
@@ -167,7 +167,7 @@ func TestASubagentReportCarriesTheNudgeForTheRest(t *testing.T) {
 	plant(svc, "t2", "s1", "s3", "api")
 
 	for ticket, answer := range map[string]string{"t1": "the report", "t2": "the other answer"} {
-		if err := svc.Reply("", ticket, answer); err != nil {
+		if err := svc.Reply(ReplyOptions{Ticket: ticket, Answer: answer}); err != nil {
 			t.Fatalf("Reply %s: %v", ticket, err)
 		}
 	}
@@ -185,7 +185,7 @@ func TestASubagentReportCarriesTheNudgeForTheRest(t *testing.T) {
 	if got := term.notesTo("s1")[0]; got == nil || got.Summary != `lich session "docs" finished` {
 		t.Errorf("the reports were handed as %+v, want them summed up by the worker that finished", got)
 	}
-	collected, _ := svc.CollectNow("s1")
+	collected, _ := svc.CollectNow(CollectNowOptions{From: "s1"})
 	if len(collected.Results) != 1 || collected.Results[0].Ticket != "t2" {
 		t.Errorf("collect = %+v, want only the other answer", collected)
 	}
@@ -204,7 +204,7 @@ func TestASubagentErrandOutlivesTheTTLWhileItsWorkerLives(t *testing.T) {
 	svc.lapsed["t2"] = lapsed
 	svc.mu.Unlock()
 
-	svc.CollectNow("s1")
+	svc.CollectNow(CollectNowOptions{From: "s1"})
 	svc.mu.Lock()
 	_, open := svc.tickets["t1"]
 	_, late := svc.lapsed["t2"]
@@ -216,7 +216,7 @@ func TestASubagentErrandOutlivesTheTTLWhileItsWorkerLives(t *testing.T) {
 	term.mu.Lock()
 	term.live["s2"] = false
 	term.mu.Unlock()
-	svc.CollectNow("s1")
+	svc.CollectNow(CollectNowOptions{From: "s1"})
 	svc.mu.Lock()
 	_, open = svc.tickets["t1"]
 	_, late = svc.lapsed["t2"]
@@ -334,7 +334,7 @@ func TestAWorkerThatReportedAndEndedItsTurnIsFinished(t *testing.T) {
 	svc, finished := finishing(t)
 	plantSubagent(svc, "t1", "s1", "s2", "docs")
 
-	if err := svc.Reply("s2", "t1", "the report"); err != nil {
+	if err := svc.Reply(ReplyOptions{From: "s2", Ticket: "t1", Answer: "the report"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	expectNoneFinished(t, finished)
@@ -357,7 +357,7 @@ func TestAWorkerThatReportedLateIsFinished(t *testing.T) {
 	expectNoneFinished(t, finished)
 
 	svc.Observe("s2", stateBusy)
-	if err := svc.Reply("s2", "t1", "the late report"); err != nil {
+	if err := svc.Reply(ReplyOptions{From: "s2", Ticket: "t1", Answer: "the late report"}); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
 	svc.Observe("s2", stateDone)
@@ -370,7 +370,7 @@ func TestAWorkerWithMoreToDoIsNotFinished(t *testing.T) {
 	t.Run("ordinary errand", func(t *testing.T) {
 		svc, finished := finishing(t)
 		plant(svc, "t1", "s1", "s2", "docs")
-		if err := svc.Reply("s2", "t1", "an answer"); err != nil {
+		if err := svc.Reply(ReplyOptions{From: "s2", Ticket: "t1", Answer: "an answer"}); err != nil {
 			t.Fatalf("Reply: %v", err)
 		}
 		svc.Observe("s2", stateDone)
@@ -380,7 +380,7 @@ func TestAWorkerWithMoreToDoIsNotFinished(t *testing.T) {
 		svc, finished := finishing(t)
 		plantSubagent(svc, "t1", "s1", "s2", "docs")
 		plant(svc, "t2", "s3", "s2", "docs")
-		if err := svc.Reply("s2", "t1", "the report"); err != nil {
+		if err := svc.Reply(ReplyOptions{From: "s2", Ticket: "t1", Answer: "the report"}); err != nil {
 			t.Fatalf("Reply: %v", err)
 		}
 		svc.Observe("s2", stateDone)
@@ -389,7 +389,7 @@ func TestAWorkerWithMoreToDoIsNotFinished(t *testing.T) {
 	t.Run("interrupted", func(t *testing.T) {
 		svc, finished := finishing(t)
 		plantSubagent(svc, "t1", "s1", "s2", "docs")
-		if err := svc.Reply("s2", "t1", "the report"); err != nil {
+		if err := svc.Reply(ReplyOptions{From: "s2", Ticket: "t1", Answer: "the report"}); err != nil {
 			t.Fatalf("Reply: %v", err)
 		}
 		svc.Observe("s2", stateInterrupted)
