@@ -364,7 +364,9 @@ func (c *client) send(args []string) error {
 
 	method := sendMethod(*private)
 	var result relay.Result
-	call := []any{c.sessionID(), flags.Arg(0), *project, flags.Arg(1), *timeout}
+	call := []any{relay.SendOptions{
+		From: c.sessionID(), Target: flags.Arg(0), Project: *project, Prompt: flags.Arg(1), WaitSeconds: *timeout,
+	}}
 	if err := c.call(context.Background(), method, call, waitBudget(*timeout), &result); err != nil {
 		return err
 	}
@@ -726,7 +728,9 @@ func (c *client) handOff(opened spawn.Session, prompt, method string) (*relay.Re
 // relay.SendPrivate, as the caller asked.
 func (c *client) deliver(ctx context.Context, opened spawn.Session, prompt, method string) (relay.Result, error) {
 	var result relay.Result
-	call := []any{c.sessionID(), opened.Label, opened.Project, prompt, deliverWait}
+	call := []any{relay.SendOptions{
+		From: c.sessionID(), Target: opened.Label, Project: opened.Project, Prompt: prompt, WaitSeconds: deliverWait,
+	}}
 	err := c.call(ctx, method, call, waitBudget(deliverWait), &result)
 	return result, err
 }
@@ -877,7 +881,9 @@ func (c *client) close(args []string) error {
 	}
 
 	var closed spawn.Closed
-	call := []any{c.sessionID(), flags.Arg(0), *project, *worktree, *force}
+	call := []any{spawn.CloseOptions{
+		From: c.sessionID(), Target: flags.Arg(0), Project: *project, Worktree: *worktree, Force: *force,
+	}}
 	if err := c.call(context.Background(), "spawn.Close", call, openCall, &closed); err != nil {
 		return err
 	}

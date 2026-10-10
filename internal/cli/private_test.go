@@ -15,8 +15,8 @@ func TestSendPrivateCallsSendPrivate(t *testing.T) {
 		t.Fatalf("exit = %d, want %d", code, ExitPending)
 	}
 	call := f.only(t)
-	if call.method != "relay.SendPrivate" || len(call.args) != 5 {
-		t.Fatalf("call = %+v, want relay.SendPrivate with Send's five arguments", call)
+	if call.method != "relay.SendPrivate" || len(call.args) != 1 {
+		t.Fatalf("call = %+v, want relay.SendPrivate with Send's options object", call)
 	}
 	// No note is coming, so the text must not promise one.
 	if strings.Contains(stdout, "typed at the sending session's prompt when") {

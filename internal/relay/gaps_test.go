@@ -16,7 +16,7 @@ func TestAnAnswerAfterTheTurnEndedWithoutOneStillReachesTheSender(t *testing.T) 
 	term := newFakeTerminal("s1", "s2")
 	svc := newRelay(workspace(), term, nil)
 
-	sent, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	sent, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestAnAnswerAfterTheTurnEndedWithoutOneStillReachesTheSender(t *testing.T) 
 // A late answer is still one answer: a second one on the same ticket is refused.
 func TestALateAnswerIsTakenOnce(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
-	sent, _ := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	sent, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	svc.Observe("s2", "busy")
 	svc.Observe("s2", "done")
 
@@ -106,7 +106,9 @@ func TestATicketlessAnswerSkipsAMessageStillBeingDelivered(t *testing.T) {
 	svc.settleLimit = time.Second
 	term.noise("s2", 1000)
 
-	go func() { _, _ = svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1) }()
+	go func() {
+		_, _ = svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
+	}()
 	deadline := time.Now().Add(2 * time.Second)
 	for len(term.writesTo("s2")) == 0 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
@@ -126,7 +128,7 @@ func TestATicketlessAnswerSkipsAMessageStillBeingDelivered(t *testing.T) {
 // caller handed "expired" would stop looking for it.
 func TestAWaitOnALapsedTicketIsToldItWentUnanswered(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
-	sent, _ := svc.SendPrivate(context.Background(), "s1", "docs", "", "run the tests", 1)
+	sent, _ := svc.SendPrivate(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	svc.Observe("s2", "busy")
 	svc.Observe("s2", "done")
 	if first, err := svc.Wait(context.Background(), sent.Ticket, 1); err != nil || first.Status != StatusUnanswered {

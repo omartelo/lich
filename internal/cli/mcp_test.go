@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/omartelo/lich/internal/prompt"
+	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/spawn"
 )
 
@@ -286,11 +287,9 @@ func TestMCPSendToSessionReturnsTheAnswer(t *testing.T) {
 	if call.method != "relay.Send" {
 		t.Fatalf("method = %q", call.method)
 	}
-	want := []any{"s1", "docs", "", "run the tests", float64(20)}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	want := relay.SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 20}
+	if got := optionsOf[relay.SendOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 }
 
@@ -534,7 +533,7 @@ func TestMCPReadsLooseArgumentTypes(t *testing.T) {
 	speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
 		{"name":"send_to_session","arguments":{"session":"docs","prompt":"hi","timeout_seconds":"15"}}}`)
 
-	if got := f.only(t).args[4]; got != float64(15) {
+	if got := optionsOf[relay.SendOptions](t, f.only(t)).WaitSeconds; got != 15 {
 		t.Errorf("timeout = %v, want 15", got)
 	}
 }
@@ -547,7 +546,7 @@ func TestMCPCapsTheWaitBelowTheClientsBackgroundThreshold(t *testing.T) {
 	tests := []struct {
 		name  string
 		asked any
-		want  float64
+		want  int
 	}{
 		{"under the cap is honoured", float64(20), 20},
 		{"the cap itself", float64(90), 90},
@@ -573,7 +572,7 @@ func TestMCPCapsTheWaitBelowTheClientsBackgroundThreshold(t *testing.T) {
 			}
 			speak(t, f, string(call))
 
-			if got := f.only(t).args[4]; got != tt.want {
+			if got := optionsOf[relay.SendOptions](t, f.only(t)).WaitSeconds; got != tt.want {
 				t.Errorf("timeout = %v, want %v", got, tt.want)
 			}
 		})
@@ -651,14 +650,9 @@ func TestMCPOpenSessionHandsOverTheTaskItCameWith(t *testing.T) {
 	// opening (up to openCall) and delivering together stay under the 120s at
 	// which the client detaches the call, and a constant this test follows
 	// could be raised past that with the suite still green.
-	want := []any{"s1", "auth-fix", "lich", "port the parser", float64(20)}
-	if len(f.calls[1].args) != len(want) {
-		t.Fatalf("send args = %v, want %v", f.calls[1].args, want)
-	}
-	for i := range want {
-		if f.calls[1].args[i] != want[i] {
-			t.Errorf("send argument %d = %v, want %v", i, f.calls[1].args[i], want[i])
-		}
+	want := relay.SendOptions{From: "s1", Target: "auth-fix", Project: "lich", Prompt: "port the parser", WaitSeconds: 20}
+	if got := optionsOf[relay.SendOptions](t, f.calls[1]); got != want {
+		t.Errorf("send options = %+v, want %+v", got, want)
 	}
 	if !strings.Contains(text, "a1b2c3d4") {
 		t.Errorf("result carries no ticket to collect the work with:\n%s", text)
@@ -756,14 +750,9 @@ func TestMCPCloseSessionPassesTheWorktreeAnswer(t *testing.T) {
 		t.Fatalf("tool reported a failure: %s", text)
 	}
 	call := f.only(t)
-	want := []any{"s1", "auth-fix", "", "remove", true}
-	if len(call.args) != len(want) {
-		t.Fatalf("args = %v, want %v", call.args, want)
-	}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	want := spawn.CloseOptions{From: "s1", Target: "auth-fix", Worktree: "remove", Force: true}
+	if got := optionsOf[spawn.CloseOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 }
 
@@ -828,7 +817,7 @@ func TestMCPForceIsOnlyTrueWhenItSaysTrue(t *testing.T) {
 		f := newFakeLich(t, `{"id":"9f8e","projectId":"p1","label":"auth-fix","removed":true}`)
 		speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
 			{"name":"close_session","arguments":{"session":"auth-fix","worktree":"remove","force":`+sent+`}}}`)
-		if got := f.only(t).args[4]; got != want {
+		if got := optionsOf[spawn.CloseOptions](t, f.only(t)).Force; got != want {
 			t.Errorf("force sent as %s read as %v, want %v", sent, got, want)
 		}
 	}

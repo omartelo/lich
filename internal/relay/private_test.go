@@ -25,7 +25,7 @@ func TestSendPrivateMarksItsResult(t *testing.T) {
 		wg  sync.WaitGroup
 	)
 	wg.Go(func() {
-		got, err = svc.SendPrivate(context.Background(), "s1", "docs", "", "run the tests", 30)
+		got, err = svc.SendPrivate(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 30})
 	})
 	if replyErr := svc.Reply("", waitForTicket(svc), "green"); replyErr != nil {
 		t.Fatalf("Reply: %v", replyErr)

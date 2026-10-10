@@ -136,7 +136,7 @@ func TestATaskToASessionWithAModIsHandedToItNotTyped(t *testing.T) {
 
 	done := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 5})
 		done <- got
 	}()
 	if !events.awaitMark("s2", DirectionIn) || !events.awaitMark("s1", DirectionOut) {
@@ -166,7 +166,7 @@ func TestATaskNoPollCollectedIsTypedInstead(t *testing.T) {
 	term.attachMod("s2", withdrawn)
 	svc := viaMod(term, nil)
 
-	got, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 5})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestATaskTheModCollectedIsNeverTypedAgain(t *testing.T) {
 	term.attachMod("s2", collected)
 	svc := viaMod(term, nil)
 
-	got, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 5})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestATaskTheModCollectedForABusyTargetWaitsForItsTurn(t *testing.T) {
 
 	done := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 5})
 		done <- got
 	}()
 	awaitDelivered(t, svc, 1)
@@ -239,7 +239,7 @@ func TestATaskAHookDroppedComesBackUndelivered(t *testing.T) {
 	term.attachMod("s2", PromptReceipt{State: PromptAcked, Reason: "blocked by a hook"})
 	svc := viaMod(term, nil)
 
-	got, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 5})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestAModTaskTheTargetStartedIsNotUnread(t *testing.T) {
 		svc.Observe("s2", stateBusy)
 	}()
 
-	got, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestAnEndedSessionsModTaskIsNotTyped(t *testing.T) {
 	term.attachMod("s2", PromptReceipt{State: PromptEnded})
 	svc := viaMod(term, nil)
 
-	got, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 5})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestARetryReachesTheModOnceItAttaches(t *testing.T) {
 		}
 	}
 
-	got, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestSubmitPromptErrorIsTheSendsError(t *testing.T) {
 	term.failMod("s2", refused)
 	svc := viaMod(term, nil)
 
-	_, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+	_, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 5})
 	if !errors.Is(err, refused) {
 		t.Fatalf("Send = %v, want the mod's error", err)
 	}
@@ -407,7 +407,9 @@ func TestTheTicketNoticeGoesThroughTheMod(t *testing.T) {
 	svc := viaMod(term, nil)
 
 	for _, from := range []string{"s1", "s3"} {
-		go func() { _, _ = svc.Send(context.Background(), from, "docs", "", "task from "+from, 5) }()
+		go func() {
+			_, _ = svc.Send(context.Background(), SendOptions{From: from, Target: "docs", Prompt: "task from " + from, WaitSeconds: 5})
+		}()
 	}
 	awaitDelivered(t, svc, 2)
 	svc.Observe("s2", stateBusy)
@@ -433,7 +435,7 @@ func TestATurnBeforeAnyPollCollectedTheTaskDoesNotCloseIt(t *testing.T) {
 
 	done := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 5})
 		done <- got
 	}()
 	awaitDelivered(t, svc, 1)
@@ -484,7 +486,7 @@ func TestATaskReachesADraftingSessionThroughItsMod(t *testing.T) {
 	term.typeAt("s2", true)
 	svc := viaMod(term, nil)
 
-	if _, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1); err != nil {
+	if _, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if prompts := term.promptsTo("s2"); len(prompts) != 1 {

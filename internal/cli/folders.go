@@ -73,7 +73,7 @@ func (c *client) file(args []string) error {
 	}
 
 	var filed spawn.Filed
-	call := []any{c.sessionID(), target, *project, folder}
+	call := []any{spawn.FileOptions{From: c.sessionID(), Target: target, Project: *project, Folder: folder}}
 	if err := c.call(context.Background(), "spawn.File", call, shortCall, &filed); err != nil {
 		return err
 	}
@@ -219,7 +219,10 @@ var folderTools = []mcpTool{
 					"an empty one takes the session out of the folder it is in")
 			}
 			var filed spawn.Filed
-			call := []any{c.sessionID(), args.text("session"), args.text("project"), args.text("folder")}
+			call := []any{spawn.FileOptions{
+				From: c.sessionID(), Target: args.text("session"), Project: args.text("project"),
+				Folder: args.text("folder"),
+			}}
 			if err := c.call(ctx, "spawn.File", call, shortCall, &filed); err != nil {
 				return "", err
 			}

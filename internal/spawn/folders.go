@@ -104,6 +104,14 @@ func foldersOf(p store.Project) []Folder {
 	return folders
 }
 
+// FileOptions is one File call, an object for the reason CloseOptions is one.
+type FileOptions struct {
+	From    string `json:"from"`
+	Target  string `json:"target"`
+	Project string `json:"project"`
+	Folder  string `json:"folder"`
+}
+
 // File files a session under a folder, the window's "Move to folder" from
 // outside it; an empty folder takes the session out of the one it is in. A
 // name no session carries yet is a folder that starts existing with this one in
@@ -111,8 +119,9 @@ func foldersOf(p store.Project) []Folder {
 //
 // target is the session to file, by either of the names it answers to; empty
 // files the caller's own, as a rename does.
-func (s *Service) File(fromID, target, projectName, folder string) (Filed, error) {
-	folder = strings.TrimSpace(folder)
+func (s *Service) File(opts FileOptions) (Filed, error) {
+	fromID, target, projectName := opts.From, opts.Target, opts.Project
+	folder := strings.TrimSpace(opts.Folder)
 
 	projects, err := s.sessions.LoadState()
 	if err != nil {

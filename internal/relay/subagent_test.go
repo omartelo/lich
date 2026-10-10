@@ -29,7 +29,7 @@ func branched() fakeSessions {
 func TestSendSubagentMarksItsErrand(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
 
-	got, err := svc.SendSubagent(context.Background(), "s1", "docs", "", "write the docs", 1)
+	got, err := svc.SendSubagent(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "write the docs", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("SendSubagent: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestSendSubagentMarksItsErrand(t *testing.T) {
 func TestSendSubagentNeedsACallingSession(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s2"), nil)
 
-	_, err := svc.SendSubagent(context.Background(), "", "docs", "", "write the docs", 1)
+	_, err := svc.SendSubagent(context.Background(), SendOptions{Target: "docs", Prompt: "write the docs", WaitSeconds: 1})
 	if err == nil || !strings.Contains(err.Error(), "session") {
 		t.Fatalf("err = %v, want a refusal naming the missing session", err)
 	}

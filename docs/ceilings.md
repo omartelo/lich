@@ -1062,15 +1062,16 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **A `lich` upgraded under a running lich is refused by any call whose argument list changed**
   (`internal/rpc/rpc.go`): the RPC matches arguments by position and count, and a package manager replaces the
   binary without restarting the backend it is serving, so the new CLI, and the `lich mcp` of every session
-  opened after the upgrade, speaks to an older backend until lich is restarted. `spawn.Open` and
-  `spawn.OpenSubagent` are out of this trap: each takes one options object (`spawn.OpenOptions`,
-  `spawn.OpenSubagentOptions`), so an option the backend does not know yet is dropped and one an older client
-  does not send is its zero value. That holds between releases that both carry them; the release that moved them
-  to the object is refused with "want 1 arguments, got 9" (and the other way round) by a lich from before it,
-  once. Every other call is still positional and breaks the same way when its argument list changes,
-  `relay.Send` and `spawn.Close` among them; one that only grows a result field does not, and a new method
-  breaks only itself: a `lich` newer than the backend has `relay.SendPrivate` refused, so `--private` sends
-  fail and every other send works.
+  opened after the upgrade, speaks to an older backend until lich is restarted. The calls that grow with
+  options are out of this trap: `spawn.Open`, `spawn.OpenSubagent`, `spawn.Close`, `spawn.Control`,
+  `spawn.Ask`, `spawn.File` and the three `relay.Send` calls each take one options object
+  (`spawn.OpenOptions` and its siblings, `relay.SendOptions`), so an option the backend does not know yet is
+  dropped and one an older client does not send is its zero value. That holds between releases that both
+  carry the object; the release that moved a call to it is refused by a lich from before it, once, with
+  "want 1 arguments, got N" (or the other way round). Every other call is still positional and breaks the
+  same way when its argument list changes (`spawn.Rename`, the folder calls, `relay.Collect`, `relay.Wait`,
+  `relay.Reply`, `relay.Insert`, `relay.Focus`); one that only grows a result field does not, and a new method
+  breaks only itself: a `lich` older than the method has it refused as unknown, and every other call works.
 - **A reasoning effort reaches five providers, and Cursor only through its model name**
   (`internal/terminal/command.go`, `effortFlags`): `lich open --effort` and `open_session`'s `effort` are refused
   for opencode, whose `--variant` lives on `run` only (1.18.31), and for Crush, which has no such option

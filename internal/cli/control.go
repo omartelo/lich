@@ -29,7 +29,10 @@ func (c *client) control(args []string) error {
 	}
 
 	var out spawn.Controlled
-	call := []any{c.sessionID(), flags.Arg(0), *project, flags.Arg(1), flags.Arg(2), flags.Arg(3)}
+	call := []any{spawn.ControlOptions{
+		From: c.sessionID(), Target: flags.Arg(0), Project: *project,
+		Action: flags.Arg(1), Value: flags.Arg(2), Args: flags.Arg(3),
+	}}
 	if err := c.call(context.Background(), "spawn.Control", call, controlCall, &out); err != nil {
 		return err
 	}
@@ -119,10 +122,10 @@ var controlTools = []mcpTool{
 		}, "session", "action"),
 		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			var out spawn.Controlled
-			call := []any{
-				c.sessionID(), args.text("session"), args.text("project"),
-				args.text("action"), args.text("value"), args.text("args"),
-			}
+			call := []any{spawn.ControlOptions{
+				From: c.sessionID(), Target: args.text("session"), Project: args.text("project"),
+				Action: args.text("action"), Value: args.text("value"), Args: args.text("args"),
+			}}
 			if err := c.call(ctx, "spawn.Control", call, controlCall, &out); err != nil {
 				return "", err
 			}

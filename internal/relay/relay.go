@@ -578,9 +578,22 @@ func (s *Service) Peers(fromID string) ([]Peer, error) {
 	return peers, nil
 }
 
-// Send types prompt at the prompt of the session labelled target and waits for
-// its agent to answer. project narrows the search when the same label exists in
-// more than one project; empty searches them all. waitSeconds bounds the wait —
+// SendOptions is one Send, SendPrivate or SendSubagent call. It travels as a
+// single JSON object rather than as positional arguments because a package
+// manager replaces the lich binary under a running backend: a field a newer
+// lich adds is dropped by an older backend, and one an older lich does not send
+// is its zero value, where a positional list refuses both on its count.
+type SendOptions struct {
+	From        string `json:"from"`
+	Target      string `json:"target"`
+	Project     string `json:"project"`
+	Prompt      string `json:"prompt"`
+	WaitSeconds int    `json:"waitSeconds"`
+}
+
+// Send types Prompt at the prompt of the session labelled Target and waits for
+// its agent to answer. Project narrows the search when the same label exists in
+// more than one project; empty searches them all. WaitSeconds bounds the wait —
 // 0 uses DefaultWait.
 //
 // The wait running out is not a failure: the errand is open, and the returned
@@ -588,8 +601,8 @@ func (s *Service) Peers(fromID string) ([]Peer, error) {
 // yet is not a failure either — the task is queued and delivered when it is
 // (see queueDelivery). ctx is the caller's: one that hangs up mid-wait hears
 // nothing, and the errand's outcome goes to its inbox as if its wait had run out.
-func (s *Service) Send(ctx context.Context, fromID, target, project, prompt string, waitSeconds int) (Result, error) {
-	return s.send(ctx, fromID, target, project, prompt, waitSeconds, errandShared)
+func (s *Service) Send(ctx context.Context, opts SendOptions) (Result, error) {
+	return s.send(ctx, opts, errandShared)
 }
 
 // SendPrivate is Send for a caller that runs inside the sender session without
@@ -597,10 +610,8 @@ func (s *Service) Send(ctx context.Context, fromID, target, project, prompt stri
 // reaches lich as the session, so this is how the caller keeps its errand to
 // itself — the outcome is collected by its ticket alone, and nothing is typed at
 // the session's prompt or counted on its card about it.
-func (s *Service) SendPrivate(
-	ctx context.Context, fromID, target, project, prompt string, waitSeconds int,
-) (Result, error) {
-	return s.send(ctx, fromID, target, project, prompt, waitSeconds, errandPrivate)
+func (s *Service) SendPrivate(ctx context.Context, opts SendOptions) (Result, error) {
+	return s.send(ctx, opts, errandPrivate)
 }
 
 // SendSubagent is Send for a worker opened as the sender's subagent (`lich open
@@ -609,13 +620,11 @@ func (s *Service) SendPrivate(
 // dropped by ticketTTL while the worker lives (sweep), and the sender hears once
 // when the worker blocks on a permission (Observe). It needs a sending session:
 // there is nobody else to report to.
-func (s *Service) SendSubagent(
-	ctx context.Context, fromID, target, project, prompt string, waitSeconds int,
-) (Result, error) {
-	if fromID == "" {
+func (s *Service) SendSubagent(ctx context.Context, opts SendOptions) (Result, error) {
+	if opts.From == "" {
 		return Result{}, fmt.Errorf("a subagent reports to the session that asked for it, and this call came from no session")
 	}
-	return s.send(ctx, fromID, target, project, prompt, waitSeconds, errandSubagent)
+	return s.send(ctx, opts, errandSubagent)
 }
 
 // errandMode is who an errand's outcome is for: the sending session (Send), the
@@ -629,9 +638,8 @@ const (
 	errandSubagent
 )
 
-func (s *Service) send(
-	ctx context.Context, fromID, target, project, prompt string, waitSeconds int, mode errandMode,
-) (Result, error) {
+func (s *Service) send(ctx context.Context, opts SendOptions, mode errandMode) (Result, error) {
+	fromID, target, project, prompt, waitSeconds := opts.From, opts.Target, opts.Project, opts.Prompt, opts.WaitSeconds
 	prompt = sanitize(prompt)
 	if strings.TrimSpace(prompt) == "" {
 		return Result{}, fmt.Errorf("nothing to send: the prompt is empty")

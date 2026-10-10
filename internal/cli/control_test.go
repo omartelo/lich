@@ -2,7 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -27,9 +26,9 @@ func TestControlPostsTheActionAndItsArguments(t *testing.T) {
 	if call.method != "spawn.Control" {
 		t.Errorf("method = %q", call.method)
 	}
-	want := []any{"s1", "auth-fix", "lich", "command", "/compact", "keep the plan"}
-	if !reflect.DeepEqual(call.args, want) {
-		t.Errorf("args = %v, want %v", call.args, want)
+	want := spawn.ControlOptions{From: "s1", Target: "auth-fix", Project: "lich", Action: "command", Value: "/compact", Args: "keep the plan"}
+	if got := optionsOf[spawn.ControlOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 	if stdout != "\"auth-fix\" ran /compact.\n" {
 		t.Errorf("stdout = %q", stdout)
@@ -126,8 +125,8 @@ func TestMCPControlSessionReportsAPendingCommandAsAResult(t *testing.T) {
 	if !strings.Contains(text, "It still goes through") {
 		t.Errorf("text = %q", text)
 	}
-	want := []any{"s1", "auth-fix", "", "command", "compact", "keep the plan"}
-	if call := f.only(t); !reflect.DeepEqual(call.args, want) {
-		t.Errorf("args = %v, want %v", call.args, want)
+	want := spawn.ControlOptions{From: "s1", Target: "auth-fix", Action: "command", Value: "compact", Args: "keep the plan"}
+	if got := optionsOf[spawn.ControlOptions](t, f.only(t)); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 }

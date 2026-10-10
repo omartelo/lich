@@ -43,7 +43,9 @@ func TestControlHandsTheModOneCommandPerAction(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.action+" "+tc.value, func(t *testing.T) {
 			svc, term := newControlService(t)
-			got, err := svc.Control(context.Background(), "s1", "auth-fix", "", tc.action, tc.value, tc.args)
+			got, err := svc.Control(context.Background(), ControlOptions{
+				From: "s1", Target: "auth-fix", Action: tc.action, Value: tc.value, Args: tc.args,
+			})
 			if err != nil {
 				t.Fatalf("Control: %v", err)
 			}
@@ -77,7 +79,9 @@ func TestControlRefusesBeforeReachingTheSession(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, term := newControlService(t)
-			_, err := svc.Control(context.Background(), tc.from, tc.target, "", tc.action, tc.value, tc.args)
+			_, err := svc.Control(context.Background(), ControlOptions{
+				From: tc.from, Target: tc.target, Action: tc.action, Value: tc.value, Args: tc.args,
+			})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want one saying %q", err, tc.want)
 			}
@@ -90,7 +94,7 @@ func TestControlRefusesBeforeReachingTheSession(t *testing.T) {
 
 func TestControlReachesASessionByItsID(t *testing.T) {
 	svc, term := newControlService(t)
-	got, err := svc.Control(context.Background(), "s1", "s2", "", "abort", "", "")
+	got, err := svc.Control(context.Background(), ControlOptions{From: "s1", Target: "s2", Action: "abort"})
 	if err != nil {
 		t.Fatalf("Control: %v", err)
 	}
@@ -104,7 +108,7 @@ func TestControlReportsHowFarTheCommandGot(t *testing.T) {
 		t.Run(state, func(t *testing.T) {
 			svc, term := newControlService(t)
 			term.outcome = terminal.ModOutcome{ID: "m4", State: state}
-			got, err := svc.Control(context.Background(), "s1", "auth-fix", "", "abort", "", "")
+			got, err := svc.Control(context.Background(), ControlOptions{From: "s1", Target: "auth-fix", Action: "abort"})
 			if err != nil {
 				t.Fatalf("Control: %v", err)
 			}
@@ -118,7 +122,7 @@ func TestControlReportsHowFarTheCommandGot(t *testing.T) {
 func TestControlNamesTheSessionThatRefused(t *testing.T) {
 	svc, term := newControlService(t)
 	term.outcome = terminal.ModOutcome{ID: "m1", State: terminal.ModAcked, Error: "no turn is running"}
-	_, err := svc.Control(context.Background(), "s1", "auth-fix", "", "abort", "", "")
+	_, err := svc.Control(context.Background(), ControlOptions{From: "s1", Target: "auth-fix", Action: "abort"})
 	if err == nil || err.Error() != `"auth-fix" refused the abort: no turn is running` {
 		t.Fatalf("err = %v", err)
 	}
@@ -127,7 +131,7 @@ func TestControlNamesTheSessionThatRefused(t *testing.T) {
 func TestControlPassesTheTerminalsRefusalOn(t *testing.T) {
 	svc, term := newControlService(t)
 	term.runErr = errors.New("the session is not running")
-	_, err := svc.Control(context.Background(), "s1", "auth-fix", "", "abort", "", "")
+	_, err := svc.Control(context.Background(), ControlOptions{From: "s1", Target: "auth-fix", Action: "abort"})
 	if !errors.Is(err, term.runErr) || !strings.HasPrefix(err.Error(), `"auth-fix": `) {
 		t.Fatalf("err = %v, want the terminal's, naming the session", err)
 	}
@@ -138,7 +142,7 @@ func TestControlPassesTheTerminalsRefusalOn(t *testing.T) {
 func TestControlFailsACommandTheSessionNeverTook(t *testing.T) {
 	svc, term := newControlService(t)
 	term.outcome = terminal.ModOutcome{ID: "m4", State: terminal.ModWithdrawn}
-	_, err := svc.Control(context.Background(), "s1", "auth-fix", "", "command", "compact", "")
+	_, err := svc.Control(context.Background(), ControlOptions{From: "s1", Target: "auth-fix", Action: "command", Value: "compact"})
 	if err == nil || !strings.Contains(err.Error(), `"auth-fix" did not take the command within 60 seconds`) ||
 		!strings.Contains(err.Error(), "nothing ran") {
 		t.Fatalf("err = %v, want one saying the command was withdrawn unrun", err)
@@ -150,7 +154,9 @@ func TestControlFailsACommandTheSessionNeverTook(t *testing.T) {
 func TestControlBoundsTheWait(t *testing.T) {
 	waited := func(action, value string) time.Duration {
 		svc, term := newControlService(t)
-		if _, err := svc.Control(context.Background(), "s1", "auth-fix", "", action, value, ""); err != nil {
+		if _, err := svc.Control(context.Background(), ControlOptions{
+			From: "s1", Target: "auth-fix", Action: action, Value: value,
+		}); err != nil {
 			t.Fatalf("Control %s: %v", action, err)
 		}
 		if term.deadline.IsZero() {

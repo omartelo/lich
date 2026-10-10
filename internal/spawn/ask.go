@@ -25,13 +25,22 @@ type Answered struct {
 	Answer  string `json:"answer"`
 }
 
+// AskOptions is one Ask call, an object for the reason CloseOptions is one.
+type AskOptions struct {
+	From     string `json:"from"`
+	Target   string `json:"target"`
+	Project  string `json:"project"`
+	Question string `json:"question"`
+}
+
 // Ask puts a side question to a running Claude Code session and waits for its
 // answer. The session's mod answers it with a tool-less fork of the session's
 // own conversation: the session's turn goes on undisturbed and the question
 // never enters its transcript. Every way it ends without an answer is an
 // error naming the session, a wait that runs out included: an answer that lands
 // later is dropped.
-func (s *Service) Ask(ctx context.Context, fromID, target, projectName, question string) (Answered, error) {
+func (s *Service) Ask(ctx context.Context, opts AskOptions) (Answered, error) {
+	fromID, target, projectName, question := opts.From, opts.Target, opts.Project, opts.Question
 	found, err := s.claudeTarget(target, projectName, "ask", "asked")
 	if err != nil {
 		return Answered{}, err

@@ -34,7 +34,7 @@ func plantAnsweredByMod(svc *Service, id, fromID, targetID, target string) {
 
 func sendSubagentTask(t *testing.T, svc *Service) Result {
 	t.Helper()
-	got, err := svc.SendSubagent(context.Background(), "s1", "docs", "", "write the docs", 1)
+	got, err := svc.SendSubagent(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "write the docs", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("SendSubagent: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestAnOrdinaryTaskToAWorkerWhoseModAnswersKeepsTheTicket(t *testing.T) {
 	term.answerByMod("s2", ackedOK)
 	svc := viaMod(term, nil)
 
-	got, err := svc.Send(context.Background(), "s1", "docs", "", "write the docs", 1)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "write the docs", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}

@@ -46,10 +46,10 @@ func closer(t *testing.T) (*Service, *fakeSessions, *fakeWorktrees, *fakeTermina
 func TestCloseTellsTheTerminalWhoClosedTheSession(t *testing.T) {
 	svc, _, _, term, _ := closer(t)
 
-	if _, err := svc.Close("s1", "shared-a", "", "", false); err != nil {
+	if _, err := svc.Close(CloseOptions{From: "s1", Target: "shared-a"}); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if _, err := svc.Close("s1", "alone", "", RemoveWorktree, false); err != nil {
+	if _, err := svc.Close(CloseOptions{From: "s1", Target: "alone", Worktree: RemoveWorktree}); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
@@ -66,7 +66,7 @@ func TestCloseTellsTheTerminalWhoClosedTheSession(t *testing.T) {
 func TestCloseTakesDownASessionWithNothingAtStake(t *testing.T) {
 	svc, sessions, worktrees, term, events := closer(t)
 
-	closed, err := svc.Close("s1", "shared-a", "", "", false)
+	closed, err := svc.Close(CloseOptions{From: "s1", Target: "shared-a"})
 	if err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestCloseTakesDownASessionWithNothingAtStake(t *testing.T) {
 func TestCloseRefusesToDecideAWorktreesFateOnItsOwn(t *testing.T) {
 	svc, sessions, _, _, _ := closer(t)
 
-	_, err := svc.Close("s1", "alone", "", "", false)
+	_, err := svc.Close(CloseOptions{From: "s1", Target: "alone"})
 	if err == nil {
 		t.Fatal("closed the last session of a worktree without being told what to do with it")
 	}
@@ -116,7 +116,7 @@ func TestCloseRefusesToDecideAWorktreesFateOnItsOwn(t *testing.T) {
 func TestCloseRefusesTheSessionItWasAskedFrom(t *testing.T) {
 	svc, sessions, _, term, _ := closer(t)
 
-	if _, err := svc.Close("s2", "shared-a", "", "", false); err == nil {
+	if _, err := svc.Close(CloseOptions{From: "s2", Target: "shared-a"}); err == nil {
 		t.Fatal("closed the session the caller is running in")
 	}
 	if len(sessions.deleted) != 0 || len(term.closed) != 0 {
@@ -127,7 +127,7 @@ func TestCloseRefusesTheSessionItWasAskedFrom(t *testing.T) {
 func TestCloseKeepingAWorktreeParksTheSession(t *testing.T) {
 	svc, sessions, worktrees, _, _ := closer(t)
 
-	closed, err := svc.Close("s1", "alone", "", KeepWorktree, false)
+	closed, err := svc.Close(CloseOptions{From: "s1", Target: "alone", Worktree: KeepWorktree})
 	if err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestCloseKeepingAWorktreeParksTheSession(t *testing.T) {
 func TestCloseRemovingAWorktreeTakesTheCheckoutWithIt(t *testing.T) {
 	svc, sessions, worktrees, term, _ := closer(t)
 
-	closed, err := svc.Close("s1", "alone", "", RemoveWorktree, false)
+	closed, err := svc.Close(CloseOptions{From: "s1", Target: "alone", Worktree: RemoveWorktree})
 	if err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestCloseRefusesToRemoveAnAdoptedCheckout(t *testing.T) {
 	svc, sessions, worktrees, term, _ := closer(t)
 	worktrees.adopted = map[string]bool{"/wt/alone": true}
 
-	_, err := svc.Close("s1", "alone", "", RemoveWorktree, false)
+	_, err := svc.Close(CloseOptions{From: "s1", Target: "alone", Worktree: RemoveWorktree})
 	if err == nil {
 		t.Fatal("removed a checkout lich never created")
 	}
@@ -199,7 +199,7 @@ func TestCloseRefusesToRemoveADirtyCheckout(t *testing.T) {
 	svc, sessions, worktrees, term, _ := closer(t)
 	worktrees.dirty["/wt/alone"] = true
 
-	_, err := svc.Close("s1", "alone", "", RemoveWorktree, false)
+	_, err := svc.Close(CloseOptions{From: "s1", Target: "alone", Worktree: RemoveWorktree})
 	if err == nil {
 		t.Fatal("removed a checkout with uncommitted work")
 	}
@@ -215,7 +215,7 @@ func TestCloseRemovesADirtyCheckoutWhenForced(t *testing.T) {
 	svc, _, worktrees, _, _ := closer(t)
 	worktrees.dirty["/wt/alone"] = true
 
-	if _, err := svc.Close("s1", "alone", "", RemoveWorktree, true); err != nil {
+	if _, err := svc.Close(CloseOptions{From: "s1", Target: "alone", Worktree: RemoveWorktree, Force: true}); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 	if len(worktrees.removed) != 1 || !worktrees.removed[0].force {
@@ -228,7 +228,7 @@ func TestCloseRemovesADirtyCheckoutWhenForced(t *testing.T) {
 func TestCloseRefusesTheCallersOwnSession(t *testing.T) {
 	svc, sessions, _, _, _ := closer(t)
 
-	_, err := svc.Close("s2", "shared-a", "", "", false)
+	_, err := svc.Close(CloseOptions{From: "s2", Target: "shared-a"})
 	if err == nil {
 		t.Fatal("a session closed itself")
 	}
@@ -257,7 +257,7 @@ func TestCloseResolvesALabelBeforeAnotherSessionsRosterName(t *testing.T) {
 	}}}
 	svc := New(sessions, &fakeWorktrees{}, &fakeTerminal{}, &fakeEvents{})
 
-	closed, err := svc.Close("s1", name, "", "", false)
+	closed, err := svc.Close(CloseOptions{From: "s1", Target: name})
 	if err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -280,7 +280,7 @@ func TestCloseFindsASessionByItsRenamedName(t *testing.T) {
 	term := &fakeTerminal{names: map[string]string{"s6": "reviewer"}}
 	svc := New(sessions, &fakeWorktrees{}, term, &fakeEvents{})
 
-	closed, err := svc.Close("s1", "reviewer", "", "", false)
+	closed, err := svc.Close(CloseOptions{From: "s1", Target: "reviewer"})
 	if err != nil {
 		t.Fatalf("Close by the renamed roster name: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestCloseFindsASessionByItsRenamedName(t *testing.T) {
 func TestCloseRefusesAnUnknownSession(t *testing.T) {
 	svc, _, _, _, _ := closer(t)
 
-	if _, err := svc.Close("s1", "ghost", "", "", false); err == nil {
+	if _, err := svc.Close(CloseOptions{From: "s1", Target: "ghost"}); err == nil {
 		t.Fatal("closed a session that does not exist")
 	}
 }
@@ -300,7 +300,7 @@ func TestCloseRefusesAnUnknownSession(t *testing.T) {
 func TestCloseRefusesAnUnknownWorktreeAnswer(t *testing.T) {
 	svc, sessions, _, _, _ := closer(t)
 
-	_, err := svc.Close("s1", "alone", "", "delete", false)
+	_, err := svc.Close(CloseOptions{From: "s1", Target: "alone", Worktree: "delete"})
 	if err == nil {
 		t.Fatal("accepted an answer that is neither keeping nor removing")
 	}
@@ -315,7 +315,7 @@ func TestCloseHandsTheProjectToTheNeighbour(t *testing.T) {
 	svc, sessions, _, _, events := closer(t)
 	sessions.projects[0].ActiveSessionID = "s2"
 
-	if _, err := svc.Close("s1", "shared-a", "", "", false); err != nil {
+	if _, err := svc.Close(CloseOptions{From: "s1", Target: "shared-a"}); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 	if got := sessions.parked[0].activeID; got != "s3" {
@@ -336,7 +336,7 @@ func TestCloseHandsTheProjectToTheNeighbour(t *testing.T) {
 func TestCloseAnInactiveSessionLeavesTheFocusAlone(t *testing.T) {
 	svc, sessions, _, _, events := closer(t)
 
-	if _, err := svc.Close("s3", "shared-a", "", "", false); err != nil {
+	if _, err := svc.Close(CloseOptions{From: "s3", Target: "shared-a"}); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 	if got := sessions.parked[0].activeID; got != "s1" {
@@ -358,7 +358,7 @@ func TestCloseTakesTheCardDownEvenWhenThePTYRefuses(t *testing.T) {
 	svc, sessions, _, term, events := closer(t)
 	term.closeErr = errors.New("process already gone")
 
-	if _, err := svc.Close("s1", "shared-a", "", "", false); err != nil {
+	if _, err := svc.Close(CloseOptions{From: "s1", Target: "shared-a"}); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 	if len(sessions.parked) != 1 {
@@ -374,7 +374,7 @@ func TestCloseNeedsSomethingToClose(t *testing.T) {
 		t.Run("target="+target, func(t *testing.T) {
 			svc, sessions, _, _, _ := closer(t)
 
-			_, err := svc.Close("s1", target, "", "", false)
+			_, err := svc.Close(CloseOptions{From: "s1", Target: target})
 			if err == nil {
 				t.Fatal("closed a session that was never named")
 			}
@@ -398,7 +398,7 @@ func TestCloseRefusesANameThatFitsTwoSessions(t *testing.T) {
 	}}
 	svc := New(sessions, &fakeWorktrees{}, &fakeTerminal{}, &fakeEvents{})
 
-	_, err := svc.Close("s9", "worker", "", "", false)
+	_, err := svc.Close(CloseOptions{From: "s9", Target: "worker"})
 	if err == nil {
 		t.Fatal("closed one of two sessions that answer to the same name")
 	}
@@ -409,7 +409,7 @@ func TestCloseRefusesANameThatFitsTwoSessions(t *testing.T) {
 		t.Error("closed a session picked by a name that named two")
 	}
 	// Naming the project settles it.
-	if _, err := svc.Close("s9", "worker", "revu", "", false); err != nil {
+	if _, err := svc.Close(CloseOptions{From: "s9", Target: "worker", Project: "revu"}); err != nil {
 		t.Fatalf("Close with the project named: %v", err)
 	}
 	if len(sessions.parked) != 1 || sessions.parked[0].sessionID != "s2" {
@@ -421,7 +421,7 @@ func TestCloseReportsAnUnreadableWorkspace(t *testing.T) {
 	svc, sessions, _, term, _ := closer(t)
 	sessions.loadErr = errors.New("database is locked")
 
-	_, err := svc.Close("s1", "shared-a", "", "", false)
+	_, err := svc.Close(CloseOptions{From: "s1", Target: "shared-a"})
 	if err == nil {
 		t.Fatal("closed a session out of a workspace it could not read")
 	}
@@ -439,7 +439,7 @@ func TestCloseReportsAWorktreeGitWouldNotRemove(t *testing.T) {
 	svc, _, worktrees, _, _ := closer(t)
 	worktrees.removeErr = errors.New("worktree is locked")
 
-	_, err := svc.Close("s1", "alone", "", RemoveWorktree, false)
+	_, err := svc.Close(CloseOptions{From: "s1", Target: "alone", Worktree: RemoveWorktree})
 	if err == nil {
 		t.Fatal("reported a checkout removed that git kept")
 	}
@@ -455,7 +455,7 @@ func TestCloseTheLastSessionOfAProjectLeavesNoneActive(t *testing.T) {
 	}}}
 	svc := New(sessions, &fakeWorktrees{dirty: map[string]bool{}}, &fakeTerminal{}, nil)
 
-	if _, err := svc.Close("", "Session 1", "", "", false); err != nil {
+	if _, err := svc.Close(CloseOptions{Target: "Session 1"}); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 	if got := sessions.parked[0].activeID; got != "" {

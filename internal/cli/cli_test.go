@@ -365,14 +365,9 @@ func TestSendPrintsTheAnswer(t *testing.T) {
 	if call.method != "relay.Send" {
 		t.Errorf("method = %q", call.method)
 	}
-	want := []any{"s1", "docs", "", "run the tests", float64(0)}
-	if len(call.args) != len(want) {
-		t.Fatalf("args = %v, want %v", call.args, want)
-	}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	want := relay.SendOptions{From: "s1", Target: "docs", Prompt: "run the tests"}
+	if got := optionsOf[relay.SendOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 	if strings.TrimSpace(stdout) != "3 failures" {
 		t.Errorf("stdout = %q, want the answer alone", stdout)
@@ -387,12 +382,12 @@ func TestSendPassesProjectAndTimeout(t *testing.T) {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr)
 	}
 
-	call := f.only(t)
-	if call.args[2] != "revu" {
-		t.Errorf("project = %v", call.args[2])
+	opts := optionsOf[relay.SendOptions](t, f.only(t))
+	if opts.Project != "revu" {
+		t.Errorf("project = %v", opts.Project)
 	}
-	if call.args[4] != float64(5) {
-		t.Errorf("timeout = %v", call.args[4])
+	if opts.WaitSeconds != 5 {
+		t.Errorf("timeout = %v", opts.WaitSeconds)
 	}
 }
 
@@ -924,14 +919,9 @@ func TestOpenHandsOverTheTaskItCameWith(t *testing.T) {
 	// project — the caller cannot have been told either one yet. The wait is
 	// spelled out rather than read from deliverWait, which could be raised past
 	// what the surfaces sharing it allow with the suite still green.
-	want := []any{"s1", "auth-fix", "lich", "port the parser", float64(20)}
-	if len(f.calls[1].args) != len(want) {
-		t.Fatalf("send args = %v, want %v", f.calls[1].args, want)
-	}
-	for i := range want {
-		if f.calls[1].args[i] != want[i] {
-			t.Errorf("send argument %d = %v, want %v", i, f.calls[1].args[i], want[i])
-		}
+	want := relay.SendOptions{From: "s1", Target: "auth-fix", Project: "lich", Prompt: "port the parser", WaitSeconds: 20}
+	if got := optionsOf[relay.SendOptions](t, f.calls[1]); got != want {
+		t.Errorf("send options = %+v, want %+v", got, want)
 	}
 	// Both halves are reported: the session's names, then what became of the
 	// task — and the next step is this command line's own, not the tool's.
@@ -1084,14 +1074,9 @@ func TestCloseSaysWhatWentWithTheSession(t *testing.T) {
 	if call.method != "spawn.Close" {
 		t.Errorf("method = %q", call.method)
 	}
-	want := []any{"s1", "auth-fix", "", "keep", false}
-	if len(call.args) != len(want) {
-		t.Fatalf("args = %v, want %v", call.args, want)
-	}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	want := spawn.CloseOptions{From: "s1", Target: "auth-fix", Worktree: "keep"}
+	if got := optionsOf[spawn.CloseOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 	// A kept checkout is the one outcome with something to come back to.
 	if !strings.Contains(stdout, "/wt/auth-fix") || !strings.Contains(stdout, "parked") {
@@ -1104,8 +1089,8 @@ func TestCloseSaysWhatWentWithTheSession(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
-	if removed.only(t).args[4] != true {
-		t.Errorf("force was not passed through: %v", removed.only(t).args)
+	if opts := optionsOf[spawn.CloseOptions](t, removed.only(t)); !opts.Force {
+		t.Errorf("force was not passed through: %+v", opts)
 	}
 	if !strings.Contains(stdout, "removed its worktree") {
 		t.Errorf("output = %q", stdout)
