@@ -28,6 +28,7 @@ import {
   feedEntry,
   hideEntry,
   type LiveTerminal,
+  markExited,
   showEntry,
   terminalEntry,
 } from "@/lib/terminal/terminal-registry"
@@ -620,7 +621,7 @@ export function TerminalView({
         onAppEvent(EXIT_EVENT_PREFIX + sessionId, (data) => {
           const exit = readSessionExit(data)
           feedEntry(entry, new TextEncoder().encode(exitMarker(exit)), 0)
-          entry.exit = exit
+          markExited(entry, exit)
           entry.handlers?.exited(exit)
         }),
       )

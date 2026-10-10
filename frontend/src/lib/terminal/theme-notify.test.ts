@@ -57,6 +57,23 @@ describe("watchThemeNotify", () => {
     expect(replies).toEqual([])
   })
 
+  it("reports the mode as known, and whether it is on, to DECRQM", async () => {
+    const { state, replies, write } = rig()
+    await write("\x1b[?2031$p")
+    state.themeNotify = true
+    await write("\x1b[?2031$p")
+    expect(replies).toEqual(["\x1b[?2031;2$y", "\x1b[?2031;1$y"])
+  })
+
+  it("leaves DECRQM for every other mode to xterm", async () => {
+    const { term, replies, write } = rig()
+    const toPty: string[] = []
+    term.onData((data) => toPty.push(data))
+    await write("\x1b[?2004$p")
+    expect(replies).toEqual([])
+    expect(toPty).toEqual(["\x1b[?2004;2$y"])
+  })
+
   it("stops listening once disposed", async () => {
     const { state, replies, watch, write } = rig()
     watch.dispose()

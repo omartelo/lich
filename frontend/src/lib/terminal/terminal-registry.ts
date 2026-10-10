@@ -181,6 +181,15 @@ export function feedEntry(entry: TerminalEntry, bytes: Uint8Array, decodeMs: num
   live.term.write(bytes, () => recordChunk(decodeMs, performance.now() - t0, bytes.length))
 }
 
+/**
+ * Records the session's process ending. Modes the app asked for die with it:
+ * Restart spawns a new process into this same entry.
+ */
+export function markExited(entry: TerminalEntry, exit: SessionExit): void {
+  entry.exit = exit
+  entry.themeNotify = false
+}
+
 /** Serializes the live terminal and destroys it; output then queues until show. */
 export function hideEntry(entry: TerminalEntry): void {
   const live = entry.live

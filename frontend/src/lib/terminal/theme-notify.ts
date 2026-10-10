@@ -16,6 +16,9 @@ type Scheme = ThemeDefinition["scheme"]
 
 const THEME_NOTIFY_MODE = 2031
 const COLOR_SCHEME_QUERY = 996
+// DECRPM status values: 1 set, 2 reset.
+const MODE_SET = 1
+const MODE_RESET = 2
 
 /** The report the mode sends on a change and DSR 996 answers with. */
 export function colorSchemeReport(scheme: Scheme): string {
@@ -24,8 +27,9 @@ export function colorSchemeReport(scheme: Scheme): string {
 
 /**
  * Teaches `term` the mode: DECSET/DECRST 2031 flip `state.themeNotify`, and the
- * DSR 996 query is answered through `reply` with the scheme read at that
- * moment. Every other private mode and query is left to xterm.
+ * DSR 996 query and a DECRQM for 2031 are answered through `reply`, the
+ * scheme read at that moment. Every other private mode and query is left to
+ * xterm.
  */
 export function watchThemeNotify(
   term: Terminal,
@@ -48,6 +52,13 @@ export function watchThemeNotify(
         return false
       }
       reply(colorSchemeReport(scheme()))
+      return true
+    }),
+    term.parser.registerCsiHandler({ prefix: "?", intermediates: "$", final: "p" }, (params) => {
+      if (params.length !== 1 || params[0] !== THEME_NOTIFY_MODE) {
+        return false
+      }
+      reply(`\x1b[?${THEME_NOTIFY_MODE};${state.themeNotify ? MODE_SET : MODE_RESET}$y`)
       return true
     }),
   ]
