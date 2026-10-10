@@ -39,14 +39,22 @@ const load = async () => {
   }
 }
 
+const loadOnce = () => {
+  if (loaded) return
+  loaded = true
+  void load()
+}
+
 export const promptLanguageStore = {
-  get: (): Locale => language,
+  // A read starts the load too: the prompt composers read this without
+  // subscribing, and the first text typed must not wait on the Settings pane.
+  get: (): Locale => {
+    loadOnce()
+    return language
+  },
   subscribe(listener: () => void): () => void {
     listeners.add(listener)
-    if (!loaded) {
-      loaded = true
-      void load()
-    }
+    loadOnce()
     return () => {
       listeners.delete(listener)
     }
