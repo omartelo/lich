@@ -66,9 +66,8 @@ func (s *Service) indexTranscript(sessionID string) {
 // One query per word of the term, over the rows still without a snippet: a term
 // is almost always one word, and a session is windowed on the first of them its
 // conversation mentions, which is the word the snippet is then centred on. A row
-// whose conversation mentions none of them (a hit the index found by a fold of
-// its own, since accents are folded and "ción" is indexed as "cion") keeps its
-// place in the list with no snippet under it.
+// whose conversation mentions none of them in the plain text is a hit the index
+// found by a fold of its own, and is cut by foldedSnippets instead.
 func (s *Service) attachSnippets(sessions []ClosedSession, ids []string, term string) {
 	if len(ids) == 0 {
 		return
@@ -96,6 +95,84 @@ func (s *Service) attachSnippets(sessions []ClosedSession, ids []string, term st
 		}
 		pending = missed
 	}
+	for id, cut := range s.foldedSnippets(pending, term) {
+		sessions[row[id]].Snippet = cut
+	}
+}
+
+// matchOpen and matchClose are what FTS5's snippet() is asked to wrap the token
+// it matched in: control characters a conversation does not write as prose, so
+// the first pair in a fragment is the hit.
+const (
+	matchOpen  = "\x02"
+	matchClose = "\x03"
+)
+
+// fragmentTokens is how many tokens of the conversation FTS5's snippet() cuts
+// around the hit, which is its own ceiling: SQLite caps the argument at 64.
+const fragmentTokens = 64
+
+// foldedSnippets cuts a snippet for each of these conversations out of the
+// fragment the index itself finds, keyed by session id. They are the hits the
+// plain text does not hold: the index folds case and accents across Unicode,
+// so "indice" finds "Índice", while SQLite's lower() folds ASCII alone. Asking
+// the index which token it matched is what keeps a snippet under every row the
+// index lists, without folding in Go a body of up to eight megabytes.
+//
+// It is the fallback and not the first try because snippet() tokenizes the
+// whole conversation, where the plain scan is a byte search.
+func (s *Service) foldedSnippets(ids []string, term string) map[string]string {
+	fts := ftsQuery(term)
+	if len(ids) == 0 || fts == "" {
+		return nil
+	}
+	query := `SELECT t.session_id,
+	                 snippet(session_texts_fts, 0, char(2), char(3), '', ?)
+	            FROM session_texts_fts
+	            JOIN session_texts t ON t.rowid = session_texts_fts.rowid
+	           WHERE session_texts_fts MATCH ?
+	             AND t.session_id IN (?` + strings.Repeat(",?", len(ids)-1) + `)`
+	args := []any{fragmentTokens, fts}
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		slog.Warn("store: cut folded snippets", "err", err)
+		return nil
+	}
+	defer rows.Close()
+	unmark := strings.NewReplacer(matchOpen, "", matchClose, "")
+	snippets := make(map[string]string, len(ids))
+	for rows.Next() {
+		var id, fragment string
+		if err := rows.Scan(&id, &fragment); err != nil {
+			slog.Warn("store: scan folded snippet", "err", err)
+			return snippets
+		}
+		token, ok := markedToken(fragment)
+		if !ok {
+			continue
+		}
+		if cut, ok := snippet.Around(unmark.Replace(fragment), strings.ToLower(token)); ok {
+			snippets[id] = cut
+		}
+	}
+	if err := rows.Err(); err != nil {
+		slog.Warn("store: iterate folded snippets", "err", err)
+	}
+	return snippets
+}
+
+// markedToken is the first token snippet() wrapped as a hit, as the
+// conversation spells it.
+func markedToken(fragment string) (string, bool) {
+	_, rest, ok := strings.Cut(fragment, matchOpen)
+	if !ok {
+		return "", false
+	}
+	token, _, ok := strings.Cut(rest, matchClose)
+	return token, ok
 }
 
 // windowChars is how much of a conversation the snippet is cut out of, centred
@@ -115,8 +192,7 @@ const windowChars = 4096
 // null: a conversation is mostly lowercase prose and the word is already
 // lowercased, so the folded copy of a multi-megabyte body is one this almost
 // always avoids. The fold itself is SQLite's, which is ASCII: a body that shouts
-// an accented word in capitals is a hit with no snippet, the same answer the
-// index's own accent fold already gives.
+// an accented word in capitals is not windowed here, and foldedSnippets cuts it.
 const firstMention = `coalesce(nullif(instr(body, ?), 0), instr(lower(body), ?))`
 
 // conversationWindows cuts, in the query, the stretch of each of these

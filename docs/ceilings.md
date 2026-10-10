@@ -848,14 +848,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   version-1 step is the one step every database that already exists has long since run, so a column added
   there reaches none of them and every read of that table fails. 0.53.0 shipped a column that way and loaded
   no projects at all.
-- **A history snippet folds case in ASCII, so a shouted accented word is a hit with no snippet**
-  (`internal/store/transcripts.go`, `firstMention`): the window around a match is cut in the query rather than
-  out of the whole conversation, which is what keeps a page of a hundred rows off the megabytes behind it. The
-  fold that locates the match inside that body is SQLite's `lower()`, which leaves everything outside ASCII
-  alone: measured, `index` finds `INDEX` but `índice` does not find `Índice`. The row still lists, because the
-  FTS index has an accent fold of its own and matched it, so what the reader loses is the line under the row,
-  not the row. Folding in Go over the returned window would close it, and is now cheap because the window is
-  4096 characters rather than the whole conversation.
 - **The history's branch is read live, so a row whose checkout is gone has none** (`internal/project.BranchesOf`):
   the branch a row shows is not the one it stores — a worktree keeps the name it was created with while an
   agent moves the branch inside it, so the stored snapshot dates the close and only git can say what the
