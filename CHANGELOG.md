@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`lich insert` pastes text at a session's prompt without sending it.** Give
+  it a project directory and it finds the session running there; give it a
+  session and it goes there. The person at that session reads what landed,
+  writes around it and presses Enter themselves — a half-written line is added
+  to, not waited out. It is what an editor plugin calls to hand over a
+  selection or a file. `lich sessions --json` and `whoami --json` now also carry
+  each session's `path` and `projectPath`, and `send --project` now takes a
+  directory, as `lich --help` already said it did.
+
 - **Two language settings, English and Brazilian Portuguese.** Settings ›
   Appearance now has an *Interface language* for lich's own screens and a
   separate *Prompt language* for the text lich hands your agents (relayed tasks,

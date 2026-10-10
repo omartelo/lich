@@ -237,6 +237,21 @@ func (sess *session) setupEnded(chunk []byte) bool {
 // ever starts. It looked delivered to everyone involved: the sender waited out
 // its ticket on an agent that was never asked anything.
 func (s *Service) Ready(id string) bool {
+	return s.promptState(id, true)
+}
+
+// AtPrompt is Ready without the draft check: whether the provider is the
+// program reading this PTY and sitting at its prompt, whoever has typed there.
+// It is the question for a write that does not send — text pasted for the
+// person to finish and submit themselves — where a half-written line is the
+// place the text belongs rather than a reason to hold it back.
+func (s *Service) AtPrompt(id string) bool {
+	return s.promptState(id, false)
+}
+
+// promptState answers Ready and AtPrompt, which differ in whether the person's
+// unsent line counts against the prompt.
+func (s *Service) promptState(id string, mindDraft bool) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sess, ok := s.sessions[id]
@@ -246,7 +261,7 @@ func (s *Service) Ready(id string) bool {
 	// Unlike the rest of this, being ready is not a state a session reaches and
 	// keeps: the user starts typing and the prompt is theirs again until they
 	// send it (see draft.go).
-	if sess.drafting(time.Now()) {
+	if mindDraft && sess.drafting(time.Now()) {
 		return false
 	}
 	// A quiet screen is not a prompt in a fresh directory: Claude Code and

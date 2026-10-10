@@ -215,6 +215,9 @@ type Events interface {
 type Terminal interface {
 	Live(id string) bool
 	Ready(id string) bool
+	// AtPrompt is Ready without minding what the person has typed there: the
+	// question for a write that does not send (Insert).
+	AtPrompt(id string) bool
 	Write(id, data string) error
 	// QuietFor is how long that session's PTY has produced nothing, which is
 	// how a delivery knows the target has finished taking the paste in before
@@ -266,6 +269,12 @@ type Peer struct {
 	// so a reader holding a recorded id can find its card. Last, because
 	// fields are appended to this shape, never inserted.
 	ID string `json:"id"`
+	// Path is the directory the session runs in, the worktree's for a worktree
+	// session, and ProjectPath the root of the project it belongs to. They are
+	// what an editor matches its open folder against to find the session beside
+	// it; the name of a project says nothing about where it is.
+	Path        string `json:"path"`
+	ProjectPath string `json:"projectPath"`
 }
 
 // Result is what a caller gets back from Send or Wait. Answer is empty unless

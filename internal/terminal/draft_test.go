@@ -74,6 +74,35 @@ func TestPointerAndCursorInputIsNotADraft(t *testing.T) {
 	}
 }
 
+// AtPrompt is the question for text that is pasted and not sent: the person's
+// half-written line is where it belongs, so it must not count against the
+// prompt, while a session that is not at one at all still does.
+func TestAtPromptIgnoresTheUsersDraft(t *testing.T) {
+	svc, _ := settled(t)
+
+	svc.noteInput("s1", []byte("explain this: "))
+	if svc.Ready("s1") {
+		t.Fatal("a drafted prompt was offered work")
+	}
+	if !svc.AtPrompt("s1") {
+		t.Error("a draft held back text that was only to be added to it")
+	}
+}
+
+func TestAtPromptIsFalseWhereThereIsNoPrompt(t *testing.T) {
+	svc, sess := settled(t)
+
+	svc.mu.Lock()
+	sess.settingUp = true
+	svc.mu.Unlock()
+	if svc.AtPrompt("s1") {
+		t.Error("a session still running its setup script was at a prompt")
+	}
+	if svc.AtPrompt("nobody") {
+		t.Error("a session that does not exist was at a prompt")
+	}
+}
+
 // The prompt cannot be held indefinitely: lich sees the bytes going in, never
 // the line itself, so an edit it cannot read as one would wedge the relay
 // silently. A draft nobody has touched goes stale and gives the prompt back.

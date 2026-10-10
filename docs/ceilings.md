@@ -480,6 +480,18 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the handoff, and the relay's own hold is not drawn at all: a delivery held there answers to its sender, through
   the ticket. What stays open is the provider that takes keystrokes through anything other than this PTY, which is
   invisible to every part of this.
+- **`lich insert` pastes and leaves it, so what the person sees is the provider's own paste handling**
+  (`internal/relay/insert.go`, `internal/terminal` `AtPrompt`): it types a bracketed paste at the PTY of all eight
+  providers alike, a Claude Code session with the mod included, and presses nothing. The same gaps as a typed
+  delivery apply and are not closed here. On Windows (ConPTY) the paste markers are dropped, so a multi-line
+  selection reaches the TUI as typed characters and each provider's burst heuristic decides whether a newline
+  inside it submits the line — measured on none of them, since there is no Windows hardware here. A provider that
+  collapses a long paste (Claude Code's `[Pasted text #1 +40 lines]`) shows the placeholder, not the text, and the
+  person cannot edit what is inside it. And a prompt lich cannot see — a trust dialog, a question of the provider's
+  own — takes the text as an answer: `AtPrompt` only knows the agent has gone quiet, which `waiting` (reported by
+  some providers) is what refuses; the rest are on the same footing as `send`. It ignores the user's unsent draft
+  on purpose, unlike `send`, because it adds to the line instead of sending it; the draft heuristic's blind spots
+  (above) do not apply to it for that reason.
 - **An interrupted wait lets go only when the caller says so, and oh-my-pi never says so**
   (`internal/cli/mcp.go`, `runMCP`; `internal/relay/inbox.go`, `collect`): a wait whose caller is gone must not
   take a result, because nothing reads it and the nudge was skipped for its sake. `lich wait` killed with Ctrl-C

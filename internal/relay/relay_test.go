@@ -121,6 +121,13 @@ func (f *fakeTerminal) Ready(id string) bool {
 	return f.live[id] && !f.settingUp[id] && !f.typing[id]
 }
 
+// AtPrompt is Ready that does not mind the person's unsent line.
+func (f *fakeTerminal) AtPrompt(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.live[id] && !f.settingUp[id]
+}
+
 // typeAt marks a session as having the user's own unsent line at its prompt.
 func (f *fakeTerminal) typeAt(id string, drafting bool) {
 	f.mu.Lock()
@@ -399,11 +406,12 @@ func TestPeersListsLiveSessionsWithoutTheCaller(t *testing.T) {
 
 	// Both names travel: an agent that sees only one of them treats the other
 	// as a different session, which is what sent the first real run down two
-	// channels at once.
+	// channels at once. A session with no directory of its own runs in its
+	// project's, and both are published for an editor to match its folder to.
 	want := []Peer{
-		{Label: "docs", Name: "lich-s2", Project: "lich", Kind: "codex", ID: "s2"},
-		{Label: "api", Name: "lich-s3", Project: "lich", Kind: "opencode", ID: "s3"},
-		{Label: "api", Name: "revu-s5", Project: "revu", Kind: "crush", ID: "s5"},
+		{Label: "docs", Name: "lich-s2", Project: "lich", Kind: "codex", ID: "s2", Path: "/src/lich", ProjectPath: "/src/lich"},
+		{Label: "api", Name: "lich-s3", Project: "lich", Kind: "opencode", ID: "s3", Path: "/src/lich", ProjectPath: "/src/lich"},
+		{Label: "api", Name: "revu-s5", Project: "revu", Kind: "crush", ID: "s5", Path: "/src/revu", ProjectPath: "/src/revu"},
 	}
 	if len(peers) != len(want) {
 		t.Fatalf("got %d peers %v, want %d", len(peers), peers, len(want))
@@ -3007,7 +3015,10 @@ func TestSelfIsTheCallersOwnEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Self: %v", err)
 	}
-	want := Peer{Label: "sender", Name: "lich-s1", Project: "lich", Kind: "claude", ID: "s1"}
+	want := Peer{
+		Label: "sender", Name: "lich-s1", Project: "lich", Kind: "claude", ID: "s1",
+		Path: "/src/lich", ProjectPath: "/src/lich",
+	}
 	if got != want {
 		t.Fatalf("Self = %+v, want %+v", got, want)
 	}

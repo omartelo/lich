@@ -44,6 +44,15 @@ var commands = []command{
 			"never returns it — for a subagent or workflow step inside a session.",
 	},
 	{
+		name: "insert",
+		args: "[--project <name-or-path>] [--session <session>] [--timeout <seconds>] [--json] [<text> | -]",
+		about: "Paste <text> at a session's prompt without sending it, for the person there\n" +
+			"to finish and submit. The text is read from stdin when it is left out or is -.\n" +
+			"--session names the target; without it --project names where to find one, by\n" +
+			"name or by the absolute path of its directory, and exactly one live session\n" +
+			"must be running there. For an editor sending a selection or a file.",
+	},
+	{
 		name: "wait",
 		args: "[--timeout <seconds>] [--no-wait] [--json] [<ticket>]",
 		about: "With a ticket, wait again on that errand. Without one, collect every\n" +

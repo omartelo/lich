@@ -72,6 +72,9 @@ func (s *Service) peerOf(p store.Project, sess store.Session) Peer {
 		Kind:    sess.Kind,
 		State:   s.reportedState(sess.ID),
 		ID:      sess.ID,
+
+		Path:        cwd,
+		ProjectPath: p.Path,
 	}
 }
 
@@ -171,7 +174,7 @@ func matching(found []candidate, target, project string, naming func(candidate) 
 		if !strings.EqualFold(naming(c), target) {
 			continue
 		}
-		if project != "" && !strings.EqualFold(c.Peer.Project, project) {
+		if !inProjectNamed(c.Peer, project) {
 			continue
 		}
 		matches = append(matches, c)
