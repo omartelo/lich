@@ -192,7 +192,7 @@ func TestStatus(t *testing.T) {
 
 func TestInstallCommand(t *testing.T) {
 	arch := "yay -S lich-bin" + restartChain
-	cask := "brew upgrade --cask omartelo/tap/lich" + restartChain
+	cask := "brew upgrade --cask lichdotdev/tap/lich" + restartChain
 
 	tests := []struct {
 		name      string
