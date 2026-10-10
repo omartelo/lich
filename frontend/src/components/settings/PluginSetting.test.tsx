@@ -192,6 +192,33 @@ describe("the plugin pane", () => {
     await second.unmount()
   })
 
+  it("updates every outdated plugin from one button, and only those", async () => {
+    status = () =>
+      Promise.resolve([
+        OUTDATED,
+        { ...UNSUPPORTED, provider: "codex", name: "Codex" },
+        { ...INSTALLED, provider: "cursor", name: "Cursor CLI" },
+        { ...NOT_INSTALLED, provider: "crush", name: "Crush" },
+      ])
+    const mounted = await mountBudget(createElement(PluginSetting))
+    await mounted.act(() => {})
+
+    await mounted.act(() => click("Update all"))
+
+    expect(updates).toEqual(["claude", "codex"])
+    expect(installs).toEqual([])
+    await mounted.unmount()
+  })
+
+  it("offers no update-all for a single outdated plugin", async () => {
+    status = () => Promise.resolve([OUTDATED])
+    const mounted = await mountBudget(createElement(PluginSetting))
+    await mounted.act(() => {})
+
+    expect(text()).not.toContain("Update all")
+    await mounted.unmount()
+  })
+
   it("offers the supported release on an unsupported install", async () => {
     status = () => Promise.resolve([UNSUPPORTED])
     const mounted = await mountBudget(createElement(PluginSetting))

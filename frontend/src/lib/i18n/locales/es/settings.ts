@@ -404,6 +404,8 @@ export const settings = {
     unsupported: "v{version}, no compatible con este lich",
     install: "Instalar",
     updateTo: "Actualizar a la v{version}",
+    updateAll: "Actualizar todos",
+    updatingAll: "Actualizando el plugin de lich en todas las CLI…",
     installVersion: "Instalar la v{version}",
     codexHint: "Codex: ejecuta /hooks en una sesión de Codex para confiar en los hooks del plugin.",
     crushHint:

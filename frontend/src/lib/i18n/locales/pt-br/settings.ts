@@ -394,6 +394,8 @@ export const settings = {
     unsupported: "v{version}, não suportada por este lich",
     install: "Instalar",
     updateTo: "Atualizar para v{version}",
+    updateAll: "Atualizar todos",
+    updatingAll: "Atualizando o plugin do lich em todas as CLIs…",
     installVersion: "Instalar v{version}",
     codexHint: "Codex: rode /hooks em uma sessão do Codex para confiar nos hooks do plugin.",
     crushHint:
