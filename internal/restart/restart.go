@@ -29,17 +29,22 @@ type Coordinator struct {
 	started bool
 	exePath string
 	env     []string
+	// args are the successor's arguments: lich's own, so its window opens
+	// with the switches this one was launched with.
+	args []string
 	// spawn is the seam for tests; it defaults to the build-tagged primitive.
 	spawn func(exe string, env, args []string) error
 }
 
 // New returns a coordinator that relaunches exePath with env (plus the wait
-// marker). env should be the current process environment so the successor pins
-// the same listener port.
-func New(exePath string, env []string) *Coordinator {
+// marker) and args. env should be the current process environment so the
+// successor pins the same listener port; args are what the successor is
+// launched with (chromium.RelaunchArgs), nil for none.
+func New(exePath string, env, args []string) *Coordinator {
 	return &Coordinator{
 		exePath: exePath,
 		env:     env,
+		args:    args,
 		spawn:   startDetached,
 	}
 }
@@ -70,7 +75,7 @@ func (c *Coordinator) Quit() error {
 // starts first and blocks retrying the pinned port; then this process exits,
 // and the freed port lets the successor bind and open a fresh window.
 func (c *Coordinator) Do() error {
-	return c.launch(c.exePath, nil)
+	return c.launch(c.exePath, c.args)
 }
 
 // Install hands replacement and relaunch to Inno Setup. It waits for this PID

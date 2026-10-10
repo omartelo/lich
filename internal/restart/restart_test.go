@@ -11,7 +11,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	c := New("/usr/local/bin/lich", []string{"PATH=/bin"})
+	c := New("/usr/local/bin/lich", []string{"PATH=/bin"}, nil)
 	if c.exePath != "/usr/local/bin/lich" {
 		t.Fatalf("exePath = %q", c.exePath)
 	}
@@ -116,7 +116,7 @@ func TestQuit(t *testing.T) {
 	})
 
 	t.Run("refused before lich serves", func(t *testing.T) {
-		if err := New("/usr/local/bin/lich", nil).Quit(); err == nil {
+		if err := New("/usr/local/bin/lich", nil, nil).Quit(); err == nil {
 			t.Fatal("Quit() = nil before SetStop, want an error")
 		}
 	})
@@ -166,7 +166,7 @@ func TestDoErrors(t *testing.T) {
 
 func TestInstallLaunchesBeforeShutdown(t *testing.T) {
 	var order []string
-	c := New(filepath.Join(t.TempDir(), "lich.exe"), []string{"LICH_LISTEN_PORT=47821"})
+	c := New(filepath.Join(t.TempDir(), "lich.exe"), []string{"LICH_LISTEN_PORT=47821"}, nil)
 	c.spawn = func(exe string, env, args []string) error {
 		if exe != "verified-setup.exe" {
 			t.Fatalf("spawned %q instead of installer", exe)
@@ -196,7 +196,7 @@ func TestInstallLaunchesBeforeShutdown(t *testing.T) {
 }
 
 func TestInstallerLaunchFailureKeepsRunning(t *testing.T) {
-	c := New("lich.exe", nil)
+	c := New("lich.exe", nil, nil)
 	c.spawn = func(string, []string, []string) error { return io.ErrClosedPipe }
 	c.SetStop(func() { t.Fatal("stopped after launch failure") })
 	if err := c.Install("setup.exe"); !errors.Is(err, io.ErrClosedPipe) {
@@ -216,5 +216,24 @@ func TestWithoutMarkerKeepsTheRestartMarkerOutOfChildren(t *testing.T) {
 	}
 	if !slices.Contains(env, WaitEnv+"=1") {
 		t.Fatal("WithoutMarker changed the slice it was given")
+	}
+}
+
+// A successor is lich launched again, and a lich launched with
+// `lich -- <chromium flags>` opened its window with them: re-executed with no
+// arguments, the restarted window lost them (an --ozone-platform=x11 that
+// worked around a driver, gone after the first update).
+func TestDoRelaunchesWithTheArgsItWasGiven(t *testing.T) {
+	var spawnedArgs []string
+	c := New("/usr/local/bin/lich", nil, []string{"--", "--ozone-platform=x11"})
+	c.spawn = func(_ string, _ []string, args []string) error {
+		spawnedArgs = args
+		return nil
+	}
+	if err := c.Do(); err != nil {
+		t.Fatalf("Do() = %v", err)
+	}
+	if want := []string{"--", "--ozone-platform=x11"}; !slices.Equal(spawnedArgs, want) {
+		t.Fatalf("successor args = %v, want %v", spawnedArgs, want)
 	}
 }

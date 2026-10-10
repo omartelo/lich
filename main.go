@@ -121,7 +121,7 @@ func main() {
 	// session was worked in this run is still in memory until something writes
 	// it (internal/terminal.handsOn).
 	defer term.FlushHandsOn()
-	coord := newCoordinator()
+	coord := newCoordinator(chromiumArgs)
 	window := newWindow(term.Transport(), configDir, chromiumArgs, term.LiveCount, coord.Quit)
 	registerServices(db, term, hub, configDir, logPath, env, launchEnv, window, coord)
 
@@ -131,7 +131,8 @@ func main() {
 }
 
 // pinShellFlag carries --shell in the environment rather than passing it down:
-// the restart successor inherits it (it is re-executed with no arguments), and
+// the restart successor inherits it (it is re-executed with the window's
+// switches alone, chromium.RelaunchArgs), and
 // `lich doctor` then reports the window a launch here would really open.
 func pinShellFlag(pinnedShell string) {
 	if pinnedShell == "" {
@@ -563,15 +564,16 @@ func newWindowTarget(info terminal.TransportInfo, configDir string) windowTarget
 
 // newCoordinator is the in-place restart: the update flow (install.sh) POSTs
 // /restart after replacing the binary. os.Environ() here carries the pinned
-// LICH_LISTEN_PORT so the successor rebinds the same port. A missing executable
-// path only disables restart; the app still runs.
-func newCoordinator() *restart.Coordinator {
+// LICH_LISTEN_PORT so the successor rebinds the same port, and the window's
+// switches (`lich -- <flags>`) go to it as arguments, so its window opens with
+// them too. A missing executable path only disables restart; the app still runs.
+func newCoordinator(windowFlags []string) *restart.Coordinator {
 	exe, err := os.Executable()
 	if err != nil {
 		slog.Warn("resolve executable — restart disabled", "err", err)
 		exe = ""
 	}
-	return restart.New(exe, os.Environ())
+	return restart.New(exe, os.Environ(), chromium.RelaunchArgs(windowFlags))
 }
 
 // newWindow builds the keeper of this lich's window. Extra CLI args after `--`
