@@ -3,6 +3,13 @@
 // no stores) so the flatten and filter are testable without a render.
 
 import type { ClosedSession, ExternalSession, Project, TranscriptMatch } from "@/lib/api-types"
+import {
+  formatCombo,
+  HOTKEY_ACTIONS,
+  HOTKEY_GROUPS,
+  type HotkeyAction,
+  type Hotkeys,
+} from "@/lib/hotkeys"
 import type { SessionKind, SessionState } from "./sessions"
 
 // PaletteSession is one session flattened with the project it belongs to — what
@@ -218,6 +225,7 @@ export type PaletteRow =
   | { kind: "message"; message: PaletteMessage }
   | { kind: "history"; session: PaletteHistory }
   | { kind: "external"; session: ExternalSession }
+  | { kind: "action"; action: HotkeyAction; keys: string }
 
 export interface PaletteGroup {
   label: string
@@ -242,6 +250,8 @@ export function rowKey(row: PaletteRow): string {
       return row.session.id
     case "external":
       return `external:${row.session.providerSessionId}`
+    case "action":
+      return `action:${row.action.id}`
     default:
       return row.project.id
   }
@@ -390,4 +400,41 @@ export function nextTab(tab: PaletteTab, step: number): PaletteTab {
   const count = PALETTE_TABS.length
   const index = (PALETTE_TABS.indexOf(tab) + step + count) % count
   return PALETTE_TABS[index] ?? tab
+}
+
+// ACTION_PREFIX switches the palette from jumping to running actions, the way
+// the editors' palettes read it. The mode lives in the query and nowhere else:
+// nothing listens for the key itself, so a ">" typed into a terminal stays in
+// the terminal, and a palette closed in action mode reopens jumping.
+export const ACTION_PREFIX = ">"
+
+// actionTerm is the part of the query an action is searched by, or null when
+// the query is not asking for actions at all.
+export function actionTerm(query: string): string | null {
+  return query.startsWith(ACTION_PREFIX) ? query.slice(ACTION_PREFIX.length) : null
+}
+
+// actionGroups lists the hotkey actions matching term, grouped the way the
+// shortcuts overlay groups them, each with its chord as currently bound. The
+// palette's own action is left out: run from the palette, it would only close
+// the palette it was run from.
+export function actionGroups(term: string, hotkeys: Hotkeys, isMac: boolean): PaletteGroup[] {
+  const runnable = HOTKEY_ACTIONS.filter(
+    (action) => action.id !== "commandPalette" && matchesQuery(action.label, term),
+  )
+  return HOTKEY_GROUPS.map((hotkeyGroup) =>
+    group(
+      hotkeyGroup.label,
+      runnable
+        .filter((action) => action.group === hotkeyGroup.id)
+        .map(
+          (action): PaletteRow => ({
+            kind: "action",
+            action,
+            keys: formatCombo(hotkeys[action.id], isMac),
+          }),
+        ),
+      0,
+    ),
+  ).filter((g) => g.rows.length > 0)
 }

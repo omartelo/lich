@@ -1,9 +1,19 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Folder, FolderX, GitBranch, MessageSquareText, TriangleAlert } from "lucide-react"
+import {
+  ChevronRight,
+  Folder,
+  FolderX,
+  GitBranch,
+  MessageSquareText,
+  TriangleAlert,
+} from "lucide-react"
 import { useProjects } from "@/providers/projects"
 import { useSettings } from "@/providers/settings"
-import { useHotkey } from "@/lib/use-hotkey"
+import { runHotkey, useHotkey } from "@/lib/use-hotkey"
+import type { HotkeyAction } from "@/lib/hotkeys"
+import { isMac } from "@/lib/platform"
+import { Keys } from "@/components/common/Keys"
 import {
   runningSessions,
   useSessionStatus,
@@ -11,6 +21,8 @@ import {
 } from "@/lib/session/use-session-status"
 import { SessionStatusIcon } from "@/components/sidebar/SessionStatusIcon"
 import {
+  actionGroups,
+  actionTerm,
   adoptedSession,
   externalLabel,
   filterPalette,
@@ -60,8 +72,15 @@ export function CommandPalette() {
   const [tab, setTab] = useState<PaletteTab>("All")
   const [selected, setSelected] = useState(0)
   const [running, setRunning] = useState<ReadonlySet<string>>(new Set())
+  // The action Enter picked, run once the palette has finished closing: its
+  // focus trap would pull back any focus the action moves while it is still up.
+  const picked = useRef<HotkeyAction | null>(null)
+  // Non-null while the query asks for actions: the list is then the actions and
+  // nothing else, so the stores are not searched for a term that starts with ">".
+  const term = actionTerm(query)
+  const searching = open && term === null
 
-  useHotkey(hotkeys.commandPalette, () => {
+  useHotkey("commandPalette", () => {
     setOpen((v) => !v)
     setQuery("")
     setTab("All")
@@ -73,7 +92,7 @@ export function CommandPalette() {
   // list the palette is the only way back to one, so a term that only matches an
   // older close still has to find it. Their directories come back with them, so
   // a project whose folder moved is relocated rather than reopened.
-  const { rows: closed, total: closedTotal, missing } = useClosedProjects(query, open)
+  const { rows: closed, total: closedTotal, missing } = useClosedProjects(query, searching)
 
   // The parked sessions are searched in the store rather than filtered here, so
   // the History tab reaches a session parked further back than one page of it.
@@ -82,7 +101,7 @@ export function CommandPalette() {
     total: historyTotal,
     indexing,
     forget: dropParked,
-  } = useHistorySearch(query, open)
+  } = useHistorySearch(query, searching)
 
   // Forgetting drops the row from the list in place rather than closing the
   // palette: the whole point of the action is that there are usually several of
@@ -137,14 +156,17 @@ export function CommandPalette() {
   // What was said inside the sessions, not just their names. It arrives after
   // the name-matched groups (it is a disk read behind a debounce), so it is
   // listed last and never moves a row the user is already aiming at.
-  const messages = useTranscriptSearch(query, all, open)
+  const messages = useTranscriptSearch(query, all, searching)
   // The indexing note is held back until something is typed: with no term there
   // is no search for it to be incomplete, and the backfill it reports is not
   // running either: asking with a term is what starts one.
   const backlog = query.trim() === "" ? 0 : indexing
   const groups = useMemo(
-    () => paletteGroups(tab, results, messages, historyTotal, backlog),
-    [tab, results, messages, historyTotal, backlog],
+    () =>
+      term === null
+        ? paletteGroups(tab, results, messages, historyTotal, backlog)
+        : actionGroups(term, hotkeys, isMac),
+    [term, hotkeys, tab, results, messages, historyTotal, backlog],
   )
   const counts = useMemo(
     () => PALETTE_TABS.map((t) => paletteTabCount(t, results, messages)),
@@ -207,6 +229,23 @@ export function CommandPalette() {
         close()
         void adopt(row.session)
         return
+      case "action":
+        picked.current = row.action
+        close()
+        return
+    }
+  }
+
+  // A declined action is said rather than dropped: a chord that does nothing
+  // falls through to the terminal, but a row that does nothing just looks broken.
+  const runPicked = (isOpen: boolean) => {
+    const action = picked.current
+    picked.current = null
+    if (isOpen || !action) {
+      return
+    }
+    if (!runHotkey(action.id)) {
+      toast(`${action.label} is not available here`)
     }
   }
 
@@ -232,6 +271,9 @@ export function CommandPalette() {
     if (row?.kind === "history") {
       return historyAction(row.session)
     }
+    if (row?.kind === "action") {
+      return "run"
+    }
     return row?.kind === "external" ? "resume" : "open"
   })()
 
@@ -252,7 +294,9 @@ export function CommandPalette() {
       // The dialog traps focus and there is nothing else in it worth tabbing to,
       // so Tab walks the filters instead of the focus ring.
       event.preventDefault()
-      setTab((t) => nextTab(t, event.shiftKey ? -1 : 1))
+      if (term === null) {
+        setTab((t) => nextTab(t, event.shiftKey ? -1 : 1))
+      }
     }
   }
 
@@ -260,15 +304,16 @@ export function CommandPalette() {
     <PickerDialog
       open={open}
       onOpenChange={(next) => (next ? setOpen(true) : close())}
+      onOpenChangeComplete={runPicked}
       title="Command palette"
-      placeholder="Jump to a session, project or something said…"
+      placeholder="Jump to a session, project or something said, or type > for actions…"
       searchLabel="Search sessions and projects"
       resultsLabel="Results"
       query={query}
       onQueryChange={setQuery}
       onKeyDown={onInputKeyDown}
       actionHint={actionHint}
-      filters={<FilterTabs tab={tab} counts={counts} onPick={setTab} />}
+      filters={term === null ? <FilterTabs tab={tab} counts={counts} onPick={setTab} /> : undefined}
     >
       {total === 0 ? (
         // Two different empties, deliberately not sharing a sentence: one says
@@ -290,7 +335,7 @@ export function CommandPalette() {
         ) : (
           <PickerEmpty>
             No matches for <span className="font-mono text-foreground/80">{query.trim()}</span>
-            {tab !== "All" && <> in {tab.toLowerCase()}</>}
+            {term === null && tab !== "All" && <> in {tab.toLowerCase()}</>}
           </PickerEmpty>
         )
       ) : (
@@ -424,7 +469,42 @@ function ListRow({
       return (
         <ExternalRow session={row.session} selected={selected} onSelect={onSelect} onRun={onRun} />
       )
+    case "action":
+      return (
+        <ActionRow
+          action={row.action}
+          keys={row.keys}
+          selected={selected}
+          onSelect={onSelect}
+          onRun={onRun}
+        />
+      )
   }
+}
+
+// An action names itself and the chord it is bound to, so running it from here
+// is also how its shortcut is learned. An Unassigned one says so in the same
+// slot, the way the shortcuts overlay does, and still runs.
+function ActionRow({
+  action,
+  keys,
+  selected,
+  onSelect,
+  onRun,
+}: {
+  action: HotkeyAction
+  keys: string
+  selected: boolean
+  onSelect: () => void
+  onRun: () => void
+}) {
+  return (
+    <PickerRow selected={selected} onSelect={onSelect} onRun={onRun}>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1 truncate text-sm">{action.label}</span>
+      <Keys>{keys}</Keys>
+    </PickerRow>
+  )
 }
 
 // A conversation started outside lich reads like a closed session without the

@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Code, Codex and opencode sessions report waiting; the other providers never
   do, so the shortcut skips them.
 
+- **Run any shortcut from the command palette.** Type `>` in the palette
+  (Ctrl+K, ⌘K on macOS) to list every keyboard shortcut action with the chord
+  it is bound to, and press Enter to run one. Actions left Unassigned in
+  Settings › Hotkeys are listed too, so they can be run without binding a key.
+
 ### Changed
 
 - **macOS is no longer experimental.** The Homebrew cask has held up in real

@@ -125,8 +125,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // event subscription without re-subscribing on every navigation.
   const activeProjectIdRef = useRef(activeProjectId)
   activeProjectIdRef.current = activeProjectId
-  const { hotkeys, desktopNotifications, setDesktopNotifications, finishedTurnNotifications } =
-    useSettings()
+  const { desktopNotifications, setDesktopNotifications, finishedTurnNotifications } = useSettings()
   // Read inside the same once-only subscription, for the same reason as the
   // active project: a preference change must not tear down the status listener.
   const desktopNotificationsRef = useRef(desktopNotifications)
@@ -516,7 +515,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // focus — see useHotkey for how the chord is kept out of the PTY. A press with
   // no project open is declined, so the chord falls through instead of being
   // swallowed for nothing.
-  useHotkey(hotkeys.newSession, () => {
+  useHotkey("newSession", () => {
     if (!activeProjectId) return false
     newSession(activeProjectId)
   })
@@ -534,12 +533,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       activateSession(activeProjectId, target)
     }
   }
-  useHotkey(hotkeys.nextSession, () => stepSession(1))
-  useHotkey(hotkeys.prevSession, () => stepSession(-1))
+  useHotkey("nextSession", () => stepSession(1))
+  useHotkey("prevSession", () => stepSession(-1))
 
   // Unlike the step above, nothing waiting declines the chord rather than
   // swallowing it: there is no move this press could have meant.
-  useHotkey(hotkeys.nextWaitingSession, () => {
+  useHotkey("nextWaitingSession", () => {
     if (!activeProjectId) return false
     const target = nextWaitingSessionId(
       readSidebarCards(),
@@ -553,7 +552,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // Settings and the pull requests render over the terminals rather than beside
   // them, so handing focus to a session that is behind one of those screens would
   // type into something the user cannot see: leave the screen first.
-  useHotkey(hotkeys.focusTerminal, () => {
+  useHotkey("focusTerminal", () => {
     if (!activeProjectId) return false
     const target = activeSessionId(sessionsRef.current, activeProjectId)
     if (!target) return false
@@ -566,8 +565,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     if (!target) return false
     navigate(`/projects/${target}`)
   }
-  useHotkey(hotkeys.nextProject, () => stepProject(1))
-  useHotkey(hotkeys.prevProject, () => stepProject(-1))
+  useHotkey("nextProject", () => stepProject(1))
+  useHotkey("prevProject", () => stepProject(-1))
 
   useSessionEvents({
     sessions,

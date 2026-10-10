@@ -19,7 +19,7 @@ export function ShortcutsOverlay() {
   const { hotkeys } = useSettings()
   const [open, setOpen] = useState(false)
 
-  useHotkey(hotkeys.shortcuts, () => setOpen((v) => !v))
+  useHotkey("shortcuts", () => setOpen((v) => !v))
 
   const groups = useMemo(() => shortcutGroups(hotkeys, isMac, isWindows), [hotkeys])
 
