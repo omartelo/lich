@@ -39,6 +39,7 @@ import {
   sectionLabel,
   type SettingHit,
 } from "@/lib/settings-index"
+import { useLocale } from "@/lib/i18n/i18n"
 import { HighlightProvider, type HighlightTarget } from "./setting-highlight"
 import { cn } from "@/lib/utils"
 
@@ -126,9 +127,12 @@ export function Settings() {
   const [cursor, setCursor] = useState(0)
   const [lit, setLit] = useState<HighlightTarget>({ title: "", group: "" })
 
+  // The index resolves translated titles when it runs, so a language switch has
+  // to run it again.
+  const locale = useLocale()
   const hits = useMemo(
     () => searchSettings(query, expandEntries(enabledProviders(providers))),
-    [query, providers],
+    [query, providers, locale],
   )
 
   // The highlight is a pointer, not a state to live in: it says "you were just

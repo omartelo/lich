@@ -17,6 +17,7 @@ import { delegatesOf, type Session, sessionOrigin } from "@/lib/session/sessions
 import { useCardDrag } from "@/lib/session/use-card-drag"
 import { useClosingSessions } from "@/lib/session/use-closing-sessions"
 import { sharedColor } from "@/lib/session/card-color"
+import { useT } from "@/lib/i18n/i18n"
 import { useProjects } from "@/providers/projects"
 import { CardTransition } from "./CardTransition"
 import { SessionCard } from "./SessionCard"
@@ -144,6 +145,7 @@ export function SessionGroup({
   delegateGroups,
   providers,
 }: SessionGroupProps) {
+  const t = useT()
   const {
     sessions: workspace,
     activateSession,
@@ -179,7 +181,7 @@ export function SessionGroup({
   const name = stage
     ? stage.name
     : pinned
-      ? "Pinned"
+      ? t("sidebar.sessionGroup.pinned")
       : folder || checkoutLabel(path, projectPath, projectId)
   // One answer for the whole block rather than one per card — and null while the
   // block is open, so a turn ending in another block never repaints this one.

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/omartelo/lich/internal/prompt"
 )
 
 // The message lich types at the target's prompt, and the keystrokes that put it
@@ -28,6 +30,9 @@ import (
 // cannot get right on its own, because nothing in its prompt says lich sessions
 // are visible and steerable and subagents are not.
 //
+// lang is the session's prompt language; every locale keeps to the quoting
+// rule below (see prompt.Catalog).
+//
 // hasTools is whether this provider was handed lich's MCP server at spawn. The
 // command line works everywhere and is named for the ones that were not, on the
 // same rule replyInstruction follows: naming a tool a session does not have is
@@ -42,32 +47,19 @@ import (
 //
 // route is where this spawn's own subagents run (SubagentRoute), which decides
 // what the agent is sent to for fanning work out.
-func SpawnBriefing(hasTools bool, route SubagentRoute) string {
-	command := "Open one with `lich open --worktree BRANCH --prompt 'the task'`, which opens the " +
-		"session and hands it the task in one command."
+func SpawnBriefing(lang prompt.Lang, hasTools bool, route SubagentRoute) string {
+	text := prompt.For(lang)
+	command := text.BriefingCommandCLI
 	if hasTools {
-		command = "The lich tools in your list open one and hand it the task."
+		command = text.BriefingCommandTools
 	}
-	intro := "You are running inside lich, which runs coding-agent sessions side by side and can " +
-		"open more of them beside this one — each a card the user watches and can take over " +
-		"mid-task, in its own git worktree when the work needs its own checkout. "
 	switch route {
 	case RouteCards:
-		return intro + "Here your own Agent tool opens them: a general-purpose subagent runs as " +
-			"one of those cards, in this checkout unless you ask for isolation 'worktree', " +
-			"in the background, and its report comes back to you on its own. Fan work out with " +
-			"it. Open a session yourself only for what a subagent cannot be: another agent " +
-			"kind, a branch the user named, or work that must outlive this session. " + command
+		return text.BriefingIntro + text.BriefingCards + command
 	case RouteNative:
-		return intro + "This session is itself a subagent card another session opened, and here " +
-			"your own Agent tool runs a subagent inside this session rather than as a card. Fan " +
-			"work out with it rather than with new lich sessions: your final message is the " +
-			"report the session that opened you is waiting for."
+		return text.BriefingIntro + text.BriefingNative
 	default:
-		return intro + "When work is " +
-			"to be fanned out — several tasks at once, one per branch or checkout — those sessions " +
-			"are what to open, not the subagents your own harness runs: a subagent has no checkout, " +
-			"no card, and nothing the user can steer or resume. " + command
+		return text.BriefingIntro + text.BriefingSessions + command
 	}
 }
 
@@ -99,10 +91,10 @@ const (
 // person in front of it, and carries the exact command that sends an answer
 // home — the reply path only exists because this text describes it, so the
 // agent needs no prior knowledge of the feature.
-func compose(sender, ticketID, prompt string, hasTools bool) string {
+func compose(lang prompt.Lang, sender, ticketID, task string, hasTools bool) string {
 	return fmt.Sprintf(
-		"[lich] %s, not from your own prompt.\n\n%s\n\n%s",
-		origin(sender), prompt, replyInstruction(hasTools, ticketID),
+		prompt.For(lang).RelayMessage,
+		origin(lang, sender), task, replyInstruction(lang, hasTools, ticketID),
 	)
 }
 
@@ -110,12 +102,8 @@ func compose(sender, ticketID, prompt string, hasTools bool) string {
 // (docs/hooks/mod-answer.md): the task under one line naming who asked, the way
 // a native subagent is handed its prompt. There is no ticket and no reply
 // command, because the worker's last message is its answer.
-func composeForWorker(sender, prompt string) string {
-	return fmt.Sprintf(
-		"[lich] Task from session %q, which opened this session as its subagent. "+
-			"Your final message when you finish is sent back to it as your report.\n\n%s",
-		sender, prompt,
-	)
+func composeForWorker(lang prompt.Lang, sender, task string) string {
+	return fmt.Sprintf(prompt.For(lang).WorkerTask, sender, task)
 }
 
 // replyInstruction tells the receiving agent how to answer. Every agent has a
@@ -129,20 +117,14 @@ func composeForWorker(sender, prompt string) string {
 // blocked on a ticket instead. That happened on the first real run: the target
 // replied over its own socket and the errand timed out with the answer already
 // written. The ticket is the only route home, and the message has to say so.
-func replyInstruction(hasTools bool, ticketID string) string {
-	command := fmt.Sprintf("  \"$LICH_BIN\" reply %s \"<your answer>\"", ticketID)
-	route := "When you have an answer, send it back by running:\n" + command
+func replyInstruction(lang prompt.Lang, hasTools bool, ticketID string) string {
+	text := prompt.For(lang)
+	command := fmt.Sprintf(text.ReplyCommand, ticketID)
+	route := fmt.Sprintf(text.ReplyRouteCLI, command)
 	if hasTools {
-		route = fmt.Sprintf(
-			"When you have an answer, send it back with the lich tool `%s` (ticket %s), or by running:\n%s",
-			ToolReply, ticketID, command,
-		)
+		route = fmt.Sprintf(text.ReplyRouteTools, ToolReply, ticketID, command)
 	}
-	return route + "\n\nThat ticket is the only way back: whoever asked is blocked on it and " +
-		"is reading nothing else. Do not answer by messaging a peer session — an answer " +
-		"sent any other way is lost. Keep the answer a concise report — what was done, " +
-		"where, and what remains — never a transcript: the sender pays to read every byte, " +
-		"and the detail is in your commits and files anyway."
+	return route + "\n\n" + text.ReplyOnlyWayBack
 }
 
 // pickTicketNudge is what a worker is told at its own prompt after a turn that
@@ -152,15 +134,8 @@ func replyInstruction(hasTools bool, ticketID string) string {
 // as somewhere to reply: a ticket the relay has closed answers "unknown ticket",
 // and a note that invites that is worse than no note. What it asks for is the
 // next answer, which is the one that can still name its ticket.
-func pickTicketNudge(count int, errands string) string {
-	return fmt.Sprintf(
-		"[lich] Your turn ended with no answer sent, so %d requests went back to their senders "+
-			"unanswered:\n%s\nNothing outside this session can say which of them that turn was, "+
-			"which is why none of them could be answered for you. One you are still working on "+
-			"still takes its answer, and every answer from here on has to name its ticket: "+
-			"lich reply <ticket> \"<answer>\".",
-		count, errands,
-	)
+func pickTicketNudge(lang prompt.Lang, count int, errands string) string {
+	return fmt.Sprintf(prompt.For(lang).PickTicketNudge, count, errands)
 }
 
 // nudgeNotice is the one line typed at a sender's prompt when results are
@@ -170,18 +145,14 @@ func pickTicketNudge(count int, errands string) string {
 // while one short line lets the agent drain everything in a single tool call.
 // count and targets cover everything waiting, not only what this nudge is the
 // first to mention — the reader acts on the total.
-func nudgeNotice(count int, targets []string, hasTools bool) string {
-	what := fmt.Sprintf("Results from %d tasks you sent are ready (%s)", count, QuotedList(targets))
-	if count == 1 {
-		what = fmt.Sprintf("The task you sent %s has its result ready", QuotedList(targets))
-	}
-	route := "run:\n  \"$LICH_BIN\" wait"
+func nudgeNotice(lang prompt.Lang, count int, targets []string, hasTools bool) string {
+	text := prompt.For(lang)
+	what := fmt.Sprintf(text.Pick(count, text.NudgeResultsReady), count, QuotedList(targets))
+	route := text.NudgeRouteCLI
 	if hasTools {
-		route = fmt.Sprintf(
-			"call the lich tool `%s` with no ticket, or run:\n  \"$LICH_BIN\" wait", ToolCollect,
-		)
+		route = fmt.Sprintf(text.NudgeRouteTools, ToolCollect)
 	}
-	return fmt.Sprintf("[lich] %s. To collect everything at once, %s", what, route)
+	return fmt.Sprintf(text.NudgeNotice, what, route)
 }
 
 // QuotedList words a list of names (session labels, folders) for a message:
@@ -198,11 +169,12 @@ func QuotedList(names []string) string {
 // origin describes the sender in the message's first line. An empty sender is
 // the lich CLI run outside any session — a script, a scheduled job, the user's
 // own shell — which is a different thing to be told than "another agent".
-func origin(sender string) string {
+func origin(lang prompt.Lang, sender string) string {
+	text := prompt.For(lang)
 	if sender == "" {
-		return "Message relayed by the lich command line"
+		return text.OriginCLI
 	}
-	return fmt.Sprintf("Message from session %q", sender)
+	return fmt.Sprintf(text.OriginSession, sender)
 }
 
 // paste wraps text in bracketed paste, which is how a multi-line message

@@ -5,6 +5,8 @@ import { useSessionStatus, useSessionUnread } from "@/lib/session/use-session-st
 import { filterTargetRows, flattenTargetGroups, groupTargetRows } from "@/lib/session/target-picker"
 import type { DelegateGroup, DelegateTarget } from "@/lib/session/delegate-targets"
 import { PickerDialog, PickerEmpty, PickerGroup, PickerRow } from "@/components/common/PickerDialog"
+import { Trans } from "@/components/common/Trans"
+import { useT } from "@/lib/i18n/i18n"
 import { SessionStatusIcon } from "./SessionStatusIcon"
 
 interface SessionTargetPickerProps {
@@ -15,8 +17,6 @@ interface SessionTargetPickerProps {
   /** Delegate to a session that does not exist yet: a fresh worktree. */
   onPickWorktree: () => void
 }
-
-const TITLE = "Delegate to session"
 
 // A searchable stand-in for the plain, ungrouped submenu the delegate
 // context-menu item used to open (SessionCard.tsx): with several sessions
@@ -35,6 +35,7 @@ export function SessionTargetPicker({
   onPick,
   onPickWorktree,
 }: SessionTargetPickerProps) {
+  const t = useT()
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
 
@@ -89,18 +90,23 @@ export function SessionTargetPicker({
     <PickerDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={TITLE}
-      placeholder="Search sessions to delegate to…"
-      searchLabel="Search sessions to delegate to"
-      resultsLabel="Sessions this one can delegate to"
+      title={t("sidebar.sessionTargetPicker.title")}
+      placeholder={t("sidebar.sessionTargetPicker.placeholder")}
+      searchLabel={t("sidebar.sessionTargetPicker.search")}
+      resultsLabel={t("sidebar.sessionTargetPicker.results")}
       query={query}
       onQueryChange={setQuery}
       onKeyDown={onInputKeyDown}
-      actionHint="pick"
+      actionHint={t("sidebar.sessionTargetPicker.pick")}
     >
       {results.length === 0 && query.trim() !== "" && (
         <PickerEmpty>
-          No sessions match <span className="font-mono text-foreground/80">{query.trim()}</span>
+          <Trans
+            k="sidebar.sessionTargetPicker.noMatch"
+            params={{
+              query: <span className="font-mono text-foreground/80">{query.trim()}</span>,
+            }}
+          />
         </PickerEmpty>
       )}
       {displayGroups.map((group) => (
@@ -127,7 +133,7 @@ export function SessionTargetPicker({
           onRun={pickWorktree}
         >
           <GitBranchPlus className="size-4 shrink-0 text-muted-foreground" />
-          <span className="truncate text-sm">New worktree session…</span>
+          <span className="truncate text-sm">{t("sidebar.sessionTargetPicker.newWorktree")}</span>
         </PickerRow>
       </div>
     </PickerDialog>

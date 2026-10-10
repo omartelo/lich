@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/omartelo/lich/internal/prompt"
 	"github.com/omartelo/lich/internal/providers"
 )
 
@@ -333,4 +334,21 @@ func (s *Service) CostReadout() bool {
 		return false
 	}
 	return value == "true"
+}
+
+// promptLanguageKey is the settings key holding the language of the text lich
+// types into agent sessions (internal/prompt). Global only. It is independent
+// of the UI language, which is a page preference: people often run the
+// interface in one language and talk to their agents in another.
+const promptLanguageKey = "prompt.language"
+
+// PromptLanguage is the language lich writes agent prompts in. An absent or
+// unknown value, or a failed read, is English, the default every session got
+// before the setting existed.
+func (s *Service) PromptLanguage() prompt.Lang {
+	value, err := s.GetSetting(promptLanguageKey, globalScope)
+	if err != nil {
+		return prompt.English
+	}
+	return prompt.Parse(value)
 }

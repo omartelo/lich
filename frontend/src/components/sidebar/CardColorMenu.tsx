@@ -12,6 +12,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useT } from "@/lib/i18n/i18n"
 import { CARD_COLOR_NAMES, CARD_COLORS, type CardColor } from "@/lib/session/card-color"
 import { cn } from "@/lib/utils"
 
@@ -31,16 +32,17 @@ type SwatchItem = ComponentType<{
 }>
 
 function Swatches({ current, onPick, Item }: CardColorMenuProps & { Item: SwatchItem }) {
+  const t = useT()
   const options: (CardColor | "")[] = ["", ...CARD_COLOR_NAMES]
   return (
     <div className="grid grid-cols-3 gap-0.5">
       {options.map((name) => {
-        const label = name ? name[0].toUpperCase() + name.slice(1) : "Theme"
+        const label = t(`sidebar.cardColor.color.${name || "theme"}`)
         const on = (current ?? "") === name
         return (
           <Item
             key={name || "theme"}
-            aria-label={on ? `${label} (current)` : label}
+            aria-label={on ? t("sidebar.cardColor.current", { color: label }) : label}
             title={label}
             onClick={() => onPick(name)}
             className="justify-center p-1.5"
@@ -62,11 +64,12 @@ function Swatches({ current, onPick, Item }: CardColorMenuProps & { Item: Swatch
 
 // "Color" on a session card's right-click menu.
 export function CardColorContextSub(props: CardColorMenuProps) {
+  const t = useT()
   return (
     <ContextMenuSub>
       <ContextMenuSubTrigger>
         <Palette />
-        Color
+        {t("sidebar.cardColor.menu")}
       </ContextMenuSubTrigger>
       <ContextMenuSubContent className="min-w-0 shadow-lg">
         <Swatches {...props} Item={ContextMenuItem} />
@@ -77,11 +80,12 @@ export function CardColorContextSub(props: CardColorMenuProps) {
 
 // "Color" on a folder header's options menu: it paints every card in the folder.
 export function CardColorDropdownSub(props: CardColorMenuProps) {
+  const t = useT()
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
         <Palette />
-        Color
+        {t("sidebar.cardColor.menu")}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="min-w-0">
         <Swatches {...props} Item={DropdownMenuItem} />

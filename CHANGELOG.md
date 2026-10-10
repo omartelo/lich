@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Two language settings, English and Brazilian Portuguese.** Settings ›
+  Appearance now has an *Interface language* for lich's own screens and a
+  separate *Prompt language* for the text lich hands your agents (relayed tasks,
+  results-ready notices, the briefing at spawn), so you can read lich in one
+  language and talk to your agents in another. The interface translation is
+  partial for now: the sidebar and these two settings; the rest of the window
+  stays English until follow-up releases. A session started after you change the
+  prompt language gets it everywhere; one already open gets it in relayed
+  messages only.
+
 - **A session card offers to open a pull request.** Hover a card whose branch
   has none yet and a PR button shows where the PR number would be; clicking it
   types the request to open one at that session's prompt, ready to send.

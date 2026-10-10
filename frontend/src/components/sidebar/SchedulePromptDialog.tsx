@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Trans } from "@/components/common/Trans"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -9,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { useT } from "@/lib/i18n/i18n"
 import { clockAt, scheduleChoices, scheduledFor } from "@/lib/session/schedule"
 
 interface SchedulePromptDialogProps {
@@ -39,6 +41,7 @@ export function SchedulePromptDialog({
   at,
   onSchedule,
 }: SchedulePromptDialogProps) {
+  const t = useT()
   const [value, setValue] = useState(prompt)
   const [now, setNow] = useState(() => new Date())
 
@@ -70,16 +73,18 @@ export function SchedulePromptDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Schedule a prompt</DialogTitle>
+          <DialogTitle>{t("sidebar.schedulePromptDialog.title")}</DialogTitle>
           <DialogDescription>
-            Typed at <span className="font-medium text-foreground">{label}</span> when the time
-            comes, as if you had typed it yourself.
+            <Trans
+              k="sidebar.schedulePromptDialog.description"
+              params={{ label: <span className="font-medium text-foreground">{label}</span> }}
+            />
           </DialogDescription>
         </DialogHeader>
         <Textarea
           value={value}
           onChange={(event) => setValue(event.target.value)}
-          placeholder="run the release checklist"
+          placeholder={t("sidebar.schedulePromptDialog.placeholder")}
           autoFocus
           rows={3}
           className="max-h-40"
@@ -106,10 +111,10 @@ export function SchedulePromptDialog({
           // has no cancel to misread.
           <DialogFooter className="items-center justify-between sm:justify-between">
             <span className="text-xs text-muted-foreground">
-              Scheduled for {scheduledFor(at, now)}
+              {t("sidebar.schedulePromptDialog.scheduledFor", { when: scheduledFor(at, now) })}
             </span>
             <Button variant="ghost" size="sm" onClick={clear}>
-              Cancel it
+              {t("sidebar.schedulePromptDialog.cancel")}
             </Button>
           </DialogFooter>
         )}

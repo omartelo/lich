@@ -14,9 +14,9 @@ func (s *Service) taskMessage(id string, t *ticket, kind string) string {
 		s.mu.Lock()
 		t.modAnswers = true
 		s.mu.Unlock()
-		return composeForWorker(t.sender, t.prompt)
+		return composeForWorker(s.lang(), t.sender, t.prompt)
 	}
-	return compose(t.sender, id, t.prompt, s.offersTools(kind))
+	return compose(s.lang(), t.sender, id, t.prompt, s.offersTools(kind))
 }
 
 // WorkerAnswered answers the one subagent errand open at workerID with text,

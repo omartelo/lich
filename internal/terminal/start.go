@@ -144,6 +144,7 @@ func (s *Service) spawnSession(
 		args: providerArgs(
 			kind, name, resume, s.store.SessionModel(id), s.store.SessionEffort(id), mcpBin,
 			kiroPluginAgent(kind), fork, skipPermissions, ultracode, subagentRoute(kind, depth, cardsOn),
+			s.promptLanguage(),
 		),
 		dir:  cwd,
 		env:  subagentEnv(s.sessionEnv(id, projectID, cwd), kind, depth, cardsOn),

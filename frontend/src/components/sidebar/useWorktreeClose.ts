@@ -1,5 +1,6 @@
 import { useRef, useState } from "react"
 import { toast } from "sonner"
+import { t } from "@/lib/i18n/i18n"
 import { ProjectService, Store } from "@/lib/rpc"
 import { closeIntent } from "@/lib/session/close-intent"
 import { runningSessions } from "@/lib/session/use-session-status"
@@ -70,7 +71,7 @@ export function useWorktreeClose(
     // directory, and for an adopted one that dialog says lich did not make it.
     ProjectService.RemoveWorktree(projectPath, session.path ?? "", force, true).catch(
       (err: unknown) => {
-        toast.error(`Failed to remove worktree: ${errorText(err)}`)
+        toast.error(t("sidebar.useWorktreeClose.removeFailed", { error: errorText(err) }))
       },
     )
   }

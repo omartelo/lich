@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/omartelo/lich/internal/prompt"
 	"github.com/omartelo/lich/internal/store"
 )
 
@@ -473,6 +474,8 @@ type Service struct {
 	// state a test that does not care is in — reads as "nothing is installed":
 	// no delivery is checked, and a relayed message names the command line.
 	plugins Plugins
+	// promptLang is the language of the text typed at sessions (SetPromptLanguage).
+	promptLang func() prompt.Lang
 	// reportedWorkers is the sessions that answered a subagent errand in the
 	// turn running now; the turn ending finishes them (finishedWorkerLocked).
 	reportedWorkers map[string]bool
@@ -532,6 +535,21 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 // any errand exists.
 func (s *Service) SetPlugins(plugins Plugins) {
 	s.plugins = plugins
+}
+
+// SetPromptLanguage wires where the relay reads the language of the text it
+// types at a session. It is read again for every message rather than once,
+// so a change in Settings reaches the next message. Without it the relay
+// speaks English, the default. Called at startup, before any errand exists.
+func (s *Service) SetPromptLanguage(lang func() prompt.Lang) {
+	s.promptLang = lang
+}
+
+func (s *Service) lang() prompt.Lang {
+	if s.promptLang == nil {
+		return prompt.English
+	}
+	return s.promptLang()
 }
 
 // Peers lists the live sessions fromID may address, in the order the sidebar

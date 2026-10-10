@@ -17,7 +17,7 @@ old form keeps working, with a visible warning, for at least one minor release b
   releases a lich supports, and how the plugin's version number marks a contract change, is under [Versioning](hooks/README.md#versioning).
 - **Themes.** The theme JSON format and the `lich-theme.json` pack manifest, as described in [themes.md](themes.md).
 - **Project files.** `.lich/setup-worktree.sh`, `.lich/run-worktree.sh` and `.worktreeinclude`.
-- **Environment variables lich sets in every session:** `LICH_PORT`, `LICH_TOKEN`, `LICH_SESSION_ID`, `LICH_BIN`,
+- **Environment variables lich sets in every session:** `LICH_PORT`, `LICH_TOKEN`, `LICH_SESSION_ID`, `LICH_BIN`, `LICH_PROMPT_LANG`,
   `LICH_PROJECT_DIR` and `LICH_WORKTREE_PORT`.
 - **Environment variables lich reads at startup:** `LICH_SHELL`, `LICH_LISTEN_PORT` and `LICH_LOG_LEVEL`.
 

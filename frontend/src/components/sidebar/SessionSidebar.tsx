@@ -8,6 +8,8 @@ import { GitPullRequestArrow, PanelLeftClose, Plus, Search } from "lucide-react"
 import { toast } from "sonner"
 import { ProjectService, Spawn, Terminal as TerminalService } from "@/lib/rpc"
 import { errorText } from "@/lib/utils"
+import { useT } from "@/lib/i18n/i18n"
+import { Trans } from "@/components/common/Trans"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { delegateTargets } from "@/lib/session/delegate-targets"
@@ -90,6 +92,7 @@ interface SessionSidebarProps {
 // Resizing only changes this element's width; the terminal keeps its PTY in sync
 // on its own via a ResizeObserver, so the sidebar does not need to know about it.
 export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
+  const t = useT()
   const {
     projects,
     sessions,
@@ -205,11 +208,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   const groupDelegates = (sessionId: string, delegateIds: string[]) => {
     const skipped = panes.groupWith(sessionId, delegateIds)
     if (skipped > 0) {
-      toast(
-        skipped === 1
-          ? "1 delegate could not be added to the split"
-          : `${skipped} delegates could not be added to the split`,
-      )
+      toast(t("sidebar.sessionSidebar.delegatesSkipped", { count: skipped }))
     }
   }
 
@@ -362,7 +361,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
       // closes on a worktree that exists, and the wait can be minutes.
       if (prompt) {
         void writeAtPrompt(opened, prompt).catch((err: unknown) => {
-          toast.error(`Couldn’t hand the issue to the session: ${errorText(err)}`)
+          toast.error(t("sidebar.sessionSidebar.issueHandoffFailed", { error: errorText(err) }))
         })
       }
     }
@@ -382,7 +381,9 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     const cwd = session.path || path || ""
     const conversation = session.providerSessionId ?? ""
     if (!(await TerminalService.ResumeAvailable(session.kind, conversation, cwd))) {
-      toast.error(`${session.label} has no conversation left to fork — ${session.kind} pruned it.`)
+      toast.error(
+        t("sidebar.sessionSidebar.forkPruned", { name: session.label, provider: session.kind }),
+      )
       return
     }
     setForking(session)
@@ -507,8 +508,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
       <div className="mb-2 flex items-center gap-1">
         <DropdownMenu>
           <DropdownMenuTrigger
-            title="New session"
-            aria-label="New session"
+            title={t("sidebar.sessionSidebar.newSession")}
+            aria-label={t("sidebar.sessionSidebar.newSession")}
             render={
               <Button
                 variant="ghost"
@@ -520,7 +521,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
               className="size-4 text-muted-foreground"
               style={{ viewTransitionName: SIDEBAR_MORPH.newSession }}
             />
-            New Session
+            {t("sidebar.sessionSidebar.newSessionButton")}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="max-w-56">
             <SessionLaunchMenuItems
@@ -540,8 +541,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         </DropdownMenu>
         <Button
           variant="ghost"
-          title="Filter sessions"
-          aria-label="Filter sessions"
+          title={t("sidebar.sessionSidebar.filter")}
+          aria-label={t("sidebar.sessionSidebar.filter")}
           aria-pressed={filterOpen}
           onClick={toggleFilter}
           className="size-8 shrink-0 justify-center px-0 text-muted-foreground hover:bg-accent hover:text-foreground aria-pressed:bg-accent aria-pressed:text-foreground"
@@ -550,8 +551,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         </Button>
         <Button
           variant="ghost"
-          title="Collapse sidebar"
-          aria-label="Collapse sidebar"
+          title={t("sidebar.sessionSidebar.collapse")}
+          aria-label={t("sidebar.sessionSidebar.collapse")}
           onClick={onCollapse}
           className="size-8 shrink-0 justify-center px-0 text-muted-foreground hover:bg-accent hover:text-foreground"
         >
@@ -571,8 +572,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onFilterKeyDown}
-            placeholder="Filter sessions"
-            aria-label="Filter sessions"
+            placeholder={t("sidebar.sessionSidebar.filter")}
+            aria-label={t("sidebar.sessionSidebar.filter")}
             className="h-7 text-xs"
           />
           <SessionPhaseChips
@@ -592,7 +593,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         {pullsListOpen && (
           <SidebarCard
             icon={GitPullRequestArrow}
-            label="Pull requests"
+            label={t("sidebar.sessionSidebar.pullRequests")}
             active={onPullsListRoute}
             onSelect={() => navigate(`/projects/${projectId}/pulls/all`)}
             onClose={() => {
@@ -601,7 +602,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
                 navigate(`/projects/${projectId}`)
               }
             }}
-            closeLabel="Close pull requests"
+            closeLabel={t("sidebar.sessionSidebar.closePullRequests")}
           />
         )}
         {settingsOpen && (
@@ -668,27 +669,31 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         // is the same lie as the entry that promised to stop showing a card.
         title={
           panes.current
-            ? `Move ${moving?.session.label ?? ""} to this split?`
-            : `Show ${moving?.session.label ?? ""} beside this session?`
+            ? t("sidebar.sessionSidebar.moveTitle", { name: moving?.session.label ?? "" })
+            : t("sidebar.sessionSidebar.showBesideTitle", { name: moving?.session.label ?? "" })
         }
         description={
           moving?.from.cells.length === 2 ? (
-            <>
-              It is one of only two sessions in <strong>{moving.from.name}</strong>, so that group
-              ends when it leaves. No session is closed either way.
-            </>
+            <Trans
+              k="sidebar.sessionSidebar.moveEndsGroup"
+              params={{ group: <strong>{moving.from.name}</strong> }}
+            />
           ) : (
-            <>
-              It is on <strong>{moving?.from.name}</strong>, and a session can only be on one split
-              at a time — it leaves that one. No session is closed either way.
-            </>
+            <Trans
+              k="sidebar.sessionSidebar.moveLeavesSplit"
+              params={{ group: <strong>{moving?.from.name}</strong> }}
+            />
           )
         }
       >
-        <Button onClick={confirmMove}>Move it</Button>
+        <Button onClick={confirmMove}>{t("sidebar.sessionSidebar.moveConfirm")}</Button>
       </ConfirmDialog>
 
-      <ResizeHandle edge="right" label="Resize sidebar" handleProps={handleProps} />
+      <ResizeHandle
+        edge="right"
+        label={t("sidebar.sessionSidebar.resize")}
+        handleProps={handleProps}
+      />
     </aside>
   )
 }

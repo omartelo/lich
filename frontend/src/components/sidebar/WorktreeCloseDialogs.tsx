@@ -1,5 +1,7 @@
+import { Trans } from "@/components/common/Trans"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
+import { useT } from "@/lib/i18n/i18n"
 import type { Session } from "@/lib/session/sessions"
 import type { WorktreeClose } from "./useWorktreeClose"
 
@@ -15,20 +17,21 @@ interface RunningSessionDialogProps {
 // working, or blocked on a prompt nobody answered: the card's × kills the PTY,
 // and neither the turn nor the answer it was waiting for survives that.
 function RunningSessionDialog({ session, onCancel, onCloseAnyway }: RunningSessionDialogProps) {
+  const t = useT()
   return (
     <ConfirmDialog
       open={session !== null}
       onCancel={onCancel}
-      title="Session is still running"
+      title={t("sidebar.worktreeCloseDialogs.runningTitle")}
       description={
-        <>
-          <span className="font-medium">{session?.label}</span> is mid-turn. Closing it stops the
-          process where it stands; the turn in flight is lost.
-        </>
+        <Trans
+          k="sidebar.worktreeCloseDialogs.runningDescription"
+          params={{ label: <span className="font-medium">{session?.label}</span> }}
+        />
       }
     >
       <Button variant="destructive" onClick={onCloseAnyway}>
-        Close anyway
+        {t("sidebar.worktreeCloseDialogs.closeAnyway")}
       </Button>
     </ConfirmDialog>
   )
@@ -62,31 +65,26 @@ function CloseWorktreeDialog({
   onKeep,
   onRemove,
 }: CloseWorktreeDialogProps) {
+  const t = useT()
   const path = <span className="break-all font-mono select-text">{session?.path}</span>
   return (
     <ConfirmDialog
       open={session !== null}
       onCancel={onCancel}
-      title="Close worktree session"
+      title={t("sidebar.worktreeCloseDialogs.closeTitle")}
       description={
         adopted ? (
-          <>
-            lich did not create the worktree at {path}. Keep it, or remove the checkout? Removing
-            deletes that directory but keeps its branch.
-          </>
+          <Trans k="sidebar.worktreeCloseDialogs.adoptedDescription" params={{ path }} />
         ) : (
-          <>
-            Keep or remove the worktree at {path}? Removing deletes the checkout but keeps its
-            branch.
-          </>
+          <Trans k="sidebar.worktreeCloseDialogs.createdDescription" params={{ path }} />
         )
       }
     >
       <Button variant="outline" onClick={onKeep}>
-        Keep worktree
+        {t("sidebar.worktreeCloseDialogs.keep")}
       </Button>
       <Button variant="destructive" onClick={onRemove}>
-        Remove worktree
+        {t("sidebar.worktreeCloseDialogs.remove")}
       </Button>
     </ConfirmDialog>
   )
@@ -108,21 +106,23 @@ function ForceRemoveWorktreeDialog({
   onCancel,
   onForceRemove,
 }: ForceRemoveWorktreeDialogProps) {
+  const t = useT()
   return (
     <ConfirmDialog
       open={session !== null}
       onCancel={onCancel}
-      title="Worktree has uncommitted changes"
+      title={t("sidebar.worktreeCloseDialogs.dirtyTitle")}
       description={
-        <>
-          The worktree at <span className="break-all font-mono select-text">{session?.path}</span>{" "}
-          contains uncommitted changes. Removing it will discard them permanently. The branch is
-          kept.
-        </>
+        <Trans
+          k="sidebar.worktreeCloseDialogs.dirtyDescription"
+          params={{
+            path: <span className="break-all font-mono select-text">{session?.path}</span>,
+          }}
+        />
       }
     >
       <Button variant="destructive" onClick={onForceRemove}>
-        Discard changes and remove
+        {t("sidebar.worktreeCloseDialogs.discardAndRemove")}
       </Button>
     </ConfirmDialog>
   )

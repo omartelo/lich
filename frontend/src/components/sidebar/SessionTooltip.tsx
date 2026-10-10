@@ -9,6 +9,7 @@ import {
   ShieldOff,
   TriangleAlert,
 } from "lucide-react"
+import { useT } from "@/lib/i18n/i18n"
 import { unknownCwd } from "@/lib/paths"
 import { sandboxDrift } from "@/lib/providers-store"
 import type { Session } from "@/lib/session/sessions"
@@ -19,6 +20,7 @@ import { scheduledFor } from "@/lib/session/schedule"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { baseReadout } from "@/lib/git/base-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
+import { Trans } from "@/components/common/Trans"
 import { DiffStat } from "@/components/DiffStat"
 import { TooltipContent } from "@/components/ui/tooltip"
 
@@ -48,6 +50,7 @@ interface SessionTooltipProps {
 // behind them are keyed by path and shared (one git poller per repository), so
 // the second reader costs a subscription, not a second poll.
 export function SessionTooltip({ session, path, projectId }: SessionTooltipProps) {
+  const t = useT()
   const { cwd: liveCwd, host: cwdHost } = useSessionCwd(session.id)
   const relay = useSessionRelay(session.id)
   const shownPath = liveCwd || session.path || path
@@ -81,15 +84,27 @@ export function SessionTooltip({ session, path, projectId }: SessionTooltipProps
                 <ArrowLeft className="size-3 shrink-0" />
               )}
               <span>
-                {relay.direction === "out" ? "Waiting on " : "Answering "}
-                {relay.peer ? (
-                  <span className="font-medium text-foreground">{relay.peer}</span>
-                ) : (
-                  <span className="italic">the command line</span>
-                )}
+                <Trans
+                  k={
+                    relay.direction === "out"
+                      ? "sidebar.sessionTooltip.waitingOn"
+                      : "sidebar.sessionTooltip.answering"
+                  }
+                  params={{
+                    peer: relay.peer ? (
+                      <span className="font-medium text-foreground">{relay.peer}</span>
+                    ) : (
+                      <span className="italic">{t("sidebar.sessionTooltip.commandLine")}</span>
+                    ),
+                  }}
+                />
               </span>
             </span>
-            {relay.ticket && <span className="font-mono tabular-nums">ticket {relay.ticket}</span>}
+            {relay.ticket && (
+              <span className="font-mono tabular-nums">
+                {t("sidebar.sessionTooltip.ticket", { ticket: relay.ticket })}
+              </span>
+            )}
             {relay.ticket && relay.direction === "in" && (
               <span className="break-all font-mono text-muted-foreground">
                 {`lich reply ${relay.ticket} "…"`}
@@ -106,10 +121,16 @@ export function SessionTooltip({ session, path, projectId }: SessionTooltipProps
             <span className="flex items-center gap-1.5 text-muted-foreground">
               <Clock className="size-3 shrink-0" />
               <span>
-                Scheduled for{" "}
-                <span className="font-medium text-foreground">
-                  {scheduledFor(session.scheduledAt, new Date())}
-                </span>
+                <Trans
+                  k="sidebar.sessionTooltip.scheduledFor"
+                  params={{
+                    when: (
+                      <span className="font-medium text-foreground">
+                        {scheduledFor(session.scheduledAt, new Date())}
+                      </span>
+                    ),
+                  }}
+                />
               </span>
             </span>
             <span className="line-clamp-2 text-muted-foreground italic">
@@ -150,19 +171,21 @@ export function SessionTooltip({ session, path, projectId }: SessionTooltipProps
               ) : (
                 <ShieldOff className="size-3 shrink-0" />
               )}
-              {confined ? "Sandboxed" : "Not sandboxed"}
+              {confined
+                ? t("sidebar.sessionTooltip.sandboxed")
+                : t("sidebar.sessionTooltip.notSandboxed")}
             </span>
             <span className="text-muted-foreground">
               {confined
-                ? "Empty home, machine read-only, writes only in this checkout. "
-                : "This session runs on the machine. "}
+                ? t("sidebar.sessionTooltip.confinedMeans")
+                : t("sidebar.sessionTooltip.unconfinedMeans")}{" "}
               {drift
-                ? "Opened before the sandbox setting changed; reopen the session to apply it."
-                : "Set when the session opened; reopen it to change."}
+                ? t("sidebar.sessionTooltip.settingMoved")
+                : t("sidebar.sessionTooltip.setAtOpen")}
             </span>
             {skippedLinks.length > 0 && (
               <span className="text-muted-foreground">
-                Not mounted (symlinks): {skippedLinks.join(", ")}
+                {t("sidebar.sessionTooltip.notMounted", { paths: skippedLinks.join(", ") })}
               </span>
             )}
           </span>
@@ -202,7 +225,9 @@ export function SessionTooltip({ session, path, projectId }: SessionTooltipProps
                 {file}
               </span>
             ))}
-            {base.more > 0 && <span>+{base.more} more</span>}
+            {base.more > 0 && (
+              <span>{t("sidebar.sessionTooltip.morePaths", { count: base.more })}</span>
+            )}
           </span>
         )}
       </div>

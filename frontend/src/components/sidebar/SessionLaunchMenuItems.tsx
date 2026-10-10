@@ -8,6 +8,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
+import { useT } from "@/lib/i18n/i18n"
+import { en } from "@/lib/i18n/locales/en"
 import { isWindows } from "@/lib/platform"
 import type { ProviderState } from "@/lib/providers-store"
 import { sandboxDefaultFor } from "@/lib/providers-store"
@@ -46,20 +48,21 @@ interface SessionLaunchMenuItemsProps {
 /** Why the Run item is dead on Windows: .lich/run-worktree.sh holds sh and a
  * session there runs PowerShell, which would take its lines as commands of its
  * own and expand $LICH_WORKTREE_PORT to nothing. */
-export const RUN_NOT_ON_WINDOWS = "Run scripts are sh; not run on Windows."
+export const RUN_NOT_ON_WINDOWS = en.sidebar.sessionLaunchMenuItems.runNotOnWindows
 
 // The checkout's Run row: live where the script can run, dead under the
 // sentence naming why on Windows — SessionForkItem's idiom. The row stays
 // either way, because a user who runs a card on Linux and finds nothing on
 // Windows has no way to learn that the offer was withheld rather than missing.
 function RunMenuItem({ run }: { run: RunMenuAction }) {
+  const t = useT()
   if (isWindows) {
     return (
       <DropdownMenuItem disabled>
         <Play />
         <span className="flex flex-col items-start">
-          Run
-          <span className="text-xs">{RUN_NOT_ON_WINDOWS}</span>
+          {t("sidebar.sessionLaunchMenuItems.run")}
+          <span className="text-xs">{t("sidebar.sessionLaunchMenuItems.runNotOnWindows")}</span>
         </span>
       </DropdownMenuItem>
     )
@@ -67,7 +70,9 @@ function RunMenuItem({ run }: { run: RunMenuAction }) {
   return (
     <DropdownMenuItem onClick={run.onSelect}>
       <Play />
-      {run.open ? "Go to Run card" : "Run"}
+      {run.open
+        ? t("sidebar.sessionLaunchMenuItems.goToRunCard")
+        : t("sidebar.sessionLaunchMenuItems.run")}
     </DropdownMenuItem>
   )
 }
@@ -91,6 +96,7 @@ interface SandboxStepProps {
 // listing Claude on Ask beside Codex on Everywhere cannot carry one box that
 // means both.
 function SandboxStep({ provider, onOpen, onBack }: SandboxStepProps) {
+  const t = useT()
   // The rung's own answer, which for "ask" is the confined side and does not
   // depend on the checkout — so the side this session lands on is not asked
   // here (store.SandboxDefault).
@@ -103,7 +109,7 @@ function SandboxStep({ provider, onOpen, onBack }: SandboxStepProps) {
           {provider.name}
         </DropdownMenuLabel>
         <DropdownMenuCheckboxItem checked={confined} onCheckedChange={setConfined}>
-          Run confined
+          {t("sidebar.sessionLaunchMenuItems.runConfined")}
         </DropdownMenuCheckboxItem>
         <p className="px-2 pt-0.5 pb-1.5 text-xs text-muted-foreground">{CONFINED_MEANS}</p>
       </DropdownMenuGroup>
@@ -111,14 +117,14 @@ function SandboxStep({ provider, onOpen, onBack }: SandboxStepProps) {
       <DropdownMenuGroup>
         <DropdownMenuItem onClick={() => onOpen(confined ? "on" : "off")}>
           <ProviderIcon kind={provider.id} />
-          Open session
+          {t("sidebar.sessionLaunchMenuItems.openSession")}
         </DropdownMenuItem>
         {/* Back stays in the menu — closing it is what Escape and the trigger
             already do, and a "Back" that dismisses the whole thing is a click
             nobody gets a second try at. */}
         <DropdownMenuItem closeOnClick={false} onClick={onBack}>
           <ChevronLeft />
-          Back
+          {t("sidebar.sessionLaunchMenuItems.back")}
         </DropdownMenuItem>
       </DropdownMenuGroup>
     </>
@@ -133,6 +139,7 @@ export function SessionLaunchMenuItems({
   worktree,
   run,
 }: SessionLaunchMenuItemsProps) {
+  const t = useT()
   const asking = useSandboxAsk(
     providers.map((provider) => provider.id),
     projectId,
@@ -178,13 +185,15 @@ export function SessionLaunchMenuItems({
       <DropdownMenuGroup>
         <DropdownMenuItem onClick={() => onNewSession("shell", "")}>
           <Terminal />
-          {terminalLabel}
+          {terminalLabel === "New Terminal"
+            ? t("sidebar.sessionLaunchMenuItems.newTerminal")
+            : t("sidebar.sessionLaunchMenuItems.terminal")}
         </DropdownMenuItem>
         {run && <RunMenuItem run={run} />}
         {worktree && (
           <DropdownMenuItem disabled={worktree.disabled} onClick={worktree.onSelect}>
             <GitBranch />
-            Worktree
+            {t("sidebar.sessionLaunchMenuItems.worktree")}
           </DropdownMenuItem>
         )}
       </DropdownMenuGroup>

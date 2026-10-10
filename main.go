@@ -306,6 +306,11 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// report at all, and whether they can answer with a tool — are about what
 	// the plugin put there.
 	rl.SetPlugins(plugins)
+	// The language of the text lich types into sessions is read live from the
+	// settings table, by the relay at every message and by the terminal at
+	// every spawn.
+	rl.SetPromptLanguage(db.PromptLanguage)
+	term.SetPromptLanguage(db.PromptLanguage)
 	// A session whose provider runs lich's hooks is held until its session-start
 	// report, which comes only from the agent's own prompt, past a trust
 	// question that a quiet screen cannot be told apart from.
@@ -374,12 +379,12 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //     terminal calls it for a turn a usage limit ended, with the reset it read.
 //   - spawn.CloseFinishedWorker closes a session with none of spawn.Close's
 //     checks; the relay calls it for a worker that reported back.
-//   - relay.SetPlugins, relay.SetWorkerFinished, project.SetAccounts, project.SetProjects,
+//   - relay.SetPlugins, relay.SetWorkerFinished, relay.SetPromptLanguage, project.SetAccounts, project.SetProjects,
 //     quota.SetSessions, store.SetSessionGone, store.SetScheduleForfeited,
 //     store.SetBranchOf, store.SetTranscriptOf, store.SetConversationsOf,
 //     store.SetCheckoutsOf, terminal.SetDropDir,
 //     terminal.SetRateLimitReports, terminal.SetUsageLimit, terminal.SetWorkerAnswer,
-//     terminal.SetWorkerUnanswered, terminal.SetStartReports and terminal.SetSessionClosed are startup wiring. Called with [null] they silently
+//     terminal.SetWorkerUnanswered, terminal.SetStartReports, terminal.SetPromptLanguage and terminal.SetSessionClosed are startup wiring. Called with [null] they silently
 //     nil what they wired (encoding/json leaves a func or pointer alone on
 //     null), and the write races the readers already serving — nilling
 //     SetProjects also disarms the guard that keeps two projects off the same
@@ -417,6 +422,7 @@ func denyInternal(d *rpc.Handler) {
 		"agentplugin.RepairRegistrations",
 		"relay.SetPlugins",
 		"relay.SetWorkerFinished",
+		"relay.SetPromptLanguage",
 		"spawn.CloseFinishedWorker",
 		"project.SetAccounts",
 		"project.SetProjects",
@@ -431,6 +437,7 @@ func denyInternal(d *rpc.Handler) {
 		"terminal.SetWorkerUnanswered",
 		"terminal.SetSessionClosed",
 		"terminal.SetStartReports",
+		"terminal.SetPromptLanguage",
 		"terminal.EnqueueModCommand",
 		"terminal.RunModCommand",
 		"terminal.SubmitPrompt",

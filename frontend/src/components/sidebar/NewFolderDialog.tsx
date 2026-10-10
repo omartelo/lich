@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Trans } from "@/components/common/Trans"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -10,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useT } from "@/lib/i18n/i18n"
 
 interface NewFolderDialogProps {
   open: boolean
@@ -35,6 +37,7 @@ export function NewFolderDialog({
   existing,
   onCreate,
 }: NewFolderDialogProps) {
+  const t = useT()
   const [value, setValue] = useState("")
 
   // Reseed on every open: the dialog outlives one naming, and a second card sent
@@ -60,36 +63,36 @@ export function NewFolderDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>New folder</DialogTitle>
+          <DialogTitle>{t("sidebar.newFolderDialog.title")}</DialogTitle>
           <DialogDescription>
-            {count === 1
-              ? "Files this session under a name of your own. It stays open, and its checkout does not change."
-              : `Files these ${count} sessions under a name of your own. They stay open, and their checkouts do not change.`}
+            {t("sidebar.newFolderDialog.description", { count })}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="new-folder-name">Name</Label>
+          <Label htmlFor="new-folder-name">{t("sidebar.newFolderDialog.name")}</Label>
           <Input
             id="new-folder-name"
             value={value}
             onChange={(event) => setValue(event.target.value)}
             onKeyDown={(event) => event.key === "Enter" && commit()}
-            placeholder="Design system"
+            placeholder={t("sidebar.newFolderDialog.placeholder")}
             autoFocus
           />
           {known && (
             <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{name}</span> already exists — this
-              files into it.
+              <Trans
+                k="sidebar.newFolderDialog.exists"
+                params={{ name: <span className="font-medium text-foreground">{name}</span> }}
+              />
             </p>
           )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("common.action.cancel")}
           </Button>
           <Button onClick={commit} disabled={!name}>
-            {known ? "Move here" : "Create"}
+            {known ? t("sidebar.newFolderDialog.moveHere") : t("common.action.create")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,5 +1,6 @@
 import { GitPullRequestArrow } from "lucide-react"
 import { SidebarCard } from "@/components/common/SidebarCard"
+import { useT } from "@/lib/i18n/i18n"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
 
@@ -17,21 +18,22 @@ interface PullRequestCardProps {
 // branch, showing the open PR's number when there is one (and otherwise reading
 // as the door to open one, whose create flow lives on the screen's empty state).
 export function PullRequestCard({ path, active, onSelect, onClose }: PullRequestCardProps) {
+  const t = useT()
   const git = useGitStatus(path)
   const pr = usePullRequest(path, git?.branch ?? "", git?.head ?? "")
   return (
     <SidebarCard
       icon={GitPullRequestArrow}
-      label="Pull request"
+      label={t("sidebar.pullRequestCard.label")}
       active={active}
       onSelect={onSelect}
       onClose={onClose}
-      closeLabel="Close pull request"
+      closeLabel={t("sidebar.pullRequestCard.close")}
     >
       {pr && (
         <span className="flex items-center gap-1.5 text-xs">
           <span className="text-muted-foreground">#{pr.number}</span>
-          <span className="text-tone-pass">Open</span>
+          <span className="text-tone-pass">{t("sidebar.pullRequestCard.open")}</span>
         </span>
       )}
     </SidebarCard>

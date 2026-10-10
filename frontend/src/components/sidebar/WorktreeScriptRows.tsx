@@ -2,8 +2,10 @@ import { useEffect, useState } from "react"
 import { FileText, Play, Terminal } from "lucide-react"
 import { ProjectService } from "@/lib/rpc"
 import type { WorktreeSetup } from "@/lib/api-types"
+import { Trans } from "@/components/common/Trans"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { useT } from "@/lib/i18n/i18n"
 import { errorText } from "@/lib/utils"
 
 // Which of the two scripts a row is about. They are the same shape — one file
@@ -36,11 +38,14 @@ function ScriptEditor({
   onCancel: () => void
   onSave: () => void
 }) {
+  const t = useT()
   const id = `worktree-${script}`
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id} className="text-xs uppercase tracking-wide">
-        {script === "setup" ? "Setup script" : "Run command"} — saved to {files[script]}
+        {script === "setup"
+          ? t("sidebar.worktreeScriptRows.setupEditorLabel", { file: files[script] })
+          : t("sidebar.worktreeScriptRows.runEditorLabel", { file: files[script] })}
       </Label>
       <textarea
         id={id}
@@ -58,10 +63,10 @@ function ScriptEditor({
         </span>
         <div className="flex gap-1">
           <Button variant="ghost" size="xs" onClick={onCancel}>
-            Discard
+            {t("sidebar.worktreeScriptRows.discard")}
           </Button>
           <Button variant="ghost" size="xs" onClick={onSave}>
-            Save
+            {t("common.action.save")}
           </Button>
         </div>
       </div>
@@ -95,6 +100,7 @@ function ConfiguredRow({ script, value }: { script: Script; value: string }) {
 // opens a Run card on. Both are read from the main checkout; Use/Save write the
 // file through the backend. Neither ever blocks Create.
 export function WorktreeScriptRows({ projectPath }: { projectPath: string }) {
+  const t = useT()
   const [info, setInfo] = useState<WorktreeSetup | null>(null)
   const [editing, setEditing] = useState<Script | null>(null)
   const [draft, setDraft] = useState("")
@@ -164,8 +170,13 @@ export function WorktreeScriptRows({ projectPath }: { projectPath: string }) {
           <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
             <Terminal className="size-3.5 shrink-0" aria-hidden />
             <span className="min-w-0 truncate">
-              Detected {info.detected} — run{" "}
-              <span className="font-mono text-foreground">{info.suggestion}</span> in new worktrees?
+              <Trans
+                k="sidebar.worktreeScriptRows.detected"
+                params={{
+                  detected: info.detected,
+                  command: <span className="font-mono text-foreground">{info.suggestion}</span>,
+                }}
+              />
             </span>
             <div className="ml-auto flex shrink-0 gap-1">
               <Button
@@ -173,14 +184,14 @@ export function WorktreeScriptRows({ projectPath }: { projectPath: string }) {
                 size="xs"
                 onClick={() => void save("setup", info.suggestion ?? "")}
               >
-                Use
+                {t("sidebar.worktreeScriptRows.use")}
               </Button>
               <Button
                 variant="ghost"
                 size="xs"
                 onClick={() => edit("setup", info.suggestion ?? "")}
               >
-                Edit
+                {t("sidebar.worktreeScriptRows.edit")}
               </Button>
             </div>
           </div>
@@ -194,16 +205,14 @@ export function WorktreeScriptRows({ projectPath }: { projectPath: string }) {
         // row nobody can see is a feature nobody finds.
         <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
           <Play className="size-3.5 shrink-0" aria-hidden />
-          <span className="min-w-0 truncate">
-            No run command — the checkout&apos;s reserved port stays unused.
-          </span>
+          <span className="min-w-0 truncate">{t("sidebar.worktreeScriptRows.noRunCommand")}</span>
           <Button
             variant="ghost"
             size="xs"
             className="ml-auto shrink-0"
             onClick={() => edit("run", "")}
           >
-            Set
+            {t("sidebar.worktreeScriptRows.set")}
           </Button>
         </div>
       )}

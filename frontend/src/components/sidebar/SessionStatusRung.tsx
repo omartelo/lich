@@ -20,6 +20,8 @@ import { useSessionWaitingReason } from "@/lib/session/use-session-status"
 import { useSessionTodo } from "@/lib/session/use-session-todo"
 import { useSessionTool } from "@/lib/session/use-session-tool"
 import { useHandoffHeld } from "@/lib/terminal/handoff-store"
+import { Trans } from "@/components/common/Trans"
+import { useT } from "@/lib/i18n/i18n"
 import { SessionLimitRung } from "./SessionLimitRung"
 
 // The line under a card's label that says what the session is doing or waiting
@@ -36,6 +38,7 @@ export function SessionStatusRung({
   origin: string
   scheduledIn: string | null
 }) {
+  const t = useT()
   // What the session is blocked on, when its provider's event had words for it:
   // the line the user reads to decide whether this is the card to open. "" from
   // a provider that reports the block and nothing about it.
@@ -115,7 +118,7 @@ export function SessionStatusRung({
           ) : (
             // Not a session, so not a label: the other end is the `lich`
             // command run from a script or a shell (docs/cli.md).
-            <span className="truncate italic">command line</span>
+            <span className="truncate italic">{t("sidebar.sessionStatusRung.commandLine")}</span>
           )}
         </span>
       ) : status === "waiting" ? (
@@ -129,7 +132,7 @@ export function SessionStatusRung({
               docs/hooks/session-state.md), and the generic line is what
               those fall back to. */}
           <span className="truncate font-medium text-tone-wait">
-            {waitingReason || "Waiting on you"}
+            {waitingReason || t("sidebar.sessionStatusRung.waitingOnYou")}
           </span>
         </span>
       ) : status === "compacting" ? (
@@ -138,12 +141,14 @@ export function SessionStatusRung({
         // stuck: the conversation is being folded into a summary.
         <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
           <FoldVertical className="size-3 shrink-0" />
-          <span className="truncate font-medium text-foreground">Compacting…</span>
+          <span className="truncate font-medium text-foreground">
+            {t("sidebar.sessionStatusRung.compacting")}
+          </span>
         </span>
       ) : handoffHeld ? (
         <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
           <Hourglass className="size-3 shrink-0" />
-          <span className="truncate">Something is waiting for this prompt</span>
+          <span className="truncate">{t("sidebar.sessionStatusRung.handoffHeld")}</span>
         </span>
       ) : limit ? (
         <SessionLimitRung limit={limit} scheduledAt={session.scheduledAt ?? 0} />
@@ -151,17 +156,26 @@ export function SessionStatusRung({
         <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
           <Inbox className="size-3 shrink-0" />
           <span className="truncate font-medium text-foreground">
-            {inbox === 1 ? "1 result ready" : `${inbox} results ready`}
+            {t("sidebar.sessionStatusRung.inbox", { count: inbox })}
           </span>
         </span>
       ) : status !== "busy" && todo ? (
         <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
           <ListChecks className="size-3 shrink-0" />
           <span className="truncate">
-            <span className="font-medium tabular-nums text-foreground">
-              {`${todo.done} of ${todo.total}`}
-            </span>
-            {" done"}
+            <Trans
+              k="sidebar.sessionStatusRung.todo"
+              params={{
+                progress: (
+                  <span className="font-medium tabular-nums text-foreground">
+                    {t("sidebar.sessionStatusRung.todoProgress", {
+                      done: todo.done,
+                      total: todo.total,
+                    })}
+                  </span>
+                ),
+              }}
+            />
           </span>
         </span>
       ) : tool ? (
@@ -185,14 +199,19 @@ export function SessionStatusRung({
           <Clock className="size-3 shrink-0" />
           {scheduledIn ? (
             <span className="truncate">
-              Scheduled <span className="font-medium text-foreground">{scheduledIn}</span>
+              <Trans
+                k="sidebar.sessionStatusRung.scheduled"
+                params={{
+                  when: <span className="font-medium text-foreground">{scheduledIn}</span>,
+                }}
+              />
             </span>
           ) : (
             // Due and still here: the prompt is waiting on somewhere to
             // be typed — a setup script still running, a half-written
             // line at that prompt, a card whose terminal was never
             // opened — and it goes in the moment there is one.
-            <span className="truncate">Waiting for a prompt</span>
+            <span className="truncate">{t("sidebar.sessionStatusRung.waitingForPrompt")}</span>
           )}
         </span>
       ) : (
@@ -206,7 +225,7 @@ export function SessionStatusRung({
         origin && (
           <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
             <CornerDownLeft className="size-3 shrink-0" />
-            <span className="truncate">from {origin}</span>
+            <span className="truncate">{t("sidebar.sessionStatusRung.origin", { origin })}</span>
           </span>
         )
       )}

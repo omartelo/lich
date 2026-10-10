@@ -1,8 +1,10 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { HOTKEY_ACTIONS } from "./hotkeys"
+import { resetLocale, setLocale, tIn } from "./i18n/i18n"
 import {
+  type IndexedSetting,
   SETTING_ENTRIES,
   SETTING_SECTIONS,
   allEntries,
@@ -149,14 +151,18 @@ describe("the path over a result", () => {
 
 // The index is written by hand, so it can fall behind the panes silently: a
 // block added without an entry here is a control the search cannot find, and
-// nothing else in the app would ever say so. This reads the same literals out
-// of the source the panes are written in.
+// nothing else in the app would ever say so. This reads the same titles out
+// of the source the panes are written in: a literal, or the catalog key a
+// translated block hands to t(), which its entry names as titleKey.
+// What an entry is found by in the source: its literal title, or its key.
+const writtenTitle = (entry: IndexedSetting) => ("title" in entry ? entry.title : entry.titleKey)
+
 describe("the index against the panes it indexes", () => {
   const paneDir = fileURLToPath(new URL("../components/settings", import.meta.url))
 
   // Every `<SettingBlock ... title=...>` and `<SettingRow ... title=...>` in the
   // settings components, whether the title is a plain string or a template with
-  // the project's name in it. Split rather than one regex: a block's other props
+  // the project's name in it, or a catalog key read through t(). Split rather than one regex: a block's other props
   // hold JSX and arrow functions, so "everything up to the closing angle
   // bracket" is not a thing to match.
   function renderedTitles(): string[] {
@@ -166,7 +172,8 @@ describe("the index against the panes it indexes", () => {
       for (const block of source.split(/<Setting(?:Block|Row)/).slice(1)) {
         const quoted = block.match(/^[\s\S]{0,400}?title="([^"]+)"/)
         const templated = block.match(/^[\s\S]{0,400}?title=\{`([^`$]+)/)
-        const title = quoted?.[1] ?? templated?.[1]
+        const translated = block.match(/^[\s\S]{0,400}?title=\{t\("([^"]+)"\)\}/)
+        const title = quoted?.[1] ?? templated?.[1] ?? translated?.[1]
         if (title) {
           titles.push(title.trim())
         }
@@ -181,15 +188,15 @@ describe("the index against the panes it indexes", () => {
     const titles: string[] = []
     for (const file of readdirSync(paneDir).filter((name) => name.endsWith(".tsx"))) {
       const source = readFileSync(`${paneDir}/${file}`, "utf8")
-      for (const match of source.matchAll(/title=(?:"([^"]+)"|\{`([^`$]+))/g)) {
-        titles.push((match[1] ?? match[2]).trim())
+      for (const match of source.matchAll(/title=(?:"([^"]+)"|\{`([^`$]+)|\{t\("([^"]+)"\)\})/g)) {
+        titles.push((match[1] ?? match[2] ?? match[3]).trim())
       }
     }
     return titles
   }
 
   it("has an entry for every block the panes render", () => {
-    const indexed = SETTING_ENTRIES.map((entry) => entry.title.toLowerCase())
+    const indexed = SETTING_ENTRIES.map((entry) => writtenTitle(entry).toLowerCase())
     const missing = renderedTitles().filter(
       (title) => !indexed.some((known) => title.toLowerCase().startsWith(known)),
     )
@@ -203,8 +210,8 @@ describe("the index against the panes it indexes", () => {
   it("indexes no control that no longer exists", () => {
     const rendered = allTitles().map((title) => title.toLowerCase())
     const stale = SETTING_ENTRIES.filter(
-      (entry) => !rendered.some((title) => title.startsWith(entry.title.toLowerCase())),
-    ).map((entry) => entry.title)
+      (entry) => !rendered.some((title) => title.startsWith(writtenTitle(entry).toLowerCase())),
+    ).map(writtenTitle)
 
     expect(stale).toEqual([])
   })
@@ -212,7 +219,7 @@ describe("the index against the panes it indexes", () => {
   it("points every entry at a section the nav actually has", () => {
     const ids = SETTING_SECTIONS.map((section) => section.id)
     const orphans = SETTING_ENTRIES.filter((entry) => !ids.includes(entry.section)).map(
-      (entry) => entry.title,
+      writtenTitle,
     )
 
     expect(orphans).toEqual([])
@@ -223,4 +230,36 @@ describe("the index against the panes it indexes", () => {
   it("reads the blocks out of the source at all", () => {
     expect(renderedTitles().length).toBeGreaterThan(20)
   })
+})
+
+// A translated block is matched in the interface language and in English, so a
+// search typed from memory of the English screens still lands after a switch.
+describe("the language settings", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    resetLocale()
+  })
+
+  const cases = [
+    { key: "settings.language.uiTitle", en: "interface language", ptBR: "idioma da interface" },
+    { key: "settings.language.promptTitle", en: "prompt language", ptBR: "idioma dos prompts" },
+  ] as const
+
+  for (const { key, en, ptBR } of cases) {
+    it(`finds ${key} in English`, () => {
+      expect(find(en)[0]?.title).toBe(tIn("en", key))
+      expect(find("language").map((hit) => hit.title)).toContain(tIn("en", key))
+    })
+
+    it(`finds ${key} in Portuguese, by its title, a keyword and its English title`, () => {
+      vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} })
+      setLocale("pt-BR")
+      const title = tIn("pt-BR", key)
+
+      expect(find(ptBR)[0]?.title).toBe(title)
+      expect(find("idioma").map((hit) => hit.title)).toContain(title)
+      expect(find("tradução").map((hit) => hit.title)).toContain(title)
+      expect(find(en).map((hit) => hit.title)).toContain(title)
+    })
+  }
 })

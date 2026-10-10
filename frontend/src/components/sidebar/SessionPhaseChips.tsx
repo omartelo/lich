@@ -1,12 +1,6 @@
+import { useT } from "@/lib/i18n/i18n"
 import { cn } from "@/lib/utils"
 import { SESSION_PHASES, type SessionPhase } from "@/lib/session/session-filter"
-
-const LABELS: Record<SessionPhase, string> = {
-  waiting: "Waiting",
-  running: "Running",
-  unread: "Unread",
-  idle: "Idle",
-}
 
 interface SessionPhaseChipsProps {
   picked: ReadonlySet<SessionPhase>
@@ -20,6 +14,7 @@ interface SessionPhaseChipsProps {
 // dimmed rather than dropped: a row that reshuffles as sessions change state
 // costs more to aim at than the space it saves.
 export function SessionPhaseChips({ picked, counts, onChange }: SessionPhaseChipsProps) {
+  const t = useT()
   const toggle = (phase: SessionPhase) => {
     const next = new Set(picked)
     if (!next.delete(phase)) {
@@ -28,9 +23,13 @@ export function SessionPhaseChips({ picked, counts, onChange }: SessionPhaseChip
     onChange(next)
   }
   return (
-    <div role="group" aria-label="Filter by state" className="flex flex-wrap items-center gap-0.5">
+    <div
+      role="group"
+      aria-label={t("sidebar.sessionPhaseChips.group")}
+      className="flex flex-wrap items-center gap-0.5"
+    >
       <Chip
-        label="All"
+        label={t("sidebar.sessionPhaseChips.all")}
         // Every session the query matches sits in exactly one phase.
         count={SESSION_PHASES.reduce((sum, phase) => sum + counts[phase], 0)}
         on={picked.size === 0}
@@ -39,7 +38,7 @@ export function SessionPhaseChips({ picked, counts, onChange }: SessionPhaseChip
       {SESSION_PHASES.map((phase) => (
         <Chip
           key={phase}
-          label={LABELS[phase]}
+          label={t(`sidebar.sessionPhaseChips.phase.${phase}`)}
           count={counts[phase]}
           on={picked.has(phase)}
           onClick={() => toggle(phase)}

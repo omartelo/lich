@@ -1,5 +1,6 @@
 import { Settings } from "lucide-react"
 import { SidebarCard } from "@/components/common/SidebarCard"
+import { useT } from "@/lib/i18n/i18n"
 
 interface SettingsCardProps {
   active: boolean
@@ -12,14 +13,15 @@ interface SettingsCardProps {
 // user works in a terminal, mirroring SessionCard's shape so it reads as a peer
 // of the sessions rather than a separate control.
 export function SettingsCard({ active, onSelect, onClose }: SettingsCardProps) {
+  const t = useT()
   return (
     <SidebarCard
       icon={Settings}
-      label="Settings"
+      label={t("sidebar.settingsCard.label")}
       active={active}
       onSelect={onSelect}
       onClose={onClose}
-      closeLabel="Close settings"
+      closeLabel={t("sidebar.settingsCard.close")}
     />
   )
 }

@@ -20,6 +20,7 @@ import { Stepper } from "@/components/common/Stepper"
 import { SettingRow } from "./SettingBlock"
 import { FontSetting } from "./FontSetting"
 import { FooterSettings } from "./FooterSettings"
+import { LanguageSettings } from "./LanguageSettings"
 import { ImportThemeDialog } from "./ImportThemeDialog"
 import { ThemePicker } from "./ThemePicker"
 import { Button } from "@/components/ui/button"
@@ -204,6 +205,7 @@ export function AppearanceSettings() {
 
       <FontSetting />
       <FooterSettings />
+      <LanguageSettings />
 
       <ImportThemeDialog
         open={importOpen}
