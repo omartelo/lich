@@ -46,6 +46,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   descriptions, `--help` and error returns stay English in every language. A usage-limit continuation parked
   before the setting changed keeps the language it was parked in: the row stores the text, so
   `isResumePrompt` matches it in every locale.
+- **Some interface text stays English in every language**: the exit marker written into a terminal's scrollback
+  (`exitMarker`, `frontend/src/lib/terminal/session-exit.ts`), because it is data in the replay and not a label;
+  the `Session N` label a session gets when nothing names it (`frontend/src/lib/session/sessions.ts`), because
+  it is persisted and would otherwise change language on the next launch only for the rows made afterwards;
+  every `Error` message and the output of `errorText()`, which show backend and library text as it came; the
+  CHANGELOG group labels in the What's new dialog (`PatchNotesDialog`), which render a file that is English;
+  and MCP tool descriptions and the `lich` CLI's `--help`, which agents read and which do not follow the prompt
+  language either.
 - **`LICH_WORKTREE_PORT` is reserved, never held** (`internal/terminal/worktreeport.go`): the number is a name the
   checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts. A
   Run card shortens that window rather than closing it — the process it starts is what binds the port, and
