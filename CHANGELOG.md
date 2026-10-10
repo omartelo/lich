@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.65.0] - 2026-10-10
+
+> [!IMPORTANT]
+> **Everyone: lich now speaks Português, Español and 简体中文 as well as English.**
+> Pick the language of lich's screens and, separately, the one your agents hear,
+> in Settings › Appearance.
+
 ### Added
 
 - **`lich insert` pastes text at a session's prompt without sending it.** Give
@@ -17,28 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selection or a file. `lich sessions --json` and `whoami --json` now also carry
   each session's `path` and `projectPath`, and `send --project` now takes a
   directory, as `lich --help` already said it did.
-- **Simplified Chinese (简体中文) joins the language settings.** Both Settings ›
-  Appearance pickers, the *Interface language* and the *Prompt language*, now
-  offer Simplified Chinese next to English, Brazilian Portuguese and
-  Spanish. A browser set to any Chinese variant picks it by default for the
-  interface.
-
-- **Two language settings, English and Brazilian Portuguese.** Settings ›
-  Appearance now has an *Interface language* for lich's own screens and a
-  separate *Prompt language* for the text lich hands your agents (relayed tasks,
-  results-ready notices, subagent reports, merge and late-prompt notices, the
-  `lich` CLI and MCP results, the briefing at spawn), so you can read lich in one
-  language and talk to your agents in another. The whole interface is
-  available in English and Brazilian Portuguese; the text lich hands your agents
-  follows the prompt language. A session started after you change the
-  prompt language gets it everywhere; one already open gets it in relayed
-  messages only.
-
-- **Spanish joins the interface and prompt languages.** *Interface language*
-  and *Prompt language* in Settings › Appearance now offer Español next to
-  English and Português (Brasil). A Spanish browser language (es-ES, es-MX,
-  es-419) picks it until you choose another.
-
+- **lich speaks four languages, and your agents can hear a different one.**
+  Settings › Appearance now has an *Interface language* for lich's own screens
+  and a separate *Prompt language* for the text lich hands your agents (relayed
+  tasks, results-ready notices, subagent reports, merge and late-prompt
+  notices, the `lich` CLI and MCP results, the briefing at spawn), so you can
+  read lich in one language and talk to your agents in another. Both offer
+  English, Português (Brasil), Español and 简体中文; the interface starts in your
+  browser's language. A session started after you change the prompt language
+  gets it everywhere; one already open gets it in relayed messages only. The
+  text lich-plugin's mods add for the agent follows it too, from lich-plugin
+  0.20.
 - **A session card offers to open a pull request.** Hover a card whose branch
   has none yet and a PR button shows where the PR number would be; clicking it
   types the request to open one at that session's prompt, ready to send.
@@ -5625,7 +5621,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.64.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.65.0...HEAD
+[0.65.0]: https://github.com/omartelo/lich/compare/v0.64.0...v0.65.0
 [0.64.0]: https://github.com/omartelo/lich/compare/v0.63.0...v0.64.0
 [0.63.0]: https://github.com/omartelo/lich/compare/v0.62.1...v0.63.0
 [0.62.1]: https://github.com/omartelo/lich/compare/v0.62.0...v0.62.1
