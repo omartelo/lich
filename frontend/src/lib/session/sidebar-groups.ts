@@ -7,7 +7,7 @@
 
 import type { PaneGroup } from "./panes"
 import type { PendingStatus } from "./session-status-store"
-import { sessionsOf, type Session, type SessionState } from "./sessions"
+import type { Session } from "./sessions"
 
 // The pinned block's stand-in id, for the same reason ROOT_GROUP_KEY exists: it
 // is not a path. The block gathers sessions from every checkout, so it can
@@ -271,59 +271,72 @@ export function dragOrder(stored: Session[], groups: SidebarGroup[], keys: strin
   return reorderSubset(stored, orderGroups(movable, keys), (session) => moved.has(session.id))
 }
 
-// neighborSessionId returns the session one step from `sessionId` in the order
-// the sidebar draws, wrapping at both ends. "" means there is nowhere to go —
-// unknown project, no sessions, or a single one — and the caller leaves focus
-// alone. A `sessionId` no longer in the list (its session was closed) lands on
-// the end the step comes from, so the press still moves somewhere.
+// One card in the order the sidebar draws, and whether it is on screen. A card
+// in a folded block keeps its place in the order: the active card can be one
+// (folded after it was picked), and a step has to leave from where it sits.
+export interface SidebarCard {
+  id: string
+  shown: boolean
+}
+
+// sidebarCards is the card order every keyboard walk reads: the blocks as
+// drawn, pinned and split blocks first where they are, each card shown unless
+// `folded` picks its block. `groups` is built from the list the sidebar draws,
+// so a card the filter left out is not in it at all.
 //
 // The order is the grouped one, not the stored flat list: a session opened in
 // the project root after a worktree one sits between its own group's cards in
 // the state and under them on screen, so walking the flat list would jump a
-// divider and come back. Pinned cards, and the split's, are walked where they
-// are drawn — in the block at the top, not in the worktree they belong to.
-export function neighborSessionId(
-  state: SessionState,
-  projectId: string,
-  sessionId: string,
-  step: 1 | -1,
-  stage: readonly PaneGroup[] = [],
-): string {
-  const sessions = sidebarGroups(sessionsOf(state, projectId), stage).flatMap(
-    (group) => group.sessions,
-  )
-  if (sessions.length < 2) {
-    return ""
-  }
-  const index = sessions.findIndex((s) => s.id === sessionId)
-  if (index === -1) {
-    return step === 1 ? sessions[0].id : sessions[sessions.length - 1].id
-  }
-  return sessions[(index + step + sessions.length) % sessions.length].id
+// divider and come back.
+export function sidebarCards(
+  groups: SidebarGroup[],
+  folded: (groupKey: string) => boolean,
+): SidebarCard[] {
+  return groups.flatMap((group) => {
+    const shown = !folded(group.key)
+    return group.sessions.map((session) => ({ id: session.id, shown }))
+  })
 }
 
-// nextWaitingSessionId returns the first session after `sessionId` that
-// `isWaiting` picks, walking the order neighborSessionId walks and wrapping
-// past the end. "" means no other session is waiting: the active session never
-// answers for itself, since landing on it again would move nothing.
-export function nextWaitingSessionId(
-  state: SessionState,
-  projectId: string,
+// nextShownCard walks `cards` from `sessionId` in `step` direction, wrapping,
+// and returns the first shown card `pick` accepts. The active card never
+// answers for itself, since landing on it again would move nothing. A
+// `sessionId` no longer in the list (its session was closed) starts from the
+// end the step comes from, so the whole list is searched.
+function nextShownCard(
+  cards: SidebarCard[],
   sessionId: string,
-  isWaiting: (sessionId: string) => boolean,
-  stage: readonly PaneGroup[] = [],
+  step: 1 | -1,
+  pick: (sessionId: string) => boolean,
 ): string {
-  const sessions = sidebarGroups(sessionsOf(state, projectId), stage).flatMap(
-    (group) => group.sessions,
-  )
-  const start = sessions.findIndex((s) => s.id === sessionId)
-  for (let offset = 1; offset <= sessions.length; offset++) {
-    const candidate = sessions[(start + offset) % sessions.length]
-    if (candidate.id !== sessionId && isWaiting(candidate.id)) {
+  const count = cards.length
+  const index = cards.findIndex((card) => card.id === sessionId)
+  const from = index !== -1 ? index : step === 1 ? -1 : count
+  for (let offset = 1; offset <= count; offset++) {
+    const candidate = cards[(((from + step * offset) % count) + count) % count]
+    if (candidate.shown && candidate.id !== sessionId && pick(candidate.id)) {
       return candidate.id
     }
   }
   return ""
+}
+
+// neighborSessionId returns the shown card one step from `sessionId`, wrapping
+// at both ends. "" means there is nowhere to go (no other card on screen) and
+// the caller leaves focus alone.
+export function neighborSessionId(cards: SidebarCard[], sessionId: string, step: 1 | -1): string {
+  return nextShownCard(cards, sessionId, step, () => true)
+}
+
+// nextWaitingSessionId returns the first shown card after `sessionId` that
+// `isWaiting` picks, wrapping past the end. "" means no other session on screen
+// is waiting.
+export function nextWaitingSessionId(
+  cards: SidebarCard[],
+  sessionId: string,
+  isWaiting: (sessionId: string) => boolean,
+): string {
+  return nextShownCard(cards, sessionId, 1, isWaiting)
 }
 
 // A worktree's sessions under one roof. `path` is the checkout root ("" for the

@@ -1,10 +1,12 @@
+import { useEffect } from "react"
 import { useMatch, useNavigate } from "react-router-dom"
 import { PanelLeft, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SIDEBAR_MORPH } from "@/lib/view-transition"
 import { useProjects } from "@/providers/projects"
 import { activeSessionId, sessionsOf, type Session } from "@/lib/session/sessions"
-import { sidebarGroups } from "@/lib/session/sidebar-groups"
+import { sidebarCards, sidebarGroups } from "@/lib/session/sidebar-groups"
+import { registerSidebarCards } from "@/lib/session/sidebar-cards-store"
 import { resolveGroups } from "@/lib/session/panes"
 import { useStoredGroups } from "@/lib/session/panes-store"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
@@ -84,18 +86,21 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
   // unrelated render came along. Resolved ahead of the no-project bail below:
   // hooks cannot sit behind it.
   const stored = useStoredGroups(projectId ?? "")
+  // Same order as the expanded sidebar, split's block and all: the rail is
+  // that list with the words taken out. Reconciled the same way too — the
+  // stored value is not the truth on its own, and a rail drawing a wall the
+  // open sidebar has already dropped is the same list disagreeing with itself.
+  const list = sessionsOf(sessions, projectId ?? "")
+  const groups = sidebarGroups(list, resolveGroups(stored, list))
+  // The rail draws every card, folded blocks included, so the shortcuts walk
+  // them all while it is the sidebar on screen.
+  useEffect(() => registerSidebarCards(() => sidebarCards(groups, () => false)))
 
   if (!projectId) {
     return null
   }
 
   const path = projects.find((p) => p.id === projectId)?.path ?? ""
-  // Same order as the expanded sidebar, split's block and all: the rail is
-  // that list with the words taken out. Reconciled the same way too — the
-  // stored value is not the truth on its own, and a rail drawing a wall the
-  // open sidebar has already dropped is the same list disagreeing with itself.
-  const list = sessionsOf(sessions, projectId)
-  const groups = sidebarGroups(list, resolveGroups(stored, list))
   // Unlike the open sidebar, a full-screen route (Settings, Pulls) does not put
   // the highlight out: those screens have no card of their own here to carry
   // it, so dropping it would leave the rail with nothing lit at all.
