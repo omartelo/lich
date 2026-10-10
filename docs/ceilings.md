@@ -968,6 +968,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   pull request's file on the next one's tree. The re-read is held in state and never in a ref, for the replay
   reason `use-remote-resource.ts` documents, and `use-active-file.test.tsx` pins it by moving the pull
   request on a live component — a probe that remounted instead would call the ref version green.
+- **The CEF cache only grows** (`build/cef.sh`): every worktree's `task build:shell` shares one unpacked
+  distribution per CEF version under the user's cache dir (`build/cef.sh --dir` prints it), and nothing ever
+  deletes one. Each CEF bump leaves the previous ~1.4 GB behind, as does the per-worktree `.cef/` of a checkout
+  from before the cache. Clearing `lich-cef/` is safe; the next build fetches again. The fetch tool itself is
+  still built per worktree (`shell/target/tetsu-tools`), so a fresh worktree compiles it once even on a warm
+  cache.
 - **A profile belongs to one window build, so pinning another opens lich at its defaults**
   (`internal/chromium/profiledir.go`): every `lich.*` UI setting lives in the localStorage of the profile keyed
   by the path of the window that opened it, and nothing copies between profiles. A `LICH_SHELL` pin, or the

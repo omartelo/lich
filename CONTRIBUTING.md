@@ -31,8 +31,11 @@ libxrandr-dev libxkbcommon-dev libxss-dev libxtst-dev libwayland-dev` on
 Debian/Ubuntu), on Windows **MSVC** (Visual Studio Build Tools) and git-bash
 on PATH for the scripts, and on macOS the Xcode command line tools. Nothing
 of CEF is compiled: the window loads it when it starts. The first build
-fetches the CEF distribution (~200 MB download, 1.4 GB unpacked into
-`.cef/`); later builds reuse it. `zenity` provides the folder picker on
+fetches the CEF distribution (~200 MB download, 1.4 GB unpacked) into a
+per-user cache keyed by CEF version (`${XDG_CACHE_HOME:-~/.cache}/lich-cef/`,
+`~/Library/Caches/lich-cef/` on macOS, `%LOCALAPPDATA%\lich-cef\` on
+Windows); later builds, from any worktree, reuse it. `CEF_DIR` overrides the
+location. `zenity` provides the folder picker on
 Linux.
 
 ```bash

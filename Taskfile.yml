@@ -49,12 +49,13 @@ tasks:
       - "{{.BIN_DIR}}/shell/lich-shell{{exeExt}}"
       - "{{.BIN_DIR}}/shell/{{if eq OS \"windows\"}}libcef.dll{{else if eq OS \"darwin\"}}Chromium Embedded Framework.framework{{else}}cef/libcef.so{{end}}"
     vars:
-      # Where build/cef.sh puts the CEF distribution (CI points it at the
-      # same place, and caches it). kurogane links nothing of CEF: the
-      # window loads libcef when it starts, so the distribution is only what
-      # assemble.sh ships beside the binary.
+      # Where build/cef.sh puts the CEF distribution: CEF_DIR when set (CI
+      # points it at .cef, and caches it), else a per-user cache shared by
+      # every worktree on the same CEF version. kurogane links nothing of CEF:
+      # the window loads libcef when it starts, so the distribution is only
+      # what assemble.sh ships beside the binary.
       CEF_DIR:
-        sh: echo "${CEF_DIR:-{{.ROOT_DIR}}/.cef}"
+        sh: bash build/cef.sh --dir
     cmds:
       # The Go binary stays pure and static; the window is a separate Rust
       # binary on CEF, found beside it at run time (internal/chromium/shell.go).
