@@ -7,6 +7,7 @@
 // The harness is imported first for the reason render-budget.test.tsx names: it
 // has to hook react-dom before anything else reaches it.
 import { mountBudget } from "@/test/render-budget"
+import { typeInto } from "@/test/type-into"
 import { createElement } from "react"
 import { expect, test } from "vitest"
 import { SessionGroupHeader } from "./SessionGroupHeader"
@@ -187,10 +188,7 @@ async function typeName(value: string) {
   if (!input) {
     throw new Error("rename field not rendered")
   }
-  // The value setter is called off the prototype so React's own onChange sees
-  // the change, the way it would from a keystroke.
-  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value)
-  input.dispatchEvent(new Event("input", { bubbles: true }))
+  typeInto(input, value)
   await tick()
 }
 
