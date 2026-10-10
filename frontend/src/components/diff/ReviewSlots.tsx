@@ -2,6 +2,7 @@ import type { DraftReviewComment, ReviewThread as Thread } from "@/lib/api-types
 import type { NewLineRange } from "@/lib/git/diff"
 import type { DraftScope } from "@/lib/pulls/draft-store"
 import { COMPOSER_KEY, draftSlotKey, isThreadSlot, threadSlotKey } from "@/lib/pulls/review-slots"
+import { useT } from "@/lib/i18n/i18n"
 import { CommentBox } from "@/components/pulls/CommentBox"
 import { PendingComments, ReviewThread, type ThreadActions } from "@/components/pulls/ReviewThread"
 
@@ -72,6 +73,7 @@ export function ReviewSlot({
   onComposerSubmit,
   onComposerCancel,
 }: ReviewSlotProps) {
+  const t = useT()
   if (slotKey === COMPOSER_KEY) {
     if (!composer) {
       return null
@@ -82,18 +84,22 @@ export function ReviewSlot({
     return (
       <div className="flex flex-col gap-1.5 rounded-md bg-sidebar px-3 py-2.5">
         <span className="font-mono text-xs text-muted-foreground">
-          {session ? "for the session" : "on the pull request"} · {composer.lines}
+          {session
+            ? t("diff.reviewSlots.forSession", { lines: composer.lines })
+            : t("diff.reviewSlots.onPullRequest", { lines: composer.lines })}
         </span>
         <CommentBox
           value={composer.body}
           onChange={onComposerChange}
           onSubmit={onComposerSubmit}
           onCancel={onComposerCancel}
-          submitLabel={session ? "Add to batch" : "Add to review"}
+          submitLabel={
+            session ? t("diff.reviewSlots.addToBatch") : t("diff.reviewSlots.addToReview")
+          }
           placeholder={
             session
-              ? "What should change here? It goes to the session with the rest."
-              : "Leave a comment. It is sent when you submit the review."
+              ? t("diff.reviewSlots.sessionPlaceholder")
+              : t("diff.reviewSlots.reviewPlaceholder")
           }
           autoFocus
           submitOnEnter={session}
