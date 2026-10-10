@@ -1076,6 +1076,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   on a windowless lich may do nothing. On Windows the Start-menu launch is a new process and takes the same
   path, and quitting closes the window with WM_CLOSE as restart did, but neither has run on Windows
   hardware with the window closed first.
+- **The gate run inside lich kills lich's window** (measured 2026-10-10): `go vet`, `go test ./...`, the
+  cross-compile loop and `vitest` + `vite build` started together from a session ran the machine out of
+  memory, and every Chromium on it, the lich window and an unrelated browser alike, died with SIGBUS; the
+  window took the session that ran the gate down with it. `/tmp` is tmpfs on many distributions, so the Go
+  build's temporaries count as RAM too. Nothing in lich bounds what a session spends. The way around it is
+  in CLAUDE.md › Local Gate: one step at a time, in a `systemd-run --user --scope` with `MemoryMax`, with
+  `GOTMPDIR`/`TMPDIR` on disk; there a step over the limit is the one killed. macOS and Windows have no
+  equivalent here.
 - **A rig needs its own HOME, not just its own config dir** (`internal/agentplugin.RepairRegistrations`): every
   launch that is not `task dev` (`LICH_DEV`) or a `go run` binary repoints the provider MCP registrations it
   finds to its own executable, and those live under HOME, not under the config dir: `~/.cursor/mcp.json`,
