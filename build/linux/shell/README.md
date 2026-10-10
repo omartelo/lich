@@ -13,7 +13,9 @@ lich that opened it — so nothing about it reaches the pure-Go build.
 bubble kept off the window,
 [0x48piraj/kurogane#23](https://github.com/0x48piraj/kurogane/pull/23)) and
 `App::on_before_unload`, which lets lich-shell keep a close the user made so the
-page can ask whether lich keeps running. Neither is upstream yet.
+page can ask whether lich keeps running
+([0x48piraj/kurogane#24](https://github.com/0x48piraj/kurogane/pull/24)).
+Neither is upstream yet.
 Everything else the fork once carried is upstream's own now, in upstream's
 shape: the window's class, icon and title, the profile directory, where the
 window closed and where it reopens, the decision hooks that grew out of
