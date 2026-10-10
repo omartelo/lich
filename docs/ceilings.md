@@ -536,11 +536,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   handed the task with no ticket and its last message is its report; a worker whose mod had not polled when the
   task went in (4 of 84 workers measured on 2026-10-09), or runs a lich-plugin older than 0.17.0, is handed
   the ticket instead. A final turn that ends blank
-  or in a refusal ends the errand `unanswered` with that reason (`relay.WorkerUnanswered`), once the plugin posts
-  it (docs/hooks/mod-answer.md, Unanswered turns); until then, and for a turn aborted with Esc or ended by an API
-  error, whose background list the plugin cannot read yet, the errand stays open with nothing reported while the
-  worker runs. An API error's `unanswered` can beat the parked usage-limit continuation it should yield to, and the
-  caller then hears `unanswered` before that continuation's report. A worker's report,
+  ends the errand `unanswered` (`relay.WorkerUnanswered`), once the plugin posts it (docs/hooks/mod-answer.md,
+  Unanswered turns). A turn ended by an API error or a refusal fires `StopFailure`, which carries no background
+  list, and no `Stop` (measured on Claude Code 2.1.296), so the plugin cannot tell it from a turn whose background
+  work will resume the worker and posts nothing: that errand, like one whose turn was aborted with Esc, stays open
+  with nothing reported while the worker runs, kept past `ticketTTL` rather than ending at a deadline, until a later
+  turn answers or the worker is closed. A worker's report,
   and a turn end that would call a ticket-carrying errand unanswered (`relay.turnCandidates`), wait for the
   errands it sent itself (`relay.awaitsOutcomeLocked`), since Claude Code does not list them as
   background work; one of those that ages out on `ticketTTL` is filed in the worker's inbox as `expired`

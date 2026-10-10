@@ -73,9 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   collect it, instead of returning nothing.
 
 - **A subagent whose last turn ends with nothing to say no longer leaves its
-  asker waiting.** When the worker's turn ends blank or in a refusal, the
-  asker hears the task went unanswered and why, instead of a task that stays
-  open for as long as the worker runs. Needs a lich-plugin release that reports
+  asker waiting.** When the worker's last turn ends blank, the asker hears the
+  task went unanswered, instead of a task that stays open for as long as the
+  worker runs. Needs a lich-plugin release that reports
   it.
 
 - **A Cursor CLI card now shows its turns.** It spins while the agent works,
