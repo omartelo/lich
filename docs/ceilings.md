@@ -42,8 +42,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   fixed when the session spawns. Change the language and an open session can get relay messages in the new
   language and CLI output in the old one until it is restarted. The spawn briefing is likewise fixed at spawn,
   and only Claude Code and oh-my-pi receive one at all: they are the two whose command line can append to the
-  system prompt (`briefingFlags`), so the other six read lich's words only in relayed messages. Until the
-  follow-up PRs land, the CLI, MCP and `resumePrompt` text is English in every language.
+  system prompt (`briefingFlags`), so the other six read lich's words only in relayed messages. MCP tool
+  descriptions, `--help` and error returns stay English in every language. A usage-limit continuation parked
+  before the setting changed keeps the language it was parked in: the row stores the text, so
+  `isResumePrompt` matches it in every locale.
 - **`LICH_WORKTREE_PORT` is reserved, never held** (`internal/terminal/worktreeport.go`): the number is a name the
   checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts. A
   Run card shortens that window rather than closing it — the process it starts is what binds the port, and
