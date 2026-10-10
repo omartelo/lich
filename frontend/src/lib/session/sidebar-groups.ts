@@ -226,6 +226,30 @@ export function checkoutsOf(sessions: Session[]): string[] {
   return [...new Set(sessions.map((session) => session.path ?? ""))]
 }
 
+// pullsCheckoutHomes says, per block key, which checkouts ("" for the project
+// root) draw their parked Pull request card in that block. A checkout's own
+// block draws its own; one whose cards are all filed or on a wall has no block,
+// so the first folder or wall holding one of them draws it instead — once, so
+// two folders sharing a checkout do not both show its card. The pinned block
+// draws none: it spans every checkout, and its cards keep their own block.
+export function pullsCheckoutHomes(groups: SidebarGroup[]): Map<string, string[]> {
+  const isCheckoutBlock = (group: SidebarGroup) => !group.pinned && !group.stage && !group.folder
+  const placed = new Set(groups.filter(isCheckoutBlock).map((group) => group.path))
+  const homes = new Map<string, string[]>()
+  for (const group of groups) {
+    if (group.pinned || isCheckoutBlock(group)) {
+      homes.set(group.key, group.pinned ? [] : [group.path])
+      continue
+    }
+    const homeless = checkoutsOf(group.sessions).filter((path) => !placed.has(path))
+    for (const path of homeless) {
+      placed.add(path)
+    }
+    homes.set(group.key, homeless)
+  }
+  return homes
+}
+
 // runCardIn names the Run card of the checkout stored as `path` ("" for the
 // project's own directory), or undefined when it has none, which is what puts
 // the launch menu's item on "Run" rather than "Go to Run card".
