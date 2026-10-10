@@ -14,7 +14,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { RUN_NOT_ON_WINDOWS, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
+import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 import { WorktreeScriptRows } from "./WorktreeScriptRows"
 
 // The OS the menu reads, behind a getter so one file can mount both sides: the
@@ -176,7 +176,7 @@ test("the Run item is dead on Windows, naming why", async () => {
     throw new Error("Run row not rendered")
   }
   expect(row.getAttribute("data-disabled")).not.toBeNull()
-  expect(row.textContent).toContain(RUN_NOT_ON_WINDOWS)
+  expect(row.textContent).toContain("Run scripts are sh; not run on Windows.")
 
   await mounted.act(() => {
     row.click()
