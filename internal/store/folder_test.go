@@ -216,3 +216,23 @@ func TestRenameFolderOfNothingMovesNothing(t *testing.T) {
 		t.Errorf("moved = %#v, want an empty list", moved)
 	}
 }
+
+// TestAddSessionFilesTheRowItInserts: a session opened into a folder carries it
+// from the insert, with no filing write after it, so no crash can land between
+// the row and its folder and bring the session back unfiled.
+func TestAddSessionFilesTheRowItInserts(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+
+	if err := svc.AddSessionInFolder("p1", "s1", "Session 1", "", "", 2, "", "Apps"); err != nil {
+		t.Fatalf("AddSessionInFolder: %v", err)
+	}
+	if err := svc.AddSessionFrom("p1", "s2", "worker", "", "", 3, "s1", "Session 1", "Apps"); err != nil {
+		t.Fatalf("AddSessionFrom: %v", err)
+	}
+	for _, id := range []string{"s1", "s2"} {
+		if got := folderOf(t, svc, "p1", id); got != "Apps" {
+			t.Errorf("%s folder = %q, want %q", id, got, "Apps")
+		}
+	}
+}

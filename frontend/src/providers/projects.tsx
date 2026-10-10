@@ -47,7 +47,7 @@ import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { neighborProjectId } from "@/lib/project-order"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { useSettings } from "./settings"
-import { buildSessionState, fileAfterInsert, toProject } from "./project-workspace"
+import { buildSessionState, toProject } from "./project-workspace"
 import { ProjectsContext } from "./projects-context"
 import { useSessionEvents } from "./project-events"
 import { t } from "@/lib/i18n/i18n"
@@ -298,7 +298,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]
       commit(next)
-      const inserted = Store.AddSession(
+      void Store.AddSessionInFolder(
         projectId,
         sessionId,
         created.label,
@@ -306,8 +306,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         checkout,
         project.nextSeq,
         sandbox,
+        folder,
       )
-      void fileAfterInsert(inserted, sessionId, folder)
       return sessionId
     },
     [],

@@ -255,6 +255,8 @@ type spawnStore struct {
 	effort    string
 	ultracode bool
 	subagent  bool
+	// insertFolder is the folder the last insert wrote with its row.
+	insertFolder string
 	// renamed is the session id and label the last rename wrote.
 	renamed [2]string
 	// filed is the session id and folder the last filing wrote, refolded the
@@ -274,10 +276,11 @@ func (*spawnStore) LoadState() ([]store.Project, error) {
 	}}}, nil
 }
 
-func (s *spawnStore) AddSessionFrom(_, _, _, _, _ string, _ int, _, _ string) error {
+func (s *spawnStore) AddSessionFrom(_, _, _, _, _ string, _ int, _, _, folder string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.rows++
+	s.insertFolder = folder
 	return nil
 }
 
@@ -475,8 +478,9 @@ func TestOpenOverTheRealDispatcher(t *testing.T) {
 	if rows.effort != "high" {
 		t.Errorf("row effort = %q, want the one the flag named", rows.effort)
 	}
-	if rows.filed[1] != "Apps" {
-		t.Errorf("filed = %v, want the new session under the folder the flag named", rows.filed)
+	if rows.insertFolder != "Apps" || rows.filed != [2]string{} {
+		t.Errorf("inserted under %q, filed %v; want the folder the flag named on the insert itself",
+			rows.insertFolder, rows.filed)
 	}
 }
 

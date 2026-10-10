@@ -83,7 +83,7 @@ type Sessions interface {
 	RecentProjects(term string) ([]store.Recent, error)
 	AddProject(id, name, path string) error
 	AddSessionFrom(
-		projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
+		projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel, folder string,
 	) error
 	SandboxDefault(providerID, projectID, cwd string) bool
 	SetSessionModel(sessionID, model string) error
@@ -215,7 +215,8 @@ func New(sessions Sessions, worktrees Worktrees, term Terminal, events Events) *
 // runs; it is recorded the same way, and refused for every other provider.
 //
 // folder, when given, is the folder the session is filed under from its first
-// frame (see fileOpened).
+// frame: it is written with the row, so the card arrives in the folder's block
+// rather than among its checkout's cards and then jumps.
 func (s *Service) Open(
 	fromID, projectName, kind, worktree, base, model, effort, folder string, ultracode bool,
 ) (Session, error) {
@@ -326,14 +327,14 @@ func (s *Service) openSession(req request) (Session, error) {
 		NextSeq:         target.NextSeq + 1,
 		OriginSessionID: originID,
 		OriginLabel:     originLabel,
+		Folder:          folder,
 		Confined:        s.sessions.SandboxDefault(kind, target.ID, cwd),
 	}
 	if err := s.sessions.AddSessionFrom(
-		target.ID, id, label, kind, stored, opened.NextSeq, originID, originLabel,
+		target.ID, id, label, kind, stored, opened.NextSeq, originID, originLabel, folder,
 	); err != nil {
 		return Session{}, err
 	}
-	folderErr := s.fileOpened(&opened, folder)
 	// Announced before the spawn, and regardless of how it goes: the row exists
 	// either way, so the card has to exist either way too — a session only the
 	// database knows about is one the user cannot reach to see what went wrong.
@@ -353,7 +354,7 @@ func (s *Service) openSession(req request) (Session, error) {
 	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, false, at.setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)
 	}
-	if err := errors.Join(folderErr, callerErr, overrideErr, markErr); err != nil {
+	if err := errors.Join(callerErr, overrideErr, markErr); err != nil {
 		return Session{}, err
 	}
 	return opened, nil
@@ -424,24 +425,6 @@ func (s *Service) markSubagent(id, label string, req request) error {
 			label, err,
 		)
 	}
-	return nil
-}
-
-// fileOpened files a just-inserted session under the folder it was opened into,
-// before the window is told about it, so the card arrives in the folder's block
-// rather than among its checkout's cards and then jumps. A write that fails
-// leaves the card unfiled, as the row is, and is reported once the session is
-// running, for the reason recordOverrides gives.
-func (s *Service) fileOpened(opened *Session, folder string) error {
-	if folder == "" {
-		return nil
-	}
-	if err := s.sessions.SetSessionFolder(opened.ID, folder); err != nil {
-		return fmt.Errorf(
-			"session %q is open, but it could not be filed under %q: %w", opened.Label, folder, err,
-		)
-	}
-	opened.Folder = folder
 	return nil
 }
 

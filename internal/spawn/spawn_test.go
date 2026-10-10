@@ -23,6 +23,7 @@ type added struct {
 	nextSeq     int
 	originID    string
 	originLabel string
+	folder      string
 }
 
 type fakeSessions struct {
@@ -201,13 +202,13 @@ func (f *fakeSessions) AddProject(id, name, path string) error {
 }
 
 func (f *fakeSessions) AddSessionFrom(
-	projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
+	projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel, folder string,
 ) error {
 	if f.addErr != nil {
 		return f.addErr
 	}
 	f.rows = append(f.rows, added{
-		projectID, sessionID, label, kind, path, nextSeq, originID, originLabel,
+		projectID, sessionID, label, kind, path, nextSeq, originID, originLabel, folder,
 	})
 	// The counter moves with the write, as it does in the store: a fake that kept
 	// answering the old number would hide two sessions taking one label.
@@ -450,7 +451,7 @@ func TestOpenLandsInTheCallersProject(t *testing.T) {
 		t.Fatalf("wrote %d rows, want 1", len(sessions.rows))
 	}
 	row := sessions.rows[0]
-	if row != (added{"p1", opened.ID, "Session 4", "codex", "", 5, "s1", "Session 3"}) {
+	if row != (added{"p1", opened.ID, "Session 4", "codex", "", 5, "s1", "Session 3", ""}) {
 		t.Errorf("row = %+v", row)
 	}
 	if len(term.spawns) != 1 {

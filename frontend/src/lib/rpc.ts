@@ -405,6 +405,29 @@ export const Store = {
     nextSeq: number,
     sandbox = "",
   ) => call<null>("store.AddSession", [projectID, sessionID, label, kind, path, nextSeq, sandbox]),
+  /** AddSession for a session opened into a folder (a folder's +). The folder
+   * rides the insert because filing is an UPDATE: a lich that died between two
+   * calls would bring the session back unfiled. */
+  AddSessionInFolder: (
+    projectID: string,
+    sessionID: string,
+    label: string,
+    kind: string,
+    path: string,
+    nextSeq: number,
+    sandbox: string,
+    folder: string,
+  ) =>
+    call<null>("store.AddSessionInFolder", [
+      projectID,
+      sessionID,
+      label,
+      kind,
+      path,
+      nextSeq,
+      sandbox,
+      folder,
+    ]),
   /**
    * AddSession for a session that was opened by delegation: originID is the
    * session that asked for it and originLabel what that one was called then.
@@ -430,6 +453,7 @@ export const Store = {
       nextSeq,
       originID,
       originLabel,
+      "",
     ]),
   DeleteSession: (projectID: string, sessionID: string, activeID: string) =>
     call<null>("store.DeleteSession", [projectID, sessionID, activeID]),

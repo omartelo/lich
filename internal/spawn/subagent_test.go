@@ -73,8 +73,8 @@ func TestOpenSubagentFilesTheWorkerUnderTheCallersLabel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenSubagent: %v", err)
 	}
-	if opened.Folder != "Session 3" || sessions.folders[opened.ID] != "Session 3" {
-		t.Errorf("folder %q, rows %v; want the caller's label", opened.Folder, sessions.folders)
+	if opened.Folder != "Session 3" || sessions.rows[0].folder != "Session 3" {
+		t.Errorf("folder %q, rows %+v; want the caller's label", opened.Folder, sessions.rows)
 	}
 	if events.events[0].data.(Session).Folder != "Session 3" {
 		t.Errorf("the card was announced unfiled: %+v", events.events[0].data)
@@ -109,8 +109,8 @@ func TestOpenSubagentFilesTheWorkerUnderTheCallersFolder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenSubagent: %v", err)
 	}
-	if opened.Folder != "Auth" || sessions.folders[opened.ID] != "Auth" {
-		t.Errorf("worker folder %q, rows %v; want the caller's folder", opened.Folder, sessions.folders)
+	if opened.Folder != "Auth" || sessions.rows[0].folder != "Auth" {
+		t.Errorf("worker folder %q, rows %+v; want the caller's folder", opened.Folder, sessions.rows)
 	}
 	if _, moved := sessions.folders["s1"]; moved {
 		t.Errorf("caller was refiled: %v", sessions.folders)
