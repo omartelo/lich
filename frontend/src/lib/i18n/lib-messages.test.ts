@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { formatCombo, terminalCost, UNASSIGNED } from "@/lib/hotkeys"
 import { noMatchNotice } from "@/lib/session/session-filter"
 import { scheduleChoices, scheduledFor, timeUntil } from "@/lib/session/schedule"
+import { formatAge } from "@/lib/session/session-age"
 import { COST_MISS_REASON } from "@/lib/session/session-cost"
 import { copyToastMessage } from "@/lib/terminal/copy-toast"
 import { resetLocale, setLocale } from "./i18n"
@@ -55,5 +56,11 @@ describe("messages built in plain modules follow the language", () => {
   it("leaves a chord with no cost and an unassigned one alone", () => {
     expect(terminalCost({ mod: false, shift: false, alt: false, key: "r" })).toBe("")
     expect(formatCombo(UNASSIGNED, false)).toBe("Unassigned")
+  })
+
+  it("writes an age with the unit of the language", () => {
+    expect(formatAge(5 * 60_000)).toBe("5m")
+    setLocale("pt-BR")
+    expect(formatAge(5 * 60_000)).toBe("5 min")
   })
 })
