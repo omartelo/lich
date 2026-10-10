@@ -3,6 +3,7 @@ import { ProviderIcon } from "@/components/ProviderIcon"
 import { Switch } from "@/components/ui/switch"
 import { countOpenSessions } from "@/lib/provider-summary"
 import { setProviderEnabled, type ProviderState } from "@/lib/providers-store"
+import { useT } from "@/lib/i18n/i18n"
 import { useProjects } from "@/providers/projects"
 import { ProviderBinSettings } from "./ProviderBinSettings"
 import { ProviderDocsLink } from "./ProviderDocsLink"
@@ -23,6 +24,7 @@ export function ProviderDetail({
   projectId?: string
   onBack: () => void
 }) {
+  const t = useT()
   const { sessions } = useProjects()
   const open = countOpenSessions(sessions, provider.id)
 
@@ -34,17 +36,19 @@ export function ProviderDetail({
         className="mb-1 inline-flex items-center gap-1 rounded-md text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="size-3.5" aria-hidden="true" />
-        All providers
+        {t("settings.providerDetail.back")}
       </button>
       <div className="mb-4 flex items-center gap-3">
         <ProviderIcon kind={provider.id} size={22} />
         <h1 className="text-2xl font-semibold text-foreground">{provider.name}</h1>
         <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Enabled</span>
+          <span className="text-xs text-muted-foreground">
+            {t("settings.providerDetail.enabled")}
+          </span>
           <Switch
             checked={provider.enabled}
             onCheckedChange={(checked) => setProviderEnabled(provider.id, checked)}
-            aria-label={`Enable ${provider.name}`}
+            aria-label={t("settings.providersPane.enableNamed", { name: provider.name })}
           />
         </div>
       </div>
@@ -60,12 +64,13 @@ export function ProviderDetail({
             answer the switch above owes: turning it off with sessions running
             leaves those sessions alone, and the count is how you know there
             are any. */}
-        <SettingBlock title="Right now">
+        <SettingBlock title={t("settings.providerDetail.rightNowTitle")}>
           <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-            <span>
-              {open === 0 ? "No sessions open" : `${open} session${open === 1 ? "" : "s"} open`}
-            </span>
-            <ProviderDocsLink provider={provider} label="Documentation" />
+            <span>{t("settings.providerDetail.openSessions", { count: open })}</span>
+            <ProviderDocsLink
+              provider={provider}
+              label={t("settings.providerDetail.documentation")}
+            />
           </div>
         </SettingBlock>
       </div>

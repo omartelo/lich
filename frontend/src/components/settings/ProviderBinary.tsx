@@ -14,6 +14,7 @@ import { ProjectService } from "@/lib/rpc"
 import { useBinaryCheck } from "@/lib/use-binary-check"
 import { useStoredFlag, useStoredSetting } from "@/lib/use-stored-setting"
 import { binKey, binOffKey } from "@/lib/providers-store"
+import { useT } from "@/lib/i18n/i18n"
 import { useProjects } from "@/providers/projects"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -50,6 +51,7 @@ export function ProviderBinary({
   providerBin: string
   projectId?: string
 }) {
+  const t = useT()
   const { projects } = useProjects()
   const project = projects.find((p) => p.id === projectId)
   const key = binKey(providerId)
@@ -79,19 +81,21 @@ export function ProviderBinary({
 
   const browse = async (persist: (value: string) => void) => {
     try {
-      const file = await ProjectService.PickFile(`Choose the ${providerName} binary`)
+      const file = await ProjectService.PickFile(
+        t("settings.providerBinary.pickTitle", { provider: providerName }),
+      )
       if (file) {
         persist(file)
       }
     } catch {
-      toast.error("Could not open the file picker")
+      toast.error(t("settings.providerBinary.pickerFailed"))
     }
   }
 
   const layers = [
     project && {
       scope: "project" as const,
-      label: `${project.name} only`,
+      label: t("settings.providerBinary.projectOnly", { name: project.name }),
       value: projectBin,
       persist: setProjectBin,
       off: projectOff,
@@ -99,7 +103,7 @@ export function ProviderBinary({
     },
     {
       scope: "global" as const,
-      label: "All projects",
+      label: t("settings.providerBinary.allProjects"),
       value: globalBin,
       persist: setGlobalBin,
       off: globalOff,
@@ -109,11 +113,11 @@ export function ProviderBinary({
 
   return (
     <SettingBlock
-      title="Binary"
+      title={t("settings.providerBinary.title")}
       description={
         project
-          ? `Which executable a session in ${project.name} spawns.`
-          : "Which executable a session spawns."
+          ? t("settings.providerBinary.descriptionProject", { name: project.name })
+          : t("settings.providerBinary.description")
       }
     >
       {broken || open ? (
@@ -121,11 +125,11 @@ export function ProviderBinary({
           <div className="mb-3 flex items-center justify-between gap-4">
             <span className="flex items-center gap-1.5 text-xs text-foreground">
               <ChevronDown className="size-3.5" aria-hidden="true" />
-              Where it comes from — the first layer switched on wins
+              {t("settings.providerBinary.layersHint")}
             </span>
             {!broken && (
               <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-                Done
+                {t("settings.providerBinary.done")}
               </Button>
             )}
           </div>
@@ -143,7 +147,10 @@ export function ProviderBinary({
                     checked={resolves({ bin: layer.value, off: layer.off })}
                     disabled={!layer.value.trim()}
                     onCheckedChange={(on) => layer.setOff(!on)}
-                    aria-label={`Use the ${providerName} binary set for ${layer.label}`}
+                    aria-label={t("settings.providerBinary.useLayer", {
+                      provider: providerName,
+                      layer: layer.label,
+                    })}
                   />
                 }
               >
@@ -151,7 +158,10 @@ export function ProviderBinary({
                   value={layer.value}
                   onChange={(event) => layer.persist(event.target.value)}
                   placeholder={providerBin}
-                  aria-label={`${providerName} binary for ${layer.label}`}
+                  aria-label={t("settings.providerBinary.layerPath", {
+                    provider: providerName,
+                    layer: layer.label,
+                  })}
                   className={cn(
                     "h-8 min-w-0 flex-1 font-mono text-xs",
                     layer.off && "text-muted-foreground",
@@ -161,10 +171,13 @@ export function ProviderBinary({
                   variant="ghost"
                   size="sm"
                   onClick={() => void browse(layer.persist)}
-                  aria-label={`Pick the ${providerName} binary for ${layer.label}`}
+                  aria-label={t("settings.providerBinary.pickLayer", {
+                    provider: providerName,
+                    layer: layer.label,
+                  })}
                 >
                   <FolderOpen className="size-3.5" aria-hidden="true" />
-                  Browse
+                  {t("settings.providerBinary.browse")}
                 </Button>
               </Layer>
             ))}
@@ -183,12 +196,12 @@ export function ProviderBinary({
               {check?.path || configured || providerBin}
             </span>
             <span className="whitespace-nowrap text-muted-foreground">
-              · {sourceLabel(scope, project?.name)}
+              · {sourceLabel(t, scope, project?.name)}
               {parkedLabel(scope, projectLayer, globalLayer, project?.name)}
             </span>
           </span>
           <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
-            Use a different binary
+            {t("settings.providerBinary.useDifferent")}
           </Button>
         </div>
       )}
@@ -208,11 +221,19 @@ export function ProviderBinary({
 
 // sourceLabel names where the winning path came from, in the closed state where
 // the layers themselves are not on screen.
-function sourceLabel(scope: string, projectName: string | undefined): string {
+function sourceLabel(
+  t: ReturnType<typeof useT>,
+  scope: string,
+  projectName: string | undefined,
+): string {
   if (scope === "project") {
-    return projectName ? `set for ${projectName}` : "set for this project"
+    return projectName
+      ? t("settings.providerBinary.sourceProjectNamed", { name: projectName })
+      : t("settings.providerBinary.sourceProject")
   }
-  return scope === "global" ? "set for all projects" : "from $PATH"
+  return scope === "global"
+    ? t("settings.providerBinary.sourceGlobal")
+    : t("settings.providerBinary.sourcePath")
 }
 
 // Layer is one row of the resolution stack: the scope it configures, its

@@ -18,6 +18,7 @@ import {
 import { PASSTHROUGH_TITLE, passthroughRows, TERMINAL_TITLE, terminalRows } from "@/lib/shortcuts"
 import { Button } from "@/components/ui/button"
 import { ShortcutLine } from "@/components/common/ShortcutLine"
+import { useT } from "@/lib/i18n/i18n"
 import { isMac, isWindows } from "@/lib/platform"
 import { cn } from "@/lib/utils"
 import { GroupProvider, useHighlight } from "./setting-highlight"
@@ -43,6 +44,7 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 // leaves the action with no chord at all, which is how the chord is handed back
 // to the agent's TUI; resetting puts lich's default back.
 function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: HotkeyId[] }) {
+  const t = useT()
   const { hotkeys, setHotkey, resetHotkey } = useSettings()
   const [recording, setRecording] = useState(false)
   // A shortcut is a searchable setting like any block, so it lights up the same
@@ -86,7 +88,9 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
           // and whichever listener runs first is the one that will answer to it.
           <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-tone-wait">
             <TriangleAlert className="size-3 shrink-0" />
-            Also bound to {conflicts.map(hotkeyLabel).join(", ")}
+            {t("settings.hotkeysSettings.alsoBound", {
+              actions: conflicts.map(hotkeyLabel).join(", "),
+            })}
           </span>
         )}
         {cost && <span className="mt-0.5 text-xs text-muted-foreground">{cost}</span>}
@@ -104,13 +108,13 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
           conflicts && !recording && "border-tone-wait/60",
         )}
       >
-        {recording ? "Press keys…" : formatCombo(combo, isMac)}
+        {recording ? t("settings.hotkeysSettings.pressKeys") : formatCombo(combo, isMac)}
       </button>
       <Button
         variant="ghost"
         size="icon"
-        aria-label={`Unassign ${action.label} shortcut`}
-        title="Leave this action unbound"
+        aria-label={t("settings.hotkeysSettings.unassignNamed", { name: action.label })}
+        title={t("settings.hotkeysSettings.unassignHint")}
         disabled={isUnassigned}
         onClick={() => setHotkey(action.id, UNASSIGNED)}
       >
@@ -119,8 +123,8 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
       <Button
         variant="ghost"
         size="icon"
-        aria-label={`Reset ${action.label} shortcut`}
-        title="Restore the default shortcut"
+        aria-label={t("settings.hotkeysSettings.resetNamed", { name: action.label })}
+        title={t("settings.hotkeysSettings.resetHint")}
         disabled={isDefault}
         onClick={() => resetHotkey(action.id)}
       >
@@ -131,6 +135,7 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
 }
 
 export function HotkeysSettings() {
+  const t = useT()
   const { hotkeys } = useSettings()
   const conflicts = hotkeyConflicts(hotkeys)
 
@@ -145,8 +150,7 @@ export function HotkeysSettings() {
       ))}
       <Group label={TERMINAL_TITLE}>
         <p className="mb-2 max-w-prose text-xs text-muted-foreground">
-          lich's own, and fixed: this one shadows a browser accelerator, which answers to a chord
-          rather than to whatever it was rebound to.
+          {t("settings.hotkeysSettings.terminalNote")}
         </p>
         {terminalRows.map((row) => (
           <ShortcutLine key={row.label} label={row.label} keys={row.keys} />
@@ -154,8 +158,7 @@ export function HotkeysSettings() {
       </Group>
       <Group label={PASSTHROUGH_TITLE}>
         <p className="mb-2 max-w-prose text-xs text-muted-foreground">
-          lich rewrites these on their way to the agent's terminal, so they are fixed rather than
-          rebindable.
+          {t("settings.hotkeysSettings.passthroughNote")}
         </p>
         {passthroughRows(isWindows, isMac).map((row) => (
           <ShortcutLine key={row.label} label={row.label} keys={row.keys} />

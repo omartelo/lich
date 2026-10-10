@@ -45,6 +45,7 @@ import {
   type FooterLayout,
   type FooterZone,
 } from "@/lib/footer-layout"
+import { useT } from "@/lib/i18n/i18n"
 import { cn } from "@/lib/utils"
 import { Button, buttonVariants } from "@/components/ui/button"
 
@@ -61,11 +62,6 @@ const ICONS: Record<FooterItem, LucideIcon> = {
   cost: Coins,
   handsOn: Timer,
   clock: Clock,
-}
-const LABELS: Record<FooterZone, string> = {
-  available: "Available",
-  left: "Left",
-  right: "Right",
 }
 const exampleOf = (id: FooterItem) => FOOTER_ITEMS.find((item) => item.id === id)?.example ?? id
 const labelOf = (id: FooterItem) => FOOTER_ITEMS.find((item) => item.id === id)?.label ?? id
@@ -215,6 +211,8 @@ interface FooterZoneViewProps {
 }
 
 function FooterZoneView({ zone, items, layout, disabled }: FooterZoneViewProps) {
+  const t = useT()
+  const label = t(`settings.footerLayoutEditor.zone.${zone}`)
   const { setNodeRef, isOver } = useDroppable({
     id: zone,
     disabled,
@@ -222,8 +220,8 @@ function FooterZoneView({ zone, items, layout, disabled }: FooterZoneViewProps) 
   })
   const side = zone !== "available"
   return (
-    <section className="flex min-w-0 flex-col" aria-label={LABELS[zone]}>
-      <h3 className="mb-1.5 text-xs text-muted-foreground">{LABELS[zone]}</h3>
+    <section className="flex min-w-0 flex-col" aria-label={label}>
+      <h3 className="mb-1.5 text-xs text-muted-foreground">{label}</h3>
       <div
         ref={setNodeRef}
         data-footer-zone={zone}
@@ -243,7 +241,9 @@ function FooterZoneView({ zone, items, layout, disabled }: FooterZoneViewProps) 
         </SortableContext>
         {items.length === 0 && (
           <p className="px-1 text-xs text-muted-foreground">
-            {zone === "available" ? "Every item is in the footer" : "Drag items here"}
+            {zone === "available"
+              ? t("settings.footerLayoutEditor.allPlaced")
+              : t("settings.footerLayoutEditor.dragHere")}
           </p>
         )}
       </div>
@@ -258,6 +258,7 @@ interface FooterEditorItemProps {
 }
 
 function FooterEditorItem({ id, layout, disabled }: FooterEditorItemProps) {
+  const t = useT()
   const {
     setNodeRef,
     setActivatorNodeRef,
@@ -290,7 +291,7 @@ function FooterEditorItem({ id, layout, disabled }: FooterEditorItemProps) {
         disabled={disabled}
         {...attributes}
         {...listeners}
-        aria-label={`Move ${labelOf(id)}`}
+        aria-label={t("settings.footerLayoutEditor.moveNamed", { name: labelOf(id) })}
         className="touch-none cursor-grab tabular-nums active:cursor-grabbing"
       >
         <ItemReading id={id} />
@@ -304,16 +305,20 @@ interface FooterLayoutPreviewProps {
 }
 
 export function FooterLayoutPreview({ layout }: FooterLayoutPreviewProps) {
+  const t = useT()
   return (
-    <section className="mt-5 flex flex-col gap-2" aria-label="Footer preview">
+    <section
+      className="mt-5 flex flex-col gap-2"
+      aria-label={t("settings.footerLayoutEditor.previewLabel")}
+    >
       <span className="text-xs text-muted-foreground">
-        Preview · example values · scroll to see all items
+        {t("settings.footerLayoutEditor.previewHint")}
       </span>
       <section
         className="overflow-x-auto bg-sidebar"
         // biome-ignore lint/a11y/noNoninteractiveTabindex: scrollable region needs keyboard access
         tabIndex={0}
-        aria-label="Scrollable footer preview"
+        aria-label={t("settings.footerLayoutEditor.previewScrollLabel")}
       >
         <div className="flex min-h-12 w-max min-w-full items-center justify-between gap-8 px-3 py-2">
           {(["left", "right"] as const).map((side) => (
@@ -333,7 +338,9 @@ export function FooterLayoutPreview({ layout }: FooterLayoutPreviewProps) {
             </div>
           ))}
           {layout.left.length + layout.right.length === 0 && (
-            <span className="text-xs text-muted-foreground">No footer items selected</span>
+            <span className="text-xs text-muted-foreground">
+              {t("settings.footerLayoutEditor.previewEmpty")}
+            </span>
           )}
         </div>
       </section>

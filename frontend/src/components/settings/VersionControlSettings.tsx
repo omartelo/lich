@@ -10,6 +10,7 @@ import { useRemoteResource } from "@/lib/use-remote-resource"
 import { useStoredSetting } from "@/lib/use-stored-setting"
 import { GIT } from "@/lib/vcs-tools"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
+import { useT } from "@/lib/i18n/i18n"
 import { useProjects } from "@/providers/projects"
 import {
   Select,
@@ -24,7 +25,7 @@ import { SettingBlock } from "./SettingBlock"
 // The stored value for "no override" is "", which a Select item cannot carry —
 // this stands in for it in the picker only.
 const ACTIVE_ACCOUNT = "__active__"
-const ACTIVE_ACCOUNT_LABEL = "gh's active account"
+const ACTIVE_ACCOUNT_LABEL_KEY = "settings.versionControlSettings.activeAccount"
 
 // Module-level, as every non-primitive `empty` has to be. The two are different
 // answers: null is "gh has not been asked yet", and an empty list is "gh is
@@ -39,6 +40,7 @@ const NO_IDENTITY = null
 // project names that account. Project-scoped: naming one globally would be the
 // same trap in the other direction.
 export function VersionControlSettings({ projectId }: { projectId?: string }) {
+  const t = useT()
   const { projects } = useProjects()
   const project = projects.find((p) => p.id === projectId)
   // Null until gh answers: an empty list is "gh is signed in to nothing", which
@@ -82,7 +84,7 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
   if (!project) {
     return (
       <p className="py-4 text-sm text-muted-foreground">
-        Open a project to configure its version control.
+        {t("settings.versionControlSettings.openProject")}
       </p>
     )
   }
@@ -99,24 +101,20 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
   return (
     <SettingBlock
       title={`GitHub account for ${project.name}`}
-      description={
-        "Which account lich runs gh as for this project — pull requests, checks and PR checkouts. " +
-        "gh keeps one active account per host, so a repository only another account can see reads " +
-        "as not found. Accounts on an enterprise host are listed with it."
-      }
+      description={t("settings.versionControlSettings.accountDescription")}
     >
       <p className="mb-2 text-xs text-muted-foreground">{project.path}</p>
       <Select
         value={account || ACTIVE_ACCOUNT}
-        items={accountSelectItems(ACTIVE_ACCOUNT, ACTIVE_ACCOUNT_LABEL, options)}
+        items={accountSelectItems(ACTIVE_ACCOUNT, t(ACTIVE_ACCOUNT_LABEL_KEY), options)}
         onValueChange={(value) => value && persist(value)}
       >
         <SelectTrigger className="w-72">
-          <SelectValue placeholder="Select an account" />
+          <SelectValue placeholder={t("settings.versionControlSettings.selectAccount")} />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            <SelectItem value={ACTIVE_ACCOUNT}>{ACTIVE_ACCOUNT_LABEL}</SelectItem>
+            <SelectItem value={ACTIVE_ACCOUNT}>{t(ACTIVE_ACCOUNT_LABEL_KEY)}</SelectItem>
             {options.map((option) => (
               <SelectItem key={option} value={option}>
                 {accountLabel(option, options)}
@@ -129,11 +127,13 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
           not installed, a host that would not answer — so the sentence that used
           to be appended here told half of them to run the wrong command. */}
       {error && (
-        <p className="mt-2 text-xs text-destructive">Could not list GitHub accounts: {error}</p>
+        <p className="mt-2 text-xs text-destructive">
+          {t("settings.versionControlSettings.listFailed", { error })}
+        </p>
       )}
       {!error && accounts?.length === 0 && (
         <p className="mt-2 text-xs text-muted-foreground">
-          gh is signed in to no account. Run `gh auth login` in a terminal.
+          {t("settings.versionControlSettings.noAccounts")}
         </p>
       )}
       {row && (

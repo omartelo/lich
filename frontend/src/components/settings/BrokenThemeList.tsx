@@ -1,6 +1,7 @@
 import { TriangleAlert } from "lucide-react"
 import type { BrokenTheme } from "@/lib/api-types"
 import { Button } from "@/components/ui/button"
+import { useT } from "@/lib/i18n/i18n"
 
 interface BrokenThemeListProps {
   themes: readonly BrokenTheme[]
@@ -11,12 +12,16 @@ interface BrokenThemeListProps {
 // strip rather than a card in it, and the reason is text, not a tooltip: the
 // reason is the whole point, and a tooltip is out of reach from a keyboard.
 export function BrokenThemeList({ themes, onRemove }: BrokenThemeListProps) {
+  const t = useT()
   if (themes.length === 0) return null
   return (
-    <section aria-label="Themes that can't load" className="mb-3 border-t border-border pt-2">
+    <section
+      aria-label={t("settings.brokenThemeList.label")}
+      className="mb-3 border-t border-border pt-2"
+    >
       <h3 className="flex items-center gap-1.5 pb-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
         <TriangleAlert className="size-3.5" />
-        {themes.length === 1 ? "1 theme can't load" : `${themes.length} themes can't load`}
+        {t("settings.brokenThemeList.heading", { count: themes.length })}
       </h3>
       <ul>
         {themes.map((theme) => (
@@ -31,10 +36,10 @@ export function BrokenThemeList({ themes, onRemove }: BrokenThemeListProps) {
               variant="ghost"
               size="xs"
               className="text-destructive hover:text-destructive"
-              aria-label={`Remove ${theme.id}`}
+              aria-label={t("settings.brokenThemeList.removeNamed", { name: theme.id })}
               onClick={() => onRemove(theme)}
             >
-              Remove
+              {t("settings.brokenThemeList.remove")}
             </Button>
           </li>
         ))}

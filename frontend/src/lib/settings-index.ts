@@ -41,12 +41,28 @@ export type IndexedSetting = Omit<SettingEntry, "title" | "also" | "english"> &
 
 // Every SettingBlock in the app, in the order its pane renders it.
 export const SETTING_ENTRIES: readonly IndexedSetting[] = [
-  { section: "appearance", title: "Theme", also: "colors dark light terminal palette" },
-  { section: "appearance", title: "Zoom" },
-  { section: "appearance", title: "Terminal text size" },
-  { section: "appearance", title: "Terminal font", also: "typeface monospace" },
-  { section: "appearance", title: "Footer", also: "status bar layout arrange" },
-  { section: "appearance", title: "Spend ceiling", also: "cost budget usd" },
+  {
+    section: "appearance",
+    titleKey: "settings.themePicker.title",
+    alsoKey: "settings.themePicker.searchWords",
+  },
+  { section: "appearance", titleKey: "settings.appearanceSettings.zoomTitle" },
+  { section: "appearance", titleKey: "settings.appearanceSettings.textSizeTitle" },
+  {
+    section: "appearance",
+    titleKey: "settings.fontSetting.title",
+    alsoKey: "settings.fontSetting.searchWords",
+  },
+  {
+    section: "appearance",
+    titleKey: "settings.footerSettings.title",
+    alsoKey: "settings.footerSettings.searchWords",
+  },
+  {
+    section: "appearance",
+    titleKey: "settings.footerSettings.ceilingTitle",
+    alsoKey: "settings.footerSettings.ceilingSearchWords",
+  },
   {
     section: "appearance",
     titleKey: "settings.language.uiTitle",
@@ -57,56 +73,124 @@ export const SETTING_ENTRIES: readonly IndexedSetting[] = [
     titleKey: "settings.language.promptTitle",
     alsoKey: "settings.language.promptSearchWords",
   },
-  { section: "notifications", title: "Notify me when a session needs input" },
-  { section: "notifications", title: "Notify me when a session finishes working" },
-  { section: "providers", title: "Default provider", also: "agent new session" },
   {
-    section: "providers",
-    title: "Plan usage",
-    also: "quota subscription limit",
-    perProvider: true,
+    section: "notifications",
+    titleKey: "settings.notificationsSettings.needsInputTitle",
   },
-  { section: "providers", title: "Binary", also: "path executable command", perProvider: true },
   {
-    section: "providers",
-    title: "Skip permission prompts",
-    also: "yolo dangerous approvals",
-    perProvider: true,
+    section: "notifications",
+    titleKey: "settings.notificationsSettings.finishedTitle",
   },
   {
     section: "providers",
-    title: "Ultracode",
-    also: "workflow orchestration multi-agent effort",
+    titleKey: "settings.providersPane.defaultTitle",
+    alsoKey: "settings.providersPane.defaultSearchWords",
+  },
+  {
+    section: "providers",
+    titleKey: "settings.planUsageSetting.title",
+    alsoKey: "settings.planUsageSetting.searchWords",
+    perProvider: true,
+  },
+  {
+    section: "providers",
+    titleKey: "settings.providerBinary.title",
+    alsoKey: "settings.providerBinary.searchWords",
+    perProvider: true,
+  },
+  {
+    section: "providers",
+    titleKey: "settings.providerBinSettings.skipTitle",
+    alsoKey: "settings.providerBinSettings.skipSearchWords",
+    perProvider: true,
+  },
+  {
+    section: "providers",
+    titleKey: "settings.ultracodeSetting.title",
+    alsoKey: "settings.ultracodeSetting.searchWords",
     perProvider: true,
     onlyFor: "claude",
   },
   {
     section: "providers",
-    title: "Subagents as lich sessions",
-    also: "agent subagent card worktree delegate background",
+    titleKey: "settings.subagentCardsSetting.title",
+    alsoKey: "settings.subagentCardsSetting.searchWords",
     perProvider: true,
     onlyFor: "claude",
   },
   {
     section: "providers",
-    title: "Restored sessions",
-    also: "resume conversation start new restart ask",
+    titleKey: "settings.restoreSetting.title",
+    alsoKey: "settings.restoreSetting.searchWords",
     perProvider: true,
   },
-  { section: "providers", title: "Right now", also: "open sessions docs", perProvider: true },
-  { section: "sandbox", title: "Which sessions run confined", also: "isolate bwrap seatbelt" },
-  { section: "sandbox", title: "What a confined session may carry in" },
-  { section: "sandbox", title: "SSH agent", also: "push keys" },
-  { section: "sandbox", title: "GitHub token", also: "gh credentials" },
-  { section: "version-control", title: "Command-line tools", also: "git gh install" },
-  { section: "version-control", title: "Diff layout", also: "side by side split unified review" },
-  { section: "version-control", title: "GitHub account", also: "login gh switch" },
-  { section: "updates", title: "Application", also: "version upgrade" },
-  { section: "updates", title: "What's new", also: "changelog release notes" },
-  { section: "updates", title: "lich plugin", also: "hooks install" },
-  { section: "help", title: "Report a bug", also: "issue github" },
-  { section: "help", title: "Log file", also: "debug logs" },
-  { section: "help", title: "About", also: "version license" },
+  {
+    section: "providers",
+    titleKey: "settings.providerDetail.rightNowTitle",
+    alsoKey: "settings.providerDetail.rightNowSearchWords",
+    perProvider: true,
+  },
+  {
+    section: "sandbox",
+    titleKey: "settings.sandboxSettings.confinedTitle",
+    alsoKey: "settings.sandboxSettings.confinedSearchWords",
+  },
+  { section: "sandbox", titleKey: "settings.sandboxSettings.carryTitle" },
+  {
+    section: "sandbox",
+    titleKey: "settings.sandboxSettings.sshTitle",
+    alsoKey: "settings.sandboxSettings.sshSearchWords",
+  },
+  {
+    section: "sandbox",
+    titleKey: "settings.sandboxSettings.ghTitle",
+    alsoKey: "settings.sandboxSettings.ghSearchWords",
+  },
+  {
+    section: "version-control",
+    titleKey: "settings.vcsToolsSetting.title",
+    alsoKey: "settings.vcsToolsSetting.searchWords",
+  },
+  {
+    section: "version-control",
+    titleKey: "settings.diffLayoutSetting.title",
+    alsoKey: "settings.diffLayoutSetting.searchWords",
+  },
+  {
+    section: "version-control",
+    title: "GitHub account",
+    also: "login gh switch",
+  },
+  {
+    section: "updates",
+    titleKey: "settings.updatesSettings.applicationTitle",
+    alsoKey: "settings.updatesSettings.applicationSearchWords",
+  },
+  {
+    section: "updates",
+    titleKey: "settings.updatesSettings.whatsNewTitle",
+    alsoKey: "settings.updatesSettings.whatsNewSearchWords",
+  },
+  {
+    section: "updates",
+    titleKey: "settings.pluginSetting.title",
+    alsoKey: "settings.pluginSetting.searchWords",
+  },
+  {
+    section: "help",
+    titleKey: "settings.helpSettings.bugTitle",
+    alsoKey: "settings.helpSettings.bugSearchWords",
+  },
+  {
+    section: "help",
+    titleKey: "settings.helpSettings.logTitle",
+    alsoKey: "settings.helpSettings.logSearchWords",
+  },
+  {
+    section: "help",
+    titleKey: "settings.helpSettings.aboutTitle",
+    alsoKey: "settings.helpSettings.aboutSearchWords",
+  },
 ]
 
 // The keyboard shortcuts are not blocks, so they are not written out twice:
@@ -125,26 +209,48 @@ export function hotkeyEntries(): SettingEntry[] {
 // than in the screen because a result has to be able to name the section it
 // opens, and because the sections are searchable themselves: typing "updates"
 // has to reach the pane called Updates even though no block is called that.
-export const SETTING_SECTIONS: readonly { id: string; label: string }[] = [
-  { id: "appearance", label: "Appearance" },
-  { id: "notifications", label: "Notifications" },
-  { id: "hotkeys", label: "Hotkeys" },
-  { id: "providers", label: "Providers" },
-  { id: "sandbox", label: "Sandbox" },
-  { id: "version-control", label: "Version Control" },
-  { id: "updates", label: "Updates" },
-  { id: "help", label: "Help" },
+export interface SettingSection {
+  id: string
+  labelKey: PlainMessageKey
+  /** The nav label in the current language, read when asked rather than when
+   * the module loads. */
+  readonly label: string
+}
+
+function section(id: string, labelKey: PlainMessageKey): SettingSection {
+  return {
+    id,
+    labelKey,
+    get label() {
+      return t(labelKey)
+    },
+  }
+}
+
+export const SETTING_SECTIONS: readonly SettingSection[] = [
+  section("appearance", "settings.settings.section.appearance"),
+  section("notifications", "settings.settings.section.notifications"),
+  section("hotkeys", "settings.settings.section.hotkeys"),
+  section("providers", "settings.settings.section.providers"),
+  section("sandbox", "settings.settings.section.sandbox"),
+  section("version-control", "settings.settings.section.versionControl"),
+  section("updates", "settings.settings.section.updates"),
+  section("help", "settings.settings.section.help"),
 ]
 
-/** The nav label of a section, by id. */
+/** The nav label of a section, by id, in the current language. */
 export function sectionLabel(id: string): string {
-  return SETTING_SECTIONS.find((section) => section.id === id)?.label ?? id
+  return SETTING_SECTIONS.find((candidate) => candidate.id === id)?.label ?? id
 }
 
 // A section is its own coarsest result. Last in the index, so a block named
 // after what was typed outranks the pane it sits in.
 function sectionEntries(): SettingEntry[] {
-  return SETTING_SECTIONS.map((section) => ({ section: section.id, title: section.label }))
+  return SETTING_SECTIONS.map((section) => ({
+    section: section.id,
+    title: t(section.labelKey),
+    english: tIn("en", section.labelKey).toLowerCase(),
+  }))
 }
 
 /** An entry with its keys read in the current language. Called at search
