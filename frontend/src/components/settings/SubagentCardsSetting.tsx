@@ -1,5 +1,6 @@
 import { Switch } from "@/components/ui/switch"
 import { subagentCardsKey, supportsSubagentCards } from "@/lib/providers-store"
+import { useT } from "@/lib/i18n/i18n"
 import { useStoredSetting } from "@/lib/use-stored-setting"
 import { SettingBlock } from "./SettingBlock"
 
@@ -14,19 +15,20 @@ export function SubagentCardsSetting({
   providerId: string
   providerName: string
 }) {
+  const t = useT()
   const [value, persist] = useStoredSetting(subagentCardsKey(providerId), GLOBAL_SCOPE)
   if (!supportsSubagentCards(providerId)) {
     return null
   }
   return (
     <SettingBlock
-      title="Subagents as lich sessions"
-      description={`A general-purpose subagent opens its own card and worktree instead of running hidden inside ${providerName}. Applies to sessions opened after you change it.`}
+      title={t("settings.subagentCardsSetting.title")}
+      description={t("settings.subagentCardsSetting.description", { provider: providerName })}
     >
       <Switch
         checked={value !== "false"}
         onCheckedChange={(on) => void persist(on ? "true" : "false")}
-        aria-label={`Run ${providerName} subagents as lich sessions`}
+        aria-label={t("settings.subagentCardsSetting.label", { provider: providerName })}
       />
     </SettingBlock>
   )

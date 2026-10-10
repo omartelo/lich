@@ -11,6 +11,7 @@ import {
   NO_APPROVAL_EVENT_HINT,
   RESTART_HINT,
 } from "@/lib/update/plugin-gate"
+import { useT } from "@/lib/i18n/i18n"
 import { runWithToast } from "@/lib/toast-async"
 import { useRemoteResource } from "@/lib/use-remote-resource"
 import type { PluginStatus } from "@/lib/api-types"
@@ -19,6 +20,7 @@ import type { PluginStatus } from "@/lib/api-types"
 // action that closes the gap, and — for a CLI the machine does not have — the
 // plain reason there is nothing to do.
 export function PluginSetting() {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   // Whether the user has asked for a check since this pane was mounted. The
   // outcome itself is not stored: it is whatever the refresh left in `error`,
@@ -59,16 +61,16 @@ export function PluginSetting() {
     if (fresh?.available && !fresh.installed) {
       await run(
         () => AgentPlugin.Install(provider),
-        `Installing lich plugin for ${name}…`,
-        `Plugin installed — ${RESTART_HINT}`,
-        "Install failed",
+        t("settings.pluginSetting.installing", { name }),
+        t("settings.pluginSetting.installed", { hint: RESTART_HINT }),
+        t("settings.pluginSetting.installFailed"),
       )
     } else if (fresh?.installed && fresh.updateAvailable) {
       await run(
         () => AgentPlugin.Update(provider),
-        `Updating lich plugin for ${name}…`,
-        `Plugin updated — ${RESTART_HINT}`,
-        "Update failed",
+        t("settings.pluginSetting.updating", { name }),
+        t("settings.pluginSetting.updated", { hint: RESTART_HINT }),
+        t("settings.pluginSetting.updateFailed"),
       )
     }
     setBusy(false)
@@ -82,7 +84,9 @@ export function PluginSetting() {
     setBusy(false)
   }
 
-  const outcome = checked && (error ? "Check failed — are you online?" : "Checked.")
+  const outcome =
+    checked &&
+    (error ? t("settings.pluginSetting.checkFailed") : t("settings.pluginSetting.checked"))
 
   const spinner = <LoaderCircle className="size-4 animate-spin" />
   const showTrustHint = statuses?.some((s) => s.provider === "codex" && s.installed)
@@ -94,8 +98,8 @@ export function PluginSetting() {
   return (
     <SettingBlock
       icon={<Puzzle className="size-4" />}
-      title="lich plugin"
-      description="Session status, titles, git refresh and resume, inside the provider CLIs that can run it."
+      title={t("settings.pluginSetting.title")}
+      description={t("settings.pluginSetting.description")}
     >
       <div className="flex w-full flex-col gap-1">
         {statuses?.map((status) => (
@@ -104,12 +108,12 @@ export function PluginSetting() {
             <span>{status.name}</span>
             <span className="ml-auto text-xs text-muted-foreground">
               {!status.available
-                ? "CLI not installed"
+                ? t("settings.pluginSetting.cliMissing")
                 : !status.installed
-                  ? "Plugin not installed"
+                  ? t("settings.pluginSetting.notInstalled")
                   : status.compatible
                     ? `v${status.installedVersion}`
-                    : `v${status.installedVersion}, not supported by this lich`}
+                    : t("settings.pluginSetting.unsupported", { version: status.installedVersion })}
             </span>
             {status.available && !status.installed && (
               <Button
@@ -118,7 +122,7 @@ export function PluginSetting() {
                 disabled={busy}
               >
                 {busy ? spinner : null}
-                Install
+                {t("settings.pluginSetting.install")}
               </Button>
             )}
             {status.installed && status.updateAvailable && (
@@ -129,29 +133,50 @@ export function PluginSetting() {
                 disabled={busy}
               >
                 {busy ? spinner : null}
-                {status.compatible ? "Update to" : "Install"} v{status.latestVersion}
+                {status.compatible
+                  ? t("settings.pluginSetting.updateTo", { version: status.latestVersion })
+                  : t("settings.pluginSetting.installVersion", { version: status.latestVersion })}
               </Button>
             )}
           </div>
         ))}
         {showTrustHint && (
-          <p className="text-xs text-muted-foreground">Codex: {CODEX_TRUST_HINT}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.pluginSetting.hint", { provider: "Codex", hint: CODEX_TRUST_HINT })}
+          </p>
         )}
         {showCrushHint && (
-          <p className="text-xs text-muted-foreground">Crush: {CRUSH_SCOPE_HINT}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.pluginSetting.hint", { provider: "Crush", hint: CRUSH_SCOPE_HINT })}
+          </p>
         )}
         {showOMPHint && (
-          <p className="text-xs text-muted-foreground">oh-my-pi: {NO_APPROVAL_EVENT_HINT}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.pluginSetting.hint", {
+              provider: "oh-my-pi",
+              hint: NO_APPROVAL_EVENT_HINT,
+            })}
+          </p>
         )}
         {showAntigravityHint && (
-          <p className="text-xs text-muted-foreground">Antigravity: {NO_APPROVAL_EVENT_HINT}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.pluginSetting.hint", {
+              provider: "Antigravity",
+              hint: NO_APPROVAL_EVENT_HINT,
+            })}
+          </p>
         )}
         {showCursorHint && (
-          <p className="text-xs text-muted-foreground">Cursor CLI: {CURSOR_SHARED_PLUGIN_HINT}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.pluginSetting.hint", {
+              provider: "Cursor CLI",
+              hint: CURSOR_SHARED_PLUGIN_HINT,
+            })}
+          </p>
         )}
         <div className="flex items-center gap-3 pt-1">
           <Button size="sm" variant="outline" onClick={() => void check()} disabled={busy}>
-            Check for updates
+            {t("settings.pluginSetting.checkForUpdates")}
           </Button>
           {outcome && <span className="text-xs text-muted-foreground">{outcome}</span>}
         </div>

@@ -9,6 +9,7 @@ import {
   resolveFooterLayout,
   type FooterLayout,
 } from "@/lib/footer-layout"
+import { useT } from "@/lib/i18n/i18n"
 import { errorText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +17,7 @@ import { SettingRow } from "./SettingBlock"
 import { FooterLayoutEditor, FooterLayoutPreview } from "./FooterLayoutEditor"
 
 export function FooterSettings() {
+  const t = useT()
   const { footerLayout, setFooterLayout, footerVisibility, showContextUsage } = useSettings()
   const showCost = useCostReadout()
   const ready = useCostReadoutReady()
@@ -29,7 +31,7 @@ export function FooterSettings() {
       if (showCost !== cost) await setCostReadout(cost)
       setFooterLayout(next)
     } catch (error) {
-      toast.error(`Could not save the footer: ${errorText(error)}`)
+      toast.error(t("settings.footerSettings.saveFailed", { error: errorText(error) }))
     } finally {
       setSaving(false)
     }
@@ -44,13 +46,13 @@ export function FooterSettings() {
             drag; the editor below it is always open, because it is the thing the
             row is about and hiding it behind a click buys nothing. */}
         <SettingRow
-          title="Footer"
+          title={t("settings.footerSettings.title")}
           description={
             !ready
-              ? "Loading saved choices…"
+              ? t("settings.footerSettings.loading")
               : saving
-                ? "Saving…"
-                : "Drag an item between the sides, or out to hide it. Applies to every project."
+                ? t("settings.footerSettings.saving")
+                : t("settings.footerSettings.description")
           }
         >
           <Button
@@ -59,7 +61,7 @@ export function FooterSettings() {
             disabled={!ready || saving}
             onClick={() => void change(DEFAULT_FOOTER_LAYOUT)}
           >
-            Restore default
+            {t("settings.footerSettings.restoreDefault")}
           </Button>
         </SettingRow>
         <FooterLayoutEditor
@@ -75,13 +77,14 @@ export function FooterSettings() {
 }
 
 function SpendCeiling() {
+  const t = useT()
   const { costBudget, setCostBudget } = useSettings()
   // Preserve a half-typed decimal while the stored amount stays numeric.
   const [budget, setBudget] = useState(() => (costBudget > 0 ? String(costBudget) : ""))
   return (
     <SettingRow
-      title="Spend ceiling"
-      description="Warn as the session's API cost nears this amount: amber at 80%, red at 95%. Empty for none."
+      title={t("settings.footerSettings.ceilingTitle")}
+      description={t("settings.footerSettings.ceilingDescription")}
     >
       <Input
         type="number"
@@ -92,8 +95,8 @@ function SpendCeiling() {
           setBudget(event.target.value)
           setCostBudget(Number(event.target.value))
         }}
-        placeholder="No ceiling"
-        aria-label="Session spend ceiling in dollars"
+        placeholder={t("settings.footerSettings.ceilingPlaceholder")}
+        aria-label={t("settings.footerSettings.ceilingLabel")}
         className="w-40 font-mono"
       />
     </SettingRow>

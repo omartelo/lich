@@ -3,6 +3,8 @@ import { Download, FileJson } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Trans } from "@/components/common/Trans"
+import { useT } from "@/lib/i18n/i18n"
 import {
   Dialog,
   DialogContent,
@@ -35,6 +37,7 @@ export function ImportThemeDialog({
   onDownloadTemplate,
   busy,
 }: ImportThemeDialogProps) {
+  const t = useT()
   const [url, setUrl] = useState("")
 
   useEffect(() => {
@@ -47,10 +50,8 @@ export function ImportThemeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Import theme</DialogTitle>
-          <DialogDescription>
-            Install from a git repository to keep the theme versioned, or pick a single theme file.
-          </DialogDescription>
+          <DialogTitle>{t("settings.importThemeDialog.title")}</DialogTitle>
+          <DialogDescription>{t("settings.importThemeDialog.description")}</DialogDescription>
         </DialogHeader>
         <form
           className="flex flex-col gap-2"
@@ -59,7 +60,9 @@ export function ImportThemeDialog({
             if (trimmed && !busy) void onInstallRepository(trimmed)
           }}
         >
-          <Label htmlFor="theme-repository-url">Repository URL</Label>
+          <Label htmlFor="theme-repository-url">
+            {t("settings.importThemeDialog.repositoryUrl")}
+          </Label>
           <div className="flex items-center gap-2">
             <Input
               id="theme-repository-url"
@@ -70,17 +73,21 @@ export function ImportThemeDialog({
               disabled={busy}
             />
             <Button type="submit" disabled={!trimmed || busy}>
-              {busy ? "Installing…" : "Install"}
+              {busy
+                ? t("settings.importThemeDialog.installing")
+                : t("settings.importThemeDialog.install")}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            A repository holding <code className="font-mono">lich-theme.json</code> and one or more
-            theme files. Its manifest version is what lich compares on update.
+            <Trans
+              k="settings.importThemeDialog.repositoryHint"
+              params={{ file: <code className="font-mono">lich-theme.json</code> }}
+            />
           </p>
         </form>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="h-px flex-1 bg-border" />
-          or
+          {t("settings.importThemeDialog.or")}
           <span className="h-px flex-1 bg-border" />
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -91,10 +98,10 @@ export function ImportThemeDialog({
             onClick={() => void onChooseFile()}
           >
             <FileJson />
-            Choose file…
+            {t("settings.importThemeDialog.chooseFile")}
           </Button>
           <span className="text-xs text-muted-foreground">
-            A single theme file. No version, no updates.
+            {t("settings.importThemeDialog.fileHint")}
           </span>
         </div>
         <DialogFooter className="sm:justify-between">
@@ -103,10 +110,10 @@ export function ImportThemeDialog({
               Import, which named neither the file nor what it was for. */}
           <Button type="button" variant="ghost" disabled={busy} onClick={onDownloadTemplate}>
             <Download />
-            Download template
+            {t("settings.importThemeDialog.downloadTemplate")}
           </Button>
           <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("common.action.cancel")}
           </Button>
         </DialogFooter>
       </DialogContent>

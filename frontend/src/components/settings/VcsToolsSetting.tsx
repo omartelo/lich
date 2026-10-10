@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react"
 import { ExternalLink, GitBranch, GitPullRequestArrow, Wrench } from "lucide-react"
 import type { BinaryCheck } from "@/lib/api-types"
 import { failed } from "@/lib/binary-layers"
+import { useT } from "@/lib/i18n/i18n"
 import { System } from "@/lib/rpc"
 import { NO_SETTLE, useBinaryCheck } from "@/lib/use-binary-check"
 import { GH, GIT, type VcsTool } from "@/lib/vcs-tools"
@@ -18,13 +19,14 @@ import { SettingBlock } from "./SettingBlock"
 // rarely the real question: lich resolves the login shell's $PATH, so *which*
 // git it found is what a machine with two of them needs to see.
 export function VcsToolsSetting() {
+  const t = useT()
   const git = useBinaryCheck(GIT.bin, NO_SETTLE)
   const gh = useBinaryCheck(GH.bin, NO_SETTLE)
   return (
     <SettingBlock
       icon={<Wrench className="size-4" />}
-      title="Command-line tools"
-      description="lich drives git and the GitHub CLI. Everything on this screen runs through them."
+      title={t("settings.vcsToolsSetting.title")}
+      description={t("settings.vcsToolsSetting.description")}
     >
       <div className="flex w-full flex-col gap-1">
         <ToolRow tool={GIT} icon={GitBranch} check={git} />
@@ -47,6 +49,7 @@ interface ToolRowProps {
 }
 
 function ToolRow({ tool, icon: Icon, check }: ToolRowProps) {
+  const t = useT()
   const gone = failed(check)
   return (
     <div>
@@ -55,14 +58,14 @@ function ToolRow({ tool, icon: Icon, check }: ToolRowProps) {
         <span>{tool.label}</span>
         <span className="ml-auto text-xs text-muted-foreground">
           {gone ? (
-            <span className="text-destructive">Not on $PATH</span>
+            <span className="text-destructive">{t("settings.vcsToolsSetting.notOnPath")}</span>
           ) : (
             <span className="font-mono select-text">{check?.path}</span>
           )}
         </span>
         {gone && (
           <Button size="sm" onClick={() => void System.OpenExternal(tool.url)}>
-            Install
+            {t("settings.vcsToolsSetting.install")}
             <ExternalLink />
           </Button>
         )}

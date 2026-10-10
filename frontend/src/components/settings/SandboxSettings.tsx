@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useT } from "@/lib/i18n/i18n"
 import { System } from "@/lib/rpc"
 import {
   climbsToRiskier,
@@ -36,22 +37,15 @@ const cannotConfine = cannotConfineCopy(isWindows ? "windows" : isMac ? "mac" : 
 // alone: they carry their own meaning, and the ladder is now read as a whole —
 // several providers stacked and compared — rather than one consequence line at a
 // time. Only "Ask" keeps a caption below, its catch not being in its name.
-const RUNGS: { level: SandboxLevel; label: string }[] = [
-  { level: "off", label: "Off" },
-  { level: "ask", label: "Ask" },
-  { level: "worktrees", label: "Worktrees" },
-  { level: "everywhere", label: "Everywhere" },
-]
+const RUNGS: SandboxLevel[] = ["off", "ask", "worktrees", "everywhere"]
 
 // What each rung leaves running on the machine, said only when it is being
 // climbed to. "Everywhere" has no line because it is the safest rung: it is
 // never the answer to "are you sure", so a caption for it would be copy nobody
 // ever reads.
-const EXPOSES: Partial<Record<SandboxLevel, string>> = {
-  off: "Every session runs on the machine.",
-  ask: "A session whose box you untick runs on the machine.",
-  worktrees: "Sessions in the project directory run on the machine.",
-}
+const EXPOSED_RUNGS = ["off", "ask", "worktrees"] as const
+const isExposed = (level: SandboxLevel): level is (typeof EXPOSED_RUNGS)[number] =>
+  (EXPOSED_RUNGS as readonly string[]).includes(level)
 
 // A module-level constant, as every array `empty` has to be: a fresh one per
 // render would notify subscribers on every failed read.
@@ -101,6 +95,7 @@ function useAgentKeys(): string[] {
 // control on the pane writes to it, so a grant cannot drift from the rung it
 // qualifies.
 export function SandboxSettings({ projectId }: { projectId?: string }) {
+  const t = useT()
   const scope = projectId ?? GLOBAL_SCOPE
   const providers = useProviders()
   const { data: backend, loading, error } = useSandboxBackend()
@@ -135,11 +130,11 @@ export function SandboxSettings({ projectId }: { projectId?: string }) {
       <section className="py-5">
         <StatusStrip backend={backend} />
         <p className="mt-2 max-w-prose text-xs text-muted-foreground">
-          An empty home, the machine read-only, writes only in the checkout. The network stays on.
+          {t("settings.sandboxSettings.summary")}
         </p>
       </section>
 
-      <SettingBlock title="Which sessions run confined">
+      <SettingBlock title={t("settings.sandboxSettings.confinedTitle")}>
         {enabledProviders(providers).map((provider) => (
           <Rung
             key={provider.id}
@@ -149,24 +144,26 @@ export function SandboxSettings({ projectId }: { projectId?: string }) {
           />
         ))}
         <p className="mt-2 max-w-prose text-xs text-muted-foreground">
-          Ask puts the question in the New session menu and the New worktree dialog. A session
-          opened where nobody can answer — by another session, or through the MCP tool — is
-          confined. Terminals are never confined; the sandbox is for agents working unattended.
+          {t("settings.sandboxSettings.confinedHint")}
         </p>
       </SettingBlock>
 
-      <SettingBlock title="What a confined session may carry in">
+      <SettingBlock title={t("settings.sandboxSettings.carryTitle")}>
         <Grant
-          title="SSH agent"
-          description="git push works inside. Signs with every identity in your agent, against any host, for as long as the session runs."
-          detail={agentKeys.length > 0 ? `Loaded: ${agentKeys.join(" · ")}` : "Nothing loaded."}
+          title={t("settings.sandboxSettings.sshTitle")}
+          description={t("settings.sandboxSettings.sshDescription")}
+          detail={
+            agentKeys.length > 0
+              ? t("settings.sandboxSettings.sshLoaded", { keys: agentKeys.join(" · ") })
+              : t("settings.sandboxSettings.sshNone")
+          }
           checked={sshAgent === "true"}
           onChange={(next) => setSSHAgent(String(next))}
         />
         <Grant
-          title="GitHub token"
-          description="gh works inside. The agent can read the token out of its environment and spend it outside this repository."
-          detail={accountLine(account)}
+          title={t("settings.sandboxSettings.ghTitle")}
+          description={t("settings.sandboxSettings.ghDescription")}
+          detail={accountLine(t, account)}
           checked={ghToken === "true"}
           onChange={(next) => setGHToken(String(next))}
         />
@@ -179,9 +176,11 @@ export function SandboxSettings({ projectId }: { projectId?: string }) {
 // An unset account is gh's own active one, which is what every lich gh call
 // already falls back to — and what the session would answer as, so it is said
 // rather than left blank.
-function accountLine(account: string): string {
+function accountLine(t: ReturnType<typeof useT>, account: string): string {
   const [, login] = splitAccount(account)
-  return login ? `As ${login}.` : "As gh's active account."
+  return login
+    ? t("settings.sandboxSettings.ghAccount", { login })
+    : t("settings.sandboxSettings.ghActiveAccount")
 }
 
 // Rung is one provider's row: its name, and the ladder for it. Compact, because
@@ -195,6 +194,7 @@ function Rung({
   providerName: string
   scope: string
 }) {
+  const t = useT()
   const [stored, setStored] = useStoredSetting(sandboxKey(providerId), scope, "off")
   // The rung a click asked for and the write is waiting on. Null while nothing
   // is pending, which is every click that does not loosen the confinement.
@@ -224,12 +224,12 @@ function Rung({
         value={[level]}
         onValueChange={(next) => next[0] && choose(next[0] as SandboxLevel)}
         spacing={1}
-        aria-label={`Which ${providerName} sessions run confined`}
+        aria-label={t("settings.sandboxSettings.rungLabel", { provider: providerName })}
         className="shrink-0 border border-border p-[0.1875rem]"
       >
         {RUNGS.map((rung) => (
-          <ToggleGroupItem key={rung.level} value={rung.level} size="sm">
-            {rung.label}
+          <ToggleGroupItem key={rung} value={rung} size="sm">
+            {t(`settings.sandboxSettings.rung.${rung}`)}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
@@ -237,8 +237,15 @@ function Rung({
       <ConfirmDialog
         open={pending !== null}
         onCancel={() => setPending(null)}
-        title={`Confine fewer ${providerName} sessions`}
-        description={`${RUNGS.find((rung) => rung.level === pending)?.label} — ${pending ? EXPOSES[pending] : ""}`}
+        title={t("settings.sandboxSettings.confirmTitle", { provider: providerName })}
+        description={
+          pending
+            ? t("settings.sandboxSettings.confirmDescription", {
+                rung: t(`settings.sandboxSettings.rung.${pending}`),
+                exposes: isExposed(pending) ? t(`settings.sandboxSettings.exposes.${pending}`) : "",
+              })
+            : ""
+        }
       >
         <Button
           variant="destructive"
@@ -249,7 +256,7 @@ function Rung({
             setPending(null)
           }}
         >
-          Leave unconfined
+          {t("settings.sandboxSettings.confirm")}
         </Button>
       </ConfirmDialog>
     </div>
@@ -260,6 +267,7 @@ function Rung({
 // backend is named because the two have different holes, so a report about a
 // confined session that names the one in play starts a round ahead.
 function StatusStrip({ backend }: { backend: string }) {
+  const t = useT()
   return (
     <div className="flex items-center gap-2.5 rounded-md border border-border px-3 py-2.5 text-xs">
       <span
@@ -269,9 +277,15 @@ function StatusStrip({ backend }: { backend: string }) {
         }`}
       />
       <span className="font-medium text-foreground">
-        This machine {backend ? "can" : "cannot"} confine sessions
+        {backend
+          ? t("settings.sandboxSettings.canConfine")
+          : t("settings.sandboxSettings.cannotConfine")}
       </span>
-      <span className="text-muted-foreground">— {backend || cannotConfine.reason}</span>
+      <span className="text-muted-foreground">
+        {t("settings.sandboxSettings.statusDetail", {
+          detail: backend || cannotConfine.reason,
+        })}
+      </span>
     </div>
   )
 }

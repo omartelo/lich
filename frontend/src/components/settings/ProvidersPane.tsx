@@ -25,6 +25,7 @@ import {
 import { usePlanQuotaFor } from "@/lib/quota/use-plan-quota"
 import { useStoredFlag, useStoredSetting } from "@/lib/use-stored-setting"
 import { useProjects } from "@/providers/projects"
+import { useT } from "@/lib/i18n/i18n"
 import { cn } from "@/lib/utils"
 import { ProviderDetail } from "./ProviderDetail"
 import { CheckAgainButton } from "@/components/common/CheckAgainButton"
@@ -52,10 +53,13 @@ interface ProvidersPaneProps {
 // are off: turning a provider on is a rare errand, and the rows for seven
 // agents nobody uses were most of what the pane showed.
 export function ProvidersPane({ projectId, openProvider, onOpenProvider }: ProvidersPaneProps) {
+  const t = useT()
   const providers = useProviders()
 
   if (providers.length === 0) {
-    return <p className="py-5 text-sm text-muted-foreground">Detecting providers…</p>
+    return (
+      <p className="py-5 text-sm text-muted-foreground">{t("settings.providersPane.detecting")}</p>
+    )
   }
 
   // A provider turned off while its screen was open resolves back to the list,
@@ -80,6 +84,7 @@ function ProvidersList({
   projectId?: string
   onOpenProvider: (id: string) => void
 }) {
+  const t = useT()
   const enabled = enabledProviders(providers)
   const available = providers.filter((provider) => !provider.enabled)
   // Opened by hand, except on a machine with nothing enabled: there the list of
@@ -88,7 +93,9 @@ function ProvidersList({
 
   return (
     <>
-      <h1 className="mb-4 text-2xl font-semibold text-foreground">Providers</h1>
+      <h1 className="mb-4 text-2xl font-semibold text-foreground">
+        {t("settings.providersPane.heading")}
+      </h1>
       <div className="divide-y divide-border">
         <DefaultProviders providers={enabled} projectId={projectId} />
         <div className="py-4">
@@ -112,8 +119,10 @@ function ProvidersList({
                 className="flex w-full items-center gap-2 rounded-md px-2 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
               >
                 {adding ? <ChevronDown className="size-4" /> : <Plus className="size-4" />}
-                Add provider
-                <span className="text-xs">{available.length} more detected</span>
+                {t("settings.providersPane.addProvider")}
+                <span className="text-xs">
+                  {t("settings.providersPane.moreDetected", { count: available.length })}
+                </span>
               </button>
               {adding && (
                 <div className="pl-2">
@@ -145,6 +154,7 @@ function DefaultProviders({
   providers: ProviderState[]
   projectId?: string
 }) {
+  const t = useT()
   const { projects } = useProjects()
   const globalDefault = useDefaultProvider()
   const projectDefault = useStoredProjectDefaultProvider(projectId ?? "")
@@ -159,16 +169,18 @@ function DefaultProviders({
 
   return (
     <SettingBlock
-      title="Default provider"
-      description="Which provider implicit session actions spawn: the new-session shortcut, an empty project's New session button, and newly created worktrees."
+      title={t("settings.providersPane.defaultTitle")}
+      description={t("settings.providersPane.defaultDescription")}
     >
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="w-28 shrink-0 text-xs text-muted-foreground">All projects</span>
+          <span className="w-28 shrink-0 text-xs text-muted-foreground">
+            {t("settings.providersPane.allProjects")}
+          </span>
           <ProviderSelect
             providers={providers}
             value={globalDefault}
-            ariaLabel="Default provider for all projects"
+            ariaLabel={t("settings.providersPane.defaultForAll")}
             onChange={setProviderDefault}
           />
         </div>
@@ -182,7 +194,7 @@ function DefaultProviders({
             <ProviderSelect
               providers={providers}
               value={override?.id ?? globalDefault}
-              ariaLabel={`Default provider for ${project.name}`}
+              ariaLabel={t("settings.providersPane.defaultForProject", { name: project.name })}
               onChange={(value) => setProjectProviderDefault(projectId, value)}
             />
             {override ? (
@@ -193,15 +205,15 @@ function DefaultProviders({
                   onClick={() => setProjectProviderDefault(projectId, "")}
                 >
                   <X data-icon="inline-start" />
-                  Clear
+                  {t("settings.providersPane.clear")}
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  Clearing falls back to {globalName}
+                  {t("settings.providersPane.clearFallsBack", { name: globalName })}
                 </span>
               </>
             ) : (
               <span className="text-xs text-muted-foreground">
-                Following all projects: {globalName}
+                {t("settings.providersPane.following", { name: globalName })}
               </span>
             )}
           </div>
@@ -225,6 +237,7 @@ function ProviderRow({
   projectId?: string
   onOpen: () => void
 }) {
+  const t = useT()
   const plan = usePlanQuotaFor(provider.id)
   const [skipHere] = useStoredFlag(skipPermissionsKey(provider.id, false), GLOBAL_SCOPE)
   const [skipInWorktrees] = useStoredFlag(skipPermissionsKey(provider.id, true), GLOBAL_SCOPE)
@@ -250,7 +263,7 @@ function ProviderRow({
         type="button"
         onClick={onOpen}
         className="absolute inset-0 rounded-md outline-none"
-        aria-label={`Open ${provider.name} settings`}
+        aria-label={t("settings.providersPane.openSettings", { name: provider.name })}
       />
       <span className="pointer-events-none flex min-w-0 flex-1 items-center gap-3 py-2.5">
         <ProviderIcon kind={provider.id} />
@@ -265,11 +278,17 @@ function ProviderRow({
         </span>
       </span>
       <span className="pointer-events-none flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-        {projectDefault === provider.id && <span className="whitespace-nowrap">default here</span>}
-        {customPath && <span className="whitespace-nowrap">custom path</span>}
+        {projectDefault === provider.id && (
+          <span className="whitespace-nowrap">{t("settings.providersPane.defaultHere")}</span>
+        )}
+        {customPath && (
+          <span className="whitespace-nowrap">{t("settings.providersPane.customPath")}</span>
+        )}
         {level !== "never" && (
           <span className="whitespace-nowrap">
-            {level === "worktrees" ? "worktrees" : "no prompts"}
+            {level === "worktrees"
+              ? t("settings.providersPane.skipWorktrees")
+              : t("settings.providersPane.skipEverywhere")}
           </span>
         )}
         {ultracode && supportsUltracode(provider.id) && (
@@ -279,7 +298,7 @@ function ProviderRow({
       <Switch
         checked={provider.enabled}
         onCheckedChange={(checked) => setProviderEnabled(provider.id, checked)}
-        aria-label={`Enable ${provider.name}`}
+        aria-label={t("settings.providersPane.enableNamed", { name: provider.name })}
         className="relative shrink-0"
       />
       <ChevronRight className="pointer-events-none size-4 shrink-0 text-muted-foreground" />
