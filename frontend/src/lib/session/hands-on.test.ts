@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { resetLocale, setLocale } from "@/lib/i18n/i18n"
 import { formatHandsOn, handsOnDetail, spellHandsOn } from "./hands-on"
 
 describe("formatHandsOn", () => {
@@ -39,6 +40,39 @@ describe("formatHandsOn", () => {
     expect(formatHandsOn(Number.NaN)).toBe("")
     expect(formatHandsOn(Number.POSITIVE_INFINITY)).toBe("")
     expect(formatHandsOn(-60)).toBe("")
+  })
+})
+
+describe("formatHandsOn in another language", () => {
+  beforeEach(() => {
+    const data = new Map<string, string>()
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => data.set(key, value),
+      removeItem: (key: string) => data.delete(key),
+    })
+    resetLocale()
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    resetLocale()
+  })
+
+  const cases = [
+    ["pt-BR", "48 min", "1 h 12 min", "1 h 12 min"],
+    ["es", "48min", "1h05min", "1h 05min"],
+    ["zh-CN", "48分钟", "1小时12分钟", "1小时 12分钟"],
+  ] as const
+
+  it.each(cases)("%s writes the figure with its own units", (locale, minutesOnly, withHours) => {
+    setLocale(locale)
+    expect(formatHandsOn(48 * 60)).toBe(minutesOnly)
+    expect(formatHandsOn(3600 + (locale === "es" ? 5 : 12) * 60)).toBe(withHours)
+  })
+
+  it.each(cases)("%s spells it with a space for the tooltip", (locale, _m, _s, spelled) => {
+    setLocale(locale)
+    expect(spellHandsOn(3600 + (locale === "es" ? 5 : 12) * 60)).toBe(spelled)
   })
 })
 

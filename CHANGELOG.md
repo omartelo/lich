@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The language settings open Settings › Appearance**, above the theme, where
   someone who can't read the current language finds them first.
 
+### Fixed
+
+- **The hands-on time on a session card is written in the interface language.**
+  It read `1h12m` in every language; it now reads `1 h 12 min` in Portuguese,
+  `1h12min` in Spanish and `1小时12分钟` in Chinese, and stays `1h12m` in English.
+
 ## [0.65.0] - 2026-10-10
 
 > [!IMPORTANT]

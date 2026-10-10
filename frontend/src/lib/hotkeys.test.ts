@@ -11,7 +11,6 @@ import {
   parseHotkeys,
   sameCombo,
   UNASSIGNED,
-  UNASSIGNED_LABEL,
   type Combo,
   type KeyState,
 } from "./hotkeys"
@@ -104,11 +103,9 @@ describe("formatCombo", () => {
   })
 
   it("names an unassigned combo instead of printing modifiers alone", () => {
-    expect(formatCombo(UNASSIGNED, false)).toBe(UNASSIGNED_LABEL)
-    expect(formatCombo(UNASSIGNED, true)).toBe(UNASSIGNED_LABEL)
-    expect(formatCombo({ mod: true, shift: true, alt: false, key: "" }, false)).toBe(
-      UNASSIGNED_LABEL,
-    )
+    expect(formatCombo(UNASSIGNED, false)).toBe("Unassigned")
+    expect(formatCombo(UNASSIGNED, true)).toBe("Unassigned")
+    expect(formatCombo({ mod: true, shift: true, alt: false, key: "" }, false)).toBe("Unassigned")
   })
 })
 

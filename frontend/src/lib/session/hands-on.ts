@@ -1,5 +1,6 @@
 import type { ProviderKind, SessionKind } from "./sessions"
 import { t } from "@/lib/i18n/i18n"
+import { formatUnit } from "@/lib/i18n/unit-format"
 
 // formatHandsOn renders how long a session has been worked on, for the footer,
 // where it sits beside the cost figure at 12px and is glanced at rather than
@@ -13,22 +14,39 @@ import { t } from "@/lib/i18n/i18n"
 // The minutes are zero-padded once there are hours in front of them, because
 // "1h5m" and "1h50m" differ by one glyph in a strip nobody stops to parse.
 export function formatHandsOn(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 60) {
+  const parts = handsOnParts(seconds)
+  if (!parts) {
     return ""
   }
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-  if (hours === 0) {
-    return `${minutes}m`
-  }
-  return `${hours}h${String(minutes % 60).padStart(2, "0")}m`
+  // Units that carry no space of their own ("1h", "12m", "1小时") sit flush, as
+  // the strip always did; "1 h" and "12 min" keep a space between them.
+  return parts.some((part) => /\s/.test(part)) ? parts.join(" ") : parts.join("")
 }
 
 // spellHandsOn is the same figure with room to breathe, for the tooltip: "1h
 // 12m", "48m". Same rules, one space — the strip is scanned, the tooltip is
 // read.
 export function spellHandsOn(seconds: number): string {
-  return formatHandsOn(seconds).replace("h", "h ")
+  return handsOnParts(seconds)?.join(" ") ?? ""
+}
+
+// handsOnParts is the hours and minutes of the figure, each with its unit in the
+// interface language. Minutes pad to two digits behind an hour, but only where
+// the unit is a Latin abbreviation: "1h05m" reads, "1小时05分钟" does not.
+function handsOnParts(seconds: number): string[] | null {
+  if (!Number.isFinite(seconds) || seconds < 60) {
+    return null
+  }
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  if (hours === 0) {
+    return [formatUnit(minutes, "minute")]
+  }
+  const rest = formatUnit(minutes % 60, "minute")
+  const padded = /^\d+\s?\p{Script=Latin}/u.test(rest)
+    ? rest.replace(/^\d+/, (n) => n.padStart(2, "0"))
+    : rest
+  return [formatUnit(hours, "hour"), padded]
 }
 
 // Which signals a provider's session can beat the hands-on clock with —
