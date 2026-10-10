@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { DndContext } from "@dnd-kit/core"
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
@@ -22,7 +22,6 @@ import { useProjects } from "@/providers/projects"
 import { CardTransition } from "./CardTransition"
 import { SessionCard } from "./SessionCard"
 import { PullRequestCard } from "./PullRequestCard"
-import { isPullsOpen, subscribePullsCard } from "@/lib/pulls-card-store"
 import { SessionGroupHeader } from "./SessionGroupHeader"
 import type { RunMenuAction } from "./SessionLaunchMenuItems"
 
@@ -89,12 +88,14 @@ interface SessionGroupProps {
   // Absent when the project ships no run script, and on the gathered blocks,
   // which are not checkouts.
   run?: RunMenuAction
-  // The worktree's pull-request entry: opens the Pulls screen for this branch.
-  // pullsActive marks it when that screen is showing this group's PR. Rendered
-  // only for worktree groups (a truthy path).
-  pullsActive: boolean
-  onPulls: () => void
-  onClosePulls: () => void
+  // The checkouts whose parked Pull request card this block draws
+  // (pullsCheckoutHomes), and the one the Pulls screen is showing, "" off it.
+  // A card passes its own session to onPulls: a folder or a wall mixes
+  // checkouts, and the screen reviews the active session's.
+  pullsCheckouts: string[]
+  pullsShowing: string
+  onPulls: (checkout: string, sessionId?: string) => void
+  onClosePulls: (checkout: string) => void
   // Workspace-wide, so it is resolved once by the sidebar rather than per group:
   // the sessions the active one can hand work to, across every open project.
   delegateGroups: DelegateGroup[]
@@ -139,7 +140,8 @@ export function SessionGroup({
   onReorder,
   onClose,
   run,
-  pullsActive,
+  pullsCheckouts,
+  pullsShowing,
   onPulls,
   onClosePulls,
   delegateGroups,
@@ -205,11 +207,6 @@ export function SessionGroup({
   )
   const dragging = draggingId !== null
   const group = useSortable({ id: sortId, disabled: !sortable || !showHeader || fixed })
-  // The PR card keys off the group's real checkout — the project root for the
-  // root group (empty path), else the worktree — so a root project on a feature
-  // branch parks its card too, not only worktrees.
-  const checkout = path || projectPath
-  const pullsOpen = useSyncExternalStore(subscribePullsCard, () => isPullsOpen(checkout))
 
   // Written from the handler rather than from the state updater: React may
   // discard and replay an updater, and a pref written in one is a pref written
@@ -371,7 +368,7 @@ export function SessionGroup({
                         onFile={stage ? undefined : (target) => onFile([session.id], target)}
                         onNewFolder={stage ? undefined : () => onNewFolder([session.id])}
                         onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
-                        onPulls={onPulls}
+                        onPulls={() => onPulls(session.path || projectPath, session.id)}
                         // A card on its way out is no longer part of the order the
                         // drag reads, so it cannot be picked up for the last frames
                         // it is on screen.
@@ -384,16 +381,15 @@ export function SessionGroup({
               </div>
             </SortableContext>
           </DndContext>
-          {/* The pinned block spans every checkout, so no single pull request
-              belongs under it — the card stays with the worktree's own block. */}
-          {!pinned && pullsOpen && (
+          {pullsCheckouts.map((checkout) => (
             <PullRequestCard
+              key={checkout}
               path={checkout}
-              active={pullsActive}
-              onSelect={onPulls}
-              onClose={onClosePulls}
+              active={pullsShowing === checkout}
+              onSelect={() => onPulls(checkout)}
+              onClose={() => onClosePulls(checkout)}
             />
-          )}
+          ))}
         </div>
       </div>
     </div>

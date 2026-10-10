@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The hands-on time on a session card is written in the interface language.**
   It read `1h12m` in every language; it now reads `1 h 12 min` in Portuguese,
   `1h12min` in Spanish and `1小时12分钟` in Chinese, and stays `1h12m` in English.
+- **A card's pull request chip opens that card's pull request.** In a folder
+  or a wall holding cards from different worktrees, clicking the `#N` chip, or
+  Pull request in the card's menu, opened the pull request of whichever card
+  in the group was active instead, and the Pull request card it left in the
+  folder showed the project root's pull request.
 
 - **Claude Code, opencode, oh-my-pi and Cursor CLI follow lich's light or dark
   theme when you switch it.** A session kept the look it picked at start, so

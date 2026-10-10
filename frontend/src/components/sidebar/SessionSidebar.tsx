@@ -49,6 +49,7 @@ import { activeSessionId, foldersOf, sessionsOf, type Session } from "@/lib/sess
 import {
   dragOrder,
   folderKey,
+  pullsCheckoutHomes,
   reorderSubset,
   runCardIn,
   sidebarCards,
@@ -232,6 +233,9 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // The split's own block is built from the members, not from what is on screen:
   // a parked wall is exactly the case the user could not see before.
   const groups = sidebarGroups(visible, panes.groups)
+  const pullsHomes = pullsCheckoutHomes(groups)
+  // The Pulls screen reviews the active session's checkout (useActiveSession).
+  const activeCheckout = list.find((session) => session.id === realActiveId)?.path || path
   // No deps: the reader closes over the groups this render drew, and a fold is
   // read at the press, since folding re-renders its block and not this list.
   // The divider only earns its place once a worktree — or a pin — splits the
@@ -425,7 +429,6 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
 
   // One block, rendered the same whichever drag list it belongs to.
   const renderGroup = (group: SidebarGroup) => {
-    const groupActive = group.sessions.some((s) => s.id === realActiveId)
     return (
       <SessionGroup
         // The project is in the React key, not only in the props: two
@@ -480,18 +483,23 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         // Offered on a checkout's block alone: a wall and the pinned block
         // gather cards from everywhere and have no directory to run one in.
         run={runnable && !group.pinned && !group.stage ? runAction(group) : undefined}
-        pullsActive={onPullsRoute && groupActive}
-        onPulls={() => {
-          openPulls(group.path || path)
-          const target = groupActive ? realActiveId : group.sessions[0]?.id
+        pullsCheckouts={(pullsHomes.get(group.key) ?? []).map((checkout) => checkout || path)}
+        pullsShowing={onPullsRoute ? activeCheckout : ""}
+        onPulls={(checkout, sessionId) => {
+          openPulls(checkout)
+          const target =
+            sessionId ??
+            (activeCheckout === checkout
+              ? realActiveId
+              : group.sessions.find((session) => (session.path || path) === checkout)?.id)
           if (target) {
             activateSession(projectId, target)
           }
           navigate(`/projects/${projectId}/pulls`)
         }}
-        onClosePulls={() => {
-          closePulls(group.path || path)
-          if (onPullsRoute && groupActive) {
+        onClosePulls={(checkout) => {
+          closePulls(checkout)
+          if (onPullsRoute && activeCheckout === checkout) {
             navigate(`/projects/${projectId}`)
           }
         }}

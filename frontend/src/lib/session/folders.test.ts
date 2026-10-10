@@ -14,6 +14,7 @@ import {
   FOLDER_KEY_PREFIX,
   folderKey,
   PINNED_GROUP_KEY,
+  pullsCheckoutHomes,
   ROOT_GROUP_KEY,
   sidebarGroups,
 } from "./sidebar-groups"
@@ -218,6 +219,35 @@ describe("checkoutsOf", () => {
     state = addSession(state, P, "s3", "claude", "/wt/front")
     state = addSession(state, P, "s4", "claude", "/wt/back")
     expect(checkoutsOf(sessionsOf(state, P))).toEqual(["/wt/front", "", "/wt/back"])
+  })
+})
+
+describe("pullsCheckoutHomes", () => {
+  it("draws a checkout's card in its own block, never in a folder holding its cards too", () => {
+    let state = addSession({}, P, "s1", "claude", "/wt/front")
+    state = addSession(state, P, "s2", "claude", "/wt/front")
+    state = setSessionsFolder(state, P, ["s2"], "Apps")
+    const homes = pullsCheckoutHomes(sidebarGroups(sessionsOf(state, P)))
+    expect(homes.get("/wt/front")).toEqual(["/wt/front"])
+    expect(homes.get(folderKey("Apps"))).toEqual([])
+  })
+
+  it("hands a checkout with no block of its own to the first folder holding its cards", () => {
+    let state = addSession({}, P, "s1", "claude", "/wt/front")
+    state = addSession(state, P, "s2", "claude", "/wt/back")
+    state = addSession(state, P, "s3", "claude", "/wt/back")
+    state = setSessionsFolder(state, P, ["s1", "s2"], "Apps")
+    state = setSessionsFolder(state, P, ["s3"], "Ops")
+    const homes = pullsCheckoutHomes(sidebarGroups(sessionsOf(state, P)))
+    expect(homes.get(folderKey("Apps"))).toEqual(["/wt/front", "/wt/back"])
+    expect(homes.get(folderKey("Ops"))).toEqual([])
+  })
+
+  it("draws no card in the pinned block", () => {
+    let state = addSession({}, P, "s1", "claude", "/wt/front")
+    state = setSessionPinned(state, P, "s1", true)
+    const homes = pullsCheckoutHomes(sidebarGroups(sessionsOf(state, P)))
+    expect(homes.get(PINNED_GROUP_KEY)).toEqual([])
   })
 })
 

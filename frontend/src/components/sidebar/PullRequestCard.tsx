@@ -1,8 +1,10 @@
+import { useSyncExternalStore } from "react"
 import { GitPullRequestArrow } from "lucide-react"
 import { SidebarCard } from "@/components/common/SidebarCard"
 import { useT } from "@/lib/i18n/i18n"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
+import { isPullsOpen, subscribePullsCard } from "@/lib/pulls-card-store"
 
 interface PullRequestCardProps {
   // The worktree checkout whose branch PR this entry opens.
@@ -17,7 +19,13 @@ interface PullRequestCardProps {
 // the X removes it. It opens the full-screen Pulls view for the worktree's
 // branch, showing the open PR's number when there is one (and otherwise reading
 // as the door to open one, whose create flow lives on the screen's empty state).
-export function PullRequestCard({ path, active, onSelect, onClose }: PullRequestCardProps) {
+// Nothing is drawn, and nothing looked up, until the checkout's card is parked.
+export function PullRequestCard(props: PullRequestCardProps) {
+  const open = useSyncExternalStore(subscribePullsCard, () => isPullsOpen(props.path))
+  return open ? <ParkedPullRequestCard {...props} /> : null
+}
+
+function ParkedPullRequestCard({ path, active, onSelect, onClose }: PullRequestCardProps) {
   const t = useT()
   const git = useGitStatus(path)
   const pr = usePullRequest(path, git?.branch ?? "", git?.head ?? "")
