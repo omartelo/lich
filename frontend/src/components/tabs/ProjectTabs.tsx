@@ -19,9 +19,12 @@ import { horizontalAxis, useSortableList, withinList } from "@/lib/use-sortable-
 import { ProjectTab } from "./ProjectTab"
 import { HomeTab } from "./HomeTab"
 import { OpenProjectMenu } from "./OpenProjectMenu"
+import { useT } from "@/lib/i18n/i18n"
+import { Trans } from "@/components/common/Trans"
 
 export function ProjectTabs() {
   const { projects, sessions, homeId, closeProject, reorderProjects } = useProjects()
+  const t = useT()
   const navigate = useNavigate()
   // The project waiting on the "sessions are still running" confirmation, with
   // how many were running when it was asked for. Closing a project unmounts its
@@ -126,8 +129,8 @@ export function ProjectTabs() {
           size="icon-sm"
           onClick={openProjectPulls}
           disabled={!activeProjectId}
-          title="Pull requests"
-          aria-label="Pull requests"
+          title={t("tabs.projectTabs.pullRequests")}
+          aria-label={t("tabs.projectTabs.pullRequests")}
           className={cn(
             "shrink-0 text-muted-foreground",
             onPulls && "bg-accent text-accent-foreground",
@@ -140,8 +143,8 @@ export function ProjectTabs() {
           size="icon-sm"
           onClick={openProjectSettings}
           disabled={!activeProjectId}
-          title="Settings"
-          aria-label="Settings"
+          title={t("tabs.projectTabs.settings")}
+          aria-label={t("tabs.projectTabs.settings")}
           className={cn(
             "shrink-0 text-muted-foreground",
             onSettings && "bg-accent text-accent-foreground",
@@ -153,13 +156,15 @@ export function ProjectTabs() {
       <ConfirmDialog
         open={pending !== null}
         onCancel={() => setPending(null)}
-        title="Sessions are still running"
+        title={t("tabs.projectTabs.closeTitle")}
         description={
-          <>
-            Closing <span className="font-medium">{pending?.project.name}</span> stops{" "}
-            {pending?.running === 1 ? "a session" : `${pending?.running} sessions`} mid-turn.
-            Reopening the project offers to resume where each left off; the turn in flight is lost.
-          </>
+          <Trans
+            k="tabs.projectTabs.closeBody"
+            params={{
+              name: <span className="font-medium">{pending?.project.name}</span>,
+              count: pending?.running ?? 0,
+            }}
+          />
         }
       >
         <Button
@@ -171,7 +176,7 @@ export function ProjectTabs() {
             setPending(null)
           }}
         >
-          Close anyway
+          {t("tabs.projectTabs.closeAnyway")}
         </Button>
       </ConfirmDialog>
     </>

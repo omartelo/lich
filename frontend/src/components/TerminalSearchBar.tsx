@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useT } from "@/lib/i18n/i18n"
 
 /** The match position xterm's search addon reports: the active match index
  * (0-based, -1 when none) and the total count. */
@@ -29,13 +30,14 @@ export function TerminalSearchBar({
   onFind,
   onClose,
 }: TerminalSearchBarProps) {
+  const t = useT()
   return (
     <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">
       <Input
         autoFocus
         value={query}
-        placeholder="Find"
-        aria-label="Search terminal"
+        placeholder={t("terminal.searchBar.placeholder")}
+        aria-label={t("terminal.searchBar.label")}
         className="h-7 w-44 border-0 shadow-none focus-visible:ring-0"
         onChange={(event) => onQueryChange(event.target.value)}
         onKeyDown={(event) => {
@@ -58,15 +60,25 @@ export function TerminalSearchBar({
       <Button
         size="icon-xs"
         variant="ghost"
-        aria-label="Previous match"
+        aria-label={t("terminal.searchBar.previous")}
         onClick={() => onFind("prev")}
       >
         <ArrowUp className="h-3.5 w-3.5" />
       </Button>
-      <Button size="icon-xs" variant="ghost" aria-label="Next match" onClick={() => onFind("next")}>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        aria-label={t("terminal.searchBar.next")}
+        onClick={() => onFind("next")}
+      >
         <ArrowDown className="h-3.5 w-3.5" />
       </Button>
-      <Button size="icon-xs" variant="ghost" aria-label="Close search" onClick={onClose}>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        aria-label={t("terminal.searchBar.close")}
+        onClick={onClose}
+      >
         <X className="h-3.5 w-3.5" />
       </Button>
     </div>

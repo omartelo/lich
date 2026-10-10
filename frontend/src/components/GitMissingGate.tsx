@@ -4,6 +4,7 @@ import { failed } from "@/lib/binary-layers"
 import { System } from "@/lib/rpc"
 import { NO_SETTLE, useBinaryCheck } from "@/lib/use-binary-check"
 import { GIT } from "@/lib/vcs-tools"
+import { useT } from "@/lib/i18n/i18n"
 import { Button } from "@/components/ui/button"
 import { CheckAgainButton } from "@/components/common/CheckAgainButton"
 import {
@@ -29,6 +30,7 @@ import {
 // the condition is not a preference to be honoured — it is a machine that
 // cannot do half of what lich offers, and it stops asking the moment git exists.
 export function GitMissingGate() {
+  const t = useT()
   const check = useBinaryCheck(GIT.bin, NO_SETTLE)
   const [dismissed, setDismissed] = useState(false)
 
@@ -40,15 +42,12 @@ export function GitMissingGate() {
     <Dialog open onOpenChange={() => setDismissed(true)}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>git is not installed</DialogTitle>
-          <DialogDescription>
-            lich reads every branch, diff and worktree through git. Sessions still run without it —
-            the version control surfaces stay empty.
-          </DialogDescription>
+          <DialogTitle>{t("shell.gitMissingGate.title")}</DialogTitle>
+          <DialogDescription>{t("shell.gitMissingGate.description")}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setDismissed(true)}>
-            Not now
+            {t("shell.gitMissingGate.notNow")}
           </Button>
           <CheckAgainButton size="default" />
           <Button
@@ -57,7 +56,7 @@ export function GitMissingGate() {
               setDismissed(true)
             }}
           >
-            Install git
+            {t("shell.gitMissingGate.installGit")}
             <ExternalLink />
           </Button>
         </DialogFooter>

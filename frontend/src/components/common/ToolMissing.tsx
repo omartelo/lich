@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { System } from "@/lib/rpc"
 import type { VcsTool } from "@/lib/vcs-tools"
 import { CheckAgainButton } from "./CheckAgainButton"
+import { useT } from "@/lib/i18n/i18n"
 
 interface ToolMissingProps {
   tool: VcsTool
@@ -18,15 +19,18 @@ interface ToolMissingProps {
 // It fills the area it is handed rather than overlaying one (see EmptyScreen),
 // so a panel and a whole screen can both show it.
 export function ToolMissing({ tool, icon: Icon }: ToolMissingProps) {
+  const t = useT()
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
       <Icon className="size-8 text-muted-foreground" />
       <div className="flex flex-col gap-1">
-        <p className="text-sm text-foreground">{tool.label} is not installed</p>
+        <p className="text-sm text-foreground">
+          {t("common.toolMissing.notInstalled", { label: tool.label })}
+        </p>
         <p className="max-w-sm text-sm text-muted-foreground">{tool.without}</p>
       </div>
       <Button size="sm" onClick={() => void System.OpenExternal(tool.url)}>
-        Install {tool.bin}
+        {t("common.toolMissing.install", { bin: tool.bin })}
         <ExternalLink />
       </Button>
       <CheckAgainButton />

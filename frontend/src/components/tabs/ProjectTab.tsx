@@ -7,6 +7,7 @@ import { dragStyle } from "@/lib/use-sortable-list"
 import { cn } from "@/lib/utils"
 import { useProjectStatus } from "@/lib/session/use-session-status"
 import type { Project } from "@/lib/api-types"
+import { useT } from "@/lib/i18n/i18n"
 
 interface ProjectTabProps {
   project: Project
@@ -20,6 +21,7 @@ interface ProjectTabProps {
 
 // The tab is its own drag grip for reordering the strip — no separate handle.
 export function ProjectTab({ project, sessionIds, to, active, onClose }: ProjectTabProps) {
+  const t = useT()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: project.id,
   })
@@ -58,7 +60,7 @@ export function ProjectTab({ project, sessionIds, to, active, onClose }: Project
           {badge === "waiting" && <Bell className="size-3 shrink-0 text-tone-wait" />}
           <span className="truncate">{project.name}</span>
           <CloseButton
-            label={`Close ${project.name}`}
+            label={t("tabs.projectTab.close", { name: project.name })}
             onClick={(event) => {
               event.stopPropagation()
               onClose()

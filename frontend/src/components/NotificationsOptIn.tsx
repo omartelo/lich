@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useT } from "@/lib/i18n/i18n"
 
 interface NotificationsOptInProps {
   open: boolean
@@ -20,23 +21,19 @@ interface NotificationsOptInProps {
 // would have notified: the user is being asked about something that just
 // happened to them, not about a hypothetical at launch.
 export function NotificationsOptIn({ open, onDismiss, onDecide }: NotificationsOptInProps) {
+  const t = useT()
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onDismiss()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Notify you when a session needs you?</DialogTitle>
-          <DialogDescription>
-            A session just asked for your input while you were somewhere else. lich can raise a
-            desktop notification when that happens, naming the session and its project, so you can
-            start something and walk away from the window. Sessions you are looking at never notify.
-            You can change this any time in Settings › Notifications.
-          </DialogDescription>
+          <DialogTitle>{t("shell.notificationsOptIn.title")}</DialogTitle>
+          <DialogDescription>{t("shell.notificationsOptIn.description")}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onDecide(false)}>
-            No thanks
+            {t("shell.notificationsOptIn.noThanks")}
           </Button>
-          <Button onClick={() => onDecide(true)}>Notify me</Button>
+          <Button onClick={() => onDecide(true)}>{t("shell.notificationsOptIn.notifyMe")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

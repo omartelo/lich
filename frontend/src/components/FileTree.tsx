@@ -5,6 +5,7 @@ import type { DiffFile } from "@/lib/git/diff"
 import { FileIcon } from "./FileIcon"
 import { DiffStat } from "./DiffStat"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n/i18n"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -140,6 +141,7 @@ function TreeRow({
   onEditor,
   onSelect,
 }: TreeRowProps) {
+  const t = useT()
   // The 0.5rem base keeps even top-level rows off the edge.
   const indent = { paddingLeft: `${depth * 0.75 + 0.5}rem` }
   const stat = stats?.get(node.path)
@@ -192,7 +194,9 @@ function TreeRow({
           {row}
         </ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem onClick={() => onEditor(node.path)}>Open in editor</ContextMenuItem>
+          <ContextMenuItem onClick={() => onEditor(node.path)}>
+            {t("shell.fileTree.openInEditor")}
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
     )
@@ -220,8 +224,12 @@ function TreeRow({
           {badge}
         </ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem onClick={() => onSubtree(node, true)}>Expand all</ContextMenuItem>
-          <ContextMenuItem onClick={() => onSubtree(node, false)}>Collapse all</ContextMenuItem>
+          <ContextMenuItem onClick={() => onSubtree(node, true)}>
+            {t("shell.fileTree.expandAll")}
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => onSubtree(node, false)}>
+            {t("shell.fileTree.collapseAll")}
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
       {open &&

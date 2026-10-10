@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { refreshPath } from "@/lib/path-refresh"
 import { errorText } from "@/lib/utils"
+import { useT } from "@/lib/i18n/i18n"
 
 interface CheckAgainButtonProps {
   /** The surface's own check, run once the $PATH has been re-read. Omitted
@@ -17,6 +18,7 @@ interface CheckAgainButtonProps {
 // binary lookup resolves through (lib/path-refresh), so an agent, git or gh
 // installed with lich already open is found without a relaunch.
 export function CheckAgainButton({ onCheck, size = "sm" }: CheckAgainButtonProps) {
+  const t = useT()
   const [checking, setChecking] = useState(false)
 
   // Both halves can fail, and unhandled the spinner just stops: a button that
@@ -37,7 +39,7 @@ export function CheckAgainButton({ onCheck, size = "sm" }: CheckAgainButtonProps
   return (
     <Button variant="ghost" size={size} disabled={checking} onClick={() => void check()}>
       <RefreshCw data-icon="inline-start" className={checking ? "animate-spin" : undefined} />
-      {checking ? "Checking…" : "Check again"}
+      {checking ? t("common.checkAgainButton.checking") : t("common.checkAgainButton.check")}
     </Button>
   )
 }

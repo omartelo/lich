@@ -17,6 +17,7 @@ import { UpdateProgressToast } from "@/components/UpdateProgressToast"
 import { failureText, isUpdateProgress, UPDATE_PROGRESS_EVENT } from "@/lib/update/update-progress"
 import { registerUpdateChecker } from "@/lib/update/update-check"
 import { errorText } from "@/lib/utils"
+import { useT } from "@/lib/i18n/i18n"
 
 // How often to re-check for a release after startup, so a long-running session
 // eventually notices one. Hourly is plenty — releases are rare and the
@@ -29,6 +30,7 @@ const POLL_INTERVAL_MS = 60 * 60 * 1000
 // command into a terminal (the user runs it) or open the release page. Any
 // failure is silent: it must never block or break startup.
 export function AppUpdateGate() {
+  const t = useT()
   const { newSession, ensureHomeProject } = useProjects()
   const navigate = useNavigate()
   const activeProjectId = useMatch("/projects/:projectId")?.params.projectId ?? null
@@ -95,10 +97,13 @@ export function AppUpdateGate() {
 
   // Windows: download and run the installer, which closes and reopens lich.
   const promptSelfApply = (version: string) => {
-    toast(`lich ${version} is available`, {
+    toast(t("shell.appUpdateGate.available", { version }), {
       duration: Infinity,
-      action: { label: "Update & install", onClick: () => void runApply(version) },
-      cancel: { label: "Later", onClick: () => dismiss(version) },
+      action: {
+        label: t("shell.appUpdateGate.updateAndInstall"),
+        onClick: () => void runApply(version),
+      },
+      cancel: { label: t("shell.appUpdateGate.later"), onClick: () => dismiss(version) },
     })
   }
 
@@ -126,15 +131,15 @@ export function AppUpdateGate() {
       toast.error(failureText(last, errorText(error)), {
         id,
         duration: Infinity,
-        action: { label: "Retry", onClick: () => void runApply(version) },
+        action: { label: t("shell.appUpdateGate.retry"), onClick: () => void runApply(version) },
       })
       return
     }
     unsubscribe()
-    toast.success(`lich updated to ${version}`, {
+    toast.success(t("shell.appUpdateGate.updated", { version }), {
       id,
       duration: Infinity,
-      action: { label: "Restart", onClick: () => void runRestart() },
+      action: { label: t("shell.appUpdateGate.restart"), onClick: () => void runRestart() },
     })
   }
 
@@ -144,7 +149,7 @@ export function AppUpdateGate() {
     try {
       await AppUpdate.Restart()
     } catch (error) {
-      toast.error(`Restart failed: ${errorText(error)}`)
+      toast.error(t("shell.appUpdateGate.restartFailed", { error: errorText(error) }))
     }
   }
 
@@ -161,7 +166,7 @@ export function AppUpdateGate() {
     toast.custom(
       (id) => (
         <div className="flex flex-col gap-3 rounded-md border bg-popover p-4 text-sm text-popover-foreground shadow-lg">
-          <span>lich {version} is available</span>
+          <span>{t("shell.appUpdateGate.available", { version })}</span>
           <div className="flex gap-2">
             {installCommand !== "" && (
               <Button
@@ -171,7 +176,7 @@ export function AppUpdateGate() {
                   void openInstall(releaseUrl, installCommand)
                 }}
               >
-                Install
+                {t("shell.appUpdateGate.install")}
               </Button>
             )}
             <Button
@@ -182,7 +187,7 @@ export function AppUpdateGate() {
                 void System.OpenExternal(releaseUrl)
               }}
             >
-              View release
+              {t("shell.appUpdateGate.viewRelease")}
             </Button>
             <Button
               size="sm"
@@ -192,7 +197,7 @@ export function AppUpdateGate() {
                 dismiss(version)
               }}
             >
-              Later
+              {t("shell.appUpdateGate.later")}
             </Button>
           </div>
         </div>

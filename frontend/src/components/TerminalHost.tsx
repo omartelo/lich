@@ -8,6 +8,7 @@ import { CloseButton } from "./common/CloseButton"
 import { ErrorBoundary } from "./common/ErrorBoundary"
 import { WorktreeCloseDialogs } from "./sidebar/WorktreeCloseDialogs"
 import { useWorktreeClose } from "./sidebar/useWorktreeClose"
+import { useT } from "@/lib/i18n/i18n"
 import { Store, Terminal as TerminalService } from "@/lib/rpc"
 import { restoreChoice, restoreKey } from "@/lib/providers-store"
 import { useProjects } from "@/providers/projects"
@@ -71,6 +72,7 @@ function PaneHeader({
   onSwap,
   onDrop,
 }: PaneHeaderProps) {
+  const t = useT()
   return (
     <div
       className={cn(
@@ -112,7 +114,7 @@ function PaneHeader({
       <ProviderIcon kind={session.kind} size={12} />
       <span className="min-w-0 truncate font-medium">{session.label}</span>
       <CloseButton
-        label={`Stop showing ${session.label}`}
+        label={t("terminal.host.stopShowing", { name: session.label })}
         className="ml-auto"
         onClick={() => onDrop(index)}
       />
@@ -137,6 +139,7 @@ function PaneHeader({
 // mounted only once the user has said whether to continue that conversation —
 // and only when there is still a conversation to continue (ResumeAvailable).
 export function TerminalHost() {
+  const t = useT()
   const { projects, sessions, keepSession } = useProjects()
   const match = useMatch("/projects/:projectId")
   const activeProjectId = match?.params.projectId ?? null
@@ -332,7 +335,7 @@ export function TerminalHost() {
                   rendering and the panes beside it carry on. The terminal
                   detaches rather than dying with the subtree, so retrying
                   re-attaches the very same one (lib/terminal/terminal-registry). */}
-              <ErrorBoundary label={`The ${session.label} pane`}>
+              <ErrorBoundary label={t("terminal.host.paneName", { name: session.label })}>
                 {split && visible && (
                   <PaneHeader
                     session={session}
@@ -413,7 +416,7 @@ export function TerminalHost() {
         onResume={() => asking && answerResume(asking, asking.providerSessionId ?? "")}
         onRemember={(kind, choice) =>
           Store.SetSetting(restoreKey(kind), GLOBAL_SCOPE, choice).catch((err) =>
-            toast.error(`Couldn't remember the choice: ${errorText(err)}`),
+            toast.error(t("terminal.host.rememberFailed", { error: errorText(err) })),
           )
         }
       />

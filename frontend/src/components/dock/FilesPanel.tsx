@@ -32,6 +32,7 @@ import { useInject } from "@/lib/use-inject"
 import { useRemoteResource } from "@/lib/use-remote-resource"
 import { HIT_SELECTOR, SearchResults } from "./SearchResults"
 import { useFileEditor } from "./useFileEditor"
+import { useT } from "@/lib/i18n/i18n"
 
 // FilesPanel is the Files tab of the right dock: a read-only tree of the active
 // session's files — tracked and untracked in a repository, whatever is on disk
@@ -197,6 +198,7 @@ interface BrowseBoxProps {
 // BrowseBox is the one field over the Code tab and the switch that says how it
 // reads: a filter over the tree's names, or a search through the files' text.
 function BrowseBox({ path, browse, onFocusList }: BrowseBoxProps) {
+  const t = useT()
   const text = browse.mode === "text"
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Escape" && browse.query !== "") {
@@ -215,8 +217,10 @@ function BrowseBox({ path, browse, onFocusList }: BrowseBoxProps) {
           value={browse.query}
           onChange={(event) => updateFileBrowse(path, { query: event.target.value })}
           onKeyDown={onKeyDown}
-          placeholder={text ? "Search in files" : "Filter by name"}
-          aria-label={text ? "Search in files" : "Filter files by name"}
+          placeholder={
+            text ? t("dock.filesPanel.searchPlaceholder") : t("dock.filesPanel.filterPlaceholder")
+          }
+          aria-label={text ? t("dock.filesPanel.searchLabel") : t("dock.filesPanel.filterLabel")}
           className="h-7 text-xs"
         />
       </div>
@@ -226,14 +230,14 @@ function BrowseBox({ path, browse, onFocusList }: BrowseBoxProps) {
           next[0] && updateFileBrowse(path, { mode: next[0] as FileBrowse["mode"] })
         }
         spacing={1}
-        aria-label="What the field matches"
+        aria-label={t("dock.filesPanel.matchesLabel")}
         className="shrink-0 border border-border p-[0.1875rem]"
       >
         <ToggleGroupItem value="name" size="sm" className="h-5 px-2 text-xs">
-          Name
+          {t("dock.filesPanel.byName")}
         </ToggleGroupItem>
         <ToggleGroupItem value="text" size="sm" className="h-5 px-2 text-xs">
-          Text
+          {t("dock.filesPanel.byText")}
         </ToggleGroupItem>
       </ToggleGroup>
     </div>
@@ -326,18 +330,19 @@ export function TreeBody({
   onOpen,
   onEditor,
 }: TreeBodyProps) {
+  const t = useT()
   const filtering = query.trim() !== ""
   const footnote = treeFootnote(cut, hidden)
   if (failed) {
-    return <Notice>Could not read this folder</Notice>
+    return <Notice>{t("dock.filesPanel.readFailed")}</Notice>
   }
   if (loading) {
-    return <Notice>Loading…</Notice>
+    return <Notice>{t("dock.filesPanel.loading")}</Notice>
   }
   return (
     <>
       {tree.length === 0 ? (
-        <Notice>{filtering ? "No file matches" : "No files here"}</Notice>
+        <Notice>{filtering ? t("dock.filesPanel.noMatch") : t("dock.filesPanel.empty")}</Notice>
       ) : (
         <FileTree
           tree={tree}
@@ -376,6 +381,7 @@ interface FilePreviewProps {
 }
 
 function FilePreview({ path, rel, line, onBack, onInject, onComment }: FilePreviewProps) {
+  const t = useT()
   const kind = previewKind(rel)
   return (
     <div className="flex h-full flex-col">
@@ -383,7 +389,7 @@ function FilePreview({ path, rel, line, onBack, onInject, onComment }: FilePrevi
         <button
           type="button"
           onClick={onBack}
-          aria-label="Back to file tree"
+          aria-label={t("dock.filesPanel.backToTree")}
           className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           <ChevronLeft className="size-4" />
@@ -392,7 +398,7 @@ function FilePreview({ path, rel, line, onBack, onInject, onComment }: FilePrevi
           {rel}
         </span>
         <span className="ml-auto shrink-0 text-2xs uppercase tracking-wide text-muted-foreground">
-          read-only
+          {t("dock.filesPanel.readOnly")}
         </span>
       </div>
       {kind === "pdf" ? (
@@ -421,6 +427,7 @@ function FilePreview({ path, rel, line, onBack, onInject, onComment }: FilePrevi
 }
 
 function TextPreview({ path, rel, line, onInject, onComment }: Omit<FilePreviewProps, "onBack">) {
+  const t = useT()
   // Filed like the tree above it: a preview left open is restored on the way
   // back from the Review tab, and painting it from a skeleton every time would
   // undo half of what restoring it was for. resetOn keeps one file's text from
@@ -438,7 +445,7 @@ function TextPreview({ path, rel, line, onInject, onComment }: Omit<FilePreviewP
     return <Notice>{error}</Notice>
   }
   if (loading) {
-    return <Notice>Loading…</Notice>
+    return <Notice>{t("dock.filesPanel.loading")}</Notice>
   }
   return <PreviewBody text={text} rel={rel} line={line} onInject={onInject} onComment={onComment} />
 }

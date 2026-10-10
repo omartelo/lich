@@ -19,6 +19,7 @@ import { FooterCheckout } from "./FooterCheckout"
 import { FooterSession } from "./FooterSession"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { SIDEBAR_MORPH } from "@/lib/view-transition"
+import { useT } from "@/lib/i18n/i18n"
 
 interface FooterButtonProps {
   /** Both the tooltip and the accessible name — one string, one meaning. */
@@ -71,6 +72,7 @@ interface FooterBarProps {
 // project is active; everything follows the active session — a worktree session
 // shows its checkout's path, branch and diff.
 export function FooterBar({ dock, onDock }: FooterBarProps) {
+  const t = useT()
   const navigate = useNavigate()
   const { footerLayout, footerVisibility, showContextUsage } = useSettings()
   const showCost = useCostReadout()
@@ -101,24 +103,32 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
     } catch (err) {
       // The backend's own sentence when it has one — it names the ceiling a
       // file was refused for, which nothing here could reconstruct.
-      toast.error(err instanceof Error ? err.message : "Could not attach the file")
+      toast.error(err instanceof Error ? err.message : t("shell.footerBar.attachFailed"))
     }
   }
 
   const controls: Partial<Record<FooterItem, ReactNode>> = {
     attach: (
-      <FooterButton label="Attach file" onClick={() => void attachFile()} disabled={!sessionId}>
+      <FooterButton
+        label={t("shell.footerBar.attachFile")}
+        onClick={() => void attachFile()}
+        disabled={!sessionId}
+      >
         <Paperclip className="size-4" />
       </FooterButton>
     ),
     files: path && (
-      <FooterButton label="Browse code" onClick={() => onDock("files")} pressed={dock === "files"}>
+      <FooterButton
+        label={t("shell.footerBar.browseCode")}
+        onClick={() => onDock("files")}
+        pressed={dock === "files"}
+      >
         <Code className="size-4" />
       </FooterButton>
     ),
     changes: status && (
       <FooterButton
-        label="Review changes"
+        label={t("shell.footerBar.reviewChanges")}
         onClick={() => onDock("review")}
         pressed={dock === "review"}
         wide
@@ -139,14 +149,15 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
     ),
     pr: pr && projectId && (
       <FooterButton
-        label="View pull request"
+        label={t("shell.footerBar.viewPullRequest")}
         onClick={() => {
           openPulls(checkout)
           navigate(`/projects/${projectId}/pulls`)
         }}
         wide
       >
-        <GitPullRequestArrow className="size-3.5" /> PR #{pr.number}
+        <GitPullRequestArrow className="size-3.5" />{" "}
+        {t("shell.footerBar.pullRequest", { number: pr.number })}
       </FooterButton>
     ),
     checkout: path && <FooterCheckout path={path} branch={status?.branch ?? ""} />,
@@ -162,7 +173,9 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
       {(["left", "right"] as const).map((side) => (
         <section
           key={side}
-          aria-label={side === "left" ? "Left footer" : "Right footer"}
+          aria-label={
+            side === "left" ? t("shell.footerBar.leftFooter") : t("shell.footerBar.rightFooter")
+          }
           data-footer-side={side}
           className={cn(
             "flex min-w-0 flex-wrap items-center gap-1",

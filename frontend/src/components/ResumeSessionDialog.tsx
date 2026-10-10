@@ -12,6 +12,8 @@ import {
 import { Label } from "@/components/ui/label"
 import { useProviders, type RestoreChoice } from "@/lib/providers-store"
 import type { Session } from "@/lib/session/sessions"
+import { Trans } from "@/components/common/Trans"
+import { useT } from "@/lib/i18n/i18n"
 
 interface ResumeSessionDialogProps {
   /** The restored session about to spawn, or null when the dialog is hidden. */
@@ -35,11 +37,14 @@ export function ResumeSessionDialog({
   onResume,
   onRemember,
 }: ResumeSessionDialogProps) {
+  const t = useT()
   const providers = useProviders()
   // Tagged with the session it was ticked for, so the next prompt opens unticked.
   const [rememberFor, setRememberFor] = useState<string | null>(null)
   const remember = session !== null && rememberFor === session.id
-  const providerName = providers.find((p) => p.id === session?.kind)?.name ?? "this provider"
+  const providerName =
+    providers.find((p) => p.id === session?.kind)?.name ??
+    t("shell.resumeSessionDialog.thisProvider")
 
   const answer = (choice: Exclude<RestoreChoice, "ask">, spawn: () => void) => {
     if (remember && session) {
@@ -52,12 +57,19 @@ export function ResumeSessionDialog({
     <Dialog open={session !== null} onOpenChange={(next) => !next && onStartNew()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Resume previous session?</DialogTitle>
+          <DialogTitle>{t("shell.resumeSessionDialog.title")}</DialogTitle>
           <DialogDescription className="break-words">
-            <span className="font-medium">{session?.label}</span> left a conversation behind (
-            <span className="break-all font-mono select-text">{session?.providerSessionId}</span>
-            ). Resume it to pick the conversation up where it stopped, or start new for an empty
-            one.
+            <Trans
+              k="shell.resumeSessionDialog.description"
+              params={{
+                label: <span className="font-medium">{session?.label}</span>,
+                id: (
+                  <span className="break-all font-mono select-text">
+                    {session?.providerSessionId}
+                  </span>
+                ),
+              }}
+            />
           </DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-2">
@@ -67,15 +79,19 @@ export function ResumeSessionDialog({
             onCheckedChange={(checked) => setRememberFor(checked && session ? session.id : null)}
           />
           <Label htmlFor="resume-remember" className="text-sm font-normal">
-            Always do this for {providerName}
-            <span className="text-muted-foreground">· change it in Settings › Providers</span>
+            {t("shell.resumeSessionDialog.alwaysFor", { provider: providerName })}
+            <span className="text-muted-foreground">
+              {t("shell.resumeSessionDialog.changeInSettings")}
+            </span>
           </Label>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => answer("fresh", onStartNew)}>
-            Start new
+            {t("shell.resumeSessionDialog.startNew")}
           </Button>
-          <Button onClick={() => answer("resume", onResume)}>Resume</Button>
+          <Button onClick={() => answer("resume", onResume)}>
+            {t("shell.resumeSessionDialog.resume")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

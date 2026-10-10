@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useT } from "@/lib/i18n/i18n"
 
 interface StepperProps {
   value: number
@@ -40,6 +41,7 @@ export function Stepper({
   decrementLabel,
   incrementLabel,
 }: StepperProps) {
+  const t = useT()
   const custom = value !== fallback
   return (
     <div className="flex items-center gap-2">
@@ -64,14 +66,16 @@ export function Stepper({
               // is the default, which is most of the time. At the default the
               // click is simply a no-op.
               className="min-w-16 tabular-nums"
-              aria-label={custom ? `Reset ${name}` : display}
+              aria-label={custom ? t("common.stepper.reset", { name }) : display}
               onClick={() => custom && onChange(fallback)}
             />
           }
         >
           {display}
         </TooltipTrigger>
-        <TooltipContent>{custom ? `Reset ${name}` : "Default"}</TooltipContent>
+        <TooltipContent>
+          {custom ? t("common.stepper.reset", { name }) : t("common.stepper.default")}
+        </TooltipContent>
       </Tooltip>
       <Button
         variant="outline"
