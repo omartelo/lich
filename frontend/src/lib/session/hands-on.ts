@@ -1,4 +1,5 @@
 import type { ProviderKind, SessionKind } from "./sessions"
+import { t } from "@/lib/i18n/i18n"
 
 // formatHandsOn renders how long a session has been worked on, for the footer,
 // where it sits beside the cost figure at 12px and is glanced at rather than
@@ -61,10 +62,8 @@ const RUNG: Record<ProviderKind, "turn" | "tool"> = {
 // clause names what the clock listens for rather than promising the session
 // does all three.
 export function handsOnDetail(kind: SessionKind | ""): string {
-  const beats =
-    kind && kind !== "shell" && RUNG[kind] === "tool"
-      ? "typed at, or reporting a tool call"
-      : "typed at, reporting, or running a turn"
   // Keep the 15 minutes in sync with handsOnIdleGap in internal/terminal/handson.go.
-  return `How long this session has been worked on — ${beats}. A gap longer than 15 minutes counts as time away.`
+  return kind && kind !== "shell" && RUNG[kind] === "tool"
+    ? t("session.handsOn.detailTool")
+    : t("session.handsOn.detailTurn")
 }
