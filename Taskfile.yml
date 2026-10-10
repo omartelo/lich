@@ -135,10 +135,15 @@ tasks:
       # daily-driver lich keeps running untouched.
       - cmd: |
           set -e
-          (cd frontend && pnpm install --frozen-lockfile && pnpm run build)
           # Ctrl+C reaches the whole process group and takes Vite with it;
           # closing the window instead leaves it running (Task's shell has no
-          # kill and its `$!` is not a pid) — vite's strictPort then says so.
+          # kill and its `$!` is not a pid). The next run's Vite then dies on
+          # strictPort in the background, unseen, while the window loads the
+          # survivor, which serves whatever checkout it was started from. So
+          # the port is proved free before anything else, and a taken one stops
+          # the run here.
+          node -e "const s = require('net').createServer(); s.once('error', () => { console.error('task dev: port {{.VITE_PORT}} on 127.0.0.1 is taken, most likely by the Vite of an earlier task dev whose window was closed. That Vite serves its own checkout, not this one. Stop it (ss -ltnp \'sport = :{{.VITE_PORT}}\' on Linux, lsof -i :{{.VITE_PORT}} on macOS) or set LICH_VITE_PORT to another port.'); process.exit(1) }); s.listen({{.VITE_PORT}}, '127.0.0.1', () => s.close())"
+          (cd frontend && pnpm install --frozen-lockfile && pnpm run build)
           (cd frontend && pnpm run dev) &
           # node, not `sleep`: Task interprets every command with its own shell
           # (mvdan/sh) on every OS, where sleep is no builtin — a plain Windows
