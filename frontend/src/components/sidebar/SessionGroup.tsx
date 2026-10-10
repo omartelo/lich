@@ -158,6 +158,10 @@ export function SessionGroup({
   // same (project, group) pair the pref is stored under: nothing can reuse this
   // instance for another block without remounting it.
   const [collapsed, setCollapsed] = useState(() => readGroupCollapsed(projectId, sortId))
+  // A fold needs the header that undoes it. A block folded beside a sibling
+  // that has since closed is drawn alone and header-less, so it draws open; the
+  // stored fold is kept and applies again once a sibling brings the header back.
+  const folded = showHeader && collapsed
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
   // A card closed a moment ago is still drawn, playing its exit.
@@ -290,13 +294,11 @@ export function SessionGroup({
         />
       )}
       <div
-        aria-hidden={collapsed}
-        {...(collapsed ? { inert: "" } : {})}
+        aria-hidden={folded}
+        {...(folded ? { inert: "" } : {})}
         className={cn(
           "grid transition-[grid-template-rows,opacity] duration-200 ease-out",
-          collapsed
-            ? "pointer-events-none grid-rows-[0fr] opacity-0"
-            : "grid-rows-[1fr] opacity-100",
+          folded ? "pointer-events-none grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100",
         )}
       >
         {/* min-w-0 for the reason CardTransition's inner box carries it. */}

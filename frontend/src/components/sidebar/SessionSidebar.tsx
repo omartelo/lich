@@ -234,9 +234,14 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   const groups = sidebarGroups(visible, panes.groups)
   // No deps: the reader closes over the groups this render drew, and a fold is
   // read at the press, since folding re-renders its block and not this list.
+  // The divider only earns its place once a worktree — or a pin — splits the
+  // list; a lone group keeps the old flat, header-less look. A filter is the
+  // exception: which checkout a surviving card sits in is the thing the query
+  // was typed to find out, so the title stays even for a lone group.
+  const showHeader = groups.length > 1 || filtering
   useEffect(() =>
     registerSidebarCards(() =>
-      sidebarCards(groups, (key) => readGroupCollapsed(projectId ?? "", key)),
+      sidebarCards(groups, (key) => showHeader && readGroupCollapsed(projectId ?? "", key)),
     ),
   )
   // Read off the project's whole list rather than the filtered one: a filter is
@@ -461,12 +466,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         onStageToggle={toggleStage}
         onGroupDelegates={groupDelegates}
         onFork={(session) => void forkSession(session)}
-        // The divider only earns its place once a worktree — or a pin
-        // — splits the list; a lone group keeps the old flat,
-        // header-less look. A filter is the exception: which checkout
-        // a surviving card sits in is the thing the query was typed to
-        // find out, so the title stays even for a lone group.
-        showHeader={groups.length > 1 || filtering}
+        showHeader={showHeader}
         // A drop computed from a filtered view hands reorderSubset an
         // id set that does not name the group's members, and
         // reorderSessions rejects the whole order — so the gesture
