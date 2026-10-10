@@ -43,6 +43,10 @@ type Service struct {
 	// notify posts one desktop notification; injected in tests, zenity in
 	// production (see Notify).
 	notify func(text, title string) error
+	// showWindow and quit are the window and the exit, wired by main
+	// (SetShowWindow, SetQuit).
+	showWindow func()
+	quit       func() error
 }
 
 func New(env []string, logPath, version string, uncleanExit bool) *Service {
@@ -71,8 +75,8 @@ func (s *Service) SetEnv(env []string) {
 	s.env = env
 }
 
-// TakeUncleanExit reports whether the run before this one ended without closing
-// its window, and clears the flag. It is consumed rather than read because the
+// TakeUncleanExit reports whether the run before this one ended without
+// quitting cleanly, and clears the flag. It is consumed rather than read because the
 // notice belongs to the launch that followed the bad exit, not to every page
 // reload of it: the page mounts its gate again on each reload, the process does
 // not start again with it.

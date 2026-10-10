@@ -45,8 +45,8 @@ func Args(url, dataDir, class string, extra []string) []string {
 // crash one second in reached Wait at nineteen and was read as a closed window.
 const startupGrace = 30 * time.Second
 
-// Run opens the window and blocks until the user closes it — the window
-// process exiting is the app lifecycle. ErrNoShell comes back untouched,
+// Run opens the window and blocks until it closes. The backend outlives it: the
+// caller decides what the end means (EndingOf). ErrNoShell comes back untouched,
 // because the answer to an install with no window is not this function's to
 // give. Extra args pass through to Chromium (e.g. --ozone-platform=wayland).
 // onStart, when non-nil, receives the window process once launched, so the

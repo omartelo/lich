@@ -1,6 +1,7 @@
 package system
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -452,5 +453,21 @@ func TestSetEnvMovesTheEditorLookup(t *testing.T) {
 	}
 	if name != "zed" {
 		t.Fatalf("launched %q, want the re-read editor", name)
+	}
+}
+
+func TestShowWindowAndQuitReachWhatMainWired(t *testing.T) {
+	s := New(nil, "", "0.23.0", false)
+	shown := 0
+	s.SetShowWindow(func() { shown++ })
+	refused := errors.New("quit: lich is still starting")
+	s.SetQuit(func() error { return refused })
+
+	s.ShowWindow(ShowWindowOptions{})
+	if shown != 1 {
+		t.Fatalf("ShowWindow reached the window %d times, want 1", shown)
+	}
+	if err := s.Quit(QuitOptions{}); !errors.Is(err, refused) {
+		t.Fatalf("Quit = %v, want the wired quit's error", err)
 	}
 }

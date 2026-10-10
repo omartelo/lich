@@ -32,7 +32,7 @@ func startDetached(exe string, env, args []string) error {
 //
 // Windows has no signal to send, so the close is posted as WM_CLOSE by taskkill
 // without /F. The hard kill stays as the fallback for when there is no window to
-// post to (a restart in the moment before it opens): the successor is already
+// post to (lich quitting in the moment before it opens): a restart successor is already
 // waiting on the pinned port, and nothing may be left holding it.
 func terminateProcess(p *os.Process) error {
 	exe, args := closeWindowCommand(os.Getenv, p.Pid)
