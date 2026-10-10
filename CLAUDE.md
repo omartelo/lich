@@ -16,7 +16,7 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
   A change that sets a new trap or closes an old one moves that file in the same PR.
 - **Frontend rules and the visual system**: `frontend/CLAUDE.md` and `frontend/DESIGN.md`.
 - **Session hooks**: `docs/hooks/` is the canonical, contract-first spec. lich owns the server side; the scripts
-  live in the companion repo `omartelo/lich-plugin`, so an endpoint or payload change breaks a repo this one
+  live in the companion repo `lichdotdev/lich-plugin`, so an endpoint or payload change breaks a repo this one
   cannot see — move the contract first, then both sides.
 - **Every task**: `task --list`. `task dev` gets its own DB, port and Chromium profile; it never touches an
   installed lich's workspace. That isolation is one `pkill` wide: a pattern like `chromium-profile` matches the

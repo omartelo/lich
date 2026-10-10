@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	marketplaceRepo = "omartelo/lich-plugin"
+	marketplaceRepo = "lichdotdev/lich-plugin"
 	marketplaceName = "lich-plugin"
 	pluginName      = "lich"
 	// pluginKey is how both harnesses name the plugin: install target, update

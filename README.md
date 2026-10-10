@@ -219,7 +219,7 @@ needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
   and offers a detected suggestion when the repo ships none. A
   `.worktreeinclude` file tunes which gitignored files get copied over.
 - **Session hooks** — with the
-  [lich plugin](https://github.com/omartelo/lich-plugin) installed from Settings,
+  [lich plugin](https://github.com/lichdotdev/lich-plugin) installed from Settings,
   a session titles its own card and refreshes git the moment it writes a file.
 - **Stability**: which parts of lich are safe to script against, and which can
   change in any release, is written down in [docs/stability.md](docs/stability.md).
