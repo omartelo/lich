@@ -627,7 +627,10 @@ func (c *client) open(args []string) error {
 			return err
 		}
 		method, spawnMethod = relaySendSubagent, "spawn.OpenSubagent"
-		call = []any{c.sessionID(), *kind, *worktree, *base, *model, *effort, *ultracode}
+		call = []any{spawn.OpenSubagentOptions{
+			From: c.sessionID(), Kind: *kind, Worktree: *worktree, Base: *base,
+			Model: *model, Effort: *effort, Ultracode: *ultracode,
+		}}
 	}
 
 	var opened spawn.Session

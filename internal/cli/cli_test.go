@@ -100,9 +100,9 @@ func (f *fakeLich) only(t *testing.T) recorded {
 	return f.calls[0]
 }
 
-// openOptionsOf reads a spawn.Open call back the way the backend decodes it:
-// one options object, the only argument.
-func openOptionsOf(t *testing.T, call recorded) spawn.OpenOptions {
+// optionsOf reads a spawn.Open or spawn.OpenSubagent call back the way the
+// backend decodes it: one options object, the only argument.
+func optionsOf[T any](t *testing.T, call recorded) T {
 	t.Helper()
 	if len(call.args) != 1 {
 		t.Fatalf("args = %v, want one options object", call.args)
@@ -111,7 +111,7 @@ func openOptionsOf(t *testing.T, call recorded) spawn.OpenOptions {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var opts spawn.OpenOptions
+	var opts T
 	if err := json.Unmarshal(raw, &opts); err != nil {
 		t.Fatal(err)
 	}
@@ -849,7 +849,7 @@ func TestOpenNamesBothWaysToAddressTheNewSession(t *testing.T) {
 		t.Errorf("method = %q", call.method)
 	}
 	want := spawn.OpenOptions{From: "s1", Worktree: "auth-fix"}
-	if got := openOptionsOf(t, call); got != want {
+	if got := optionsOf[spawn.OpenOptions](t, call); got != want {
 		t.Errorf("options = %+v, want %+v", got, want)
 	}
 	// The label and the roster name both address the session (docs/cli.md), and
@@ -878,7 +878,7 @@ func TestOpenPassesEveryFlagThrough(t *testing.T) {
 		From: "s1", Project: "revu", Kind: "codex", Worktree: "hotfix", Base: "origin/main",
 		Model: "gpt-5.2", Effort: "xhigh", Folder: "Apps", Ultracode: true,
 	}
-	if got := openOptionsOf(t, call); got != want {
+	if got := optionsOf[spawn.OpenOptions](t, call); got != want {
 		t.Errorf("options = %+v, want %+v", got, want)
 	}
 }

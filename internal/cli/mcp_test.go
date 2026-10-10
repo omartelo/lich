@@ -613,7 +613,7 @@ func TestMCPOpenSessionReturnsTheNamesItIsAddressedBy(t *testing.T) {
 		From: "s1", Kind: "codex", Worktree: "auth-fix", Base: "main",
 		Model: "gpt-5.2", Effort: "high", Folder: "Apps", Ultracode: true,
 	}
-	if got := openOptionsOf(t, call); got != want {
+	if got := optionsOf[spawn.OpenOptions](t, call); got != want {
 		t.Errorf("options = %+v, want %+v", got, want)
 	}
 	// send_to_session is the next call the agent makes, and it addresses the
@@ -701,7 +701,7 @@ func TestMCPOpenSessionDefaultsEveryArgument(t *testing.T) {
 	}
 	call := f.only(t)
 	want := spawn.OpenOptions{From: "s1"}
-	if got := openOptionsOf(t, call); got != want {
+	if got := optionsOf[spawn.OpenOptions](t, call); got != want {
 		t.Errorf("options = %+v, want %+v", got, want)
 	}
 }

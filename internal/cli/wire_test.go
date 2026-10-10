@@ -505,8 +505,8 @@ func TestOpenUltracodeOverTheRealDispatcher(t *testing.T) {
 	}
 }
 
-// TestOpenSubagentOverTheRealDispatcher proves the seven arguments `lich open
-// --subagent` posts land on spawn.OpenSubagent in the order it declares them.
+// TestOpenSubagentOverTheRealDispatcher proves the options `lich open
+// --subagent` posts land on spawn.OpenSubagent's fields.
 func TestOpenSubagentOverTheRealDispatcher(t *testing.T) {
 	env, rows, term := wiredSpawn(t, &spawnGit{})
 
@@ -731,24 +731,27 @@ func TestColorFolderOverTheRealDispatcher(t *testing.T) {
 	}
 }
 
-// TestOpenAcrossVersions proves spawn.Open takes what a newer or an older lich
-// posts: a package manager replaces the binary under a running backend, so the
-// CLI and `lich mcp` routinely speak to a backend of another release. An option
-// the backend does not know yet is dropped, and one the client does not know
-// yet is its zero value.
+// TestOpenAcrossVersions proves spawn.Open and spawn.OpenSubagent take what a
+// newer or an older lich posts: a package manager replaces the binary under a
+// running backend, so the CLI and `lich mcp` routinely speak to a backend of
+// another release. An option the backend does not know yet is dropped, and one
+// the client does not know yet is its zero value.
 func TestOpenAcrossVersions(t *testing.T) {
 	bodies := map[string]string{
-		"newer client": `[{"from":"s1","kind":"codex","folder":"Apps","optionFromTheFuture":true}]`,
-		"older client": `[{"from":"s1","kind":"codex"}]`,
+		"spawn.Open newer client":         `[{"from":"s1","kind":"codex","folder":"Apps","optionFromTheFuture":true}]`,
+		"spawn.Open older client":         `[{"from":"s1","kind":"codex"}]`,
+		"spawn.OpenSubagent newer client": `[{"from":"s1","kind":"codex","effort":"high","optionFromTheFuture":true}]`,
+		"spawn.OpenSubagent older client": `[{"from":"s1","kind":"codex"}]`,
 	}
 	for name, body := range bodies {
 		t.Run(name, func(t *testing.T) {
+			method, _, _ := strings.Cut(name, " ")
 			term := &spawnTerminal{}
 			dispatcher := rpc.New()
 			dispatcher.Register("spawn", spawn.New(&spawnStore{}, &spawnGit{}, term, nil))
 
 			recorder := httptest.NewRecorder()
-			dispatcher.ServeHTTP(recorder, httptest.NewRequest("POST", "/rpc/spawn.Open", strings.NewReader(body)))
+			dispatcher.ServeHTTP(recorder, httptest.NewRequest("POST", "/rpc/"+method, strings.NewReader(body)))
 			if recorder.Code != 200 {
 				t.Fatalf("status = %d, body = %q", recorder.Code, recorder.Body.String())
 			}

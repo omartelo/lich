@@ -242,7 +242,20 @@ func (s *Service) Open(opts OpenOptions) (Session, error) {
 	})
 }
 
-// OpenSubagent opens a session as the subagent of the session fromID runs in
+// OpenSubagentOptions is one OpenSubagent call, an object for the reason
+// OpenOptions is one. Its fields mean what Open's do; there is no project or
+// folder, both of which are the caller's.
+type OpenSubagentOptions struct {
+	From      string `json:"from"`
+	Kind      string `json:"kind"`
+	Worktree  string `json:"worktree"`
+	Base      string `json:"base"`
+	Model     string `json:"model"`
+	Effort    string `json:"effort"`
+	Ultracode bool   `json:"ultracode"`
+}
+
+// OpenSubagent opens a session as the subagent of the session From runs in
 // (`lich open --subagent`), the way lich-plugin's mod turns Claude Code's own
 // subagent call into a card. It is Open with three differences, each of which
 // makes the card behave like the subagent it replaces:
@@ -260,12 +273,10 @@ func (s *Service) Open(opts OpenOptions) (Session, error) {
 // The project is always the caller's. A caller that is not a session lich holds
 // is refused before anything is opened: there is no checkout to share and no
 // one to report to.
-func (s *Service) OpenSubagent(
-	fromID, kind, worktree, base, model, effort string, ultracode bool,
-) (Session, error) {
+func (s *Service) OpenSubagent(opts OpenSubagentOptions) (Session, error) {
 	return s.openSession(request{
-		fromID: fromID, kind: kind, worktree: worktree, base: base,
-		model: model, effort: effort, ultracode: ultracode, subagent: true,
+		fromID: opts.From, kind: opts.Kind, worktree: opts.Worktree, base: opts.Base,
+		model: opts.Model, effort: opts.Effort, ultracode: opts.Ultracode, subagent: true,
 	})
 }
 
