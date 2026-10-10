@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/omartelo/lich/internal/prompt"
 	"github.com/omartelo/lich/internal/store"
 )
 
@@ -167,7 +168,7 @@ func TestLateNoticeWordsTheDelay(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := lateNotice(1000, 1000+tc.late)
+			got := lateNotice(prompt.English, 1000, 1000+tc.late)
 			if !strings.Contains(got, "delivered "+tc.want+" late.") {
 				t.Fatalf("lateNotice = %q, want it %s late", got, tc.want)
 			}

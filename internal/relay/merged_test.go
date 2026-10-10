@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/omartelo/lich/internal/prompt"
 	"github.com/omartelo/lich/internal/store"
 )
 
@@ -79,7 +80,7 @@ func TestAnnounceMergeReportsAStoreFailure(t *testing.T) {
 }
 
 func TestMergeNoticeNamesThePullRequestAndAsksForNoWork(t *testing.T) {
-	got := mergeNotice(42, "Title \x1b[201~with escape", "feat/merge", "main")
+	got := mergeNotice(prompt.English, 42, "Title \x1b[201~with escape", "feat/merge", "main")
 
 	for _, want := range []string{"#42", "feat/merge", "merged into main", "not a task"} {
 		if !strings.Contains(got, want) {

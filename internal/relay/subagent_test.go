@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/omartelo/lich/internal/prompt"
 )
 
 // plantSubagent is plant for an errand handed over with SendSubagent, already
@@ -396,7 +398,7 @@ func TestAWorkerWithMoreToDoIsNotFinished(t *testing.T) {
 }
 
 func TestReportsOfOneFlushAreSummedUpByEveryWorker(t *testing.T) {
-	got := reportNotification([]*inboxEntry{{target: "docs"}, {target: "api"}})
+	got := reportNotification(prompt.English, []*inboxEntry{{target: "docs"}, {target: "api"}})
 	want := Notification{Status: NotifyCompleted, Summary: `lich sessions "docs", "api" finished`}
 	if *got != want {
 		t.Errorf("notification = %+v, want %+v", *got, want)

@@ -65,7 +65,7 @@ func (s *Service) Observe(sessionID, state string) {
 		go s.deliverNotice(sessionID, notice, nil)
 	}
 	for _, t := range blocked {
-		go s.deliverNotice(t.fromID, blockedNotice(t.target), blockedNotification(t.target))
+		go s.deliverNotice(t.fromID, blockedNotice(s.lang(), t.target), blockedNotification(s.lang(), t.target))
 	}
 	if finished {
 		go s.finishWorker(sessionID)

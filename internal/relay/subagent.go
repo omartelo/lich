@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+
+	"github.com/omartelo/lich/internal/prompt"
 )
 
 // A subagent errand (SendSubagent) is an ordinary one with four differences,
@@ -25,7 +27,7 @@ func (s *Service) tellNews(fromID string, n news, hasTools bool) error {
 	if len(n.reports) == 0 {
 		return s.deliver(fromID, nudge, nil)
 	}
-	handled, err := s.handToMod(fromID, s.reportNote(n, hasTools), reportNotification(n.reports))
+	handled, err := s.handToMod(fromID, s.reportNote(n, hasTools), reportNotification(s.lang(), n.reports))
 	if err != nil {
 		return err
 	}
@@ -55,7 +57,7 @@ func (s *Service) restoreReportsLocked(reports []*inboxEntry) {
 func (s *Service) reportNote(n news, hasTools bool) string {
 	parts := make([]string, 0, len(n.reports)+1)
 	for _, e := range n.reports {
-		parts = append(parts, subagentReport(e, s.sessions.SessionBranch(e.targetID)))
+		parts = append(parts, subagentReport(s.lang(), e, s.sessions.SessionBranch(e.targetID)))
 	}
 	if rest := n.count - len(n.reports); rest > 0 {
 		parts = append(parts, nudgeNotice(s.lang(), rest, n.others, hasTools))
@@ -65,45 +67,37 @@ func (s *Service) reportNote(n news, hasTools bool) string {
 
 // reportNotification is how the caller's screen sums up one flush's reports:
 // the line Claude Code shows for a background agent of its own that finished.
-func reportNotification(reports []*inboxEntry) *Notification {
+func reportNotification(lang prompt.Lang, reports []*inboxEntry) *Notification {
 	names := make([]string, len(reports))
 	for i, e := range reports {
 		names[i] = strconv.Quote(e.target)
 	}
-	summary := "lich session " + names[0] + " finished"
-	if len(names) > 1 {
-		summary = "lich sessions " + strings.Join(names, ", ") + " finished"
-	}
+	text := prompt.For(lang)
+	summary := fmt.Sprintf(text.Pick(len(names), text.ReportSummary), strings.Join(names, ", "))
 	return &Notification{Status: NotifyCompleted, Summary: summary}
 }
 
 // subagentReport is one worker's report as its sender reads it: who wrote it,
 // on which branch, under which ticket, and then the report itself.
-func subagentReport(e *inboxEntry, branch string) string {
+func subagentReport(lang prompt.Lang, e *inboxEntry, branch string) string {
+	text := prompt.For(lang)
 	on := ""
 	if branch != "" {
-		on = fmt.Sprintf(" on branch %s", branch)
+		on = fmt.Sprintf(text.SubagentReportBranch, branch)
 	}
-	return fmt.Sprintf(
-		"[lich] Session %q%s finished the task you handed it (ticket %s). Its report:\n\n%s",
-		e.target, on, e.ticket, e.answer,
-	)
+	return fmt.Sprintf(text.SubagentReport, e.target, on, e.ticket, e.answer)
 }
 
 // blockedNotice is what a sender is told when its subagent waits on a person.
-func blockedNotice(target string) string {
-	return fmt.Sprintf(
-		"[lich] Session %q, the subagent you opened, is waiting on a permission prompt in its "+
-			"card. Its task stays open: open that card to answer it.",
-		target,
-	)
+func blockedNotice(lang prompt.Lang, target string) string {
+	return fmt.Sprintf(prompt.For(lang).BlockedNotice, target)
 }
 
 // blockedNotification sums up blockedNotice in the one line the caller sees.
-func blockedNotification(target string) *Notification {
+func blockedNotification(lang prompt.Lang, target string) *Notification {
 	return &Notification{
 		Status:  NotifyWaiting,
-		Summary: fmt.Sprintf("lich session %q is waiting on a permission prompt", target),
+		Summary: fmt.Sprintf(prompt.For(lang).BlockedSummary, target),
 	}
 }
 

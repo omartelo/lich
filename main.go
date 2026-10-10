@@ -307,9 +307,10 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// the plugin put there.
 	rl.SetPlugins(plugins)
 	// The language of the text lich types into sessions is read live from the
-	// settings table, by the relay at every message and by the terminal at
-	// every spawn.
+	// settings table, by the relay at every message, by the terminal at
+	// every spawn and by drop at every copy notice.
 	rl.SetPromptLanguage(db.PromptLanguage)
+	drops.SetPromptLanguage(db.PromptLanguage)
 	term.SetPromptLanguage(db.PromptLanguage)
 	// A session whose provider runs lich's hooks is held until its session-start
 	// report, which comes only from the agent's own prompt, past a trust
@@ -379,7 +380,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //     terminal calls it for a turn a usage limit ended, with the reset it read.
 //   - spawn.CloseFinishedWorker closes a session with none of spawn.Close's
 //     checks; the relay calls it for a worker that reported back.
-//   - relay.SetPlugins, relay.SetWorkerFinished, relay.SetPromptLanguage, project.SetAccounts, project.SetProjects,
+//   - relay.SetPlugins, relay.SetWorkerFinished, relay.SetPromptLanguage, drop.SetPromptLanguage, project.SetAccounts, project.SetProjects,
 //     quota.SetSessions, store.SetSessionGone, store.SetScheduleForfeited,
 //     store.SetBranchOf, store.SetTranscriptOf, store.SetConversationsOf,
 //     store.SetCheckoutsOf, terminal.SetDropDir,
@@ -412,6 +413,7 @@ func denyInternal(d *rpc.Handler) {
 		"drop.Save",
 		"drop.Purge",
 		"drop.SetPicker",
+		"drop.SetPromptLanguage",
 		"relay.Observe",
 		"relay.WorkerAnswered",
 		"relay.WorkerUnanswered",

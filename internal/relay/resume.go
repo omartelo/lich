@@ -2,8 +2,10 @@ package relay
 
 import (
 	"log/slog"
+	"slices"
 	"time"
 
+	"github.com/omartelo/lich/internal/prompt"
 	"github.com/omartelo/lich/internal/store"
 )
 
@@ -13,12 +15,17 @@ import (
 // the way every scheduled prompt is. The terminal service finds the limit and
 // its reset (internal/terminal, limit.go); this file decides whether to park.
 
-// resumePrompt is what lich types at a session whose usage limit has reset. It
-// is also how a parked prompt is told apart as lich's: the row has no column
-// saying who wrote it.
+// isResumePrompt is how a parked prompt is told apart as lich's continuation
+// (prompt.Catalog.ResumePrompt): the row has no column saying who wrote it.
+// Every locale's text matches, because the row keeps the language it was
+// parked in and the setting may have changed since.
 // ponytail: matched by text, a person who parks these exact words has them
 // dropped on the session's next turn; a column on the row if that ever matters.
-const resumePrompt = "[lich] Your usage limit reset. Continue the task you were working on."
+func isResumePrompt(parked string) bool {
+	return slices.ContainsFunc(prompt.Langs, func(lang prompt.Lang) bool {
+		return parked == prompt.For(lang).ResumePrompt
+	})
+}
 
 // resumeGrace is how long after the reset the prompt is due. Claude Code's own
 // autoContinueAtUsageLimit, where the server enables it, resumes at the reset
@@ -47,6 +54,7 @@ func (s *Service) ParkResume(id string, resetsAt int64) {
 		return
 	}
 	due := reset.Add(resumeGrace).Unix()
+	resumePrompt := prompt.For(s.lang()).ResumePrompt
 	if err := s.sessions.SetSessionSchedule(id, due, resumePrompt); err != nil {
 		slog.Warn("relay: park resume", "session", sess.Label, "err", err)
 		return
@@ -63,7 +71,7 @@ func (s *Service) ParkResume(id string, resetsAt int64) {
 // place since is theirs and stays.
 func (s *Service) dropResume(id string) {
 	sess, ok := s.sessionRow(id)
-	if !ok || sess.ScheduledPrompt != resumePrompt {
+	if !ok || !isResumePrompt(sess.ScheduledPrompt) {
 		return
 	}
 	if err := s.sessions.SetSessionSchedule(id, 0, ""); err != nil {
