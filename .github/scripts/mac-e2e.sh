@@ -6,8 +6,8 @@
 # which is what the Dock reads: a second entry is a subprocess with an
 # NSApplication of its own, and a Dock tile of its own with it, four of them
 # before kurogane#14), a second launch is forwarded to the window without
-# opening a second browser in it (#470), the window closes on SIGTERM, which
-# is what quitting and the restart flow send, lich keeps running without it,
+# opening a second browser in it (#470), the window closes on SIGTERM, a close
+# request like the user's, lich keeps running without it,
 # a launch opens a new window on it, and `lich quit` ends it. Its config lives
 # under a HOME of its own.
 # What a failure leaves behind goes to $RUNNER_TEMP/diag for the artifact the
