@@ -172,7 +172,7 @@ describe("the index against the panes it indexes", () => {
       for (const block of source.split(/<Setting(?:Block|Row)/).slice(1)) {
         const quoted = block.match(/^[\s\S]{0,400}?title="([^"]+)"/)
         const templated = block.match(/^[\s\S]{0,400}?title=\{`([^`$]+)/)
-        const translated = block.match(/^[\s\S]{0,400}?title=\{t\("([^"]+)"\)\}/)
+        const translated = block.match(/^[\s\S]{0,400}?title=\{t\("([^"]+)"[,)]/)
         const title = quoted?.[1] ?? templated?.[1] ?? translated?.[1]
         if (title) {
           titles.push(title.trim())
@@ -188,7 +188,7 @@ describe("the index against the panes it indexes", () => {
     const titles: string[] = []
     for (const file of readdirSync(paneDir).filter((name) => name.endsWith(".tsx"))) {
       const source = readFileSync(`${paneDir}/${file}`, "utf8")
-      for (const match of source.matchAll(/title=(?:"([^"]+)"|\{`([^`$]+)|\{t\("([^"]+)"\)\})/g)) {
+      for (const match of source.matchAll(/title=(?:"([^"]+)"|\{`([^`$]+)|\{t\("([^"]+)"[,)])/g)) {
         titles.push((match[1] ?? match[2] ?? match[3]).trim())
       }
     }
