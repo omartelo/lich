@@ -82,7 +82,7 @@ func (s *Service) Run(projectID, cwd string) (Session, error) {
 		Run:     true,
 	}
 	if err := s.sessions.AddSessionFrom(
-		target.ID, id, opened.Label, opened.Kind, opened.Path, opened.NextSeq, "", "",
+		target.ID, id, opened.Label, opened.Kind, opened.Path, opened.NextSeq, "", "", "",
 	); err != nil {
 		return Session{}, err
 	}

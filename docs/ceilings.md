@@ -97,9 +97,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (`frontend/src/components/sidebar/FolderLaunchMenuItems.tsx`): a folder has no directory of its own, so its
   + lists the checkouts of the cards it holds and opens the session in the one picked. A worktree none of its
   cards is in is not offered: open the session there and drag it in. Under a filter the list is read off the
-  cards the filter (query or state chips) left, so it can name fewer checkouts than the folder holds. The folder is written by a
-  second call chained after the session's insert (`newSession`), so a lich that dies between the two brings
-  the session back unfiled.
+  cards the filter (query or state chips) left, so it can name fewer checkouts than the folder holds.
 - **Renaming a folder remounts its block** (`frontend/src/lib/session/group-prefs.ts`): the block is keyed by
   the folder's name, so a rename is a new key to React and to the fold preference — `moveGroupCollapsed`
   carries the fold across and drops the old entry, and anything else keyed off that block starts again. A
@@ -111,9 +109,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `lich rename-folder`, `lich color-folder` and their MCP tools match a folder exactly, so an agent that types `auth` beside `Auth`
   starts a second folder; the tool descriptions send it to `list_folders` first instead of folding case behind
   the user's back. A rename from there refuses a name no session carries, because the store would report
-  success over nothing, and answers with every session that moved, which is how a merge shows. `lich open
-  --folder` files the session with a second write after the insert, as the folder's + does, so a lich that dies
-  between the two brings it back unfiled.
+  success over nothing, and answers with every session that moved, which is how a merge shows.
 - **The header of a folded block reports at most one thing** (`collapsedMark`): a waiting session, else an
   unread finished turn, else nothing. It is a dot rather than a count, so a folder hiding four unread turns and
   one hiding one read the same, and it speaks only for the cards in that block — a folder whose members are all

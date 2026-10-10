@@ -117,29 +117,40 @@ func (s *Service) DeleteProject(id string) error {
 func (s *Service) AddSession(
 	projectID, sessionID, label, kind, path string, nextSeq int, sandbox string,
 ) error {
-	return s.addSession(projectID, sessionID, label, kind, path, nextSeq, "", "", sandbox)
+	return s.addSession(projectID, sessionID, label, kind, path, nextSeq, "", "", sandbox, "")
+}
+
+// AddSessionInFolder is AddSession for a session opened into a folder (a
+// folder's +). The folder is written with the row rather than after it: filing
+// is an UPDATE, and a lich that died between the two would bring the session
+// back unfiled.
+func (s *Service) AddSessionInFolder(
+	projectID, sessionID, label, kind, path string, nextSeq int, sandbox, folder string,
+) error {
+	return s.addSession(projectID, sessionID, label, kind, path, nextSeq, "", "", sandbox, folder)
 }
 
 // AddSessionFrom is AddSession for a session opened by delegation: originID is
 // the session that asked for it and originLabel what that session was called at
 // the time. Both are written with the row rather than after it, so a card can
-// never exist without the origin it was created with.
+// never exist without the origin it was created with; folder, "" for none, is
+// written with it for AddSessionInFolder's reason.
 //
 // It is a second entry point rather than two more arguments on AddSession
 // because the window — the only caller reaching this over RPC — never has an
 // origin to pass. Only internal/spawn does.
 func (s *Service) AddSessionFrom(
-	projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
+	projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel, folder string,
 ) error {
 	// No sandbox answer: a delegated session is opened by another session, which
 	// has nobody to ask, so it follows the provider's rung like every other
 	// caller that cannot put the question on screen.
-	return s.addSession(projectID, sessionID, label, kind, path, nextSeq, originID, originLabel, "")
+	return s.addSession(projectID, sessionID, label, kind, path, nextSeq, originID, originLabel, "", folder)
 }
 
-// addSession is the one insert behind both entry points.
+// addSession is the one insert behind every entry point.
 func (s *Service) addSession(
-	projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel, sandbox string,
+	projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel, sandbox, folder string,
 ) error {
 	if kind == "" {
 		kind = providers.Claude
@@ -149,9 +160,9 @@ func (s *Service) addSession(
 	}
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(
-			`INSERT INTO sessions (id, project_id, label, kind, path, origin_session_id, origin_label, sandbox, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
-			sessionID, projectID, label, kind, path, originID, originLabel, sandbox, projectID,
+			`INSERT INTO sessions (id, project_id, label, kind, path, origin_session_id, origin_label, sandbox, folder, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			sessionID, projectID, label, kind, path, originID, originLabel, sandbox, folder, projectID,
 		); err != nil {
 			return fmt.Errorf("insert session %q: %w", sessionID, err)
 		}

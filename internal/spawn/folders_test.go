@@ -41,18 +41,22 @@ func filedEvent(t *testing.T, events *fakeEvents) FiledEvent {
 	return events.events[0].data.(FiledEvent)
 }
 
-// A session opened into a folder is filed before the window hears of it, so
-// the card arrives in the folder's block rather than among its checkout's cards
-// and then jumps.
-func TestOpenFilesTheSessionBeforeTheCardIsAnnounced(t *testing.T) {
+// A session opened into a folder carries it from the insert, before the window
+// hears of it, so the card arrives in the folder's block rather than among its
+// checkout's cards and then jumps, and no crash can land between the row and a
+// second filing write.
+func TestOpenFilesTheSessionWithItsInsert(t *testing.T) {
 	svc, sessions, _, _, events := newService(t)
 
 	opened, err := svc.Open("s1", "", "", "", "", "", "", " Apps ", false)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if opened.Folder != "Apps" || sessions.folders[opened.ID] != "Apps" {
-		t.Errorf("folder = %q, row = %v; want the trimmed name on both", opened.Folder, sessions.folders)
+	if opened.Folder != "Apps" || len(sessions.rows) != 1 || sessions.rows[0].folder != "Apps" {
+		t.Errorf("folder = %q, rows = %+v; want the trimmed name on both", opened.Folder, sessions.rows)
+	}
+	if len(sessions.folders) != 0 {
+		t.Errorf("filed %v after the insert, want no second write", sessions.folders)
 	}
 	if len(events.events) != 1 || events.events[0].data.(Session).Folder != "Apps" {
 		t.Errorf("events = %+v, want the card announced already filed", events.events)
@@ -65,27 +69,8 @@ func TestOpenWithoutAFolderFilesNothing(t *testing.T) {
 	if _, err := svc.Open("s1", "", "", "", "", "", "", "", false); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if len(sessions.folders) != 0 {
-		t.Errorf("filed %v, want the folder column left alone", sessions.folders)
-	}
-}
-
-// A filing that cannot be written costs the folder and nothing more: the row is
-// there, so the card and its terminal have to be too, and the caller hears
-// which part was lost.
-func TestOpenStartsTheSessionEvenWhenItCannotBeFiled(t *testing.T) {
-	svc, sessions, _, term, events := newService(t)
-	sessions.folderErr = errors.New("database is locked")
-
-	_, err := svc.Open("s1", "", "", "", "", "", "", "Apps", false)
-	if err == nil || !strings.Contains(err.Error(), `"Apps"`) {
-		t.Fatalf("Open = %v, want the lost folder named", err)
-	}
-	if len(term.spawns) != 1 {
-		t.Errorf("started %d terminals, want the session running anyway", len(term.spawns))
-	}
-	if len(events.events) != 1 || events.events[0].data.(Session).Folder != "" {
-		t.Errorf("events = %+v, want the card announced unfiled, as the row is", events.events)
+	if len(sessions.rows) != 1 || sessions.rows[0].folder != "" || len(sessions.folders) != 0 {
+		t.Errorf("rows %+v, filed %v; want the folder column left alone", sessions.rows, sessions.folders)
 	}
 }
 

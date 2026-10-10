@@ -150,7 +150,7 @@ func TestAddSessionCarriesTheSandboxAnswer(t *testing.T) {
 // A delegated session is opened by another session, which has nobody to ask.
 func TestAddSessionFromLeavesTheAnswerToTheRung(t *testing.T) {
 	svc := sandboxProject(t, "/work/alpha")
-	if err := svc.AddSessionFrom("p1", "s1", "one", providers.Claude, "", 0, "parent", "Parent"); err != nil {
+	if err := svc.AddSessionFrom("p1", "s1", "one", providers.Claude, "", 0, "parent", "Parent", ""); err != nil {
 		t.Fatalf("AddSessionFrom: %v", err)
 	}
 	if got := svc.SessionSandbox("s1"); got != "" {

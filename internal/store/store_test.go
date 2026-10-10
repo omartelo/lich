@@ -936,7 +936,7 @@ CREATE TABLE sessions (
 	if s := got[0].Sessions[0]; s.OriginSessionID != "" || s.OriginLabel != "" {
 		t.Errorf("migrated session origin = %+v, want none", s)
 	}
-	if err := svc.AddSessionFrom("p1", "s2", "worker", "shell", "", 3, "s1", "mellow-otter"); err != nil {
+	if err := svc.AddSessionFrom("p1", "s2", "worker", "shell", "", 3, "s1", "mellow-otter", ""); err != nil {
 		t.Fatalf("AddSessionFrom on a migrated database: %v", err)
 	}
 	after, err := svc.LoadState()
