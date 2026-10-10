@@ -1064,10 +1064,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   so the new CLI, and the `lich mcp` of every session opened after the upgrade, speaks to an older backend until
   lich is restarted. Every call they make takes one options object (`spawn.OpenOptions`, `relay.SendOptions`,
   `store.CostTotalsOptions` and their siblings), so an option the backend does not know yet is dropped and one
-  an older client does not send is its zero value. What is left: a method newer than the backend is refused as
-  unknown, and the release that moved the calls to the object is refused by a lich from before it, once, with
-  "want 1 arguments, got N" (or the other way round). The RPC itself still matches arguments by position and
-  count: a call `lich` makes that goes back to positional arguments reopens the trap, which is why
+  an older client does not send is its zero value; the version probe `system.Diagnostics` takes nothing at all,
+  which has nothing to misalign. What is left: a method newer than the backend is refused as unknown, and the
+  release that moves a call to the object (a parameterless one included, the day it takes one) is refused by a
+  lich from before it, once, with "want 1 arguments, got N" (or the other way round). The RPC itself still
+  matches arguments by position and count, so a call `lich` makes must not go back to positional arguments:
+  `TestEveryCallTheCLIPostsTakesOneOptionsObject` (`internal/cli/rpcshape_test.go`) reads every method name the
+  CLI's source posts and fails on one whose parameters are anything but one struct or none, and
   `internal/cli/wire_test.go` posts each one as a client of another release. The window's own calls stay
   positional, since the page ships in the backend's binary and cannot be of another release.
 - **A reasoning effort reaches five providers, and Cursor only through its model name**
