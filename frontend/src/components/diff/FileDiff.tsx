@@ -116,7 +116,9 @@ export function FileDiff({
   const openByDefault = file.binary
     ? sides !== undefined && previewKind(file.newPath) !== null
     : printed.lineMeta.length <= LARGE_FILE_LINES
-  const [expanded, setExpanded] = useState(openByDefault)
+  // The tick outlives the card (leaving the screen unmounts it), so a file
+  // ticked earlier comes back folded, as the tick left it.
+  const [expanded, setExpanded] = useState(openByDefault && !viewed)
   // The card outlives its content: the panel keys files by path, so a refetch
   // that rewrites this file reuses this component. Without the re-sync, a file
   // folded away by its Viewed tick stayed folded after a commit unticked it —
