@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A split can show sessions from different projects side by side.** Show
+  another session beside this one (Ctrl+Shift+G, or the + on a pane's header)
+  opens a list of the sessions of every open project to pick from, and in the
+  command palette Alt+Enter on a session does the same in one step. Clicking
+  the pane of another project's session switches to that project and keeps the
+  split on screen.
+
+### Changed
+
+- **Show another session beside this one asks which session** instead of
+  taking the next card in the sidebar.
+
 ## [0.66.0] - 2026-10-10
 
 ### Added

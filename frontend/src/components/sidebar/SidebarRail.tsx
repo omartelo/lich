@@ -5,7 +5,12 @@ import { cn } from "@/lib/utils"
 import { useT } from "@/lib/i18n/i18n"
 import { SIDEBAR_MORPH } from "@/lib/view-transition"
 import { useProjects } from "@/providers/projects"
-import { activeSessionId, sessionsOf, type Session } from "@/lib/session/sessions"
+import {
+  activeSessionId,
+  sessionsOf,
+  type Session,
+  workspaceSessions,
+} from "@/lib/session/sessions"
 import { sidebarCards, sidebarGroups } from "@/lib/session/sidebar-groups"
 import { registerSidebarCards } from "@/lib/session/sidebar-cards-store"
 import { resolveGroups } from "@/lib/session/panes"
@@ -87,13 +92,15 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
   // else, so a rail holding no listener would draw yesterday's blocks until some
   // unrelated render came along. Resolved ahead of the no-project bail below:
   // hooks cannot sit behind it.
-  const stored = useStoredGroups(projectId ?? "")
+  const stored = useStoredGroups()
   // Same order as the expanded sidebar, split's block and all: the rail is
   // that list with the words taken out. Reconciled the same way too — the
   // stored value is not the truth on its own, and a rail drawing a wall the
   // open sidebar has already dropped is the same list disagreeing with itself.
+  // Against every project, as the sidebar does: a wall of one card here and one
+  // in another project is still a wall. Its guests are not drawn at this width.
   const list = sessionsOf(sessions, projectId ?? "")
-  const groups = sidebarGroups(list, resolveGroups(stored, list))
+  const groups = sidebarGroups(list, resolveGroups(stored, workspaceSessions(sessions)))
   // The rail draws every card, folded blocks included, so the shortcuts walk
   // them all while it is the sidebar on screen.
   useEffect(() => registerSidebarCards(() => sidebarCards(groups, () => false)))

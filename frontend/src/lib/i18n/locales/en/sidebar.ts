@@ -102,13 +102,18 @@ export const sidebar = {
     },
     issueHandoffFailed: "Couldn’t hand the issue to the session: {error}",
     forkPruned: "{name} has no conversation left to fork: {provider} pruned it.",
-    moveTitle: "Move {name} to this split?",
+  },
+  stageMoveDialog: {
+    title: "Move {name} to this split?",
     showBesideTitle: "Show {name} beside this session?",
-    moveEndsGroup:
+    endsGroup:
       "It is one of only two sessions in {group}, so that group ends when it leaves. No session is closed either way.",
-    moveLeavesSplit:
+    leavesSplit:
       "It is on {group}, and a session can only be on one split at a time, so it leaves that one. No session is closed either way.",
-    moveConfirm: "Move it",
+    confirm: "Move it",
+  },
+  wallGuestCard: {
+    stopShowing: "Stop showing {name}",
   },
   sidebarRail: {
     expand: "Expand sidebar",

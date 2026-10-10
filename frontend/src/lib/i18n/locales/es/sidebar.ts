@@ -104,13 +104,18 @@ export const sidebar = {
     },
     issueHandoffFailed: "No se pudo pasar el issue a la sesión: {error}",
     forkPruned: "{name} ya no tiene una conversación que bifurcar: {provider} la podó.",
-    moveTitle: "¿Mover {name} a esta división?",
+  },
+  stageMoveDialog: {
+    title: "¿Mover {name} a esta división?",
     showBesideTitle: "¿Mostrar {name} al lado de esta sesión?",
-    moveEndsGroup:
+    endsGroup:
       "Es una de solo dos sesiones de {group}, así que ese grupo termina cuando se vaya. No se cierra ninguna sesión en ningún caso.",
-    moveLeavesSplit:
+    leavesSplit:
       "Está en {group}, y una sesión solo puede estar en una división a la vez, así que sale de esa. No se cierra ninguna sesión en ningún caso.",
-    moveConfirm: "Moverla",
+    confirm: "Moverla",
+  },
+  wallGuestCard: {
+    stopShowing: "Dejar de mostrar {name}",
   },
   sidebarRail: {
     expand: "Expandir la barra lateral",

@@ -1,4 +1,4 @@
-// Split groups: named walls of sessions the user assembles, several per project.
+// Split groups: named walls of sessions the user assembles, as many as they make.
 //
 // The model is one sentence: a pane is a viewport onto a card that already
 // exists, never a session it owns. That is what makes this unlike a terminal
@@ -11,15 +11,19 @@
 // It has a name, it survives any one member leaving, and it ends when they
 // dissolve it or when fewer than two members are left — a wall of one is a
 // session on its own, and the survivor goes back to its checkout. Which is why
-// a project holds a list of them: an orchestrator and the three worktrees it
+// the window holds a list of them: an orchestrator and the three worktrees it
 // spawned are one group, the next investigation and its two are another, and
 // neither is "the" split.
+//
+// The list belongs to the window, not to a project: a wall can hold sessions of
+// several projects, so the agent changing a hook and the one reading the plugin
+// that calls it sit side by side.
 //
 // Two rules keep "which wall is on screen" from ever being ambiguous:
 //
 //   - a session belongs to at most one group, so adding it to another moves it;
-//   - the group on screen is the one holding the active session, and none is
-//     when the active session is in no group. A session activated from anywhere
+//   - the group on screen is the one holding the routed project's active
+//     session, and none is when that session is in no group. A session activated from anywhere
 //     — a card, the palette, a link in another session's output, an MCP call —
 //     therefore shows on its own and parks whatever wall was up, whole. Only the
 //     add affordance ever puts a session in a group.
@@ -57,7 +61,11 @@ export interface PaneGroup {
   tracks: Record<string, TrackSizes>
 }
 
-export const groupsKey = (projectId: string): string => `lich.panes.${projectId}`
+export const GROUPS_KEY = "lich.panes"
+
+// Where each project kept its own walls before they became the window's. Read
+// once, by the store, to carry them over; never written again.
+export const LEGACY_GROUPS_PREFIX = "lich.panes."
 
 function numbers(value: unknown): number[] {
   return Array.isArray(value) ? value.filter((n): n is number => typeof n === "number") : []
@@ -107,11 +115,25 @@ export function parseGroups(raw: string | null): PaneGroup[] {
   }
 }
 
+// mergeGroups joins the per-project lists of the old layout into the window's
+// one list. Group ids were minted to be unique inside one project only, so a
+// repeated id keeps its first group rather than letting two walls share a key.
+export function mergeGroups(lists: readonly (readonly PaneGroup[])[]): PaneGroup[] {
+  const seen = new Set<string>()
+  return lists.flat().filter((group) => {
+    if (seen.has(group.id)) {
+      return false
+    }
+    seen.add(group.id)
+    return true
+  })
+}
+
 export function formatGroups(groups: readonly PaneGroup[]): string {
   return JSON.stringify(groups)
 }
 
-// resolveGroups reconciles what is stored against the project as it is now, and
+// resolveGroups reconciles what is stored against the workspace as it is now, and
 // is the one guard the whole feature needs.
 //
 // Membership is derived on every read rather than maintained on every mutation:
@@ -170,11 +192,6 @@ export function movingFrom(
 ): PaneGroup | null {
   const held = groupOf(groups, sessionId)
   return held && held !== current ? held : null
-}
-
-/** Every session on any wall — what the add shortcut must not offer again. */
-function grouped(groups: readonly PaneGroup[]): Set<string> {
-  return new Set(groups.flatMap((group) => group.cells))
 }
 
 // defaultName is the label of the session the group was started from, which in
@@ -269,25 +286,6 @@ export function swapCells(cells: readonly string[], from: number, to: number): s
   return next
 }
 
-// nextCandidate picks what the add shortcut shows: the first card in the
-// project's own order that is on no wall at all. The sidebar's order is the one
-// the user arranged, so what arrives is the one they can predict, and skipping
-// what is already grouped keeps the shortcut from quietly moving one wall's
-// member onto another.
-//
-// The active session is skipped with them, and for the same reason it is skipped
-// by the caller that refuses to add a session to itself: on no wall it is the
-// first card the search would find, and the shortcut that promises to start a
-// wall *around* it would answer with the session it is already showing.
-export function nextCandidate(
-  sessions: readonly Session[],
-  groups: readonly PaneGroup[],
-  activeId: string,
-): string {
-  const taken = grouped(groups)
-  return sessions.find((session) => session.id !== activeId && !taken.has(session.id))?.id ?? ""
-}
-
 /** What adding one more pane comes to: nothing, a session joining the wall on
  * screen, or a new wall around the active session. */
 export type AddPlan =
@@ -296,29 +294,27 @@ export type AddPlan =
   | { kind: "start"; around: string; sessionId: string }
 
 export interface AddRequest {
-  sessions: readonly Session[]
   groups: readonly PaneGroup[]
   /** The wall the active session is on, or null when it is on none. */
   current: PaneGroup | null
   activeId: string
   /** The stage as measured, for the "would one more still be readable" guard. */
   stage: { width: number; height: number }
-  /** The session to show, or absent for "the next card on no wall". */
-  sessionId?: string
+  /** The session to show, from any project. */
+  sessionId: string
   /** Whether the user has agreed to take the session off another wall. */
   move?: boolean
 }
 
 // planAdd is the whole refusal matrix of the add affordance, decided before
-// anything is written: nothing left to show, no active session to show it
-// beside, no room for one more pane, or a session on somebody else's wall with
+// anything is written: a session already on screen, no active session to show
+// it beside, no room for one more pane, or a session on somebody else's wall with
 // no answer from the user yet. That last refusal is the guard — taking a session
 // off an arrangement the click was not aimed at is the user's decision, so a
 // caller that forgets to ask gets a no-op rather than a silent move.
 export function planAdd(request: AddRequest): AddPlan {
-  const { sessions, groups, current, activeId, stage, sessionId, move } = request
-  const id = sessionId ?? nextCandidate(sessions, groups, activeId)
-  if (!id || !activeId || id === activeId) {
+  const { groups, current, activeId, stage, sessionId: id, move } = request
+  if (!id || !activeId || id === activeId || current?.cells.includes(id)) {
     return { kind: "none" }
   }
   if (movingFrom(groups, current, id) && !move) {
@@ -344,6 +340,37 @@ export function focusAfterRemove(cells: readonly string[], sessionId: string): s
     return ""
   }
   return rest[Math.min(at, rest.length - 1)]
+}
+
+/** What asking to show a session beside the one on screen comes to, decided
+ * before anything is written: nothing (it is already showing), a refusal (one
+ * more pane would leave them all too small to read), a question for the user
+ * (it is on another wall), or a plain add. */
+export type BesideAction =
+  | { kind: "showing" }
+  | { kind: "full" }
+  | { kind: "confirm"; from: PaneGroup }
+  | { kind: "add" }
+
+// besideAction is what the palette and the pane's + share: both name a session
+// from any project to put on the wall on screen, so both have to tell apart the
+// four answers a named add can get, and say the refusals out loud rather than
+// failing quietly the way the shortcut does.
+export function besideAction(
+  groups: readonly PaneGroup[],
+  current: PaneGroup | null,
+  activeId: string,
+  sessionId: string,
+  stage: { width: number; height: number },
+): BesideAction {
+  if (sessionId === activeId || current?.cells.includes(sessionId)) {
+    return { kind: "showing" }
+  }
+  if (!fits((current ? current.cells.length : 1) + 1, stage.width, stage.height)) {
+    return { kind: "full" }
+  }
+  const from = movingFrom(groups, current, sessionId)
+  return from ? { kind: "confirm", from } : { kind: "add" }
 }
 
 /** What the sidebar's one stage entry does for a card, matching what its label

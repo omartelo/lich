@@ -257,6 +257,16 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   for one terminal. The budget suite pins that adding a pane mounts one terminal and remounts none
   (`frontend/src/components/render-budget.test.tsx`); it cannot measure the cadence, because jsdom has
   no canvas to paint.
+- **A wall reaches into other projects, but only its own project's cards are whole cards there**
+  (`frontend/src/lib/session/sidebar-groups.ts`, `frontend/src/components/sidebar/WallGuestCard.tsx`): walls
+  belong to the window (one `lich.panes` pref), not to a project. A member from another project is drawn in
+  this project's block as a guest that can only be opened or taken off the wall, because every action on a
+  session card speaks for the sidebar's project. Guests sit under the block's own cards rather than in pane
+  order, stay out of the block's drag, the next/previous session walk and its pull request cards, and the
+  collapsed rail does not draw them. Focusing a guest's pane switches the route to its project. A closed
+  project's sessions drop out of every wall, and a wall left with one live member is not drawn. "Show
+  beside its N delegates" still reads the routed project only (`delegatesOf`), so a delegate opened in
+  another project is left out of the wall it builds.
 - **A theme switch reaches only the apps that asked, and only since the page loaded**
   (`frontend/src/lib/terminal/theme-notify.ts`): lich answers mode 2031 and sends the light or dark report on a
   switch, but the "asked" flag lives on the page's terminal entry. A full page reload forgets it, so a session

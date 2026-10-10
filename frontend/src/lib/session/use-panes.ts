@@ -1,5 +1,6 @@
+import { useNavigate } from "react-router-dom"
 import { useProjects } from "@/providers/projects"
-import { activeSessionId, sessionsOf } from "./sessions"
+import { activeSessionId, projectOfSession, sessionsOf, workspaceSessions } from "./sessions"
 import {
   addToGroup,
   defaultName,
@@ -20,9 +21,10 @@ import { fits, type Grid } from "./pane-grid"
 import { stageSize, useStoredGroups, writeGroups } from "./panes-store"
 
 export interface Panes {
-  /** Every wall in this project, reconciled, in the order the sidebar draws. */
+  /** Every wall in the window, reconciled against every open project — a wall
+   * can hold sessions of several. */
   groups: PaneGroup[]
-  /** The wall the active session belongs to, or null when it is on none. */
+  /** The wall the routed project's active session belongs to, or null. */
   current: PaneGroup | null
   /** Session ids the window is drawing, and where the cursor is among them. */
   cells: string[]
@@ -32,14 +34,14 @@ export interface Panes {
   focusCell: (index: number) => void
   /** Move the cursor one cell along, wrapping. */
   focusStep: (step: number) => void
-  /** Show one more session — a named one, or the next card on no wall. Adds to
-   * the wall the active session is on, or starts a new one around it. False when
-   * there is nothing left to show, when one more would leave them all too small
+  /** Show one more session, from any project. Adds to the wall the active
+   * session is on, or starts a new one around it. False when it is already on
+   * screen, when one more would leave them all too small
    * to read, or when that session is on another wall and `move` was not asked
    * for. That last refusal is the guard: taking a session off somebody else's
    * arrangement is a decision for the user, so a caller has to have asked them
    * first — one that forgets gets a no-op rather than a silent move. */
-  add: (sessionId?: string, opts?: { move?: boolean }) => boolean
+  add: (sessionId: string, opts?: { move?: boolean }) => boolean
   /** Take a session off its wall. Never closes it. */
   remove: (sessionId: string) => void
   /** Take the session in this cell of the wall on screen off it. */
@@ -67,16 +69,36 @@ export interface Panes {
 // and the sidebar that lists them all. Every move is the same single write —
 // the whole list of groups — and a second copy of that anywhere else is the
 // thing most likely to drift.
+//
+// projectId is the routed project: the one whose active session picks the wall
+// on screen.
 export function usePanes(projectId: string): Panes {
   const { sessions, activateSession } = useProjects()
+  const navigate = useNavigate()
   const list = sessionsOf(sessions, projectId)
   const activeId = activeSessionId(sessions, projectId)
-  const groups = resolveGroups(useStoredGroups(projectId), list)
+  const groups = resolveGroups(useStoredGroups(), workspaceSessions(sessions))
   const current = activeId ? groupOf(groups, activeId) : null
   const cells = current ? current.cells : activeId ? [activeId] : []
   const focus = Math.max(cells.indexOf(activeId), 0)
 
-  const commit = (next: PaneGroup[]) => writeGroups(projectId, next)
+  const commit = (next: PaneGroup[]) => writeGroups(next)
+
+  // Putting the cursor on a cell of another project takes the window there:
+  // the footer, the dock and the git panel all speak for the routed project's
+  // active session, so the route follows the focus rather than leaving them
+  // describing a pane the user is not in. The wall stays up, since it holds
+  // that project's active session too.
+  const show = (sessionId: string) => {
+    const owner = projectOfSession(sessions, sessionId)
+    if (!owner) {
+      return
+    }
+    activateSession(owner, sessionId)
+    if (owner !== projectId) {
+      navigate(`/projects/${owner}`)
+    }
+  }
 
   const remove = (sessionId: string) => {
     const group = groupOf(groups, sessionId)
@@ -93,7 +115,7 @@ export function usePanes(projectId: string): Panes {
     }
     const next = focusAfterRemove(group.cells, sessionId)
     if (next) {
-      activateSession(projectId, next)
+      show(next)
     }
   }
 
@@ -106,7 +128,7 @@ export function usePanes(projectId: string): Panes {
     focusCell(index) {
       const id = cells[index]
       if (projectId && id && index !== focus) {
-        activateSession(projectId, id)
+        show(id)
       }
     },
     focusStep(step) {
@@ -115,12 +137,11 @@ export function usePanes(projectId: string): Panes {
       }
       const id = cells[(focus + step + cells.length) % cells.length]
       if (projectId && id) {
-        activateSession(projectId, id)
+        show(id)
       }
     },
     add(sessionId, opts) {
       const plan = planAdd({
-        sessions: list,
         groups,
         current,
         activeId,
@@ -196,7 +217,7 @@ export function usePanes(projectId: string): Panes {
   }
 }
 
-// Group ids only have to be unique inside one project's pref, and they are minted
+// Group ids only have to be unique inside the window's one list, and they are minted
 // where the impurity belongs — panes.ts stays a pure module the suite can drive.
 function newGroupId(): string {
   return `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`

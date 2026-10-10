@@ -13,7 +13,7 @@ import { checkoutsOf } from "@/lib/session/sidebar-groups"
 import { useFileDrop } from "@/lib/session/use-file-drop"
 import { useCollapsedMark } from "@/lib/session/use-session-status"
 import type { PaneGroup } from "@/lib/session/panes"
-import { delegatesOf, type Session, sessionOrigin } from "@/lib/session/sessions"
+import { delegatesOf, projectOfSession, type Session, sessionOrigin } from "@/lib/session/sessions"
 import { useCardDrag } from "@/lib/session/use-card-drag"
 import { useClosingSessions } from "@/lib/session/use-closing-sessions"
 import { sharedColor } from "@/lib/session/card-color"
@@ -23,6 +23,7 @@ import { CardTransition } from "./CardTransition"
 import { SessionCard } from "./SessionCard"
 import { PullRequestCard } from "./PullRequestCard"
 import { SessionGroupHeader } from "./SessionGroupHeader"
+import { WallGuestCard } from "./WallGuestCard"
 import type { RunMenuAction } from "./SessionLaunchMenuItems"
 
 interface SessionGroupProps {
@@ -58,6 +59,11 @@ interface SessionGroupProps {
   // checkout path.
   path: string
   sessions: Session[]
+  // A wall's members from other projects (SidebarGroup.guests), drawn under
+  // its own cards; empty for every other block.
+  guests: Session[]
+  // Take a guest off the wall. A guest's own card toggle lives in its project.
+  onStopShowing: (sessionId: string) => void
   projectPath: string
   activeId: string
   // Every session currently drawing on the stage, in layout order; one entry —
@@ -129,6 +135,8 @@ export function SessionGroup({
   onNewFolder,
   path,
   sessions,
+  guests,
+  onStopShowing,
   projectPath,
   activeId,
   stageIds,
@@ -149,6 +157,7 @@ export function SessionGroup({
 }: SessionGroupProps) {
   const t = useT()
   const {
+    projects,
     sessions: workspace,
     activateSession,
     renameSession,
@@ -244,7 +253,7 @@ export function SessionGroup({
           name={name}
           fixed={fixed}
           folder={!!folder}
-          count={sessions.length}
+          count={sessions.length + guests.length}
           mark={mark}
           drop={drop}
           dropFolder={folder}
@@ -381,6 +390,21 @@ export function SessionGroup({
               </div>
             </SortableContext>
           </DndContext>
+          {guests.map((guest) => {
+            const home = projectOfSession(workspace, guest.id)
+            return (
+              <WallGuestCard
+                key={guest.id}
+                session={guest}
+                projectName={projects.find((project) => project.id === home)?.name ?? ""}
+                onSelect={() => {
+                  activateSession(home, guest.id)
+                  navigate(`/projects/${home}`)
+                }}
+                onStopShowing={() => onStopShowing(guest.id)}
+              />
+            )
+          })}
           {pullsCheckouts.map((checkout) => (
             <PullRequestCard
               key={checkout}

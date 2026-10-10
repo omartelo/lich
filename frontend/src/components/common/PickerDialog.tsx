@@ -34,6 +34,8 @@ interface PickerDialogProps {
   onKeyDown: (event: KeyboardEvent) => void
   /** What Enter does, for the hint bar: "open", "pick". */
   actionHint: string
+  /** A second thing the row under the cursor answers to, and its chord. */
+  secondaryHint?: { keys: string[]; label: string }
   /**
    * Narrows the results by kind, between the query and the list. Tab is what
    * walks it — the caller handles the key, and the hint bar says so on its
@@ -55,6 +57,7 @@ export function PickerDialog({
   onQueryChange,
   onKeyDown,
   actionHint,
+  secondaryHint,
   filters,
   children,
 }: PickerDialogProps) {
@@ -98,6 +101,7 @@ export function PickerDialog({
           <div className="flex items-center gap-4 border-t bg-black/10 px-4 py-2 text-xs text-muted-foreground">
             <Hint keys={["↑", "↓"]}>{t("common.pickerDialog.navigate")}</Hint>
             <Hint keys={["↵"]}>{actionHint}</Hint>
+            {secondaryHint && <Hint keys={secondaryHint.keys}>{secondaryHint.label}</Hint>}
             {filters && <Hint keys={["⇥"]}>{t("common.pickerDialog.filter")}</Hint>}
             <Hint keys={["esc"]}>{t("common.pickerDialog.close")}</Hint>
           </div>

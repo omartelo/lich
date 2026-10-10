@@ -682,6 +682,11 @@ export function sessionsOf(state: SessionState, projectId: string): Session[] {
   return state[projectId]?.sessions ?? []
 }
 
+/** Every session of every open project, in project order. */
+export function workspaceSessions(state: SessionState): Session[] {
+  return Object.values(state).flatMap((project) => project.sessions)
+}
+
 // activeTarget resolves what a project screen acts on: the active session's id,
 // the path it lives in — a worktree session resolves to its checkout, everything
 // else to the project root — which provider it runs, and whether it is confined
@@ -748,9 +753,9 @@ export function sessionOrigin(state: SessionState, session: Session): string {
 // spawned — "its delegates" is the ones it made, not everything downstream of
 // them.
 //
-// Scoped to one project, unlike sessionOrigin: a wall draws sessions of the
-// project it belongs to, so a delegate in another project is not something the
-// stage could show even if the delegation crossed over.
+// Scoped to one project, unlike sessionOrigin, so "Show beside its N delegates"
+// leaves out a delegate opened in another project, though a wall could hold it
+// (docs/ceilings.md).
 export function delegatesOf(state: SessionState, projectId: string, sessionId: string): Session[] {
   if (!sessionId) {
     return []

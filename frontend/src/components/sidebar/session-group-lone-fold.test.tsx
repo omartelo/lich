@@ -47,6 +47,8 @@ function block(showHeader: boolean) {
     onClosePulls: () => {},
     delegateGroups: [],
     providers: [],
+    guests: [],
+    onStopShowing: () => {},
   }
   return createElement(
     HashRouter,

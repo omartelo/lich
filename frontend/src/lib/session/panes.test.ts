@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest"
 import {
   addToGroup,
+  besideAction,
   defaultName,
   dissolveGroup,
   focusAfterRemove,
   formatGroups,
   groupOf,
   MAX_TRACK_SHAPES,
+  mergeGroups,
   movingFrom,
-  nextCandidate,
   type PaneGroup,
   paneTracks,
   parseGroups,
@@ -262,46 +263,34 @@ describe("defaultName", () => {
   })
 })
 
-describe("nextCandidate", () => {
-  it("takes the first card on no wall at all", () => {
-    expect(nextCandidate(sessions, [group("g1", ["a", "b"])], "d")).toBe("c")
-  })
-
-  it("answers nothing when every session is already on one", () => {
-    expect(nextCandidate(sessions, [group("g1", ["a", "b", "c", "d"])], "")).toBe("")
-  })
-
-  // The shortcut starts a wall around the active session, so offering that same
-  // session is offering nothing: the caller refuses an id equal to the active
-  // one, and the press did nothing at all.
-  it("skips the active session", () => {
-    expect(nextCandidate(sessions, [], "a")).toBe("b")
-    expect(nextCandidate([session("a")], [], "a")).toBe("")
-  })
-})
-
 // The refusal matrix the add affordance documents, and the two things it does
 // when it does not refuse.
 describe("planAdd", () => {
   // A stage big enough for several panes; the height is what runs out first.
   const roomy = { width: 3000, height: 2000 }
-  const base = { sessions, groups: [] as PaneGroup[], current: null, activeId: "a", stage: roomy }
+  const base = {
+    groups: [] as PaneGroup[],
+    current: null,
+    activeId: "a",
+    stage: roomy,
+    sessionId: "b",
+  }
 
-  it("starts a wall around the active session, taking the next free card", () => {
+  it("starts a wall around the active session", () => {
     expect(planAdd(base)).toEqual({ kind: "start", around: "a", sessionId: "b" })
   })
 
   it("joins the wall the active session is already on", () => {
     const groups = [group("g1", ["a", "b"])]
-    expect(planAdd({ ...base, groups, current: groups[0] })).toEqual({
+    expect(planAdd({ ...base, groups, current: groups[0], sessionId: "c" })).toEqual({
       kind: "join",
       groupId: "g1",
       sessionId: "c",
     })
   })
 
-  it("refuses with nothing left to show", () => {
-    const groups = [group("g1", ["a", "b", "c", "d"])]
+  it("refuses a session already on the wall on screen", () => {
+    const groups = [group("g1", ["a", "b"])]
     expect(planAdd({ ...base, groups, current: groups[0] }).kind).toBe("none")
   })
 
@@ -330,6 +319,49 @@ describe("planAdd", () => {
       around: "a",
       sessionId: "b",
     })
+  })
+})
+
+describe("mergeGroups", () => {
+  // Ids were minted unique per project, so two projects can hold the same one;
+  // the merged list must not let two walls answer to it.
+  it("joins the lists in order and keeps the first group of a repeated id", () => {
+    const merged = mergeGroups([
+      [group("g1", ["a", "b"])],
+      [group("g1", ["c", "d"]), group("g2", ["c", "d"])],
+    ])
+    expect(merged.map((wall) => [wall.id, wall.cells])).toEqual([
+      ["g1", ["a", "b"]],
+      ["g2", ["c", "d"]],
+    ])
+  })
+})
+
+describe("besideAction", () => {
+  const roomy = { width: 3000, height: 2000 }
+
+  it("does nothing for a session already on screen", () => {
+    const groups = [group("g1", ["a", "b"])]
+    expect(besideAction(groups, groups[0], "a", "b", roomy)).toEqual({ kind: "showing" })
+    expect(besideAction([], null, "a", "a", roomy)).toEqual({ kind: "showing" })
+  })
+
+  // Same arithmetic as planAdd's guard: two panes on a 500px stage are two rows.
+  it("refuses when one more pane would be too small to read", () => {
+    expect(besideAction([], null, "a", "b", { width: 500, height: 300 })).toEqual({ kind: "full" })
+  })
+
+  it("asks before taking a session off another wall", () => {
+    const groups = [group("g1", ["a", "b"]), group("g2", ["c", "d"])]
+    expect(besideAction(groups, groups[0], "a", "c", roomy)).toEqual({
+      kind: "confirm",
+      from: groups[1],
+    })
+  })
+
+  it("adds a session on no wall", () => {
+    const groups = [group("g1", ["a", "b"])]
+    expect(besideAction(groups, groups[0], "a", "c", roomy)).toEqual({ kind: "add" })
   })
 })
 

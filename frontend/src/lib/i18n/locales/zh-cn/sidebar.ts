@@ -103,13 +103,18 @@ export const sidebar = {
     },
     issueHandoffFailed: "无法将该议题交给会话：{error}",
     forkPruned: "{name} 已没有可分叉的对话：{provider} 已将其清理。",
-    moveTitle: "将 {name} 移到此分屏？",
+  },
+  stageMoveDialog: {
+    title: "将 {name} 移到此分屏？",
     showBesideTitle: "在此会话旁显示 {name}？",
-    moveEndsGroup:
+    endsGroup:
       "它是 {group} 中仅有的两个会话之一，因此它离开后该分组会结束。无论如何都不会关闭任何会话。",
-    moveLeavesSplit:
+    leavesSplit:
       "它已在 {group} 中，而一个会话同一时间只能在一个分屏中，因此它会离开原分屏。无论如何都不会关闭任何会话。",
-    moveConfirm: "移动",
+    confirm: "移动",
+  },
+  wallGuestCard: {
+    stopShowing: "不再显示 {name}",
   },
   sidebarRail: {
     expand: "展开侧边栏",

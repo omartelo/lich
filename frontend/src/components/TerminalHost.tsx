@@ -5,6 +5,7 @@ import { TerminalView } from "./TerminalView"
 import { ResumeSessionDialog } from "./ResumeSessionDialog"
 import { ProviderIcon } from "./ProviderIcon"
 import { CloseButton } from "./common/CloseButton"
+import { Hint } from "./common/Hint"
 import { ErrorBoundary } from "./common/ErrorBoundary"
 import { WorktreeCloseDialogs } from "./sidebar/WorktreeCloseDialogs"
 import { useWorktreeClose } from "./sidebar/useWorktreeClose"
@@ -12,16 +13,17 @@ import { useT } from "@/lib/i18n/i18n"
 import { Store, Terminal as TerminalService } from "@/lib/rpc"
 import { restoreChoice, restoreKey } from "@/lib/providers-store"
 import { useProjects } from "@/providers/projects"
-import { activeSessionId, hasSession, resumableSession, sessionsOf } from "@/lib/session/sessions"
+import { hasSession, projectOfSession, resumableSession, sessionsOf } from "@/lib/session/sessions"
 import { paletteSessions } from "@/lib/session/command-palette"
 import { spawnDecision, type SpawnProbe } from "@/lib/session/spawn-gate"
 import { PaneSeams } from "./PaneSeams"
-import { cellAt, grid, offsetOf, rowLength, rowTracks } from "@/lib/session/pane-grid"
+import { cellAt, fits, grid, offsetOf, rowLength, rowTracks } from "@/lib/session/pane-grid"
 import { paneTracks } from "@/lib/session/panes"
 import { usePanes } from "@/lib/session/use-panes"
 import { useStageSize } from "@/lib/session/use-stage-size"
 import { spawnedSessions } from "@/lib/terminal/terminal-registry"
 import { cn, errorText } from "@/lib/utils"
+import { Plus } from "lucide-react"
 import type { Session } from "@/lib/session/sessions"
 
 const GLOBAL_SCOPE = ""
@@ -41,6 +43,11 @@ interface PaneDrag {
 
 interface PaneHeaderProps {
   session: Session
+  /** The project the session belongs to when it is not the routed one, else "". */
+  guestOf: string
+  /** Whether one more pane would still be readable; the + says why it is off. */
+  full: boolean
+  onShowBeside: () => void
   index: number
   focused: boolean
   drag: PaneDrag
@@ -50,8 +57,8 @@ interface PaneHeaderProps {
   onDrop: (index: number) => void
 }
 
-/** Whether a pointer landed on a control inside the header — its × is the only
- * one, and it is a span with a button role (CloseButton). */
+/** Whether a pointer landed on a control inside the header — its + and its ×,
+ * both spans with a button role. */
 function onControl(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('[role="button"]') !== null
 }
@@ -64,6 +71,9 @@ function paneUnder(x: number, y: number): number | null {
 
 function PaneHeader({
   session,
+  guestOf,
+  full,
+  onShowBeside,
   index,
   focused,
   drag,
@@ -113,9 +123,23 @@ function PaneHeader({
     >
       <ProviderIcon kind={session.kind} size={12} />
       <span className="min-w-0 truncate font-medium">{session.label}</span>
+      {guestOf && <span className="shrink-0 text-muted-foreground">· {guestOf}</span>}
+      <Hint label={full ? t("terminal.host.noRoom") : t("terminal.host.showBeside")}>
+        <span
+          role="button"
+          aria-label={t("terminal.host.showBeside")}
+          aria-disabled={full}
+          onClick={full ? undefined : onShowBeside}
+          className={cn(
+            "ml-auto flex size-4 shrink-0 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100",
+            full ? "cursor-default group-hover:opacity-40" : "hover:bg-foreground/15",
+          )}
+        >
+          <Plus className="size-3" />
+        </span>
+      </Hint>
       <CloseButton
         label={t("terminal.host.stopShowing", { name: session.label })}
-        className="ml-auto"
         onClick={() => onDrop(index)}
       />
     </div>
@@ -138,7 +162,12 @@ function PaneHeader({
 // Claude session's id, so its spawn waits on the resume prompt: the terminal is
 // mounted only once the user has said whether to continue that conversation —
 // and only when there is still a conversation to continue (ResumeAvailable).
-export function TerminalHost() {
+interface TerminalHostProps {
+  /** Open the picker of sessions to show beside the one on screen. */
+  onShowBeside: () => void
+}
+
+export function TerminalHost({ onShowBeside }: TerminalHostProps) {
   const t = useT()
   const { projects, sessions, keepSession } = useProjects()
   const match = useMatch("/projects/:projectId")
@@ -173,6 +202,8 @@ export function TerminalHost() {
   // is a pointer gesture on the label rather than HTML5 drag-and-drop, which the
   // window already spends on files dropped into a terminal.
   const [paneDrag, setPaneDrag] = useState<PaneDrag>({ from: null, over: null })
+
+  const full = !fits(stage.cells.length + 1, size.width, size.height)
 
   // The close an exited session's banner raises, on its own instance of the
   // sidebar's flow — the sidebar is not always mounted (collapsed to the rail)
@@ -218,8 +249,10 @@ export function TerminalHost() {
     if (!activeProjectId || !pending) {
       return
     }
-    const projectId = activeProjectId
+    // A pane can hold a session of another project, which is spawned — and
+    // parked — in its own project rather than the routed one.
     const sessionId = pending
+    const projectId = projectOfSession(sessionsRef.current, sessionId)
     const session = sessionsOf(sessionsRef.current, projectId).find((s) => s.id === sessionId)
     const project = projectsRef.current.find((p) => p.id === projectId)
     const resumable = resumableSession(sessionsRef.current, projectId, sessionId)
@@ -291,14 +324,16 @@ export function TerminalHost() {
   return (
     <div ref={stageRef} className="absolute inset-0">
       {projects.flatMap((project) => {
-        const projectActiveId = activeSessionId(sessions, project.id)
+        // A wall can reach into other projects, so a pane is any cell of it,
+        // whichever project the session belongs to; the cursor is the routed
+        // project's active session, which is the cell at stage.focus.
+        const guest = project.id !== activeProjectId
         return sessionsOf(sessions, project.id).map((session) => {
           if (!spawned.has(session.id)) {
             return null
           }
-          const onStage = project.id === activeProjectId
-          const index = onStage ? stage.cells.indexOf(session.id) : -1
-          const focused = index >= 0 && session.id === projectActiveId
+          const index = stage.cells.indexOf(session.id)
+          const focused = index >= 0 && index === stage.focus
           const visible = focused || (measured && index >= 0)
           // A hidden layer keeps the whole stage: its terminal is destroyed
           // while hidden and refitted on the way back, so the size it holds
@@ -339,6 +374,9 @@ export function TerminalHost() {
                 {split && visible && (
                   <PaneHeader
                     session={session}
+                    guestOf={guest ? project.name : ""}
+                    full={full}
+                    onShowBeside={onShowBeside}
                     index={index}
                     focused={focused}
                     drag={paneDrag}
