@@ -53,6 +53,12 @@ var commands = []command{
 			"must be running there. For an editor sending a selection or a file.",
 	},
 	{
+		name: "focus",
+		args: "[--project <name-or-path>] [--json] <session>",
+		about: "Bring the lich window to the front with <session>'s card open, as if it\n" +
+			"had been clicked. For an editor pointing the person at a session.",
+	},
+	{
 		name: "wait",
 		args: "[--timeout <seconds>] [--no-wait] [--json] [<ticket>]",
 		about: "With a ticket, wait again on that errand. Without one, collect every\n" +
@@ -174,10 +180,10 @@ var commands = []command{
 	{
 		name: "mcp",
 		args: "",
-		about: "Serve the session commands above as MCP tools over stdio — cost is\n" +
-			"not one of them. lich registers this itself for the providers that\n" +
-			"support it; you only run it by hand to point another MCP client at\n" +
-			"lich.",
+		about: "Serve the session commands above as MCP tools over stdio, all but\n" +
+			"whoami, insert, focus and cost. lich registers this itself for the\n" +
+			"providers that support it; you only run it by hand to point another\n" +
+			"MCP client at lich.",
 	},
 	{
 		name: "rage",

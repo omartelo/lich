@@ -133,6 +133,10 @@ export const PROJECT_OPENED_EVENT = "project-opened"
 // and which card is active now, decided by the row that is already written.
 export const CLOSED_EVENT = "session-closed"
 
+// Global event the backend emits when `lich focus` asked for a session's card,
+// the way a click on it would (see relay.FocusEventName). Payload: { id }.
+export const FOCUS_EVENT = "session-focus"
+
 // Global event the backend emits when sessions were filed under a folder, or
 // taken out of one, outside the window: an agent running `lich file` or
 // `lich rename-folder`, or their MCP tools (see spawn.FiledEventName). Payload:

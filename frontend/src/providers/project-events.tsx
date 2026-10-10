@@ -29,6 +29,7 @@ import {
   CLOSED_EVENT,
   COLORED_EVENT,
   FILED_EVENT,
+  FOCUS_EVENT,
   OPENED_EVENT,
   PROJECT_OPENED_EVENT,
   RELAY_STALLED_EVENT,
@@ -282,6 +283,23 @@ export function useSessionEvents({
     })
     return () => off()
   }, [])
+
+  // `lich focus`: an editor pointing the person at a session. A card whose
+  // project is not open here has nowhere to be shown, so it is left alone.
+  useEffect(() => {
+    const off = onAppEvent(FOCUS_EVENT, (data) => {
+      if (!isIdEvent(data)) {
+        return
+      }
+      const projectId = projectOfSession(sessionsRef.current, data.id)
+      if (!projectId) {
+        return
+      }
+      navigate(`/projects/${projectId}`)
+      activateSession(projectId, data.id)
+    })
+    return () => off()
+  }, [navigate, activateSession])
 
   // Sessions an agent filed or took out of a folder, or whose folder it
   // renamed, through the CLI or its MCP tools: the rows are already written, so

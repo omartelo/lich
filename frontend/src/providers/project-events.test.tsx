@@ -7,7 +7,7 @@ import { createElement } from "react"
 import type { NavigateFunction } from "react-router-dom"
 import { describe, expect, it, vi } from "vitest"
 import type { Project } from "@/lib/api-types"
-import { COLORED_EVENT, FILED_EVENT } from "@/lib/session/session-events"
+import { COLORED_EVENT, FILED_EVENT, FOCUS_EVENT } from "@/lib/session/session-events"
 import type { SessionState } from "@/lib/session/sessions"
 import { useSessionEvents } from "./project-events"
 
@@ -42,6 +42,8 @@ async function mountWith(state: SessionState) {
   const commit = vi.fn((next: SessionState) => {
     sessionsRef.current = next
   })
+  const activateSession = vi.fn()
+  const navigate = vi.fn()
   function Probe() {
     useSessionEvents({
       sessions: state,
@@ -55,13 +57,13 @@ async function mountWith(state: SessionState) {
       commit,
       setProjects: vi.fn(),
       setAskNotifications: vi.fn(),
-      activateSession: vi.fn(),
-      navigate: vi.fn() as unknown as NavigateFunction,
+      activateSession,
+      navigate: navigate as unknown as NavigateFunction,
     })
     return null
   }
   await mountBudget(createElement(Probe))
-  return { sessionsRef, commit }
+  return { sessionsRef, commit, activateSession, navigate }
 }
 
 const workspace: SessionState = {
@@ -141,5 +143,28 @@ describe("sessions-colored", () => {
     bus.emit(COLORED_EVENT, { projectId: "p9", ids: ["s1"], color: "teal" })
 
     expect(commit).not.toHaveBeenCalled()
+  })
+})
+
+// `lich focus` resolved the session already; the window opens its card the way
+// a click on it would.
+describe("session-focus", () => {
+  it("opens the card in its project", async () => {
+    const { activateSession, navigate } = await mountWith(workspace)
+
+    bus.emit(FOCUS_EVENT, { id: "s2" })
+
+    expect(navigate).toHaveBeenCalledWith("/projects/p1")
+    expect(activateSession).toHaveBeenCalledWith("p1", "s2")
+  })
+
+  it("does nothing for a payload it cannot read or a card it does not have", async () => {
+    const { activateSession, navigate } = await mountWith(workspace)
+
+    bus.emit(FOCUS_EVENT, {})
+    bus.emit(FOCUS_EVENT, { id: "parked" })
+
+    expect(navigate).not.toHaveBeenCalled()
+    expect(activateSession).not.toHaveBeenCalled()
   })
 })

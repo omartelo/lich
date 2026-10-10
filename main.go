@@ -306,6 +306,12 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// report at all, and whether they can answer with a tool — are about what
 	// the plugin put there.
 	rl.SetPlugins(plugins)
+	// `lich focus` opens a card for someone outside the window, who then needs
+	// the window in front: the same raise a second launch of lich asks for.
+	rl.SetRaiseWindow(func() {
+		info := term.Transport()
+		focusRunning(configDir, &singleton.Info{Port: info.Port, Token: info.Token})
+	})
 	// The language of the text lich types into sessions is read live from the
 	// settings table, by the relay at every message, by the terminal at
 	// every spawn and by drop at every copy notice.

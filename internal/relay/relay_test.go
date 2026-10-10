@@ -258,6 +258,7 @@ type fakeEvents struct {
 	halts []StalledEvent
 	inbox []InboxEvent
 	marks []ScheduleEvent
+	focus []FocusEvent
 }
 
 func (f *fakeEvents) Emit(name string, data any) {
@@ -279,6 +280,10 @@ func (f *fakeEvents) Emit(name string, data any) {
 	case InboxEvent:
 		if name == InboxEventName {
 			f.inbox = append(f.inbox, event)
+		}
+	case FocusEvent:
+		if name == FocusEventName {
+			f.focus = append(f.focus, event)
 		}
 	}
 }
