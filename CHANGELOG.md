@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Window flags survive a restart and an update.** lich launched with
+  `lich -- <chromium flags>` (`--ozone-platform=x11` for a driver that needs
+  it) now relaunches with them; the restarted window used to open without.
 - **Launching lich from a terminal inside lich after an update shows the
   running window.** Sessions of an updated lich used to carry a restart marker
   that made the launch die on the busy port instead.

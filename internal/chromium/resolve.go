@@ -82,6 +82,16 @@ func Resolve(env Env) (Result, error) {
 	return Result{}, ErrNoShell
 }
 
+// RelaunchArgs are the arguments that launch lich again with the window
+// switches extra came from: ParseFlags' inverse for them, nil for none. The
+// --shell pin is not among them; it rides the environment (main.go).
+func RelaunchArgs(extra []string) []string {
+	if len(extra) == 0 {
+		return nil
+	}
+	return append([]string{"--"}, extra...)
+}
+
 // ParseFlags splits lich's own launch arguments: --shell <path> pins the
 // window to open, and everything after `--` passes through to it as Chromium
 // switches. The flag wins over its environment variable because the caller

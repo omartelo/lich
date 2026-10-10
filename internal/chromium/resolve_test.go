@@ -130,3 +130,17 @@ func TestParseFlags(t *testing.T) {
 		})
 	}
 }
+
+// RelaunchArgs is ParseFlags' inverse for the window's own switches: a lich
+// launched again with them opens its window with the same ones.
+func TestRelaunchArgsRoundTripsThroughParseFlags(t *testing.T) {
+	for _, extra := range [][]string{nil, {"--ozone-platform=x11"}, {"--ozone-platform=x11", "--remote-debugging-port=9334"}} {
+		_, got := ParseFlags(RelaunchArgs(extra))
+		if !slices.Equal(got, extra) {
+			t.Errorf("ParseFlags(RelaunchArgs(%q)) = %q", extra, got)
+		}
+	}
+	if args := RelaunchArgs(nil); args != nil {
+		t.Errorf("RelaunchArgs(nil) = %q, want no arguments", args)
+	}
+}
