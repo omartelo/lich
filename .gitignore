@@ -11,5 +11,9 @@ frontend/node_modules
 frontend/coverage
 # tsc --build incremental cache
 *.tsbuildinfo
-# Claude Code local state (skills restore from skills-lock.json)
-.claude/
+# Claude Code local state (skills restore from skills-lock.json), except the
+# project's own skills, which are versioned here
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/lich-i18n/

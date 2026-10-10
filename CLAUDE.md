@@ -22,6 +22,9 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
   installed lich's workspace. That isolation is one `pkill` wide: a pattern like `chromium-profile` matches the
   running lich's own window, and killing it exits that backend and every session under it. Kill a rig's browser
   by the PID it was launched with.
+- **Translations**: two independent languages, the interface and the prompt language (what lich and
+  lich-plugin hand agents). `.claude/skills/lich-i18n/` maps where a string lands and every point a new
+  language touches; the rules for writing a message are in `frontend/CLAUDE.md` › Translations.
 - **User-facing feature history**: `CHANGELOG.md`.
 
 ## Rules of the codebase
@@ -31,6 +34,10 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
   system browser plus one switch of its own — nothing about it reaches the Go build (`docs/chromium-shell.md`).
 - OS-specific code is selected by build tags behind small seams, never by runtime checks — the PTY is the model
   (`internal/terminal`).
+- No literal user-visible or agent-facing text: a string a person reads on a lich screen, or that lich types
+  into a session, goes through the catalogs and lands in **every** locale in the same PR (`lich-i18n` skill).
+  English is the source; tests stay English. Error text, CHANGELOG, MCP tool descriptions and CLI help stay
+  English by design.
 - Service shapes are hand-owned in `frontend/src/lib/api-types.ts`: touch a Go struct's JSON tags and that mirror
   moves in the same change. There is no codegen.
 

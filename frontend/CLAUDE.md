@@ -125,8 +125,8 @@ agents, composed by the backend (`internal/prompt`; `lib/prompt-language-store.t
 derive one from the other. No i18n library: `lib/i18n/` is the whole mechanism.
 
 - **Layout.** `lib/i18n/locales/en/<namespace>.ts` is the source of truth, written `as const`;
-  `locales/pt-br/<namespace>.ts` mirrors it with `satisfies Shape<typeof en>`, so a missing or extra key fails
-  `tsc`. One namespace per component folder (`sidebar`, `settings`, ...) plus `common`, registered in both
+  every other `locales/<lang>/<namespace>.ts` (pt-br, es, ...) mirrors it with `satisfies Shape<typeof en>`, so a missing or extra key fails
+  `tsc`. One namespace per component folder (`sidebar`, `settings`, ...) plus `common`, registered in every
   `locales/*/index.ts`. `i18n.test.ts` checks what tsc cannot: every locale uses the placeholders English uses.
 - **Keys** are `<folder>.<component>.<what>`, camelCase, the component named after its file
   (`sidebar.newFolderDialog.title`). A key names the meaning, never the English words. A message goes to
