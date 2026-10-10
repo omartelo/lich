@@ -100,7 +100,7 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
 
   return (
     <SettingBlock
-      title={`GitHub account for ${project.name}`}
+      title={t("settings.versionControlSettings.accountFor", { name: project.name })}
       description={t("settings.versionControlSettings.accountDescription")}
     >
       <p className="mb-2 text-xs text-muted-foreground">{project.path}</p>

@@ -10,6 +10,7 @@ export const env = {
   },
   quota: {
     tokenLogin: "Token login",
+    weekShort: "wk",
   },
   paths: {
     cwdUnknown: "cwd unknown · inside {host}",

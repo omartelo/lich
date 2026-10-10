@@ -12,14 +12,12 @@ import {
 } from "@/components/ui/dialog"
 import { ProviderIcon } from "@/components/ProviderIcon"
 import {
-  CODEX_TRUST_HINT,
   decidePluginAction,
   DISMISSED_FLAG,
   INSTALL_DISMISSED_KEY,
   incompatibleMessage,
   PLUGIN_INCOMPATIBLE_EVENT,
   type PluginAction,
-  RESTART_HINT,
   type Status,
   UPDATE_DISMISSED_KEY,
 } from "@/lib/update/plugin-gate"
@@ -124,7 +122,7 @@ export function AgentPluginGate() {
           providers.map((p) => p.provider),
           AgentPlugin.Update,
         ),
-      t("shell.agentPluginGate.updated", { hint: RESTART_HINT }),
+      t("shell.agentPluginGate.updated"),
       t("shell.agentPluginGate.updateFailed"),
     )
 
@@ -135,9 +133,9 @@ export function AgentPluginGate() {
     try {
       await installAll(picked, AgentPlugin.Install)
       close()
-      toast.success(t("shell.agentPluginGate.installed", { hint: RESTART_HINT }))
+      toast.success(t("shell.agentPluginGate.installed"))
       if (picked.includes("codex")) {
-        toast.info(t("shell.agentPluginGate.codexTrust", { hint: CODEX_TRUST_HINT }), {
+        toast.info(t("shell.agentPluginGate.codexTrust"), {
           duration: Infinity,
         })
       }

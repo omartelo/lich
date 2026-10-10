@@ -4,13 +4,6 @@ import { Button } from "@/components/ui/button"
 import { ProviderIcon } from "@/components/ProviderIcon"
 import { SettingBlock } from "./SettingBlock"
 import { AgentPlugin } from "@/lib/rpc"
-import {
-  CODEX_TRUST_HINT,
-  CRUSH_SCOPE_HINT,
-  CURSOR_SHARED_PLUGIN_HINT,
-  NO_APPROVAL_EVENT_HINT,
-  RESTART_HINT,
-} from "@/lib/update/plugin-gate"
 import { useT } from "@/lib/i18n/i18n"
 import { runWithToast } from "@/lib/toast-async"
 import { useRemoteResource } from "@/lib/use-remote-resource"
@@ -62,14 +55,14 @@ export function PluginSetting() {
       await run(
         () => AgentPlugin.Install(provider),
         t("settings.pluginSetting.installing", { name }),
-        t("settings.pluginSetting.installed", { hint: RESTART_HINT }),
+        t("settings.pluginSetting.installed"),
         t("settings.pluginSetting.installFailed"),
       )
     } else if (fresh?.installed && fresh.updateAvailable) {
       await run(
         () => AgentPlugin.Update(provider),
         t("settings.pluginSetting.updating", { name }),
-        t("settings.pluginSetting.updated", { hint: RESTART_HINT }),
+        t("settings.pluginSetting.updated"),
         t("settings.pluginSetting.updateFailed"),
       )
     }
@@ -141,38 +134,21 @@ export function PluginSetting() {
           </div>
         ))}
         {showTrustHint && (
-          <p className="text-xs text-muted-foreground">
-            {t("settings.pluginSetting.hint", { provider: "Codex", hint: CODEX_TRUST_HINT })}
-          </p>
+          <p className="text-xs text-muted-foreground">{t("settings.pluginSetting.codexHint")}</p>
         )}
         {showCrushHint && (
-          <p className="text-xs text-muted-foreground">
-            {t("settings.pluginSetting.hint", { provider: "Crush", hint: CRUSH_SCOPE_HINT })}
-          </p>
+          <p className="text-xs text-muted-foreground">{t("settings.pluginSetting.crushHint")}</p>
         )}
         {showOMPHint && (
-          <p className="text-xs text-muted-foreground">
-            {t("settings.pluginSetting.hint", {
-              provider: "oh-my-pi",
-              hint: NO_APPROVAL_EVENT_HINT,
-            })}
-          </p>
+          <p className="text-xs text-muted-foreground">{t("settings.pluginSetting.ompHint")}</p>
         )}
         {showAntigravityHint && (
           <p className="text-xs text-muted-foreground">
-            {t("settings.pluginSetting.hint", {
-              provider: "Antigravity",
-              hint: NO_APPROVAL_EVENT_HINT,
-            })}
+            {t("settings.pluginSetting.antigravityHint")}
           </p>
         )}
         {showCursorHint && (
-          <p className="text-xs text-muted-foreground">
-            {t("settings.pluginSetting.hint", {
-              provider: "Cursor CLI",
-              hint: CURSOR_SHARED_PLUGIN_HINT,
-            })}
-          </p>
+          <p className="text-xs text-muted-foreground">{t("settings.pluginSetting.cursorHint")}</p>
         )}
         <div className="flex items-center gap-3 pt-1">
           <Button size="sm" variant="outline" onClick={() => void check()} disabled={busy}>

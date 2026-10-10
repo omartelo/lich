@@ -15,7 +15,7 @@ import {
   type HotkeyAction,
   type HotkeyId,
 } from "@/lib/hotkeys"
-import { PASSTHROUGH_TITLE, passthroughRows, TERMINAL_TITLE, terminalRows } from "@/lib/shortcuts"
+import { passthroughRows, terminalRows } from "@/lib/shortcuts"
 import { Button } from "@/components/ui/button"
 import { ShortcutLine } from "@/components/common/ShortcutLine"
 import { useT } from "@/lib/i18n/i18n"
@@ -148,7 +148,7 @@ export function HotkeysSettings() {
           ))}
         </Group>
       ))}
-      <Group label={TERMINAL_TITLE}>
+      <Group label={t("hotkeys.shortcuts.terminalTitle")}>
         <p className="mb-2 max-w-prose text-xs text-muted-foreground">
           {t("settings.hotkeysSettings.terminalNote")}
         </p>
@@ -156,7 +156,7 @@ export function HotkeysSettings() {
           <ShortcutLine key={row.label} label={row.label} keys={row.keys} />
         ))}
       </Group>
-      <Group label={PASSTHROUGH_TITLE}>
+      <Group label={t("hotkeys.shortcuts.passthroughTitle")}>
         <p className="mb-2 max-w-prose text-xs text-muted-foreground">
           {t("settings.hotkeysSettings.passthroughNote")}
         </p>

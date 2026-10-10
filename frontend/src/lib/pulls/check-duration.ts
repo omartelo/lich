@@ -1,3 +1,5 @@
+import { formatUnit } from "@/lib/i18n/unit-format"
+
 // How long a check took, from gh's ISO timestamps. A finished check reports the
 // span it ran; one still going reports how long it has been going, which is the
 // number a waiting reviewer actually wants. Pure so the node gate covers it.
@@ -24,14 +26,18 @@ export function checkDuration(
 // and seconds under an hour, hours and minutes past it.
 function formatSeconds(total: number): string {
   if (total < 60) {
-    return `${total}s`
+    return formatUnit(total, "second")
   }
   const minutes = Math.floor(total / 60)
   if (minutes < 60) {
     const seconds = total % 60
-    return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`
+    return seconds === 0
+      ? formatUnit(minutes, "minute")
+      : `${formatUnit(minutes, "minute")} ${formatUnit(seconds, "second")}`
   }
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
-  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`
+  return rest === 0
+    ? formatUnit(hours, "hour")
+    : `${formatUnit(hours, "hour")} ${formatUnit(rest, "minute")}`
 }

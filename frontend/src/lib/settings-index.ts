@@ -158,8 +158,8 @@ export const SETTING_ENTRIES: readonly IndexedSetting[] = [
   },
   {
     section: "version-control",
-    title: "GitHub account",
-    also: "login gh switch",
+    titleKey: "settings.versionControlSettings.account",
+    alsoKey: "settings.versionControlSettings.accountSearchWords",
   },
   {
     section: "updates",

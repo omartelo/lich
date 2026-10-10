@@ -2,7 +2,7 @@ import { RotateCcw, TriangleAlert } from "lucide-react"
 import { Component, type ErrorInfo, type ReactNode } from "react"
 import { Notice } from "@/components/common/Notice"
 import { Button } from "@/components/ui/button"
-import { t } from "@/lib/i18n/i18n"
+import { useT } from "@/lib/i18n/i18n"
 import { cn } from "@/lib/utils"
 
 interface ErrorBoundaryProps {
@@ -67,37 +67,63 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     if (error === null) {
       return this.props.children
     }
-    const exhausted = throws >= RETRIES_BEFORE_RELOAD
     return (
-      <div
-        className={cn(
-          "flex h-full w-full flex-col items-center justify-center gap-2 bg-background p-6 text-center",
-          this.props.className,
-        )}
-      >
-        <TriangleAlert className="size-8 text-muted-foreground" />
-        <p className="text-sm text-foreground">
-          {t("common.errorBoundary.stoppedRendering", { label: this.props.label })}
-        </p>
-        {/* The message, not just a console line: the window it would have been
-            read in is the one this fallback is standing in for. */}
-        <Notice className="max-w-md py-0 font-mono break-words select-text">
-          {error.message || String(error)}
-        </Notice>
-        {/* The same retry that just failed is a loop, so past the second throw
-            the only offer left is the one that always works. The sessions keep
-            running through it — a reload costs the page, not the PTYs. */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => (exhausted ? window.location.reload() : this.setState({ error: null }))}
-        >
-          <RotateCcw data-icon="inline-start" />
-          {exhausted
-            ? t("common.errorBoundary.reload")
-            : (this.props.retry ?? t("common.errorBoundary.retry"))}
-        </Button>
-      </div>
+      <ErrorFallback
+        label={this.props.label}
+        message={error.message || String(error)}
+        exhausted={throws >= RETRIES_BEFORE_RELOAD}
+        retry={this.props.retry}
+        className={this.props.className}
+        onRetry={() => this.setState({ error: null })}
+      />
     )
   }
+}
+
+// A function component of its own because the boundary is a class and cannot
+// subscribe to the interface language: this is what re-renders in the new one
+// while the error is on screen.
+function ErrorFallback({
+  label,
+  message,
+  exhausted,
+  retry,
+  className,
+  onRetry,
+}: {
+  label: string
+  message: string
+  exhausted: boolean
+  retry?: string
+  className?: string
+  onRetry: () => void
+}) {
+  const t = useT()
+  return (
+    <div
+      className={cn(
+        "flex h-full w-full flex-col items-center justify-center gap-2 bg-background p-6 text-center",
+        className,
+      )}
+    >
+      <TriangleAlert className="size-8 text-muted-foreground" />
+      <p className="text-sm text-foreground">
+        {t("common.errorBoundary.stoppedRendering", { label })}
+      </p>
+      {/* The message, not just a console line: the window it would have been
+          read in is the one this fallback is standing in for. */}
+      <Notice className="max-w-md py-0 font-mono break-words select-text">{message}</Notice>
+      {/* The same retry that just failed is a loop, so past the second throw
+          the only offer left is the one that always works. The sessions keep
+          running through it — a reload costs the page, not the PTYs. */}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => (exhausted ? window.location.reload() : onRetry())}
+      >
+        <RotateCcw data-icon="inline-start" />
+        {exhausted ? t("common.errorBoundary.reload") : (retry ?? t("common.errorBoundary.retry"))}
+      </Button>
+    </div>
+  )
 }

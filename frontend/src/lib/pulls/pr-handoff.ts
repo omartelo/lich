@@ -1,4 +1,5 @@
 import type { BaseStatus, PullRequestDetail } from "@/lib/api-types"
+import { t } from "@/lib/i18n/i18n"
 import { prompt } from "@/lib/i18n/prompt"
 import { conflictsWithBase } from "@/lib/pulls/merge-gate"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
@@ -11,7 +12,8 @@ const NAMED_CHECKS = 8
 
 /** One thing wrong with a pull request, and the prompt that hands it over. */
 export interface PullRequestHandoff {
-  label: string
+  /** The button text, in the interface language read when it is used. */
+  readonly label: string
   /** Ready to write into a PTY: the prompt as one bracketed paste. A getter, so
    * the prompt language is read when the prompt is used, not when the card
    * rendered. */
@@ -31,7 +33,9 @@ export function pullRequestHandoff(detail: PullRequestDetail): PullRequestHandof
   }
   if (conflictsWithBase(detail)) {
     return {
-      label: "Resolve conflicts",
+      get label() {
+        return t("pulls.prHandoff.resolveConflicts")
+      },
       get prompt() {
         return bracketedPaste(
           prompt("prompts.pullRequest.conflicts", {
@@ -45,7 +49,9 @@ export function pullRequestHandoff(detail: PullRequestDetail): PullRequestHandof
   }
   if (detail.checks.failed > 0) {
     return {
-      label: "Fix CI errors",
+      get label() {
+        return t("pulls.prHandoff.fixChecks")
+      },
       get prompt() {
         return bracketedPaste(checksPrompt(detail))
       },

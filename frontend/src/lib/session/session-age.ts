@@ -1,4 +1,4 @@
-import { getLocale } from "@/lib/i18n/i18n"
+import { formatUnit } from "@/lib/i18n/unit-format"
 // How long a session has been in its current status: the readout the sidebar
 // draws beside the status glyph, and the one clock every card reads it from.
 // Kept free of React so both the formatting and the clock's cadence are covered
@@ -18,27 +18,12 @@ const HOUR_MS = 3_600_000
 export function formatAge(ms: number): string {
   const elapsed = Math.max(0, ms)
   if (elapsed < MINUTE_MS) {
-    return unitFormat("second").format(Math.floor(elapsed / SECOND_MS))
+    return formatUnit(Math.floor(elapsed / SECOND_MS), "second")
   }
   if (elapsed < HOUR_MS) {
-    return unitFormat("minute").format(Math.floor(elapsed / MINUTE_MS))
+    return formatUnit(Math.floor(elapsed / MINUTE_MS), "minute")
   }
-  return unitFormat("hour").format(Math.floor(elapsed / HOUR_MS))
-}
-
-// Every card reads this once a second, so the formatters are built once per
-// language and unit rather than per call.
-const unitFormats = new Map<string, Intl.NumberFormat>()
-
-function unitFormat(unit: "second" | "minute" | "hour"): Intl.NumberFormat {
-  const locale = getLocale()
-  const key = `${locale}:${unit}`
-  let format = unitFormats.get(key)
-  if (!format) {
-    format = new Intl.NumberFormat(locale, { style: "unit", unit, unitDisplay: "narrow" })
-    unitFormats.set(key, format)
-  }
-  return format
+  return formatUnit(Math.floor(elapsed / HOUR_MS), "hour")
 }
 
 // nextChangeMs is how long until formatAge(ms) returns a different string: the

@@ -193,7 +193,7 @@ export function AppearanceSettings() {
           max={ZOOM_MAX}
           step={ZOOM_STEP}
           fallback={DEFAULT_ZOOM}
-          name="the zoom"
+          resetLabel={t("settings.appearanceSettings.resetZoom")}
           onChange={setZoom}
           decrementIcon={<ZoomOut />}
           incrementIcon={<ZoomIn />}
@@ -210,7 +210,7 @@ export function AppearanceSettings() {
           max={TERMINAL_FONT_SIZE_MAX}
           step={TERMINAL_FONT_SIZE_STEP}
           fallback={DEFAULT_TERMINAL_FONT_SIZE}
-          name="the terminal text size"
+          resetLabel={t("settings.appearanceSettings.resetTextSize")}
           onChange={setTerminalFontSize}
           decrementIcon={<Minus />}
           incrementIcon={<Plus />}

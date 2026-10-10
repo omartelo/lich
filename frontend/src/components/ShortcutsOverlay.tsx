@@ -41,7 +41,12 @@ export function ShortcutsOverlay() {
                   {group.title}
                 </div>
                 {group.rows.map((row) => (
-                  <ShortcutLine key={row.label} label={row.label} keys={row.keys} />
+                  <ShortcutLine
+                    key={row.label}
+                    label={row.label}
+                    keys={row.keys}
+                    unassigned={row.unassigned}
+                  />
                 ))}
               </div>
             ))}
