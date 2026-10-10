@@ -103,3 +103,21 @@ func TestPickFollowsEachLanguagesPluralRule(t *testing.T) {
 		}
 	}
 }
+
+func TestSpanishIsAPromptLanguage(t *testing.T) {
+	if got := Parse("es"); got != Spanish {
+		t.Errorf("Parse(\"es\") = %q, want %q", got, Spanish)
+	}
+	if got := Parse("es-MX"); got != English {
+		t.Errorf("Parse(\"es-MX\") = %q, want English: only the exact tag is a language", got)
+	}
+	forms := Plural{One: "one", Other: "other"}
+	for n, want := range map[int]string{0: "other", 1: "one", 2: "other"} {
+		if got := For(Spanish).Pick(n, forms); got != want {
+			t.Errorf("Spanish Pick(%d) = %q, want %q", n, got, want)
+		}
+	}
+	if got := For(Spanish).OriginCLI; got == For(English).OriginCLI || got == "" {
+		t.Errorf("Spanish OriginCLI = %q, want its own text", got)
+	}
+}

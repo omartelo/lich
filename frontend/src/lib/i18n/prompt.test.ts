@@ -80,6 +80,24 @@ describe("prompt text follows the prompt language, not the interface", () => {
     )
   })
 
+  it("UI en, prompt es", async () => {
+    setLocale("en")
+    await setPromptLanguage("es")
+    expect(delegatePrompt("claude", "api")).toBe('Delega en la sesión "api": ')
+    expect(delegateWorktreePrompt("cursor")).toContain(
+      "`lich open --worktree <branch> --prompt <task>`",
+    )
+    expect(createPullRequestPrompt("feat-x")).toContain("`gh pr create`")
+    expect(createPullRequestPrompt("feat-x")).toContain("La rama feat-x todavía no tiene")
+    expect(composeReviewComments([])).toContain("Comentarios de revisión:")
+    expect(issueBrief(issue)).toContain(
+      "Issue de GitHub #12: Crash on start\nhttps://x/y/issues/12",
+    )
+    expect(pullRequestHandoff(detail({ mergeStateStatus: "DIRTY" }))?.prompt).toContain(
+      "#7 (quiet-willow) tiene conflictos de fusión con main",
+    )
+  })
+
   it("reads the language when the prompt is used, not when the handoff was made", async () => {
     const handoff = pullRequestHandoff(detail({ mergeStateStatus: "DIRTY" }))
     await setPromptLanguage("pt-BR")

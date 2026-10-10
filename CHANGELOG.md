@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prompt language gets it everywhere; one already open gets it in relayed
   messages only.
 
+- **Spanish joins the interface and prompt languages.** *Interface language*
+  and *Prompt language* in Settings › Appearance now offer Español next to
+  English and Português (Brasil). A Spanish browser language (es-ES, es-MX,
+  es-419) picks it until you choose another.
+
 - **A session card offers to open a pull request.** Hover a card whose branch
   has none yet and a PR button shows where the PR number would be; clicking it
   types the request to open one at that session's prompt, ready to send.

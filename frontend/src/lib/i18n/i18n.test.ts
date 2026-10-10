@@ -10,6 +10,7 @@ import {
   UI_LANGUAGE_PREF,
 } from "./i18n"
 import { en } from "./locales/en"
+import { es } from "./locales/es"
 import { ptBR } from "./locales/pt-br"
 
 function stubStorage(initial: Record<string, string> = {}) {
@@ -134,7 +135,7 @@ const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) 
 // translation that renames, drops or invents a placeholder.
 describe("every locale against English", () => {
   const source = leaves(en as unknown as Tree)
-  const locales = { "pt-BR": ptBR }
+  const locales = { "pt-BR": ptBR, es }
 
   it("covers every locale the picker offers", () => {
     expect(Object.keys(locales)).toEqual(LOCALES.filter((locale) => locale !== "en"))
@@ -161,4 +162,25 @@ describe("every locale against English", () => {
       expect(mismatched).toEqual([])
     })
   }
+})
+
+describe("Spanish", () => {
+  it("is what every Spanish browser language resolves to", () => {
+    for (const tag of ["es", "es-ES", "es-MX", "es-419", "ES-ar"]) {
+      expect(matchLocale(tag)).toBe("es")
+    }
+  })
+
+  it("renders messages, with the plural rule Spanish uses", () => {
+    stubStorage()
+    setLocale("es")
+    expect(t("common.action.cancel")).toBe("Cancelar")
+    expect(t("settings.language.promptSaveFailed", { error: "boom" })).toBe(
+      "No se pudo guardar el idioma de los prompts: boom",
+    )
+    // Spanish, like English, counts zero as plural.
+    expect(t("common.count.file", { count: 0 })).toBe("0 archivos")
+    expect(t("common.count.file", { count: 1 })).toBe("1 archivo")
+    expect(t("common.count.file", { count: 2 })).toBe("2 archivos")
+  })
 })

@@ -23,3 +23,11 @@ func TestSessionEnvExportsThePromptLanguage(t *testing.T) {
 		t.Errorf("the chosen language was not exported: %v", env)
 	}
 }
+
+func TestSessionEnvExportsSpanish(t *testing.T) {
+	s := &Service{env: []string{"A=1"}, store: stubBins{}, ws: &transport{port: 4321, token: "tok"}}
+	s.SetPromptLanguage(func() prompt.Lang { return prompt.Spanish })
+	if env := s.sessionEnv("sess", "p1", ""); !slices.Contains(env, "LICH_PROMPT_LANG=es") {
+		t.Errorf("the chosen language was not exported: %v", env)
+	}
+}

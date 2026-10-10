@@ -31,3 +31,10 @@ func TestTheCopyNoticeFollowsThePromptLanguageLive(t *testing.T) {
 		t.Errorf("notice = %q, want it in the language set after startup", got)
 	}
 }
+
+func TestTheCopyNoticeIsSpanishWhenChosen(t *testing.T) {
+	got := copyNotice(prompt.Spanish, "a.png")
+	if got == copyNotice(prompt.English, "a.png") || !strings.Contains(got, "copia de a.png") {
+		t.Errorf("notice = %q, want the Spanish text", got)
+	}
+}

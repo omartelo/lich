@@ -110,3 +110,15 @@ func TestTheHandshakeCarriesTheInstructionsInTheClientsLanguage(t *testing.T) {
 		}
 	}
 }
+
+func TestTheClientReadsSpanishFromTheEnvironment(t *testing.T) {
+	c := &client{env: func(key string) string {
+		if key == prompt.EnvVar {
+			return "es"
+		}
+		return ""
+	}}
+	if got := c.lang(); got != prompt.Spanish {
+		t.Errorf("%s=es: lang = %q, want %q", prompt.EnvVar, got, prompt.Spanish)
+	}
+}

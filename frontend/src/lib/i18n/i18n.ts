@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react"
 import { readPref, writePref } from "@/lib/prefs"
 import type { At, ParamsArg, PluralForms, Shape } from "./catalog"
 import { en, type MessageKey, type Messages } from "./locales/en"
+import { es } from "./locales/es"
 import { ptBR } from "./locales/pt-br"
 
 // The interface language. It is a page preference, not a workspace setting:
@@ -10,14 +11,18 @@ import { ptBR } from "./locales/pt-br"
 // setting on purpose (prompt-language-store.ts, internal/prompt): people often
 // run the interface in one language and talk to their agents in another.
 
-export const LOCALES = ["en", "pt-BR"] as const
+export const LOCALES = ["en", "pt-BR", "es"] as const
 export type Locale = (typeof LOCALES)[number]
 
 /** Each language named in itself, which is how someone who cannot read the
  * current interface still finds their own. */
-export const LOCALE_NAMES: Record<Locale, string> = { en: "English", "pt-BR": "Português (Brasil)" }
+export const LOCALE_NAMES: Record<Locale, string> = {
+  en: "English",
+  "pt-BR": "Português (Brasil)",
+  es: "Español",
+}
 
-const CATALOGS: Record<Locale, Shape<Messages>> = { en, "pt-BR": ptBR }
+const CATALOGS: Record<Locale, Shape<Messages>> = { en, "pt-BR": ptBR, es }
 
 export const UI_LANGUAGE_PREF = "lich.appearance.language"
 

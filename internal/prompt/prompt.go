@@ -19,10 +19,11 @@ type Lang string
 const (
 	English      Lang = "en"
 	PortugueseBR Lang = "pt-BR"
+	Spanish      Lang = "es"
 )
 
 // Langs is every language a catalog exists for, English first as the default.
-var Langs = []Lang{English, PortugueseBR}
+var Langs = []Lang{English, PortugueseBR, Spanish}
 
 // EnvVar is the variable lich exports into every session PTY with the prompt
 // language at spawn time. Text composed outside the lich process (the lich CLI,
@@ -45,6 +46,7 @@ func Parse(tag string) Lang {
 var catalogs = map[Lang]*Catalog{
 	English:      &en,
 	PortugueseBR: &ptBR,
+	Spanish:      &es,
 }
 
 // For is the catalog of a language. A Lang that came through Parse always has
@@ -72,7 +74,8 @@ func (c *Catalog) Pick(n int, p Plural) string {
 	return p.Other
 }
 
-// isOneEnglish and isOnePortuguese are the CLDR "one" rules for integers:
-// Portuguese counts zero as singular, English does not.
+// isOneEnglish, isOnePortuguese and isOneSpanish are the CLDR "one" rules for
+// integers: Portuguese counts zero as singular, English and Spanish do not.
 func isOneEnglish(n int) bool    { return n == 1 }
 func isOnePortuguese(n int) bool { return n == 0 || n == 1 }
+func isOneSpanish(n int) bool    { return n == 1 }

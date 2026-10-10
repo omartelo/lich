@@ -22,4 +22,11 @@ describe("Trans", () => {
     const html = renderToStaticMarkup(<Trans k="common.count.file" params={{ count: 2 }} />)
     expect(html).toBe("2 arquivos")
   })
+
+  it("renders in Spanish", () => {
+    vi.stubGlobal("localStorage", { setItem: () => {}, getItem: () => null })
+    setLocale("es")
+    const html = renderToStaticMarkup(<Trans k="common.count.file" params={{ count: 2 }} />)
+    expect(html).toBe("2 archivos")
+  })
 })

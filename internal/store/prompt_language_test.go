@@ -25,3 +25,13 @@ func TestPromptLanguageIsEnglishUntilSetAndPersists(t *testing.T) {
 		t.Errorf("PromptLanguage = %q for an unknown tag, want en", got)
 	}
 }
+
+func TestPromptLanguageAcceptsSpanish(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.SetSetting("prompt.language", "", "es"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+	if got := svc.PromptLanguage(); got != prompt.Spanish {
+		t.Errorf("PromptLanguage = %q after choosing es", got)
+	}
+}
