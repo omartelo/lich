@@ -344,9 +344,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (`docs/hooks/session-state.md`), so nothing ever opens or closes a window there, and the recap band beside it
   is never drawn either. Whether the switch is *offered* is read off the session's own reports and corrects
   itself the day it starts reporting (`turnSwitchable`), but the sentence under the dead switch naming
-  the provider is a hand-written list (`turnUnavailableReason`,
-  `frontend/src/lib/git/last-turn.ts`): the two disagree, and the panel names a provider that has since started
-  reporting, until that list is moved with the contract.
+  the provider is a hand-written list (`turnUnavailableReason`, `frontend/src/lib/git/last-turn.ts`),
+  because the frontend cannot tell a provider that never reports from one that has not reported yet. The
+  panel draws that sentence only while the switch is off, so a listed provider that starts reporting is
+  named only until its first report, and the list stays wrong in source until it is moved with the contract.
 - **A finished turn is unread until its own card is watched** (`frontend/src/lib/session/session-status-store.ts`,
   `frontend/src/providers/project-events.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
   fades only for the session whose terminal is on screen **while the window has focus**. A card left focused in a
