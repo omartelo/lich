@@ -46,7 +46,8 @@ runs `assemble.sh`, which reduces the 1.4 GB distribution to what ships:
   machine, where xterm.js falls back to its canvas renderer anyway. 16 MB saved.
 
 On disk ~300 MB; ~100 MB compressed into the package. The first build fetches
-the distribution (~200 MB download); later builds reuse `.cef/`.
+the distribution (~200 MB download); later builds, in any worktree on the same CEF version, reuse the copy
+`build/cef.sh --dir` prints.
 
 ## First build needs
 
