@@ -11,13 +11,14 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { IconAction } from "@/components/common/IconAction"
+import { t as tPlain, useT, type PlainMessageKey } from "@/lib/i18n/i18n"
 import type { PullRequestSummary } from "@/lib/api-types"
 import {
-  FILTER_LABELS,
+  FILTER_LABEL_KEYS,
   PULLS_FILTERS,
   PULLS_PAGE_LIMIT,
   PULLS_SORTS,
-  SORT_LABELS,
+  SORT_LABEL_KEYS,
   checkVerdict,
   filterCounts,
   filterPullRequests,
@@ -63,12 +64,13 @@ const LIST_HIDDEN_KEY = "lich.pulls.list.hidden"
 // The box takes GitHub's own qualifiers, so the syntax is already known to
 // anyone who has searched pull requests there. The tooltip is the only place
 // that says so — a column this narrow has no room for a legend.
-const QUALIFIER_HELP = [
-  "Words match the number, title, author and branch.",
-  "is:open · is:closed · is:merged · is:all",
-  "is:draft · is:ready · is:fork",
-  "review:required · review:approved · review:changes-requested",
-].join("\n")
+const qualifierHelp = () =>
+  [
+    tPlain("pulls.pullsList.qualifierWords"),
+    "is:open · is:closed · is:merged · is:all",
+    "is:draft · is:ready · is:fork",
+    "review:required · review:approved · review:changes-requested",
+  ].join("\n")
 
 interface PullsListProps {
   list: PullRequestSummary[]
@@ -103,6 +105,7 @@ export function PullsList({
   parsed,
   checkedOutBranches,
 }: PullsListProps) {
+  const t = useT()
   const [open, toggle] = usePanelVisible(LIST_HIDDEN_KEY)
   // Both are how this user reads a list of pull requests rather than facts about
   // one, so they are remembered across leaving the screen — a review resumed
@@ -130,7 +133,7 @@ export function PullsList({
   if (!open) {
     return (
       <div className="flex flex-none flex-col items-center border-r border-border px-1.5 pt-3">
-        <IconAction label="Show the pull request list" onClick={toggle}>
+        <IconAction label={t("pulls.pullsList.show")} onClick={toggle}>
           <PanelLeftOpen className="size-3.5" />
         </IconAction>
       </div>
@@ -146,13 +149,13 @@ export function PullsList({
             <Input
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Filter — try is:merged"
-              aria-label="Filter pull requests"
-              title={QUALIFIER_HELP}
+              placeholder={t("pulls.pullsList.filterPlaceholder")}
+              aria-label={t("pulls.pullsList.filterLabel")}
+              title={qualifierHelp()}
               className="h-8 pl-8 text-sm"
             />
           </div>
-          <IconAction label="Hide the pull request list" onClick={toggle}>
+          <IconAction label={t("pulls.pullsList.hide")} onClick={toggle}>
             <PanelLeftClose className="size-3.5" />
           </IconAction>
         </div>
@@ -160,7 +163,7 @@ export function PullsList({
             line in this narrow column. */}
         <div
           role="radiogroup"
-          aria-label="Pull request filter"
+          aria-label={t("pulls.pullsList.filterGroup")}
           className="flex gap-0.5 rounded-md border border-border bg-muted/40 p-0.5"
         >
           {PULLS_FILTERS.map((value) => {
@@ -179,7 +182,7 @@ export function PullsList({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                {FILTER_LABELS[value]}
+                {t(FILTER_LABEL_KEYS[value])}
                 <span className="tabular-nums opacity-60">{counts[value]}</span>
               </button>
             )
@@ -189,13 +192,13 @@ export function PullsList({
 
       <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground">
         <span className="uppercase tracking-wide">
-          {parsed.state}
+          {t(`pulls.pullsList.state.${parsed.state}`)}
           {list.length >= PULLS_PAGE_LIMIT && (
             <span
               className="ml-1.5 normal-case"
-              title={`Only the ${PULLS_PAGE_LIMIT} most recently updated are loaded — filtering searches those.`}
+              title={t("pulls.pullsList.cappedHint", { limit: PULLS_PAGE_LIMIT })}
             >
-              first {PULLS_PAGE_LIMIT}
+              {t("pulls.pullsList.capped", { limit: PULLS_PAGE_LIMIT })}
             </span>
           )}
         </span>
@@ -208,13 +211,13 @@ export function PullsList({
               />
             }
           >
-            {SORT_LABELS[sort]}
+            {t(SORT_LABEL_KEYS[sort])}
             <ChevronDown className="size-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {PULLS_SORTS.map((option) => (
               <DropdownMenuItem key={option} onClick={() => chooseSort(option)}>
-                {SORT_LABELS[option]}
+                {t(SORT_LABEL_KEYS[option])}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -229,8 +232,8 @@ export function PullsList({
         ) : rows.length === 0 ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">
             {list.length === 0
-              ? `No ${parsed.state === "all" ? "" : `${parsed.state} `}pull requests.`
-              : "Nothing matches that filter."}
+              ? t(`pulls.pullsList.none.${parsed.state}`)
+              : t("pulls.pullsList.noMatch")}
           </p>
         ) : (
           rows.map((pr) => (
@@ -272,12 +275,16 @@ const STATE_GLYPH: Record<string, LucideIcon> = {
 // counts come from the conversation read, and one of those per row is a GraphQL
 // round-trip per row: the deliberate trade is that the list summarises and the
 // screen behind it qualifies.
-const REVIEW_LABEL: Record<string, { text: string; className: string }> = {
-  APPROVED: { text: "approved", className: "text-tone-pass" },
-  CHANGES_REQUESTED: { text: "changes requested", className: "text-destructive" },
+const REVIEW_LABEL: Record<string, { text: PlainMessageKey; className: string }> = {
+  APPROVED: { text: "pulls.pullsList.review.approved", className: "text-tone-pass" },
+  CHANGES_REQUESTED: {
+    text: "pulls.pullsList.review.changesRequested",
+    className: "text-destructive",
+  },
 }
 
 function PullRow({ pr, active, isCheckedOut, onSelect }: PullRowProps) {
+  const t = useT()
   const verdict = checkVerdict(pr)
   const StateGlyph = STATE_GLYPH[pr.state] ?? GitPullRequestArrow
   const review = REVIEW_LABEL[pr.reviewDecision]
@@ -308,13 +315,13 @@ function PullRow({ pr, active, isCheckedOut, onSelect }: PullRowProps) {
           {verdict !== "none" && (
             <span className={cn("size-1.5 shrink-0 rounded-full", VERDICT_DOT[verdict])} />
           )}
-          {pr.isDraft && <span className="text-tone-wait">Draft</span>}
-          {review && <span className={review.className}>{review.text}</span>}
-          {pr.isCrossRepository && <span>fork</span>}
+          {pr.isDraft && <span className="text-tone-wait">{t("pulls.pullsList.draft")}</span>}
+          {review && <span className={review.className}>{t(review.text)}</span>}
+          {pr.isCrossRepository && <span>{t("pulls.pullsList.fork")}</span>}
           {isCheckedOut && (
             <span className="flex items-center gap-1">
               <Terminal className="size-3" />
-              checked out
+              {t("pulls.pullsList.checkedOut")}
             </span>
           )}
         </span>

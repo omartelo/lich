@@ -1,6 +1,7 @@
 import { Check, Clock, ExternalLink, X } from "lucide-react"
 import { Notice } from "@/components/common/Notice"
 import type { CheckItem } from "@/lib/api-types"
+import { useT } from "@/lib/i18n/i18n"
 import { checkDuration } from "@/lib/pulls/check-duration"
 import { System } from "@/lib/rpc"
 import { cn } from "@/lib/utils"
@@ -16,8 +17,9 @@ const stateIcon = {
 // just counting it. A row opens its run in the browser — reading the log is
 // GitHub's job, finding out which log to read is this tab's.
 export function PullsChecks({ checks }: { checks: CheckItem[] | null }) {
+  const t = useT()
   if (!checks || checks.length === 0) {
-    return <Notice className="px-6 py-5 text-sm">No checks reported.</Notice>
+    return <Notice className="px-6 py-5 text-sm">{t("pulls.pullsChecks.none")}</Notice>
   }
   return (
     <div className="flex flex-col py-1">

@@ -5,6 +5,7 @@ import { Markdown } from "@/components/Markdown"
 import { Notice } from "@/components/common/Notice"
 import { Button } from "@/components/ui/button"
 import type { PullRequestConversation, PullRequestReview } from "@/lib/api-types"
+import { useT } from "@/lib/i18n/i18n"
 import { conversationTimeline } from "@/lib/pulls/conversation-timeline"
 import type { DraftScope } from "@/lib/pulls/draft-store"
 import { useDraft } from "@/lib/pulls/use-draft"
@@ -40,6 +41,7 @@ export function PullsConversation({
   onComment,
   onDismiss,
 }: PullsConversationProps) {
+  const t = useT()
   const [draft, setDraft] = useDraft(pull, "comment")
   const [sending, setSending] = useState(false)
   const [showResolved, setShowResolved] = useState(false)
@@ -51,23 +53,20 @@ export function PullsConversation({
       await onComment(draft ?? "")
       setDraft(null)
     } catch (err: unknown) {
-      toast.error(`Comment failed: ${errorText(err)}`)
+      toast.error(t("pulls.pullsConversation.commentFailed", { error: errorText(err) }))
     } finally {
       setSending(false)
     }
   }
 
   if (loading && !conversation) {
-    return <Notice className="px-6 py-5 text-sm">Reading the conversation…</Notice>
+    return <Notice className="px-6 py-5 text-sm">{t("pulls.pullsConversation.loading")}</Notice>
   }
 
   return (
     <div className="flex max-w-3xl flex-col gap-4 px-6 py-5">
       {timeline.items.length === 0 && timeline.resolved.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          Nothing said yet. A comment here goes on the pull request itself; a comment on a line goes
-          in the diff.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("pulls.pullsConversation.empty")}</p>
       )}
 
       {timeline.items.map((item) => {
@@ -116,8 +115,7 @@ export function PullsConversation({
               <ChevronRight className="size-3.5" />
             )}
             <CheckCheck className="size-3.5" />
-            {timeline.resolved.length} resolved{" "}
-            {timeline.resolved.length === 1 ? "thread" : "threads"}
+            {t("pulls.pullsConversation.resolved", { count: timeline.resolved.length })}
           </button>
           {showResolved &&
             timeline.resolved.map((thread) => (
@@ -134,14 +132,16 @@ export function PullsConversation({
       )}
 
       <div className="flex flex-col gap-1.5 border-t border-border pt-4">
-        <span className="text-xs text-muted-foreground">Comment on the pull request</span>
+        <span className="text-xs text-muted-foreground">
+          {t("pulls.pullsConversation.commentOn")}
+        </span>
         <CommentBox
           value={draft ?? ""}
           onChange={setDraft}
           onSubmit={() => void send()}
-          submitLabel="Comment"
+          submitLabel={t("pulls.pullsConversation.comment")}
           busy={sending}
-          placeholder="Something about the pull request as a whole"
+          placeholder={t("pulls.pullsConversation.commentPlaceholder")}
         />
       </div>
     </div>
@@ -165,6 +165,7 @@ function ReviewVerdict({
   review: PullRequestReview
   onDismiss: (reviewID: string, message: string) => Promise<void>
 }) {
+  const t = useT()
   const [why, setWhy] = useState<string | null>(null)
   const [dismissing, setDismissing] = useState(false)
   const canDismiss = review.id !== "" && DISMISSABLE.has(review.state)
@@ -175,7 +176,7 @@ function ReviewVerdict({
       await onDismiss(review.id, why ?? "")
       setWhy(null)
     } catch (err: unknown) {
-      toast.error(`Dismiss failed: ${errorText(err)}`)
+      toast.error(t("pulls.pullsConversation.dismissFailed", { error: errorText(err) }))
     } finally {
       setDismissing(false)
     }
@@ -185,19 +186,19 @@ function ReviewVerdict({
     review.state === "APPROVED" ? (
       <span className="flex items-center gap-1 text-tone-pass">
         <Check className="size-3.5" />
-        approved
+        {t("pulls.verdict.approved")}
       </span>
     ) : review.state === "CHANGES_REQUESTED" ? (
       <span className="flex items-center gap-1 text-tone-wait">
         <X className="size-3.5" />
-        requested changes
+        {t("pulls.verdict.changesRequested")}
       </span>
     ) : review.state === "DISMISSED" ? (
-      <span className="text-muted-foreground">review dismissed</span>
+      <span className="text-muted-foreground">{t("pulls.verdict.dismissed")}</span>
     ) : (
       <span className="flex items-center gap-1 text-muted-foreground">
         <MessageSquare className="size-3.5" />
-        commented
+        {t("pulls.verdict.commented")}
       </span>
     )
 
@@ -219,7 +220,7 @@ function ReviewVerdict({
             onClick={() => setWhy("")}
           >
             <Undo2 />
-            Dismiss
+            {t("pulls.pullsConversation.dismiss")}
           </Button>
         )}
       </div>
@@ -230,16 +231,16 @@ function ReviewVerdict({
           read. */}
       {why !== null && (
         <div className="mt-1 flex flex-col gap-1.5">
-          <span className="text-xs text-muted-foreground">Why this review no longer applies</span>
+          <span className="text-xs text-muted-foreground">{t("pulls.pullsConversation.why")}</span>
           <CommentBox
             value={why}
             onChange={(next) => setWhy(next)}
             onSubmit={() => void dismiss()}
             onCancel={() => setWhy(null)}
-            submitLabel="Dismiss review"
+            submitLabel={t("pulls.pullsConversation.dismissReview")}
             busy={dismissing}
             autoFocus
-            placeholder="What changed since it was written"
+            placeholder={t("pulls.pullsConversation.whyPlaceholder")}
           />
         </div>
       )}

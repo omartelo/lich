@@ -11,6 +11,8 @@ import { Notice } from "@/components/common/Notice"
 import { Button } from "@/components/ui/button"
 import { ToolMissing } from "@/components/common/ToolMissing"
 import { failed } from "@/lib/binary-layers"
+import { t, useT } from "@/lib/i18n/i18n"
+import { Trans } from "@/components/common/Trans"
 import { NO_SETTLE, useBinaryCheck } from "@/lib/use-binary-check"
 import { GH } from "@/lib/vcs-tools"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
@@ -64,6 +66,7 @@ interface PullsProps {
 // around it — which one is in view, and what an action there means for the
 // checkout it lives in.
 export function Pulls({ list = false }: PullsProps) {
+  const t = useT()
   const { projectId, number } = useParams()
   const navigate = useNavigate()
   const {
@@ -196,14 +199,14 @@ export function Pulls({ list = false }: PullsProps) {
     }
     const wtPath = wt.path
     if (!(await refreshCheckouts()).some((c) => c.path === wtPath)) {
-      toast.success(`${baseName(wtPath)} was already removed`)
+      toast.success(t("pulls.pulls.alreadyRemoved", { name: baseName(wtPath) }))
       return
     }
     const occupants = sessionsOf(sessions, projectId).filter((s) => s.path === wtPath)
     // Removing the checkout would take its pinned sessions with it, which is
     // exactly what the pin refuses.
     if (occupants.some((s) => s.pinned)) {
-      toast.error("Worktree has a pinned session — unpin it first.")
+      toast.error(t("pulls.pulls.pinnedSession"))
       return
     }
     // A checkout the user made by hand is theirs, so deleting it takes a
@@ -212,11 +215,11 @@ export function Pulls({ list = false }: PullsProps) {
     // rather than at the call, which is past the point where the sessions have
     // already been discarded.
     if (await ProjectService.WorktreeAdopted(wtPath).catch(() => true)) {
-      toast.error("lich did not create this worktree — remove it from the sidebar.")
+      toast.error(t("pulls.pulls.notCreatedByLich"))
       return
     }
     if (await ProjectService.WorktreeDirty(wtPath).catch(() => false)) {
-      toast.error("Worktree has uncommitted changes — remove it from the sidebar.")
+      toast.error(t("pulls.pulls.dirty"))
       return
     }
     // The merge just told the agents in there about itself, so one of them is
@@ -246,16 +249,19 @@ export function Pulls({ list = false }: PullsProps) {
     }
     try {
       await ProjectService.RemoveWorktree(projectPath, wtPath, false, false)
-      toast.success(`Removed ${baseName(wtPath)}`)
+      toast.success(t("pulls.pulls.removed", { name: baseName(wtPath) }))
     } catch (err: unknown) {
-      toast.error(`Failed to remove worktree: ${errorText(err)}`)
+      toast.error(t("pulls.pulls.removeFailed", { error: errorText(err) }))
     }
     void refreshCheckouts()
   }
 
   const onMerged = () => {
     reload()
-    const merged = `Merged #${detail?.number} into ${detail?.baseRefName}`
+    const merged = t("pulls.pulls.merged", {
+      number: detail?.number ?? "",
+      base: detail?.baseRefName ?? "",
+    })
     // The offer is about the merged branch's own checkout, which is not
     // necessarily the one this screen is standing in — the list can merge a
     // pull request belonging to a worktree next door, or to none at all. The
@@ -269,7 +275,12 @@ export function Pulls({ list = false }: PullsProps) {
         detail.headRefName,
         detail.baseRefName,
       ).catch((err: unknown) => {
-        toast.error(`Couldn’t tell the sessions in ${baseName(checkedOut.path)}: ${errorText(err)}`)
+        toast.error(
+          t("pulls.pulls.announceFailed", {
+            name: baseName(checkedOut.path),
+            error: errorText(err),
+          }),
+        )
       })
     }
     const wt = checkedOut?.path !== projectPath ? checkedOut : undefined
@@ -279,7 +290,7 @@ export function Pulls({ list = false }: PullsProps) {
     }
     toast.success(merged, {
       duration: CLEANUP_TOAST_MS,
-      action: { label: "Remove worktree", onClick: () => void removeWorktree(wt) },
+      action: { label: t("pulls.pulls.removeWorktree"), onClick: () => void removeWorktree(wt) },
     })
   }
 
@@ -333,7 +344,7 @@ export function Pulls({ list = false }: PullsProps) {
       navigate(`/projects/${projectId}`)
       return target
     } catch (err: unknown) {
-      toast.error(`Couldn’t open a session: ${errorText(err)}`)
+      toast.error(t("pulls.pulls.openSessionFailed", { error: errorText(err) }))
       return ""
     } finally {
       setOpening(false)
@@ -358,7 +369,7 @@ export function Pulls({ list = false }: PullsProps) {
     try {
       await writeAtPrompt(target, prompt)
     } catch (err: unknown) {
-      toast.error(`Couldn’t hand this to the session: ${errorText(err)}`)
+      toast.error(t("pulls.pulls.handOffFailed", { error: errorText(err) }))
     }
   }
 
@@ -370,18 +381,18 @@ export function Pulls({ list = false }: PullsProps) {
     try {
       await writeAtPrompt(sessionId, createPullRequestPrompt(branch))
     } catch (err: unknown) {
-      toast.error(`Couldn’t hand this to the session: ${errorText(err)}`)
+      toast.error(t("pulls.pulls.handOffFailed", { error: errorText(err) }))
     }
   }
 
   const session: SessionAction = {
     label:
       checkedOut && sessionsOf(sessions, projectId ?? "").some((s) => s.path === checkedOut.path)
-        ? "Go to session"
-        : "Open in Session",
+        ? t("pulls.pulls.goToSession")
+        : t("pulls.pulls.openInSession"),
     blocked:
       detail?.isCrossRepository && !detail.maintainerCanModify
-        ? "The head branch lives on a fork that does not allow edits by maintainers — its commits could not be pushed back"
+        ? t("pulls.pulls.forkBlocked")
         : null,
     busy: opening,
     run: () => void openInSession(),
@@ -396,9 +407,9 @@ export function Pulls({ list = false }: PullsProps) {
   } else if (noGH) {
     body = <ToolMissing tool={GH} icon={GitPullRequestArrow} />
   } else if (!path) {
-    body = <CentredNotice>No repository</CentredNotice>
+    body = <CentredNotice>{t("pulls.pulls.noRepository")}</CentredNotice>
   } else if (error) {
-    body = <CentredNotice>Couldn’t load the pull request: {error}</CentredNotice>
+    body = <CentredNotice>{t("pulls.pulls.loadFailed", { error })}</CentredNotice>
   } else if (detail) {
     body = (
       <PullRequestView
@@ -478,22 +489,25 @@ interface RunningRemovalDialogProps {
 // merge toast's cleanup: removing the checkout takes every card in it down with
 // it, and the turn in flight does not survive that.
 function RunningRemovalDialog({ pending, onCancel, onRemoveAnyway }: RunningRemovalDialogProps) {
+  const t = useT()
   const labels = pending?.running.map((s) => s.label).join(", ")
   return (
     <ConfirmDialog
       open={pending !== null}
       onCancel={onCancel}
-      title="Session is still running"
+      title={t("pulls.pulls.runningRemoval.title")}
       description={
-        <>
-          <span className="font-medium">{labels}</span> is mid-turn in{" "}
-          {baseName(pending?.wt.path ?? "")}. Removing the worktree stops it where it stands; the
-          turn in flight is lost.
-        </>
+        <Trans
+          k="pulls.pulls.runningRemoval.description"
+          params={{
+            labels: <span className="font-medium">{labels}</span>,
+            name: baseName(pending?.wt.path ?? ""),
+          }}
+        />
       }
     >
       <Button variant="destructive" onClick={onRemoveAnyway}>
-        Remove anyway
+        {t("pulls.pulls.runningRemoval.removeAnyway")}
       </Button>
     </ConfirmDialog>
   )
@@ -514,10 +528,10 @@ function CentredNotice({ children }: { children: ReactNode }) {
 // pull request to come from.
 function handOffBlocked(sessionId: string, branch: string): string | null {
   if (!sessionId) {
-    return "No session on this checkout to hand it to"
+    return t("pulls.pulls.noSessionToHandOff")
   }
   if (!branch) {
-    return "HEAD is not on a branch"
+    return t("pulls.pulls.headNotOnBranch")
   }
   return null
 }

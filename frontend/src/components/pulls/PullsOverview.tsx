@@ -12,7 +12,9 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react"
+import { Trans } from "@/components/common/Trans"
 import type { PullRequestDetail, PullRequestReviewer, ReviewCandidate } from "@/lib/api-types"
+import { useT, type PlainMessageKey } from "@/lib/i18n/i18n"
 import { pendingReviewerLogins, pickableReviewers } from "@/lib/pulls/reviewers"
 import { ProjectService } from "@/lib/rpc"
 import { cn, errorText } from "@/lib/utils"
@@ -52,6 +54,7 @@ export function PullsOverview({ path, projectId, detail, onRefresh }: PullsOverv
   // null is "not editing"; an empty string is a description being cleared, which
   // is a legitimate edit and must not read as the same thing. Owned outside the
   // tree, because the tab above this one unmounts it (draft-store).
+  const t = useT()
   const [draft, setDraft] = useDraft({ projectId, number: detail.number }, "body")
   const [saving, setSaving] = useState(false)
 
@@ -65,7 +68,7 @@ export function PullsOverview({ path, projectId, detail, onRefresh }: PullsOverv
       setDraft(null)
       onRefresh()
     } catch (err: unknown) {
-      toast.error(`Couldn’t save the description: ${errorText(err)}`)
+      toast.error(t("pulls.pullsOverview.saveFailed", { error: errorText(err) }))
     } finally {
       setSaving(false)
     }
@@ -76,7 +79,10 @@ export function PullsOverview({ path, projectId, detail, onRefresh }: PullsOverv
       <div className="flex flex-col gap-2 text-xs">
         {detail.author !== "" && (
           <span className="text-muted-foreground">
-            Opened by <span className="text-foreground">{detail.author}</span>
+            <Trans
+              k="pulls.pullsOverview.openedBy"
+              params={{ author: <span className="text-foreground">{detail.author}</span> }}
+            />
           </span>
         )}
         <Reviewers path={path} detail={detail} onRefresh={onRefresh} />
@@ -84,11 +90,13 @@ export function PullsOverview({ path, projectId, detail, onRefresh }: PullsOverv
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Description</span>
+          <span className="text-xs text-muted-foreground">
+            {t("pulls.pullsOverview.description")}
+          </span>
           {draft === null && (
             <Button variant="ghost" size="sm" onClick={() => setDraft(detail.body)}>
               <Pencil />
-              Edit
+              {t("pulls.pullsOverview.edit")}
             </Button>
           )}
         </div>
@@ -96,7 +104,9 @@ export function PullsOverview({ path, projectId, detail, onRefresh }: PullsOverv
           detail.body.trim() !== "" ? (
             <Markdown>{detail.body}</Markdown>
           ) : (
-            <p className="text-sm text-muted-foreground">No description.</p>
+            <p className="text-sm text-muted-foreground">
+              {t("pulls.pullsOverview.noDescription")}
+            </p>
           )
         ) : (
           <div className="flex flex-col gap-2">
@@ -109,7 +119,7 @@ export function PullsOverview({ path, projectId, detail, onRefresh }: PullsOverv
                   setDraft(null)
                 }
               }}
-              placeholder="Describe the pull request"
+              placeholder={t("pulls.pullsOverview.descriptionPlaceholder")}
               // biome-ignore lint/a11y/noAutofocus: the box only exists because Edit was just clicked — typing is the next thing that happens.
               autoFocus
               // The shared field already grows with what it holds; what changes
@@ -121,10 +131,10 @@ export function PullsOverview({ path, projectId, detail, onRefresh }: PullsOverv
             />
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={() => void save()} disabled={saving}>
-                {saving ? "Saving…" : "Save"}
+                {saving ? t("pulls.pullsOverview.saving") : t("common.action.save")}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => setDraft(null)} disabled={saving}>
-                Cancel
+                {t("common.action.cancel")}
               </Button>
             </div>
           </div>
@@ -140,6 +150,7 @@ export function PullsOverview({ path, projectId, detail, onRefresh }: PullsOverv
 function Reviewers({ path, detail, onRefresh }: PullRequestPaneProps) {
   // Read on first open rather than with the pull request: most readings of a
   // pull request never touch the roster, and this is a gh round-trip.
+  const t = useT()
   const [candidates, setCandidates] = useState<ReviewCandidate[] | null>(null)
   const [busy, setBusy] = useState(false)
   const roster = detail.reviewers ?? []
@@ -154,7 +165,7 @@ function Reviewers({ path, detail, onRefresh }: PullRequestPaneProps) {
       setCandidates((await ProjectService.AssignableReviewers(path)) ?? [])
     } catch (err: unknown) {
       setCandidates([])
-      toast.error(`Couldn’t read who can review: ${errorText(err)}`)
+      toast.error(t("pulls.pullsOverview.candidatesFailed", { error: errorText(err) }))
     }
   }
 
@@ -164,8 +175,12 @@ function Reviewers({ path, detail, onRefresh }: PullRequestPaneProps) {
       await ProjectService.RequestReview(path, detail.number, login, requested)
       onRefresh()
     } catch (err: unknown) {
-      const asked = requested ? "request a review from" : "withdraw the review request for"
-      toast.error(`Couldn’t ${asked} ${login}: ${errorText(err)}`)
+      const error = errorText(err)
+      toast.error(
+        requested
+          ? t("pulls.pullsOverview.requestFailed", { login, error })
+          : t("pulls.pullsOverview.withdrawFailed", { login, error }),
+      )
     } finally {
       setBusy(false)
     }
@@ -173,8 +188,10 @@ function Reviewers({ path, detail, onRefresh }: PullRequestPaneProps) {
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="text-muted-foreground">Reviewers</span>
-      {roster.length === 0 && <span className="text-muted-foreground">Nobody yet</span>}
+      <span className="text-muted-foreground">{t("pulls.pullsOverview.reviewers")}</span>
+      {roster.length === 0 && (
+        <span className="text-muted-foreground">{t("pulls.pullsOverview.nobodyYet")}</span>
+      )}
       {roster.map((reviewer) => (
         <ReviewerChip key={reviewer.login} reviewer={reviewer} />
       ))}
@@ -192,16 +209,18 @@ function Reviewers({ path, detail, onRefresh }: PullRequestPaneProps) {
             render={
               <Button variant="ghost" size="sm">
                 <UserPlus />
-                Request review
+                {t("pulls.pullsOverview.requestReview")}
                 <ChevronDown />
               </Button>
             }
           />
           <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
             {candidates === null ? (
-              <DropdownMenuItem disabled>Reading who can review…</DropdownMenuItem>
+              <DropdownMenuItem disabled>
+                {t("pulls.pullsOverview.candidatesLoading")}
+              </DropdownMenuItem>
             ) : pickable.length === 0 ? (
-              <DropdownMenuItem disabled>Nobody else can review this</DropdownMenuItem>
+              <DropdownMenuItem disabled>{t("pulls.pullsOverview.nobodyElse")}</DropdownMenuItem>
             ) : (
               pickable.map((candidate) => (
                 <DropdownMenuCheckboxItem
@@ -226,22 +245,38 @@ function Reviewers({ path, detail, onRefresh }: PullRequestPaneProps) {
 
 // What each verdict reads as on a chip. A reviewer with no verdict yet is the
 // default below: the review is still owed.
-const VERDICTS: Record<string, { icon: LucideIcon; tone: string; label: string }> = {
-  APPROVED: { icon: Check, tone: "text-tone-pass", label: "approved" },
-  CHANGES_REQUESTED: { icon: X, tone: "text-destructive", label: "requested changes" },
-  COMMENTED: { icon: MessageSquare, tone: "text-muted-foreground", label: "commented" },
-  DISMISSED: { icon: CircleDashed, tone: "text-muted-foreground", label: "review dismissed" },
-}
+const VERDICTS = {
+  APPROVED: { icon: Check, tone: "text-tone-pass", label: "pulls.verdict.approved" },
+  CHANGES_REQUESTED: { icon: X, tone: "text-destructive", label: "pulls.verdict.changesRequested" },
+  COMMENTED: {
+    icon: MessageSquare,
+    tone: "text-muted-foreground",
+    label: "pulls.verdict.commented",
+  },
+  DISMISSED: {
+    icon: CircleDashed,
+    tone: "text-muted-foreground",
+    label: "pulls.verdict.dismissed",
+  },
+} as const satisfies Record<string, { icon: LucideIcon; tone: string; label: PlainMessageKey }>
 
-const AWAITING = { icon: CircleDashed, tone: "text-muted-foreground", label: "review requested" }
+const AWAITING = {
+  icon: CircleDashed,
+  tone: "text-muted-foreground",
+  label: "pulls.verdict.requested",
+} as const
 
 function ReviewerChip({ reviewer }: { reviewer: PullRequestReviewer }) {
-  const verdict = VERDICTS[reviewer.state] ?? AWAITING
+  const t = useT()
+  const verdict = VERDICTS[reviewer.state as keyof typeof VERDICTS] ?? AWAITING
   // A team only ever arrives on the roster as a pending request — a verdict
   // belongs to the person who left it — so its own glyph hides nothing.
   const Icon = reviewer.isTeam ? Users : verdict.icon
   return (
-    <span className={cn("flex items-center gap-1 font-medium", verdict.tone)} title={verdict.label}>
+    <span
+      className={cn("flex items-center gap-1 font-medium", verdict.tone)}
+      title={t(verdict.label)}
+    >
       <Icon className="size-3.5" />
       {reviewer.login}
     </span>

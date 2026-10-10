@@ -1,4 +1,5 @@
 import type { BranchRules, CommitPattern, MergeMethod, PullRequestDetail } from "@/lib/api-types"
+import { t, type PlainMessageKey } from "@/lib/i18n/i18n"
 
 // Every method lich knows how to ask gh for, in the order the menu offers them.
 const EVERY_METHOD: MergeMethod[] = ["squash", "merge", "rebase"]
@@ -32,9 +33,9 @@ export function conflictsWithBase(detail: PullRequestDetail): boolean {
 // The review verdicts that keep a BLOCKED pull request blocked. An approval —
 // or a repository that asks for none — leaves BLOCKED meaning only that a rule
 // applies to the base branch, which GitHub merges from every day.
-const REVIEW_PENDING: Record<string, string> = {
-  CHANGES_REQUESTED: "A reviewer asked for changes",
-  REVIEW_REQUIRED: "GitHub requires a review that has not been left",
+const REVIEW_PENDING: Record<string, PlainMessageKey> = {
+  CHANGES_REQUESTED: "pulls.mergeGate.changesRequested",
+  REVIEW_REQUIRED: "pulls.mergeGate.reviewRequired",
 }
 
 // mergeBlockedReason names why GitHub would refuse this merge, or returns null
@@ -57,19 +58,20 @@ const REVIEW_PENDING: Record<string, string> = {
 // it ready, will GitHub take it.
 export function mergeBlockedReason(detail: PullRequestDetail): string | null {
   if (detail.state !== "OPEN") {
-    return `Pull request is ${detail.state.toLowerCase()}`
+    return detail.state === "MERGED" ? t("pulls.mergeGate.merged") : t("pulls.mergeGate.closed")
   }
   if (detail.isDraft) {
-    return "Pull request is a draft"
+    return t("pulls.mergeGate.draft")
   }
   if (conflictsWithBase(detail)) {
-    return `Conflicts with ${detail.baseRefName}`
+    return t("pulls.mergeGate.conflicts", { base: detail.baseRefName })
   }
   if (detail.mergeStateStatus === "BEHIND") {
-    return "Base branch has moved — update this branch first"
+    return t("pulls.mergeGate.behind")
   }
   if (detail.mergeStateStatus === "BLOCKED") {
-    return REVIEW_PENDING[detail.reviewDecision] ?? null
+    const reason = REVIEW_PENDING[detail.reviewDecision]
+    return reason ? t(reason) : null
   }
   return null
 }
@@ -109,16 +111,37 @@ export function canAdminOverride(detail: PullRequestDetail, rules: BranchRules |
 // GitHub's pattern operators in the words a sentence needs. An operator this
 // build has never seen falls back to "match": the pattern beside it still says
 // more than no note at all.
-const PATTERN_VERBS: Record<string, string> = {
-  regex: "match",
-  starts_with: "start with",
-  ends_with: "end with",
-  contains: "contain",
+const PATTERN_RULES = {
+  regex: { must: "pulls.mergeGate.pattern.match", mustNot: "pulls.mergeGate.pattern.notMatch" },
+  starts_with: {
+    must: "pulls.mergeGate.pattern.startWith",
+    mustNot: "pulls.mergeGate.pattern.notStartWith",
+  },
+  ends_with: {
+    must: "pulls.mergeGate.pattern.endWith",
+    mustNot: "pulls.mergeGate.pattern.notEndWith",
+  },
+  contains: {
+    must: "pulls.mergeGate.pattern.contain",
+    mustNot: "pulls.mergeGate.pattern.notContain",
+  },
+} as const
+
+// The targets the backend names (internal/project.commitPatternTargets); one it
+// adds later is shown as it arrives.
+const PATTERN_TARGETS: Record<string, PlainMessageKey> = {
+  message: "pulls.mergeGate.target.message",
+  "author email": "pulls.mergeGate.target.authorEmail",
+  "committer email": "pulls.mergeGate.target.committerEmail",
 }
 
 function describePattern(rule: CommitPattern): string {
-  const verb = PATTERN_VERBS[rule.operator] ?? "match"
-  return `${rule.target} must ${rule.negate ? "not " : ""}${verb} ${rule.pattern}`
+  const known = PATTERN_RULES[rule.operator as keyof typeof PATTERN_RULES] ?? PATTERN_RULES.regex
+  const target = PATTERN_TARGETS[rule.target]
+  return t(rule.negate ? known.mustNot : known.must, {
+    target: target ? t(target) : rule.target,
+    pattern: rule.pattern,
+  })
 }
 
 // mergeRuleNote names what governs the base branch when GitHub answers BLOCKED
@@ -139,5 +162,5 @@ export function mergeRuleNote(detail: PullRequestDetail, rules: BranchRules | nu
     return null
   }
   const clauses = patterns.map(describePattern).join("; ")
-  return `A ruleset governs ${detail.baseRefName}: every commit ${clauses}.`
+  return t("pulls.mergeGate.ruleNote", { base: detail.baseRefName, clauses })
 }

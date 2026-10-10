@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { useT } from "@/lib/i18n/i18n"
 import { updatedAgo } from "@/lib/pulls/pull-request-list"
 
 interface BylineProps {
@@ -14,9 +15,10 @@ interface BylineProps {
 // on the Pulls screen. GitHub leaves the author null for an account that has
 // been deleted since, which arrives here as an empty login.
 export function Byline({ author, date, children }: BylineProps) {
+  const t = useT()
   return (
     <div className="flex items-baseline gap-2 text-xs text-muted-foreground">
-      <span className="font-semibold text-foreground">{author || "someone"}</span>
+      <span className="font-semibold text-foreground">{author || t("pulls.byline.someone")}</span>
       {children}
       <span>{updatedAgo(date)}</span>
     </div>

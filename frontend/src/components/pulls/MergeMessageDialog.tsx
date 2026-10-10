@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { t, useT } from "@/lib/i18n/i18n"
 import { cn } from "@/lib/utils"
 import { commentFieldClass } from "./CommentBox"
 
@@ -34,14 +35,14 @@ export function mergeEditFor(
   if (method === "squash") {
     return {
       method,
-      title: "Squash and merge",
+      title: t("pulls.mergeMessageDialog.squashAndMerge"),
       subject: `${detail.title} (#${detail.number})`,
       body: detail.body,
     }
   }
   return {
     method,
-    title: "Create a merge commit",
+    title: t("pulls.mergeMessageDialog.createMergeCommit"),
     subject: `Merge pull request #${detail.number} from ${detail.headRefName}`,
     body: "",
   }
@@ -62,6 +63,7 @@ export function MergeMessageDialog({
   onCancel,
   onConfirm,
 }: MergeMessageDialogProps) {
+  const t = useT()
   const canMerge = !merging && edit.subject.trim() !== ""
   return (
     <Dialog open onOpenChange={(next) => !next && onCancel()}>
@@ -73,11 +75,11 @@ export function MergeMessageDialog({
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{edit.title}</DialogTitle>
-          <DialogDescription>Edit the commit message, then merge.</DialogDescription>
+          <DialogDescription>{t("pulls.mergeMessageDialog.description")}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="merge-subject">Commit message</Label>
+            <Label htmlFor="merge-subject">{t("pulls.mergeMessageDialog.subject")}</Label>
             {/* A subject is one line, but a one-line *field* scrolls the end of
                 it out of sight — the part that carries the PR number. This one
                 wraps to show the whole thing (up to three lines) while keeping
@@ -97,12 +99,12 @@ export function MergeMessageDialog({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="merge-body">Extended description</Label>
+            <Label htmlFor="merge-body">{t("pulls.mergeMessageDialog.body")}</Label>
             <textarea
               id="merge-body"
               value={edit.body}
               onChange={(e) => onChange({ ...edit, body: e.target.value })}
-              placeholder="Optional"
+              placeholder={t("pulls.mergeMessageDialog.optional")}
               // The shared field grows with what it holds; the bounds are the
               // window's, as they are for a pull request's description — tall
               // enough to read the body without scrolling, short enough to
@@ -113,11 +115,15 @@ export function MergeMessageDialog({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onCancel}>
-            Cancel
+            {t("common.action.cancel")}
           </Button>
           <Button onClick={onConfirm} disabled={!canMerge}>
             <GitMerge />
-            {merging ? "Merging…" : edit.method === "squash" ? "Squash and merge" : "Merge"}
+            {merging
+              ? t("pulls.mergeMessageDialog.merging")
+              : edit.method === "squash"
+                ? t("pulls.mergeMessageDialog.squashAndMerge")
+                : t("pulls.mergeMessageDialog.merge")}
           </Button>
         </DialogFooter>
       </DialogContent>
