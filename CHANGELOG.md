@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **History search shows the line it matched for a word written with accents
+  or in capitals.** Searching `índice` for a conversation that says `Índice`,
+  or `decision` for one that says `decisión`, listed the session with no line
+  under it.
 - **The hands-on time on a session card is written in the interface language.**
   It read `1h12m` in every language; it now reads `1 h 12 min` in Portuguese,
   `1h12min` in Spanish and `1小时12分钟` in Chinese, and stays `1h12m` in English.

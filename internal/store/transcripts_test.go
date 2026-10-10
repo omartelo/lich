@@ -342,8 +342,8 @@ func TestConversationWindowsCutsAroundTheMention(t *testing.T) {
 
 	t.Run("leaves out a conversation that does not mention the word", func(t *testing.T) {
 		// What an accent fold in the index looks like from here: the search
-		// matched "cion" against "ción", and the row keeps its place with no
-		// snippet under it.
+		// matched "cion" against "ción", which the plain text does not hold,
+		// so the row is left to foldedSnippets.
 		if window, ok := windowOf(t, "una decisión importante", "cion"); ok {
 			t.Errorf("window = %q, want none", window)
 		}
@@ -419,12 +419,11 @@ func mustClosedRow(t *testing.T, svc *Service, term, sessionID string) ClosedSes
 	return ClosedSession{}
 }
 
-// TestClosedSessionsKeepsARowMatchedByAFold: the index folds accents, so
-// "decision" finds a conversation that says "decisión", and the plain text has
-// no snippet to cut for it. The row still answers, and says which half of the
-// search it answered on — that flag, not the snippet, is what the window keeps
-// it on.
-func TestClosedSessionsKeepsARowMatchedByAFold(t *testing.T) {
+// TestClosedSessionsSnippetsARowMatchedByAFold: the index folds accents, so
+// "decision" finds a conversation that says "decisión", which the plain text
+// does not hold. The row says which half of the search it answered on, and
+// carries the line the index matched like any other hit.
+func TestClosedSessionsSnippetsARowMatchedByAFold(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
 	indexed(t, svc, map[string]string{"uuid-a": "una decisión importante"})
@@ -435,11 +434,28 @@ func TestClosedSessionsKeepsARowMatchedByAFold(t *testing.T) {
 	if !row.MatchedConversation {
 		t.Error("a row the index matched does not say so")
 	}
-	if row.Snippet != "" {
-		t.Errorf("Snippet = %q, want none for a hit the plain text does not hold", row.Snippet)
+	if !strings.Contains(row.Snippet, "decisión") {
+		t.Errorf("Snippet = %q, want the stretch the index matched", row.Snippet)
 	}
 	if named := mustClosedRow(t, svc, "Session", "s-a"); named.MatchedConversation {
 		t.Error("a row matched by name alone claims its conversation matched")
+	}
+}
+
+// TestClosedSessionsSnippetsAShoutedAccentedWord: SQLite's lower() folds ASCII
+// alone, so "índice" never finds "Índice" in the plain text, while the index
+// folds it and lists the row. The row has to carry its line all the same.
+func TestClosedSessionsSnippetsAShoutedAccentedWord(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": strings.Repeat("filler ", 2000) + "ÍNDICE de la conversación"})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	for _, term := range []string{"índice", "indice", "Índice"} {
+		row := mustClosedRow(t, svc, term, "s-a")
+		if !strings.Contains(row.Snippet, "ÍNDICE de la") {
+			t.Errorf("ClosedSessions(%q) Snippet = %q, want the stretch the index matched", term, row.Snippet)
+		}
 	}
 }
 
