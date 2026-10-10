@@ -63,4 +63,13 @@ describe("messages built in plain modules follow the language", () => {
     setLocale("pt-BR")
     expect(formatAge(5 * 60_000)).toBe("5 min")
   })
+
+  it("formats units and ages for Simplified Chinese", () => {
+    setLocale("zh-CN")
+    expect(COST_MISS_REASON["mixed-models"]).toMatch(/[\u4e00-\u9fff]/)
+    expect(formatAge(5 * 60_000)).toMatch(/^5\s?(分|min)/)
+    const now = new Date(2026, 0, 5, 12, 0, 0)
+    const at = Math.floor(now.getTime() / 1000) + 45 * 60
+    expect(timeUntil(at, now)).toContain("45")
+  })
 })

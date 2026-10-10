@@ -4,6 +4,7 @@ import type { At, ParamsArg, PluralForms, Shape } from "./catalog"
 import { en, type MessageKey, type Messages } from "./locales/en"
 import { es } from "./locales/es"
 import { ptBR } from "./locales/pt-br"
+import { zhCN } from "./locales/zh-cn"
 
 // The interface language. It is a page preference, not a workspace setting:
 // it changes nothing the backend does, so it lives in localStorage like the
@@ -11,7 +12,7 @@ import { ptBR } from "./locales/pt-br"
 // setting on purpose (prompt-language-store.ts, internal/prompt): people often
 // run the interface in one language and talk to their agents in another.
 
-export const LOCALES = ["en", "pt-BR", "es"] as const
+export const LOCALES = ["en", "pt-BR", "es", "zh-CN"] as const
 export type Locale = (typeof LOCALES)[number]
 
 /** Each language named in itself, which is how someone who cannot read the
@@ -20,9 +21,10 @@ export const LOCALE_NAMES: Record<Locale, string> = {
   en: "English",
   "pt-BR": "Português (Brasil)",
   es: "Español",
+  "zh-CN": "简体中文",
 }
 
-const CATALOGS: Record<Locale, Shape<Messages>> = { en, "pt-BR": ptBR, es }
+const CATALOGS: Record<Locale, Shape<Messages>> = { en, "pt-BR": ptBR, es, "zh-CN": zhCN }
 
 export const UI_LANGUAGE_PREF = "lich.appearance.language"
 
