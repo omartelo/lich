@@ -75,7 +75,8 @@ func main() {
 	}
 
 	// Everything after `--` is the window's.
-	pinnedShell, chromiumArgs := chromium.ParseFlags(os.Args[1:])
+	args, handedErr := launchArgs()
+	pinnedShell, chromiumArgs := chromium.ParseFlags(args)
 	pinShellFlag(pinnedShell)
 
 	configDir, err := os.UserConfigDir()
@@ -98,6 +99,9 @@ func main() {
 		logPath = ""
 	} else {
 		defer closer.Close()
+	}
+	if handedErr != nil {
+		slog.Warn("relaunch arguments unreadable, opening without them", "err", handedErr)
 	}
 
 	launchEnv, env := resolveEnv()
@@ -128,6 +132,21 @@ func main() {
 	term.SetRestart(coord.Do)
 
 	runChromium(term, configDir, coord, window)
+}
+
+// launchArgs are lich's own arguments, or the ones an update on Windows handed
+// the lich it launched again (restart.ArgsEnv). The variable is dropped once
+// read: the next update would otherwise carry a stale copy beside its own.
+func launchArgs() ([]string, error) {
+	args, err := restart.LaunchArgs(os.Args[1:], os.Getenv)
+	if unsetErr := os.Unsetenv(restart.ArgsEnv); unsetErr != nil {
+		slog.Error("unset "+restart.ArgsEnv, "err", unsetErr)
+		os.Exit(1)
+	}
+	if err != nil {
+		return os.Args[1:], err
+	}
+	return args, nil
 }
 
 // pinShellFlag carries --shell in the environment rather than passing it down:
