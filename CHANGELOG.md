@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **lich opens where you left it.** A new window, whether reopened on a lich
   that kept running or opened by a fresh launch, lands on the project screen
   it was on when the window closed instead of Home.
+- **The Homebrew tap moved to `lichdotdev/tap`.** New installs run
+  `brew install --cask lichdotdev/tap/lich`. An install from `omartelo/tap`
+  keeps upgrading: the old tap points Homebrew at the new one.
 
 ### Fixed
 

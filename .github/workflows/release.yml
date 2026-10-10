@@ -474,7 +474,7 @@ jobs:
   # The cask pins the macOS assets by checksum, so it can only be rendered
   # once `release` has published them and their checksums.txt.
   # HOMEBREW_TAP_SSH_KEY is a deploy key with write access on
-  # omartelo/homebrew-tap — GITHUB_TOKEN is scoped to this repository and cannot
+  # lichdotdev/homebrew-tap — GITHUB_TOKEN is scoped to this repository and cannot
   # push to another one. A deploy key, unlike a PAT, reaches exactly that one
   # repository and never expires, so a release years from now still publishes.
   homebrew:
@@ -518,15 +518,12 @@ jobs:
           # IdentitiesOnly keeps ssh from offering the runner's other keys first
           # and getting rejected before this one is tried.
           export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$known"
-          git clone --depth 1 git@github.com:omartelo/homebrew-tap.git tap
+          git clone --depth 1 git@github.com:lichdotdev/homebrew-tap.git tap
           mkdir -p tap/Casks
           cp lich.rb tap/Casks/lich.rb
           cd tap
           git config user.name omartelo
           git config user.email meopedevts@proton.me
-          # The formula shipped a bare CLI and the cask supersedes it; leaving
-          # both in the tap makes `brew install omartelo/tap/lich` ambiguous.
-          git rm -q --ignore-unmatch Formula/lich.rb
           git add Casks/lich.rb
           # A re-run of the same tag renders an identical cask; nothing to push.
           if git diff --cached --quiet; then
