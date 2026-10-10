@@ -38,6 +38,7 @@ import { TerminalDropHint } from "./TerminalDropHint"
 import { TerminalSearchBar, type SearchResults } from "./TerminalSearchBar"
 import { useTerminalDrop } from "./useTerminalDrop"
 import { linkClickIsOurs } from "@/lib/terminal/term-modes"
+import { colorSchemeReport, watchThemeNotify } from "@/lib/terminal/theme-notify"
 import { createSessionLinkProvider } from "@/lib/terminal/session-link-provider"
 import { sessionLinkTargets } from "@/lib/terminal/session-links"
 import { useSettings } from "@/providers/settings"
@@ -160,12 +161,14 @@ export function TerminalView({
   const fontRef = useRef(font)
   const fontSizeRef = useRef(terminalFontSize)
   const themeRef = useRef(terminalColors)
+  const schemeRef = useRef(resolvedTheme.scheme)
   visibleRef.current = visible
   focusedRef.current = focused
   stillInWorkspaceRef.current = stillInWorkspace
   fontRef.current = font
   fontSizeRef.current = terminalFontSize
   themeRef.current = terminalColors
+  schemeRef.current = resolvedTheme.scheme
 
   // Every other open session's label, for the link provider below — read
   // through a ref because xterm calls provideLinks straight from its own
@@ -345,6 +348,8 @@ export function TerminalView({
         term.focus()
       })
 
+    const themeNotify = watchThemeNotify(term, entry, () => schemeRef.current, writeInput)
+
     const search = new SearchAddon()
     term.loadAddon(search)
     const searchResults = search.onDidChangeResults(({ resultIndex, resultCount }) =>
@@ -474,6 +479,7 @@ export function TerminalView({
         selection.dispose()
         searchResults.dispose()
         sessionLinks.dispose()
+        themeNotify.dispose()
         // Disposing the WebGL addon only detaches its canvas — the GL context
         // lives on until the canvas is collected, and Chromium force-loses the
         // oldest of them once 16 are alive. Since every hide destroys a
@@ -743,10 +749,21 @@ export function TerminalView({
   // on the Settings route, where TerminalHost destroys every live terminal —
   // recreation reads the refs. The theme can flip with a terminal on screen
   // (OS scheme under "system").
+  // An app listening for theme changes is told even while its terminal is
+  // hidden: it answers with an OSC 11 query, which waits in the replay queue and
+  // is answered with the new background once the terminal is rebuilt.
+  const appliedThemeRef = useRef(resolvedTheme)
   useEffect(() => {
     const live = entry.live
     if (live) {
       live.term.options.theme = resolvedTheme.terminal
+    }
+    if (appliedThemeRef.current === resolvedTheme) {
+      return
+    }
+    appliedThemeRef.current = resolvedTheme
+    if (entry.themeNotify) {
+      writeInput(colorSchemeReport(resolvedTheme.scheme))
     }
   }, [resolvedTheme, entry])
 

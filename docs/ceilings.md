@@ -262,6 +262,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   for one terminal. The budget suite pins that adding a pane mounts one terminal and remounts none
   (`frontend/src/components/render-budget.test.tsx`); it cannot measure the cadence, because jsdom has
   no canvas to paint.
+- **A theme switch reaches only the apps that asked, and only since the page loaded**
+  (`frontend/src/lib/terminal/theme-notify.ts`): lich answers mode 2031 and sends the light or dark report on a
+  switch, but the "asked" flag lives on the page's terminal entry. A full page reload forgets it, so a session
+  that turned the mode on at boot stays on its old look until it turns it on again. Of the providers, Claude Code
+  and opencode ask; Codex, Antigravity and Kiro CLI read the background once at boot and never hear of a switch;
+  oh-my-pi, Crush and Cursor CLI are unmeasured.
 - **An interrupted turn is read off the keystrokes, not from the provider** (`internal/terminal/draft.go`,
   `hookstate.go`, `Service.noteInterrupt`): Claude Code, Codex and oh-my-pi all skip the hook that ends a turn
   when the user stops one, so lich publishes `interrupted` itself when a lone Ctrl+C or Escape reaches a session
