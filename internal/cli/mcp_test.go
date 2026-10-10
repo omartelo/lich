@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/omartelo/lich/internal/prompt"
+	"github.com/omartelo/lich/internal/spawn"
 )
 
 // speak runs the MCP server over one scripted conversation and returns the
@@ -608,14 +609,12 @@ func TestMCPOpenSessionReturnsTheNamesItIsAddressedBy(t *testing.T) {
 	if call.method != "spawn.Open" {
 		t.Errorf("method = %q", call.method)
 	}
-	want := []any{"s1", "", "codex", "auth-fix", "main", "gpt-5.2", "high", "Apps", true}
-	if len(call.args) != len(want) {
-		t.Fatalf("args = %v, want %v", call.args, want)
+	want := spawn.OpenOptions{
+		From: "s1", Kind: "codex", Worktree: "auth-fix", Base: "main",
+		Model: "gpt-5.2", Effort: "high", Folder: "Apps", Ultracode: true,
 	}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	if got := optionsOf[spawn.OpenOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 	// send_to_session is the next call the agent makes, and it addresses the
 	// session by one of these two names.
@@ -701,11 +700,9 @@ func TestMCPOpenSessionDefaultsEveryArgument(t *testing.T) {
 		t.Fatalf("tool reported a failure: %s", text)
 	}
 	call := f.only(t)
-	want := []any{"s1", "", "", "", ""}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	want := spawn.OpenOptions{From: "s1"}
+	if got := optionsOf[spawn.OpenOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 }
 

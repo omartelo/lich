@@ -618,13 +618,19 @@ func (c *client) open(args []string) error {
 	}
 	method := sendMethod(*private)
 	spawnMethod := "spawn.Open"
-	call := []any{c.sessionID(), *project, *kind, *worktree, *base, *model, *effort, *folder, *ultracode}
+	call := []any{spawn.OpenOptions{
+		From: c.sessionID(), Project: *project, Kind: *kind, Worktree: *worktree, Base: *base,
+		Model: *model, Effort: *effort, Folder: *folder, Ultracode: *ultracode,
+	}}
 	if *subagent {
 		if err := c.checkSubagent(*prompt, *project, *folder, *private); err != nil {
 			return err
 		}
 		method, spawnMethod = relaySendSubagent, "spawn.OpenSubagent"
-		call = []any{c.sessionID(), *kind, *worktree, *base, *model, *effort, *ultracode}
+		call = []any{spawn.OpenSubagentOptions{
+			From: c.sessionID(), Kind: *kind, Worktree: *worktree, Base: *base,
+			Model: *model, Effort: *effort, Ultracode: *ultracode,
+		}}
 	}
 
 	var opened spawn.Session

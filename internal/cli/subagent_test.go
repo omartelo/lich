@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/omartelo/lich/internal/spawn"
 )
 
 const subagentPending = `{"ticket":"a1b2c3d4","target":"Session 4","status":"pending","answer":""}`
@@ -22,14 +24,9 @@ func TestOpenSubagentOpensAndHandsOverAsASubagent(t *testing.T) {
 	if len(f.calls) != 2 || f.calls[0].method != "spawn.OpenSubagent" || f.calls[1].method != "relay.SendSubagent" {
 		t.Fatalf("calls = %+v, want spawn.OpenSubagent then relay.SendSubagent", f.calls)
 	}
-	want := []any{"s1", "claude", "auth-fix", "main", "opus", "", false}
-	if got := f.calls[0].args; len(got) != len(want) {
-		t.Fatalf("open args = %v, want %v", got, want)
-	}
-	for i, arg := range want {
-		if f.calls[0].args[i] != arg {
-			t.Errorf("open arg %d = %v, want %v", i, f.calls[0].args[i], arg)
-		}
+	want := spawn.OpenSubagentOptions{From: "s1", Kind: "claude", Worktree: "auth-fix", Base: "main", Model: "opus"}
+	if got := optionsOf[spawn.OpenSubagentOptions](t, f.calls[0]); got != want {
+		t.Errorf("open options = %+v, want %+v", got, want)
 	}
 	// --json keeps its one shape: the session, and the delivery beside it.
 	var out map[string]any
