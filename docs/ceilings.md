@@ -1080,7 +1080,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   window took the session that ran the gate down with it. `/tmp` is tmpfs on many distributions, so the Go
   build's temporaries count as RAM too. Nothing in lich bounds what a session spends. The way around it is
   in CLAUDE.md › Local Gate: one step at a time, in a `systemd-run --user --scope` with `MemoryMax`, with
-  `GOTMPDIR`/`TMPDIR` on disk; there a step over the limit is the one killed. macOS and Windows have no
+  `GOTMPDIR`/`TMPDIR` on a short path on disk (`/var/tmp/lich-gate`; under `~/.cache` the sandbox suite's
+  Unix sockets outgrew the 108-byte limit); there a step over the limit is the one killed. macOS and Windows have no
   equivalent here.
 - **A rig needs its own HOME, not just its own config dir** (`internal/agentplugin.RepairRegistrations`): every
   launch that is not `task dev` (`LICH_DEV`) or a `go run` binary repoints the provider MCP registrations it
