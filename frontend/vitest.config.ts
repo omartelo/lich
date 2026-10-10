@@ -14,6 +14,10 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Parallel lich sessions each run this suite on the same CPU; vitest sizes
+    // its pool as if it owned the machine, and four suites at once starve the
+    // jsdom tests past their 5s timeout.
+    maxWorkers: "50%",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     coverage: {
       provider: "v8",
