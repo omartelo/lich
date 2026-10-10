@@ -95,6 +95,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Running).
   There is no error chip: no provider reports one, and a process that exited is known only to its terminal,
   not to a store the sidebar reads. The chips are not persisted and drop on a project switch, like the query.
+- **Next waiting session reads the same ring** (`nextWaitingSessionId`, `frontend/src/lib/session/sidebar-groups.ts`):
+  it jumps only to a card whose last report is Waiting, so Antigravity, oh-my-pi, Crush, Cursor CLI and Kiro CLI
+  sessions are never landed on, for the reasons the chips above give. It walks the order next session walks,
+  cards hidden by a folded block or the state filter included, and the active card never counts: when it is
+  the only one waiting, the chord does nothing and goes on to the terminal.
 - **The Run card is never started for you** (`frontend/src/components/sidebar/SessionSidebar.tsx`): a fresh
   worktree's setup script is still installing dependencies in the agent's card when the checkout appears, and
   the setup-finished marker (`setupDone`, `internal/terminal/setup.go`) never reaches the window, so there is

@@ -28,7 +28,7 @@ import {
   type SessionKind,
   type SessionState,
 } from "@/lib/session/sessions"
-import { neighborSessionId } from "@/lib/session/sidebar-groups"
+import { neighborSessionId, nextWaitingSessionId } from "@/lib/session/sidebar-groups"
 import { applyOrder, pinFirst } from "@/lib/reorder"
 import { displayPath } from "@/lib/paths"
 import { errorText } from "@/lib/utils"
@@ -41,7 +41,7 @@ import { resolveNewSessionKind } from "@/lib/session/new-session-kind"
 import { scheduledFor, timeUntil } from "@/lib/session/schedule"
 import type { SessionStatus } from "@/lib/session/session-events"
 import { NotificationsOptIn } from "@/components/NotificationsOptIn"
-import { restoreSessionUnread } from "@/lib/session/use-session-status"
+import { isSessionWaiting, restoreSessionUnread } from "@/lib/session/use-session-status"
 import { useHotkey } from "@/lib/use-hotkey"
 import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { neighborProjectId } from "@/lib/project-order"
@@ -541,6 +541,22 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   }
   useHotkey(hotkeys.nextSession, () => stepSession(1))
   useHotkey(hotkeys.prevSession, () => stepSession(-1))
+
+  // Unlike the step above, nothing waiting declines the chord rather than
+  // swallowing it: there is no move this press could have meant.
+  useHotkey(hotkeys.nextWaitingSession, () => {
+    if (!activeProjectId) return false
+    const current = sessionsRef.current
+    const target = nextWaitingSessionId(
+      current,
+      activeProjectId,
+      activeSessionId(current, activeProjectId),
+      isSessionWaiting,
+      storedGroups(activeProjectId),
+    )
+    if (!target) return false
+    activateSession(activeProjectId, target)
+  })
 
   // Settings and the pull requests render over the terminals rather than beside
   // them, so handing focus to a session that is behind one of those screens would

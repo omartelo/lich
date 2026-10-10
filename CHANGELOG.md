@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   has none yet and a PR button shows where the PR number would be; clicking it
   types the request to open one at that session's prompt, ready to send.
 
+- **Jump to the next session waiting on you.** Ctrl+Shift+Y (⌘⇧Y on macOS)
+  focuses the next session in the sidebar that is blocked on your input,
+  wrapping past the end of the list, and can be rebound in Settings. Claude
+  Code, Codex and opencode sessions report waiting; the other providers never
+  do, so the shortcut skips them.
+
 ### Changed
 
 - **macOS is no longer experimental.** The Homebrew cask has held up in real

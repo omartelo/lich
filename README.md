@@ -111,6 +111,7 @@ reads what each CLI writes down and no two of them write down the same things.
 | A turn your plan's usage limit stopped picks up again once the limit resets | yes | yes | no | its own retries | its own retries | no | no | no |
 | Spinner while a turn runs, ring when it ends | yes | yes | yes | yes | yes | no | yes | yes |
 | Bell when the agent is blocked on you | yes | yes | no | yes | no | no | no | no |
+| Ctrl+Shift+Y jumps to the next session waiting on you | yes | yes | no | yes | no | no | no | no |
 | The card says when the conversation is being compacted | yes | no | no | no | no | no | no | no |
 | Sidebar filter by state: Waiting, Running, Unread | yes | yes | no Waiting | yes | no Waiting | no, always Idle | no Waiting | no Waiting |
 | Run by your agent inside another session (`claude -p`, `cursor-agent -p`), it stays out of that session's card | yes | yes | yes | yes | yes | yes | yes | no |

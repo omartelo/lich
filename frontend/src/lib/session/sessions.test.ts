@@ -35,6 +35,7 @@ import {
   groupByWorktree,
   isLastWorktreeSession,
   neighborSessionId,
+  nextWaitingSessionId,
   orderGroups,
   PINNED_GROUP_KEY,
   reorderSubset,
@@ -622,6 +623,49 @@ describe("neighborSessionId", () => {
     const state = buildState(3)
     expect(neighborSessionId(state, P, "gone", 1)).toBe("s1")
     expect(neighborSessionId(state, P, "gone", -1)).toBe("s3")
+  })
+})
+
+describe("nextWaitingSessionId", () => {
+  const waitingOn =
+    (...ids: string[]) =>
+    (id: string) =>
+      ids.includes(id)
+
+  it("skips sessions that are not waiting", () => {
+    expect(nextWaitingSessionId(buildState(4), P, "s1", waitingOn("s3"))).toBe("s3")
+  })
+
+  it("takes the nearest waiting session after the active one", () => {
+    expect(nextWaitingSessionId(buildState(4), P, "s1", waitingOn("s2", "s4"))).toBe("s2")
+    expect(nextWaitingSessionId(buildState(4), P, "s2", waitingOn("s2", "s4"))).toBe("s4")
+  })
+
+  it("wraps past the end of the list", () => {
+    expect(nextWaitingSessionId(buildState(4), P, "s3", waitingOn("s1"))).toBe("s1")
+  })
+
+  it("answers nothing when no session is waiting", () => {
+    expect(nextWaitingSessionId(buildState(3), P, "s1", waitingOn())).toBe("")
+  })
+
+  // Landing on the session already active would move nothing, so the press is
+  // declined instead.
+  it("answers nothing when only the active session is waiting", () => {
+    expect(nextWaitingSessionId(buildState(3), P, "s2", waitingOn("s2"))).toBe("")
+  })
+
+  it("walks the order the sidebar draws", () => {
+    const state = setSessionPinned(buildState(3), P, "s3", true) // s3, s1, s2
+    expect(nextWaitingSessionId(state, P, "s2", waitingOn("s1", "s3"))).toBe("s3")
+  })
+
+  it("searches the whole list for an unknown session", () => {
+    expect(nextWaitingSessionId(buildState(3), P, "gone", waitingOn("s3"))).toBe("s3")
+  })
+
+  it("ignores an unknown project", () => {
+    expect(nextWaitingSessionId(buildState(3), "nope", "s1", waitingOn("s2"))).toBe("")
   })
 })
 
