@@ -7,6 +7,7 @@
 // The harness is imported first for the reason render-budget.test.tsx names: it
 // has to hook react-dom before anything else reaches it.
 import { mountBudget } from "@/test/render-budget"
+import { typeInto } from "@/test/type-into"
 import { createElement } from "react"
 import { expect, test } from "vitest"
 import { SessionGroupHeader } from "./SessionGroupHeader"
@@ -167,4 +168,69 @@ test("only a header that takes the dragged card is a drop target", async () => {
     expect(target()).toBeNull()
     await closed.unmount()
   }
+})
+
+const renameField = () => document.querySelector<HTMLInputElement>('input[aria-label="Group name"]')
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+async function startRename(item: string) {
+  options()?.click()
+  await tick()
+  ;[...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    .find((element) => element.textContent?.includes(item))
+    ?.click()
+  await tick()
+}
+
+async function typeName(value: string) {
+  const input = renameField()
+  if (!input) {
+    throw new Error("rename field not rendered")
+  }
+  typeInto(input, value)
+  await tick()
+}
+
+// A folder is its name, so renaming onto one the project holds merges the two
+// into one set of sessions: the field says so before the rename lands, the way
+// the New folder dialog does, and still lets it land. The match is exact, as
+// the store's is: DESIGN is a folder of its own beside Design.
+test("renaming a folder onto a name the project holds says it merges, and still renames", async () => {
+  const renamed: string[] = []
+  const mounted = await mountBudget(
+    header({
+      name: "Apps",
+      folder: true,
+      launch: false,
+      folders: ["Apps", "Design"],
+      onRename: (name: string) => renamed.push(name),
+    }),
+  )
+
+  await startRename("Rename folder")
+  expect(document.body.textContent).not.toContain("already exists")
+  await typeName("DESIGN")
+  expect(document.body.textContent).not.toContain("already exists")
+  await typeName(" Design ")
+  expect(document.body.textContent).toContain(
+    "Design already exists, so renaming merges this folder into it.",
+  )
+
+  renameField()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+  await tick()
+  expect(renamed).toEqual(["Design"])
+  await mounted.unmount()
+})
+
+// A wall is not filed by name, so a folder's name is no merge for it.
+test("renaming a wall onto a folder's name says nothing of a merge", async () => {
+  const mounted = await mountBudget(
+    header({ name: "Wall", folders: ["Design"], onRename: () => {}, onDissolve: () => {} }),
+  )
+
+  await startRename("Rename group")
+  await typeName("Design")
+  expect(document.body.textContent).not.toContain("already exists")
+  await mounted.unmount()
 })

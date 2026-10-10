@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 import { FolderLaunchMenuItems, type LaunchCheckout } from "./FolderLaunchMenuItems"
 import { type RunMenuAction, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 import { Hint } from "@/components/common/Hint"
+import { Trans } from "@/components/common/Trans"
 
 interface SessionGroupHeaderProps {
   name: string
@@ -50,6 +51,7 @@ interface SessionGroupHeaderProps {
   // file them: an existing folder by name, or a new one the dialog names. Both
   // absent on a block with nothing to move — a folder's own header, and the
   // pinned block, whose cards are filed one at a time from the card itself.
+  // A folder's header reads it too: renaming onto one of these merges the two.
   folders?: string[]
   onFileAll?: (folder: string) => void
   onNewFolder?: () => void
@@ -202,6 +204,9 @@ export function SessionGroupHeader({
 }: SessionGroupHeaderProps) {
   const t = useT()
   const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(name)
+  const typed = draft.trim()
+  const merges = folder && editing && typed !== name && (folders ?? []).includes(typed)
 
   const commit = (value: string) => {
     setEditing(false)
@@ -228,7 +233,7 @@ export function SessionGroupHeader({
     <div
       {...target}
       className={cn(
-        "flex items-center gap-1 px-1 pb-0.5 pt-1.5 transition-opacity",
+        "flex flex-wrap items-center gap-1 px-1 pb-0.5 pt-1.5 transition-opacity",
         drop === "refuses" && "opacity-45",
       )}
     >
@@ -246,6 +251,7 @@ export function SessionGroupHeader({
           autoComplete="off"
           aria-label={t("sidebar.sessionGroupHeader.groupName")}
           onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => setDraft(event.target.value)}
           onKeyDown={onEditKeyDown}
           onBlur={(event) => commit(event.currentTarget.value)}
           className="min-w-0 flex-1 rounded-sm bg-transparent px-1 py-0.5 text-2xs font-semibold uppercase tracking-wider text-foreground outline-none ring-1 ring-accent-foreground/30"
@@ -313,7 +319,12 @@ export function SessionGroupHeader({
           </Hint>
           <DropdownMenuContent align="end" className="max-w-56">
             {onRename && (
-              <DropdownMenuItem onClick={() => setEditing(true)}>
+              <DropdownMenuItem
+                onClick={() => {
+                  setDraft(name)
+                  setEditing(true)
+                }}
+              >
                 <Pencil />
                 {folder
                   ? t("sidebar.sessionGroupHeader.renameFolder")
@@ -350,6 +361,14 @@ export function SessionGroupHeader({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+      )}
+      {merges && (
+        <p className="basis-full px-1 text-xs text-muted-foreground">
+          <Trans
+            k="sidebar.sessionGroupHeader.mergesInto"
+            params={{ name: <span className="font-medium text-foreground">{typed}</span> }}
+          />
+        </p>
       )}
     </div>
   )

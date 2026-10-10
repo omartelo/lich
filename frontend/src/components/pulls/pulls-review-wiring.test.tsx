@@ -9,6 +9,7 @@
 // The harness is imported before anything that reaches react-dom, for the reason
 // render-budget.test.tsx names.
 import { mountBudget } from "@/test/render-budget"
+import { typeInto } from "@/test/type-into"
 import { createElement } from "react"
 import { beforeEach, expect, it, vi } from "vitest"
 import type {
@@ -145,15 +146,6 @@ function button(label: string): HTMLButtonElement {
   return found as HTMLButtonElement
 }
 
-function type(field: HTMLTextAreaElement, value: string): void {
-  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set as (
-    this: HTMLTextAreaElement,
-    next: string,
-  ) => void
-  setter.call(field, value)
-  field.dispatchEvent(new Event("input", { bubbles: true }))
-}
-
 beforeEach(() => {
   calls.dismissed.length = 0
   calls.toasts.length = 0
@@ -206,7 +198,7 @@ it("re-reads the verdict as well as the conversation after a dismissal", async (
   if (field === null) {
     throw new Error("the reason box never opened")
   }
-  await budget.act(() => type(field, "answered in full"))
+  await budget.act(() => typeInto(field, "answered in full"))
   await budget.act(() => button("Dismiss review").click())
 
   expect(calls.dismissed).toEqual([

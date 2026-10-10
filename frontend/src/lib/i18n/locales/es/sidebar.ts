@@ -159,6 +159,7 @@ export const sidebar = {
     newSessionIn: "Nueva sesión en {name}",
     optionsFor: "Opciones de {name}",
     renameFolder: "Renombrar carpeta",
+    mergesInto: "{name} ya existe, así que renombrar fusiona esta carpeta con ella.",
     renameGroup: "Renombrar grupo",
     ungroup: "Desagrupar",
     moveToFolder: "Mover grupo a una carpeta",

@@ -102,9 +102,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the folder's name, so a rename is a new key to React and to the fold preference — `moveGroupCollapsed`
   carries the fold across and drops the old entry, and anything else keyed off that block starts again. A
   wall avoids this by keeping one id across its renames; a folder cannot, because the name *is* the folder.
-  Renaming onto a name the project already holds merges the two folders, silently: they are the same set of
-  sessions afterwards and nothing warns first, where the New folder dialog does say a typed name already
-  exists.
+  Renaming onto a name the project already holds merges the two folders into one set of sessions; the
+  field says so under it before the rename lands, as the New folder dialog does, and the merge has no undo.
 - **An agent files by the name as written, like the window** (`internal/spawn/folders.go`): `lich file`,
   `lich rename-folder`, `lich color-folder` and their MCP tools match a folder exactly, so an agent that types `auth` beside `Auth`
   starts a second folder; the tool descriptions send it to `list_folders` first instead of folding case behind

@@ -7,6 +7,7 @@
 // The harness is imported first for the reason render-budget.test.tsx names: it
 // has to hook react-dom before anything else reaches it.
 import { mountBudget } from "@/test/render-budget"
+import { typeInto } from "@/test/type-into"
 import { createElement } from "react"
 import { beforeEach, expect, test, vi } from "vitest"
 import type { GitStatus } from "@/lib/git/use-git-status"
@@ -138,18 +139,13 @@ test("a detached source offers no working-tree row: git would refuse the base", 
 const search = () =>
   document.querySelector('[aria-label="Search base branches"]') as HTMLInputElement | null
 
-// Typing into the filter, the way a user narrows a long branch list. jsdom
-// needs the native setter to make React see the change.
+// Typing into the filter, the way a user narrows a long branch list.
 async function type(mounted: { act: (run: () => void) => Promise<void> }, value: string) {
   const input = search()
   if (!input) {
     throw new Error("search field not rendered")
   }
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
-  await mounted.act(() => {
-    setter?.call(input, value)
-    input.dispatchEvent(new Event("input", { bubbles: true }))
-  })
+  await mounted.act(() => typeInto(input, value))
 }
 
 test("a filter that hides the working-tree row moves the selection off it", async () => {

@@ -8,6 +8,7 @@
 // The harness is imported before anything that reaches react-dom, for the reason
 // render-budget.test.tsx names.
 import { mountBudget } from "@/test/render-budget"
+import { typeInto } from "@/test/type-into"
 import { createElement } from "react"
 import { beforeEach, expect, it, vi } from "vitest"
 import type { PullRequestConversation, PullRequestReview } from "@/lib/api-types"
@@ -108,14 +109,7 @@ it("sends the review's node id with the reason typed for it", async () => {
   // GitHub refuses a dismissal with no reason, so the box will not send one.
   expect(buttons("Dismiss review")[0].disabled).toBe(true)
 
-  await budget.act(() => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set as (
-      this: HTMLTextAreaElement,
-      value: string,
-    ) => void
-    setter.call(field, "fixed in 4a1c2f0")
-    field.dispatchEvent(new Event("input", { bubbles: true }))
-  })
+  await budget.act(() => typeInto(field, "fixed in 4a1c2f0"))
   await budget.act(() => buttons("Dismiss review")[0].click())
 
   expect(calls.dismissed).toEqual([{ reviewID: "PRR_kw1", message: "fixed in 4a1c2f0" }])
@@ -142,14 +136,7 @@ it("keeps what was typed when GitHub refuses the dismissal", async () => {
   if (field === null) {
     throw new Error("the reason box never opened")
   }
-  await budget.act(() => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set as (
-      this: HTMLTextAreaElement,
-      value: string,
-    ) => void
-    setter.call(field, "no longer applies")
-    field.dispatchEvent(new Event("input", { bubbles: true }))
-  })
+  await budget.act(() => typeInto(field, "no longer applies"))
   await budget.act(() => buttons("Dismiss review")[0].click())
 
   expect(calls.toasts).toEqual(["Dismiss failed: Resource not accessible"])

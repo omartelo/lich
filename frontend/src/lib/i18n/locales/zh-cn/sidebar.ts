@@ -158,6 +158,7 @@ export const sidebar = {
     newSessionIn: "在 {name} 中新建会话",
     optionsFor: "{name} 的选项",
     renameFolder: "重命名文件夹",
+    mergesInto: "{name} 已存在，因此重命名会将此文件夹合并到其中。",
     renameGroup: "重命名分组",
     ungroup: "取消分组",
     moveToFolder: "将分组移到文件夹",
