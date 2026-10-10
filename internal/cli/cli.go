@@ -142,6 +142,8 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.whoami, args[1:])
 	case "send":
 		return c.run(c.send, args[1:])
+	case "insert":
+		return c.run(c.insert, args[1:])
 	case "wait":
 		return c.run(c.wait, args[1:])
 	case "reply":
@@ -359,6 +361,65 @@ func (c *client) send(args []string) error {
 		return err
 	}
 	return outcome(result.Status)
+}
+
+// insertReadLimit caps what `insert` reads from stdin. The server refuses text
+// over its own, much lower, limit and says so; this only keeps a pipe that never
+// ends from filling memory first.
+const insertReadLimit = 1 << 20
+
+// insert pastes text at a session's prompt without sending it. The text is the
+// argument, or stdin when there is none or it is "-": a selection from an
+// editor is multi-line and arbitrary, and a shell's quoting is the wrong place
+// to carry it.
+func (c *client) insert(args []string) error {
+	flags := newFlagSet("insert")
+	project := flags.String(
+		"project", "",
+		"the project to find the session in, by name or by directory path; with no --session, "+
+			"the session running there",
+	)
+	session := flags.String("session", "", "the session to insert into: its label, roster name or lich id")
+	timeout := flags.Int("timeout", 0, "seconds to wait for the session to reach its prompt")
+	asJSON := flags.Bool("json", false, "print the result as JSON")
+	if err := c.parse(flags, args); err != nil {
+		return err
+	}
+	if flags.NArg() > 1 || (*session == "" && *project == "") {
+		return usageError("insert")
+	}
+	text, err := c.insertText(flags.Arg(0), flags.NArg() == 1)
+	if err != nil {
+		return err
+	}
+
+	var inserted relay.Inserted
+	call := []any{c.sessionID(), *session, *project, text, *timeout}
+	if err := c.call(context.Background(), "relay.Insert", call, waitBudget(*timeout), &inserted); err != nil {
+		return err
+	}
+	if *asJSON {
+		return c.emit(inserted)
+	}
+	fmt.Fprintf(c.stdout, "Inserted %d bytes at the prompt of %q (%s). Nothing was sent.\n",
+		inserted.Bytes, inserted.Label, inserted.Project)
+	return nil
+}
+
+// insertText is the text to insert: the argument, or stdin when it was left out
+// or is "-".
+func (c *client) insertText(arg string, given bool) (string, error) {
+	if given && arg != "-" {
+		return arg, nil
+	}
+	if c.stdin == nil {
+		return "", errors.New("no text given, and nothing to read it from")
+	}
+	data, err := io.ReadAll(io.LimitReader(c.stdin, insertReadLimit))
+	if err != nil {
+		return "", fmt.Errorf("read the text from stdin: %w", err)
+	}
+	return string(data), nil
 }
 
 // outcome is the exit a send or wait ends on once its result is printed.

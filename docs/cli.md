@@ -131,7 +131,7 @@ guess at the one it resembles, and exit 1 — a typo does not open a window.
 Arguments the app itself takes still do: bare `lich`, `lich --shell <path>`, and
 `lich --` with the Chromium flags behind it.
 
-`--json` on `sessions`, `whoami`, `send`, `wait`, `open`, `close`, `rename`, `control`, `ask`, `worktrees`, `folders`, `file`,
+`--json` on `sessions`, `whoami`, `send`, `insert`, `wait`, `open`, `close`, `rename`, `control`, `ask`, `worktrees`, `folders`, `file`,
 `rename-folder`, `color-folder`, `cost` and `version`
 replaces the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
@@ -152,8 +152,12 @@ docs	lich	codex	lich-a1b2	busy
 api	revu	crush	revu-9f8e	-
 ```
 
-`--json` prints an array of `{"label","name","project","kind","state","id"}`,
-`[]` when there are none. `id` is the session's lich id, the `LICH_SESSION_ID`
+`--json` prints an array of
+`{"label","name","project","kind","state","id","path","projectPath"}`,
+`[]` when there are none. `path` is the directory the session runs in (its
+worktree's, for a worktree session) and `projectPath` the root of its project:
+what an editor matches its open folder against to find the session beside it.
+`id` is the session's lich id, the `LICH_SESSION_ID`
 its process carries. lich-plugin's Claude Code mod reads it to count the
 subagent workers still running, and to name the card behind a recorded session
 id. The MCP tool `list_sessions` returns the same objects. `No other live sessions.` when there are none. A session is listed only while a
@@ -186,7 +190,7 @@ auth-fix	lich	claude	lich-a1b2	busy	0b9c…
 ```
 
 `--json` prints one object in the `sessions` shape,
-`{"label","name","project","kind","state","id"}`. It is how a caller learns its
+`{"label","name","project","kind","state","id","path","projectPath"}`. It is how a caller learns its
 own label and id without guessing: lich-plugin's Claude Code mod reads it to
 tell that a `control` aimed at a label is aimed at its own session. Run outside
 a lich session (`LICH_SESSION_ID` unset) it is an error, exit 1.
@@ -300,6 +304,41 @@ pass — is reported as a failure the sender can act on, never a ticket left to
 expire. `internal/terminal` tells the setup script and the agent apart by a
 marker the setup wrapper prints between them (`setupDone`): the PTY and the pid
 are the same across the `exec`, so nothing else can.
+
+### `lich insert [--project <name-or-path>] [--session <session>] [--timeout <seconds>] [--json] [<text> | -]`
+
+Pastes `<text>` at a session's prompt and **leaves it there**: nothing presses
+Enter, so the person at that session reads what landed, writes the question
+around it and sends it themselves. It is `send` for the other direction of work
+— an editor handing over a selection or a file — and it is what lich's editor
+plugins call.
+
+- The text is the argument, or stdin when it is left out or is `-`. A selection
+  is multi-line and arbitrary, and a shell's quoting is the wrong place to
+  carry it. It is pasted as a bracketed paste, so its newlines are not
+  submissions; control characters, ESC included, are stripped. Over 64 KiB it
+  is refused — insert the path of the file instead of its contents.
+- `--session` names the target the way `send` does: label, roster name or lich
+  id. Without it, `--project` says where to look, by project name or by the
+  **absolute path of a directory**, and exactly one live session must be
+  running there. A session running in that very directory wins over the others
+  of its project, so an editor open on a worktree reaches the session in that
+  worktree. Two candidates are an error naming both, never a guess: list them
+  with `sessions --json` (see `path`) and pick one with `--session`.
+- It waits up to `--timeout` seconds (default 10) for the session to be at its
+  prompt, so one that is still starting gets its text; one stuck behind a
+  checkout's setup script is refused with the reason.
+- **Unlike `send`, a half-written line is not a reason to wait.** The text is
+  added after it, which is where it was meant to go.
+- A session in `waiting` — blocked on a permission prompt — is refused: what is
+  typed there is read by the dialog, not the prompt.
+- Prints `Inserted <n> bytes at the prompt of "<label>" (<project>). Nothing was
+  sent.`; `--json` prints `{"id","label","project","kind","bytes"}`. Exit 1 when
+  nothing was inserted.
+
+It types at the terminal for every provider, a Claude Code session with the
+lich-plugin mod included: the mod takes prompts to submit, not text to leave on
+a line.
 
 ### `lich wait [--timeout <seconds>] [--no-wait] [--json] [<ticket>]`
 

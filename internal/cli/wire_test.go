@@ -51,6 +51,8 @@ func (*wiredTerminal) Live(string) bool { return true }
 
 func (*wiredTerminal) Ready(string) bool { return true }
 
+func (*wiredTerminal) AtPrompt(string) bool { return true }
+
 func (*wiredTerminal) QuietFor(string) time.Duration { return time.Hour }
 
 // Nothing renamed itself in these tests, so the roster stays on the name lich
@@ -127,6 +129,21 @@ func TestSessionsOverTheRealDispatcher(t *testing.T) {
 	}
 	if strings.Contains(stdout.String(), "sender") {
 		t.Errorf("the caller listed itself: %q", stdout.String())
+	}
+}
+
+// TestInsertOverTheRealDispatcher is the journey an editor's selection takes:
+// the text is pasted at the other session's prompt, bracketed so its newlines
+// are not submissions, and nothing presses Enter behind it.
+func TestInsertOverTheRealDispatcher(t *testing.T) {
+	env, term := wiredLich(t)
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"insert", "--session", "docs", "a\nb"}, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if got := term.message(); got != "\x1b[200~a\nb\x1b[201~" {
+		t.Errorf("typed = %q, want one bracketed paste and no Enter", got)
 	}
 }
 

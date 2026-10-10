@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -277,13 +278,15 @@ func TestSessionsListsPeers(t *testing.T) {
 // The lich id rides --json last, so a mod holding a recorded LICH_SESSION_ID
 // can find that session's card.
 func TestSessionsJSONCarriesTheLichID(t *testing.T) {
-	f := newFakeLich(t, `[{"label":"docs","name":"lich-s2","project":"lich","kind":"codex","state":"done","id":"s2"}]`)
+	f := newFakeLich(t, `[{"label":"docs","name":"lich-s2","project":"lich","kind":"codex","state":"done","id":"s2",`+
+		`"path":"/src/lich","projectPath":"/src/lich"}]`)
 
 	code, stdout, stderr := run(t, f, "sessions", "--json")
 	if code != 0 {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr)
 	}
-	want := `{"label":"docs","name":"lich-s2","project":"lich","kind":"codex","state":"done","id":"s2"}`
+	want := `{"label":"docs","name":"lich-s2","project":"lich","kind":"codex","state":"done","id":"s2",` +
+		`"path":"/src/lich","projectPath":"/src/lich"}`
 	if !strings.Contains(stdout, want) {
 		t.Errorf("output = %s, want %s", stdout, want)
 	}
@@ -307,7 +310,8 @@ func TestWhoamiPrintsTheCallersOwnSession(t *testing.T) {
 }
 
 func TestWhoamiJSONIsThePeerObject(t *testing.T) {
-	body := `{"label":"Session 3","name":"lich-s1","project":"lich","kind":"claude","state":"","id":"s1"}`
+	body := `{"label":"Session 3","name":"lich-s1","project":"lich","kind":"claude","state":"","id":"s1",` +
+		`"path":"/src/lich","projectPath":"/src/lich"}`
 	f := newFakeLich(t, body)
 
 	code, stdout, stderr := run(t, f, "whoami", "--json")
@@ -1249,5 +1253,85 @@ func TestVersionWorksWithNoServer(t *testing.T) {
 	}
 	if stderr.String() != "" {
 		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
+func runWithStdin(t *testing.T, f *fakeLich, stdin string, args ...string) (int, string, string) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	code := dispatch(args, &client{
+		env: f.env, version: testVersion, stdin: strings.NewReader(stdin),
+		stdout: &stdout, stderr: &stderr, running: noInstance,
+	})
+	return code, stdout.String(), stderr.String()
+}
+
+const insertedBody = `{"id":"s2","label":"docs","project":"lich","kind":"codex","bytes":5}`
+
+func TestInsertTakesTheTextFromItsArgument(t *testing.T) {
+	f := newFakeLich(t, insertedBody)
+
+	code, stdout, stderr := run(t, f, "insert", "--project", "/src/lich", "hello")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	call := f.only(t)
+	want := []any{"s1", "", "/src/lich", "hello", float64(0)}
+	if call.method != "relay.Insert" || !reflect.DeepEqual(call.args, want) {
+		t.Errorf("called %s %v, want relay.Insert %v", call.method, call.args, want)
+	}
+	if !strings.Contains(stdout, `"docs"`) || !strings.Contains(stdout, "Nothing was sent") {
+		t.Errorf("output = %q, want where it went and that it was not sent", stdout)
+	}
+}
+
+func TestInsertReadsStdinWhenTheTextIsLeftOutOrADash(t *testing.T) {
+	for _, args := range [][]string{
+		{"insert", "--session", "docs"}, {"insert", "--session", "docs", "-"},
+	} {
+		f := newFakeLich(t, insertedBody)
+
+		code, _, stderr := runWithStdin(t, f, "line one\nline two\n", args...)
+		if code != 0 {
+			t.Fatalf("%v: exit = %d, stderr = %q", args, code, stderr)
+		}
+		if got := f.only(t).args[3]; got != "line one\nline two\n" {
+			t.Errorf("%v: text = %q, want the whole of stdin", args, got)
+		}
+	}
+}
+
+func TestInsertJSONIsTheInsertedObject(t *testing.T) {
+	f := newFakeLich(t, insertedBody)
+
+	code, stdout, stderr := run(t, f, "insert", "--session", "docs", "--json", "hello")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	if strings.TrimSpace(stdout) != insertedBody {
+		t.Errorf("output = %s, want %s", stdout, insertedBody)
+	}
+}
+
+func TestInsertNeedsAPlaceToGo(t *testing.T) {
+	f := newFakeLich(t, insertedBody)
+
+	for _, args := range [][]string{{"insert", "hello"}, {"insert", "--session", "docs", "a", "b"}} {
+		code, _, stderr := run(t, f, args...)
+		if code != 1 || !strings.Contains(stderr, "usage: lich insert") {
+			t.Errorf("%v: exit = %d, stderr = %q, want the usage", args, code, stderr)
+		}
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("a malformed call reached the server: %v", f.calls)
+	}
+}
+
+func TestInsertWithNothingToReadStdinFrom(t *testing.T) {
+	f := newFakeLich(t, insertedBody)
+
+	code, _, stderr := run(t, f, "insert", "--session", "docs")
+	if code != 1 || !strings.Contains(stderr, "no text") {
+		t.Errorf("exit = %d, stderr = %q, want a refusal", code, stderr)
 	}
 }
