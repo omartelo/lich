@@ -354,6 +354,7 @@ pasted into, or one that just finished its turn.
 - Raising the window is best effort, the same hand-off a second launch of lich
   makes; the card is switched either way. See `docs/ceilings.md` for where the
   window is not raised.
+- With the window closed, it opens a new one already on that card.
 - Prints `Focused "<label>" (<project>).`; `--json` prints
   `{"id","label","project"}`. Exit 1 when no session was focused.
 
