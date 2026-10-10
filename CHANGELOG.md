@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.66.0] - 2026-10-10
+
 ### Added
 
 - **A long paste can land as text you can edit, in Claude Code, opencode and
@@ -37,7 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   break the same way the day it grew an option. They now accept options from
   a newer or an older lich. It holds from the upgrade after this one on: this
   release itself still needs one restart.
-
 - **History search shows the line it matched for a word written with accents
   or in capitals.** Searching `índice` for a conversation that says `Índice`,
   or `decision` for one that says `decisión`, listed the session with no line
@@ -50,14 +51,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Pull request in the card's menu, opened the pull request of whichever card
   in the group was active instead, and the Pull request card it left in the
   folder showed the project root's pull request.
-
 - **Claude Code, opencode, oh-my-pi and Cursor CLI follow lich's light or dark
   theme when you switch it.** A session kept the look it picked at start, so
   switching lich to light left Claude Code (under its *Auto (match terminal)*
   theme) drawing dark-theme diffs, dark green and red bands with white text, on
   a light terminal. lich now tells the terminal apps that ask (mode 2031) and
   they repaint in the new look.
-
 - **The Pull requests screen no longer reopens on a pull request that is no
   longer in its list.** Merge the one you were reading, come back later, and
   the screen showed it again beside "No open pull requests". It now reopens on
@@ -5677,7 +5676,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.65.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.66.0...HEAD
+[0.66.0]: https://github.com/omartelo/lich/compare/v0.65.0...v0.66.0
 [0.65.0]: https://github.com/omartelo/lich/compare/v0.64.0...v0.65.0
 [0.64.0]: https://github.com/omartelo/lich/compare/v0.63.0...v0.64.0
 [0.63.0]: https://github.com/omartelo/lich/compare/v0.62.1...v0.63.0
