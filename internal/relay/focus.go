@@ -18,8 +18,8 @@ type Focused struct {
 	Project string `json:"project"`
 }
 
-// SetRaiseWindow wires how the relay brings lich's window to the front. Nil —
-// a test that does not care, or lich serving without a window — leaves Focus
+// SetRaiseWindow wires how the relay brings lich's window to the front. Nil (a
+// test that does not care, or lich serving without a window) leaves Focus
 // opening the card wherever the window is. Called at startup.
 func (s *Service) SetRaiseWindow(raise func()) {
 	s.raiseWindow = raise
