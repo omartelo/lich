@@ -236,3 +236,18 @@ func TestInstallerLaunchFailureKeepsRunning(t *testing.T) {
 		t.Fatalf("launch error = %v", err)
 	}
 }
+
+// A successor is spawned with the wait marker, and everything it spawns
+// inherited it: a session of a restarted lich carried LICH_RESTART_WAIT=1, so a
+// `lich` launched from its shell skipped the duplicate check and died on the
+// busy port instead of showing the running lich's window.
+func TestWithoutMarkerKeepsTheRestartMarkerOutOfChildren(t *testing.T) {
+	env := successorEnv([]string{"PATH=/bin", "LICH_LISTEN_PORT=47821"})
+	got := WithoutMarker(env)
+	if want := []string{"PATH=/bin", "LICH_LISTEN_PORT=47821"}; !slices.Equal(got, want) {
+		t.Fatalf("WithoutMarker = %v, want %v", got, want)
+	}
+	if !slices.Contains(env, WaitEnv+"=1") {
+		t.Fatal("WithoutMarker changed the slice it was given")
+	}
+}

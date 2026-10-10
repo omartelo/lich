@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -116,6 +117,20 @@ func (c *Coordinator) launch(exe string, args []string) error {
 // successorEnv is env plus the wait marker, on a fresh slice.
 func successorEnv(env []string) []string {
 	return append(append([]string(nil), env...), WaitEnv+"=1")
+}
+
+// WithoutMarker is env minus the wait marker, on a fresh slice. The marker is
+// for this process's own startup alone: what it spawns must not read as a
+// restart successor, or a lich launched from one of its sessions never looks
+// for the running one and dies on the busy port.
+func WithoutMarker(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, WaitEnv+"=") {
+			out = append(out, kv)
+		}
+	}
+	return out
 }
 
 // closeWindowCommand is how Windows asks a GUI process to close: taskkill

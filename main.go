@@ -135,7 +135,8 @@ func pinShellFlag(pinnedShell string) {
 // resolveEnv returns the environment lich was launched in and the one its
 // children get, and pins the listener port into both.
 //
-// The launch environment is snapshotted before any tweak, because spawned
+// The launch environment is snapshotted before any tweak, minus the restart
+// marker that is this process's alone (restart.WithoutMarker), because spawned
 // terminal sessions must inherit what the user launched lich with (see
 // terminal.childEnv) and because a re-check resolves from it again, exactly as
 // this does (providers.Service.RefreshPath). ResolveShellEnv recovers the
@@ -147,7 +148,7 @@ func pinShellFlag(pinnedShell string) {
 // every spawned session agree on the origin the page's localStorage is keyed by
 // (singleton.DefaultPort).
 func resolveEnv() (launchEnv, env []string) {
-	launchEnv = os.Environ()
+	launchEnv = restart.WithoutMarker(os.Environ())
 	env = terminal.ResolveShellEnv(launchEnv)
 	terminal.PinPath(env)
 	if os.Getenv("LICH_LISTEN_PORT") == "" {
