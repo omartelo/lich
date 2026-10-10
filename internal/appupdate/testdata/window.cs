@@ -29,7 +29,16 @@ class WindowFixture {
             if (child.StandardOutput.ReadLine() != "locked") throw new Exception("child did not lock DLL");
             using (Form window = new Form()) {
                 window.Text = "lich update fixture " + version;
-                window.Shown += delegate { Record("window ready " + version); };
+                window.Shown += delegate {
+                    Record("window ready " + version);
+                    // lich closes its window by writing on the window's stdin, the
+                    // way lich-shell reads it (shell/src/main.rs, watch_stdin).
+                    new Thread(() => {
+                        if (Console.OpenStandardInput().ReadByte() >= 0) {
+                            window.BeginInvoke((Action)window.Close);
+                        }
+                    }) { IsBackground = true }.Start();
+                };
                 window.FormClosing += delegate {
                     Record("close requested " + version);
                     child.StandardInput.WriteLine("close");
