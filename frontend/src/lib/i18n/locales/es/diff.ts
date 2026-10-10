@@ -1,0 +1,95 @@
+import type { Shape } from "../../catalog"
+import type { diff as en } from "../en/diff"
+
+export const diff = {
+  binaryPreview: {
+    before: "Antes",
+    after: "Después",
+    added: "Añadido",
+    deleted: "Eliminado",
+    binary: "Archivo binario",
+    binaryNoPreview: "Archivo binario · este tipo de archivo no se puede previsualizar",
+    loading: "Cargando…",
+    missing: "No está en esta revisión",
+    pdfSide: "Qué lado del PDF mostrar",
+  },
+  commentBatch: {
+    openSession: "Abre una sesión para enviarle estos comentarios",
+    removeComment: "Quitar comentario",
+    notePlaceholder: "Una nota sobre todo el cambio…",
+    noteLabel: "Una nota sobre todo el cambio",
+    count: { one: "{count} comentario", other: "{count} comentarios" },
+    clear: "Limpiar",
+    send: "Enviar",
+  },
+  diffBulk: {
+    collapseAll: "Contraer todos los archivos",
+    expandAll: "Expandir todos los archivos",
+    showWhitespace: "Mostrar cambios de espacios en blanco",
+    hideWhitespace: "Ocultar cambios de espacios en blanco",
+  },
+  discardDialog: {
+    title: "Descartar cambios",
+    description:
+      "¿Revertir todos los cambios sin confirmar de {path}? Esta acción no se puede deshacer.",
+    descriptionAdded:
+      "¿Revertir todos los cambios sin confirmar de {path}? El archivo se eliminará del disco. Esta acción no se puede deshacer.",
+    confirm: "Descartar cambios",
+  },
+  injectMenu: {
+    injectFile: "Inyectar archivo",
+    injectLines: "Inyectar líneas",
+    injectLinesRange: "Inyectar líneas {lines}",
+    sessionComment: "Comentario para la sesión…",
+    sessionCommentRange: "Comentario para la sesión {lines}…",
+    reviewComment: "Comentar en el pull request…",
+    reviewCommentRange: "Comentar en el pull request {lines}…",
+    revertSelected: "Revertir las líneas seleccionadas",
+    revert: {
+      one: "Revertir {count} línea modificada",
+      other: "Revertir {count} líneas modificadas",
+    },
+  },
+  fileDiff: {
+    readFailed: "No se pudo leer {path}",
+    whitespaceOnly: "Solo espacios en blanco",
+    onlyWhitespaceChanged: "Solo cambiaron los espacios en blanco",
+    addAsContext: "Añadir archivo como contexto",
+    discard: "Descartar cambios",
+    viewed: "Visto",
+  },
+  reviewPanel: {
+    lastTurnHint:
+      "Lo que cambió en el disco mientras corría el último turno, incluidas las ediciones de un formateador, de tu editor o tuyas.",
+    discardFailed: "No se pudieron descartar los cambios: {error}",
+    reverted: "Se revirtió +{added} -{deleted} en {name}",
+    undo: "Deshacer",
+    undoFailed: "No se pudo deshacer la reversión en {name}",
+    revertFailed: "No se pudieron revertir las líneas en {name}",
+    said: "Dijo",
+    sourceLabel: "Qué cambios mostrar",
+    workingTree: "Árbol de trabajo",
+    lastTurn: "Último turno",
+    ended: "terminó hace {age}",
+    turnReadFailed: "No se pudo leer el último turno",
+    notRepository: "No es un repositorio git",
+    loading: "Cargando…",
+    emptyTitle: "No cambió nada en esta ventana.",
+    emptyBody: "Ningún archivo del disco se movió entre el inicio y el final del último turno.",
+    unrecordedTitle: "No hay ningún último turno registrado.",
+    unrecordedBody: "Esto se completa cuando termina un turno aquí.",
+    lostTitle: "Se perdió el registro de este turno.",
+    lostBody:
+      "Un turno terminó aquí y lich no pudo tomar una instantánea del checkout. El siguiente se registra como de costumbre.",
+    noChanges: "No hay cambios sin confirmar",
+    squeezed: "La vista en paralelo necesita un panel más ancho",
+  },
+  reviewSlots: {
+    forSession: "para la sesión · {lines}",
+    onPullRequest: "en el pull request · {lines}",
+    addToBatch: "Añadir al lote",
+    addToReview: "Añadir a la revisión",
+    sessionPlaceholder: "¿Qué debería cambiar aquí? Se envía a la sesión junto con el resto.",
+    reviewPlaceholder: "Deja un comentario. Se envía cuando envías la revisión.",
+  },
+} satisfies Shape<typeof en>
