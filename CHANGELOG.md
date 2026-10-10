@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The Homebrew tap moved to `lichdotdev/tap`.** New installs run
+  `brew install --cask lichdotdev/tap/lich`. An install from `omartelo/tap`
+  keeps upgrading: the old tap points Homebrew at the new one.
+
 ## [0.66.0] - 2026-10-10
 
 ### Added

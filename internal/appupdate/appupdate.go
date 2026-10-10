@@ -33,7 +33,7 @@ const (
 	aurPackage = "lich-bin"
 	// brewPackage is the tap-qualified name Homebrew users update through; brew
 	// owns its copy, so lich never swaps it itself.
-	brewPackage = "omartelo/tap/lich"
+	brewPackage = "lichdotdev/tap/lich"
 	// installScript is the deb/rpm/other-distro update path: install.sh detects
 	// the distro, installs the matching package, and POSTs /restart itself.
 	installScript = "curl -fsSL https://raw.githubusercontent.com/" + repo + "/main/install.sh | sh"
