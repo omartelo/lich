@@ -34,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A folded block left on its own shows its sessions again.** Fold a block,
+  close every other one, and the sidebar drew the survivor with no header and
+  its cards hidden, with nothing left to unfold it. A lone block now draws open,
+  and its fold comes back once another block appears.
+
 - **Session shortcuts only land on cards the sidebar shows.** Next session,
   previous session and next waiting session used to focus cards inside a folded
   block or left out by the sidebar's search and state filter. They now step over
