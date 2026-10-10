@@ -1,4 +1,5 @@
 import type { Issue } from "@/lib/api-types"
+import { prompt } from "@/lib/i18n/prompt"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 
 // GitHub's own spelling of an issue reference, and the URL you get from copying
@@ -42,7 +43,11 @@ export function issueName(issue: Issue): string {
  * request handoff follows too: lich writes the prompt, the user sends it.
  */
 export function issueBrief(issue: Issue): string {
-  const head = `GitHub issue #${issue.number} — ${issue.title}\n${issue.url}`
+  const head = prompt("prompts.issue.head", {
+    number: issue.number,
+    title: issue.title,
+    url: issue.url,
+  })
   const body = issue.body.trim()
   return bracketedPaste(body ? `${head}\n\n${body}` : head)
 }
