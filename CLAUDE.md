@@ -22,6 +22,8 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
   installed lich's workspace. That isolation is one `pkill` wide: a pattern like `chromium-profile` matches the
   running lich's own window, and killing it exits that backend and every session under it. Kill a rig's browser
   by the PID it was launched with.
+- **Building, `task dev` and the local gate from an agent session**: `.claude/skills/lich-build-dev/`, the
+  procedure and the traps of running them inside the user's own lich window.
 - **Translations**: two independent languages, the interface and the prompt language (what lich and
   lich-plugin hand agents). `.claude/skills/lich-i18n/` maps where a string lands and every point a new
   language touches; the rules for writing a message are in `frontend/CLAUDE.md` › Translations.

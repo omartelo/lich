@@ -17,3 +17,4 @@ frontend/coverage
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/lich-i18n/
+!.claude/skills/lich-build-dev/
