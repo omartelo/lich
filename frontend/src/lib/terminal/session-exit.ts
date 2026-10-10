@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n/i18n"
 // What a session's card says once the process inside its PTY is gone. lich
 // never closes the session on its own: the scrollback is the only evidence of
 // what killed a provider, and a resume that dies at boot would take its own
@@ -22,9 +23,9 @@ export function readSessionExit(data: unknown): SessionExit {
 // unknown exit has nothing to add to "ended".
 export function exitNotice(exit: SessionExit): string {
   if (exit.code === null || exit.code === 0) {
-    return "Session ended"
+    return t("terminal.sessionExit.ended")
   }
-  return `Session ended with code ${exit.code}`
+  return t("terminal.sessionExit.endedWithCode", { code: exit.code })
 }
 
 // exitMarker is the line written into the scrollback where the process died. It

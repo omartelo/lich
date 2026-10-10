@@ -1,5 +1,5 @@
 import type { BaseStatus } from "@/lib/api-types"
-import { count } from "@/lib/utils"
+import { t } from "@/lib/i18n/i18n"
 
 // How many conflicting paths the tooltip names before it starts counting. A
 // merge can collide on dozens of files, and a tooltip that grows with them
@@ -41,8 +41,12 @@ export function baseReadout(status: BaseStatus | null): BaseReadout | null {
   return {
     kind: conflicts.length > 0 ? "conflict" : "behind",
     count: conflicts.length > 0 ? conflicts.length : status.behind,
-    behind: status.behind > 0 ? `${count(status.behind, "commit")} behind ${status.base}` : null,
-    conflict: conflicts.length > 0 ? `Conflicts in ${count(conflicts.length, "file")}` : null,
+    behind:
+      status.behind > 0
+        ? t("git.baseStatus.behind", { count: status.behind, base: status.base })
+        : null,
+    conflict:
+      conflicts.length > 0 ? t("git.baseStatus.conflict", { count: conflicts.length }) : null,
     paths: conflicts.slice(0, NAMED_CONFLICTS),
     more: Math.max(0, conflicts.length - NAMED_CONFLICTS),
   }

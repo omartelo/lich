@@ -1,4 +1,5 @@
 import type { CommitIdentity } from "./api-types"
+import { t } from "@/lib/i18n/i18n"
 
 /** The three parts of the identity row, so the email can be set in monospace
  * without the rest of the sentence being assembled in JSX. */
@@ -18,16 +19,16 @@ export interface CommitIdentityRow {
 export function commitIdentityRow(identity: CommitIdentity): CommitIdentityRow {
   if (!identity.email) {
     return {
-      lead: "No git identity in this checkout.",
+      lead: t("env.commitIdentity.noneLead"),
       email: "",
-      note: "Commits will be refused until user.email is set.",
+      note: t("env.commitIdentity.noneNote"),
     }
   }
   return {
-    lead: identity.name ? `Commits land as ${identity.name}` : "Commits land as",
+    lead: identity.name
+      ? t("env.commitIdentity.landAsNamed", { name: identity.name })
+      : t("env.commitIdentity.landAs"),
     email: `<${identity.email}>`,
-    note: identity.local
-      ? "— set in this repository, overriding your global one."
-      : "— git user.email, not this account.",
+    note: identity.local ? t("env.commitIdentity.setLocal") : t("env.commitIdentity.setGlobal"),
   }
 }

@@ -1,4 +1,5 @@
 import type { SearchMatch, SearchResult } from "@/lib/api-types"
+import { t } from "@/lib/i18n/i18n"
 
 /** One file's hits, in the order the backend found them. */
 export interface SearchGroup {
@@ -62,9 +63,12 @@ export function highlightSegments(text: string, query: string): Segment[] {
 export function searchSummary(result: SearchResult, groups: number): string {
   const lines = result.matches.length
   if (result.cut) {
-    return `${lines}+ matches`
+    return t("git.fileSearch.cutMatches", { count: lines })
   }
-  return `${lines} ${lines === 1 ? "match" : "matches"} in ${groups} ${groups === 1 ? "file" : "files"}`
+  return t("git.fileSearch.summary", {
+    matches: t("git.fileSearch.matches", { count: lines }),
+    files: t("common.count.file", { count: groups }),
+  })
 }
 
 // searchFootnote is what the answer owes the reader about what it did not
@@ -73,12 +77,10 @@ export function searchSummary(result: SearchResult, groups: number): string {
 export function searchFootnote(result: SearchResult): string {
   const parts: string[] = []
   if (result.cut) {
-    parts.push(`Showing the first ${result.matches.length} matching lines. Narrow the search.`)
+    parts.push(t("git.fileSearch.cutNote", { count: result.matches.length }))
   }
   if (result.tooLarge > 0) {
-    parts.push(
-      `${result.tooLarge} ${result.tooLarge === 1 ? "file" : "files"} over 1 MB not searched.`,
-    )
+    parts.push(t("git.fileSearch.tooLarge", { count: result.tooLarge }))
   }
   return parts.join(" ")
 }

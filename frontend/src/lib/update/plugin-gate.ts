@@ -4,6 +4,7 @@
 // dialog, and the toast.
 
 import type { PluginStatus as Status } from "@/lib/api-types"
+import { t } from "@/lib/i18n/i18n"
 export type { Status }
 
 export const INSTALL_DISMISSED_KEY = "lich.pluginInstallDismissed"
@@ -105,8 +106,7 @@ export function decidePluginAction(
 // of range, and what closes the gap.
 export function incompatibleMessage(version: string, providers: Status[]): string {
   const installs = providers.map((p) => `${p.name} (v${p.installedVersion})`).join(", ")
-  const fix = version
-    ? `Install v${version}, the release this lich supports.`
-    : "Update lich, or check that you are online to find a release this lich supports."
-  return `The lich plugin in ${installs} is not supported by this lich. ${fix}`
+  return version
+    ? t("update.plugin.incompatibleInstall", { installs, version })
+    : t("update.plugin.incompatibleUpdate", { installs })
 }

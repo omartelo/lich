@@ -3,6 +3,7 @@
 // renders these.
 
 import type { AppUpdateProgress } from "@/lib/api-types"
+import { t } from "@/lib/i18n/i18n"
 
 /** internal/appupdate.ProgressEventName. */
 export const UPDATE_PROGRESS_EVENT = "appupdate-progress"
@@ -36,15 +37,25 @@ export function downloadReading(p: AppUpdateProgress): DownloadReading {
     return { percent: null, bytes: formatMegabytes(p.received) }
   }
   const percent = Math.min(100, Math.floor((p.received * 100) / p.total))
-  return { percent, bytes: `${formatMegabytes(p.received)} of ${formatMegabytes(p.total)}` }
+  return {
+    percent,
+    bytes: t("update.progress.bytesOf", {
+      received: formatMegabytes(p.received),
+      total: formatMegabytes(p.total),
+    }),
+  }
 }
 
 /** failureText names the phase the update died in — there are two now — and,
  * for a download, how far it got. */
 export function failureText(last: AppUpdateProgress | null, error: string): string {
   if (last === null || last.phase !== "download") {
-    return last === null ? `Update failed: ${error}` : `Install failed: ${error}`
+    return last === null
+      ? t("update.progress.updateFailed", { error })
+      : t("update.progress.installFailed", { error })
   }
   const { percent } = downloadReading(last)
-  return percent === null ? `Download failed: ${error}` : `Download failed at ${percent}%: ${error}`
+  return percent === null
+    ? t("update.progress.downloadFailed", { error })
+    : t("update.progress.downloadFailedAt", { percent, error })
 }

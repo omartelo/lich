@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n/i18n"
 // The three reasons sandbox.Backend() answers "", and the only place the pane is
 // told them apart. Only Linux's is about bubblewrap: macOS confines with
 // sandbox-exec, and Windows has no backend at all — telling either of them to go
@@ -14,20 +15,19 @@ export interface CannotConfineCopy {
 export function cannotConfineCopy(platform: SandboxPlatform): CannotConfineCopy {
   if (platform === "windows") {
     return {
-      reason: "lich has no sandbox backend on Windows",
-      advice: "There is nothing to install — every session runs on the machine.",
+      reason: t("env.sandbox.windowsReason"),
+      advice: t("env.sandbox.windowsAdvice"),
     }
   }
   if (platform === "mac") {
     return {
-      reason: "sandbox-exec is not available",
-      advice:
-        "macOS ships /usr/bin/sandbox-exec, so a machine without a working one is broken in a way lich cannot repair. Every session runs on the machine.",
+      reason: t("env.sandbox.macReason"),
+      advice: t("env.sandbox.macAdvice"),
     }
   }
   return {
-    reason: "bubblewrap is not installed",
-    advice: "Install bubblewrap and reopen lich. Until then every session runs on the machine.",
+    reason: t("env.sandbox.linuxReason"),
+    advice: t("env.sandbox.linuxAdvice"),
   }
 }
 
@@ -35,5 +35,6 @@ export function cannotConfineCopy(platform: SandboxPlatform): CannotConfineCopy 
 // the question uses: the New worktree dialog's row and the New session menu's
 // item. "Its checkout" rather than "this worktree" because the menu also opens
 // sessions in the project's own directory.
-export const CONFINED_MEANS =
-  "An empty home holding only the agent's own state, the machine read-only, and writes only inside its checkout. The network stays on."
+export function confinedMeans(): string {
+  return t("env.sandbox.confinedMeans")
+}

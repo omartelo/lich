@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n/i18n"
 // displayPath collapses a user's home directory prefix to "~", the way most
 // shells and terminals render paths: "/home/me/try/skipo" -> "~/try/skipo".
 // Paths outside a home directory are returned unchanged.
@@ -20,5 +21,5 @@ export function baseName(path: string): string {
 // not in. Saying nothing would read as "still there" — the readout has to say
 // it does not know, and what is in the way.
 export function unknownCwd(host: string): string {
-  return `cwd unknown · inside ${host}`
+  return t("env.paths.cwdUnknown", { host })
 }

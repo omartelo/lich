@@ -1,4 +1,5 @@
 import type { QuotaPlan, QuotaWindow } from "@/lib/api-types"
+import { t } from "@/lib/i18n/i18n"
 
 const HOUR_S = 60 * 60
 const DAY_S = 24 * HOUR_S
@@ -34,7 +35,7 @@ export function accountLine(plan: QuotaPlan): string {
   if (plan.account) {
     return plan.account
   }
-  return plan.noAccount === "token-login" ? "Token login" : ""
+  return plan.noAccount === "token-login" ? t("env.quota.tokenLogin") : ""
 }
 
 // shortWindow names a window's length in the width a status bar has: "5h",

@@ -17,6 +17,7 @@ import {
   lineNumbers,
 } from "@codemirror/view"
 import { gutterNumber, type DiffGap, type DiffLine } from "@/lib/git/diff"
+import { t } from "@/lib/i18n/i18n"
 
 // diffTheme styles the editor with the app's CSS variables, so the `.dark`
 // class on <html> restyles every view without any JS synchronization.
@@ -231,8 +232,8 @@ class ExpandWidget extends WidgetType {
     const button = document.createElement("button")
     button.type = "button"
     button.className = "cm-diff-expand"
-    button.textContent = `Expand ${count} unchanged line${count === 1 ? "" : "s"}`
-    button.title = `Show lines ${this.gap.from}–${this.gap.to}`
+    button.textContent = t("git.codemirror.expand", { count })
+    button.title = t("git.codemirror.showLines", { from: this.gap.from, to: this.gap.to })
     button.addEventListener("click", () => this.onExpand(this.gap))
     return button
   }
