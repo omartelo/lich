@@ -136,6 +136,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is told so and goes on to report back, instead of keeping its report until
   something else woke it.
 
+- **A file you ticked as Viewed in a pull request stays folded when you come
+  back to it.** Leaving the pull request and opening it again showed the tick
+  but opened the file.
+
 ## [0.64.0] - 2026-10-09
 
 ### Added
