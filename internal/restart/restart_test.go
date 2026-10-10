@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -235,5 +236,70 @@ func TestDoRelaunchesWithTheArgsItWasGiven(t *testing.T) {
 	}
 	if want := []string{"--", "--ozone-platform=x11"}; !slices.Equal(spawnedArgs, want) {
 		t.Fatalf("successor args = %v, want %v", spawnedArgs, want)
+	}
+}
+
+// An update on Windows ends with Inno Setup launching lich again, with a fixed
+// command line (build/windows/lich.iss), so the window's switches cannot ride
+// it: they ride the environment the installer passes on, as the pinned port
+// and the restart marker already do.
+func TestInstallHandsTheArgsToTheRelaunchThroughTheEnvironment(t *testing.T) {
+	var installerEnv []string
+	c := New("lich.exe", []string{"LICH_LISTEN_PORT=47821"}, []string{"--", "--ozone-platform=x11"})
+	c.spawn = func(_ string, env, _ []string) error {
+		installerEnv = env
+		return nil
+	}
+	if err := c.Install("setup.exe"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LaunchArgs(nil, envReader(installerEnv))
+	if err != nil {
+		t.Fatalf("LaunchArgs = %v", err)
+	}
+	if want := []string{"--", "--ozone-platform=x11"}; !slices.Equal(got, want) {
+		t.Fatalf("relaunched lich reads args %v, want %v", got, want)
+	}
+}
+
+func TestLaunchArgs(t *testing.T) {
+	handed := envReader([]string{ArgsEnv + `=["--","--ozone-platform=x11"]`})
+	cases := []struct {
+		name   string
+		argv   []string
+		getenv func(string) string
+		want   []string
+	}{
+		{"its own argv wins", []string{"--", "--use-gl=egl"}, handed, []string{"--", "--use-gl=egl"}},
+		{"none of its own takes the handed ones", nil, handed, []string{"--", "--ozone-platform=x11"}},
+		{"nothing either way", nil, envReader(nil), nil},
+	}
+	for _, c := range cases {
+		got, err := LaunchArgs(c.argv, c.getenv)
+		if err != nil || !slices.Equal(got, c.want) {
+			t.Errorf("%s: LaunchArgs = %v, %v, want %v", c.name, got, err, c.want)
+		}
+	}
+	if _, err := LaunchArgs(nil, envReader([]string{ArgsEnv + "=--ozone"})); err == nil {
+		t.Error("LaunchArgs of a value that is no JSON list = nil error, want one")
+	}
+}
+
+func TestWithoutMarkerDropsTheHandedArgsToo(t *testing.T) {
+	got := WithoutMarker([]string{"PATH=/bin", ArgsEnv + `=["--"]`, WaitEnv + "=1"})
+	if !slices.Equal(got, []string{"PATH=/bin"}) {
+		t.Fatalf("WithoutMarker = %v, want only PATH", got)
+	}
+}
+
+// envReader reads one environment the way os.Getenv reads the process's.
+func envReader(env []string) func(string) string {
+	return func(key string) string {
+		for _, kv := range env {
+			if k, v, ok := strings.Cut(kv, "="); ok && k == key {
+				return v
+			}
+		}
+		return ""
 	}
 }

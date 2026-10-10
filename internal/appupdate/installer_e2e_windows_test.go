@@ -107,7 +107,7 @@ func runInstalledUpdate(t *testing.T, install, bin, work string) {
 	t.Setenv("LICH_UPDATE_EVENTS", filepath.Join(work, "events.txt"))
 	t.Setenv("LICH_SHELL", "")
 	t.Setenv("CGO_ENABLED", "0")
-	cmd := exec.Command(filepath.Join(install, "lich.exe"))
+	cmd := exec.Command(filepath.Join(install, "lich.exe"), "--", "--lich-e2e-flag")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -169,6 +169,11 @@ func assertInstalledUpdate(t *testing.T, install, bin, work string) {
 	}
 	if sha256.Sum256(installed) != sha256.Sum256(want) {
 		t.Fatal("installed exe was not replaced")
+	}
+	// The window Inno Setup launched again kept the switch lich was started
+	// with (restart.ArgsEnv), as the one before the update had it.
+	if events := fixtureEvents(work); !strings.Contains(events, "window ready 0.8.0 flagged") {
+		t.Fatalf("the relaunched window lost lich's switches:\n%s", events)
 	}
 	events := fixtureEvents(work)
 	last := -1

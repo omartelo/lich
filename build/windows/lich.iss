@@ -53,8 +53,10 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; AppUserModelID: 
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
-; Explicit update mode inherits lich's pinned port and restart marker. Ordinary
-; silent installs still do not launch an application on the user's desktop.
+; Explicit update mode inherits lich's pinned port, restart marker and window
+; switches (LICH_RELAUNCH_ARGS, internal/restart); the command line stays fixed.
+; Ordinary silent installs still do not launch an application on the user's
+; desktop.
 Filename: "{app}\{#AppExe}"; Flags: nowait runascurrentuser; Check: IsUpdate
 
 [Code]

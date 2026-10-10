@@ -23,6 +23,9 @@ class WindowFixture {
             return;
         }
         string version = File.ReadAllText(resource).Trim();
+        // The switch lich was launched with (`lich -- --lich-e2e-flag`): a
+        // window relaunched after the update must still get it.
+        string flagged = Array.IndexOf(args, "--lich-e2e-flag") >= 0 ? " flagged" : "";
         using (Process child = Process.Start(new ProcessStartInfo(Application.ExecutablePath, "hold") {
             UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true
         })) {
@@ -30,7 +33,7 @@ class WindowFixture {
             using (Form window = new Form()) {
                 window.Text = "lich update fixture " + version;
                 window.Shown += delegate {
-                    Record("window ready " + version);
+                    Record("window ready " + version + flagged);
                     // lich closes its window by writing on the window's stdin, the
                     // way lich-shell reads it (shell/src/main.rs, watch_stdin).
                     new Thread(() => {

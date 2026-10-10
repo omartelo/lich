@@ -7,6 +7,7 @@
 package restart
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -20,6 +21,12 @@ import (
 // listener bind path retries while this is set, because the outgoing process
 // still holds the pinned port for a moment (see internal/terminal transport).
 const WaitEnv = "LICH_RESTART_WAIT"
+
+// ArgsEnv carries a lich's arguments, as a JSON list, to the lich Inno Setup
+// launches again after an update on Windows. That launch has a fixed command
+// line (build/windows/lich.iss) and the environment of the lich that started
+// the installer, so the window's switches ride the environment (LaunchArgs).
+const ArgsEnv = "LICH_RELAUNCH_ARGS"
 
 // Coordinator ends this lich: on its own (Quit), or after launching a detached
 // successor (Do, Install), so this process unwinds, exits, and frees the port.
@@ -75,13 +82,49 @@ func (c *Coordinator) Quit() error {
 // starts first and blocks retrying the pinned port; then this process exits,
 // and the freed port lets the successor bind and open a fresh window.
 func (c *Coordinator) Do() error {
-	return c.launch(c.exePath, c.args)
+	return c.launch(c.exePath, c.args, successorEnv(c.env))
 }
 
 // Install hands replacement and relaunch to Inno Setup. It waits for this PID
 // to exit before touching files, so the window and main's defers finish first.
 func (c *Coordinator) Install(installer string) error {
-	return c.launch(installer, installerArgs(filepath.Dir(c.exePath), os.Getpid()))
+	env, err := relaunchEnv(c.env, c.args)
+	if err != nil {
+		return err
+	}
+	return c.launch(installer, installerArgs(filepath.Dir(c.exePath), os.Getpid()), env)
+}
+
+// relaunchEnv is the installer's environment: the successor's, plus args in
+// ArgsEnv for the lich it launches again.
+func relaunchEnv(env, args []string) ([]string, error) {
+	out := successorEnv(env)
+	if len(args) == 0 {
+		return out, nil
+	}
+	encoded, err := json.Marshal(args)
+	if err != nil {
+		return nil, fmt.Errorf("restart: encode the relaunch arguments: %w", err)
+	}
+	return append(out, ArgsEnv+"="+string(encoded)), nil
+}
+
+// LaunchArgs are the arguments this lich runs with: its own argv when it has
+// one, and otherwise the ones a lich updating on Windows handed it through
+// ArgsEnv. An ArgsEnv that is not a JSON list of strings is an error.
+func LaunchArgs(argv []string, getenv func(string) string) ([]string, error) {
+	if len(argv) > 0 {
+		return argv, nil
+	}
+	handed := getenv(ArgsEnv)
+	if handed == "" {
+		return nil, nil
+	}
+	var args []string
+	if err := json.Unmarshal([]byte(handed), &args); err != nil {
+		return nil, fmt.Errorf("read %s: %w", ArgsEnv, err)
+	}
+	return args, nil
 }
 
 // installerArgs is half of a contract with build/windows/lich.iss. /UPDATEPID is
@@ -94,7 +137,7 @@ func installerArgs(dir string, pid int) []string {
 		"/LOG=" + filepath.Join(dir, ".lich-update-setup.log")}
 }
 
-func (c *Coordinator) launch(exe string, args []string) error {
+func (c *Coordinator) launch(exe string, args, env []string) error {
 	if c.exePath == "" {
 		return errors.New("restart: executable path unknown")
 	}
@@ -109,7 +152,7 @@ func (c *Coordinator) launch(exe string, args []string) error {
 	if c.started {
 		return nil
 	}
-	if err := c.spawn(exe, successorEnv(c.env), args); err != nil {
+	if err := c.spawn(exe, env, args); err != nil {
 		return fmt.Errorf("restart: launch successor: %w", err)
 	}
 	c.started = true
@@ -124,14 +167,15 @@ func successorEnv(env []string) []string {
 	return append(append([]string(nil), env...), WaitEnv+"=1")
 }
 
-// WithoutMarker is env minus the wait marker, on a fresh slice. The marker is
-// for this process's own startup alone: what it spawns must not read as a
-// restart successor, or a lich launched from one of its sessions never looks
-// for the running one and dies on the busy port.
+// WithoutMarker is env minus the wait marker and ArgsEnv, on a fresh slice.
+// Both are for this process's own startup alone: what it spawns must not read
+// as a restart successor, or a lich launched from one of its sessions never
+// looks for the running one and dies on the busy port, and it must not take
+// this lich's window switches for its own.
 func WithoutMarker(env []string) []string {
 	out := make([]string, 0, len(env))
 	for _, kv := range env {
-		if !strings.HasPrefix(kv, WaitEnv+"=") {
+		if !strings.HasPrefix(kv, WaitEnv+"=") && !strings.HasPrefix(kv, ArgsEnv+"=") {
 			out = append(out, kv)
 		}
 	}
