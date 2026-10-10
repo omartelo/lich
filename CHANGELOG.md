@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   background with every agent and terminal still working; launch lich again and
   a window opens on them, scrollback included. Run `lich quit` to end it for
   good. Restarting for an update still ends every session.
+- **lich opens where you left it.** A new window, whether reopened on a lich
+  that kept running or opened by a fresh launch, lands on the project screen
+  it was on when the window closed instead of Home.
 
 ### Fixed
 

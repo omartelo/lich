@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import { toast } from "sonner"
-import { useMatch, useNavigate } from "react-router-dom"
+import { useLocation, useMatch, useNavigate } from "react-router-dom"
 import type { ClosedSession, Project, RecentProject } from "@/lib/api-types"
 import type { StoredProject as StoreProject, StoredSession } from "@/lib/api-types"
 import { ProjectService, Store } from "@/lib/rpc"
@@ -43,6 +43,8 @@ import type { SessionStatus } from "@/lib/session/session-events"
 import { NotificationsOptIn } from "@/components/NotificationsOptIn"
 import { isSessionWaiting, restoreSessionUnread } from "@/lib/session/use-session-status"
 import { useHotkey } from "@/lib/use-hotkey"
+import { loadLastScreen, resumableScreen, saveLastScreen } from "@/lib/last-screen"
+import { launchFocus } from "@/lib/session/session-events"
 import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { neighborProjectId } from "@/lib/project-order"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
@@ -125,6 +127,11 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const homeIdRef = useRef<string | null>(null)
   homeIdRef.current = homeId
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  // Set once the launch has decided which screen the window opens on. Until
+  // then the screen on display is the boot's Home, not one the user went to,
+  // and saving it would forget the one to come back to.
+  const screenRestored = useRef(false)
   // "/*" so a project stays the active one while its Settings screen is open
   // (keeps the new-session hotkey, attention toasts and seen-tracking working).
   const activeProjectId = useMatch("/projects/:projectId/*")?.params.projectId
@@ -181,8 +188,26 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       hydrateProjectProviderDefaults(loaded)
       applyLoaded(loaded)
       void loadProviders().catch(() => undefined)
+      // A window opened on a card (launchFocus) goes there instead.
+      if (!launchFocus(window.location.href)) {
+        const screen = resumableScreen(
+          await loadLastScreen(),
+          loaded.map((p) => p.id),
+        )
+        if (screen) {
+          navigate(screen)
+        }
+      }
+      screenRestored.current = true
     })()
-  }, [applyLoaded])
+  }, [applyLoaded, navigate])
+
+  useEffect(() => {
+    if (!screenRestored.current) {
+      return
+    }
+    void saveLastScreen(pathname).catch(() => {})
+  }, [pathname])
 
   // A reopened project keeps the sessions it was closed with, hence the reload.
   // Nothing is seeded: a brand-new project lands on the empty screen.
