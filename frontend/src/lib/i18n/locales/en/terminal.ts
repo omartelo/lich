@@ -27,6 +27,8 @@ export const terminal = {
   view: {
     restartFailed: "Session failed to restart: {error}",
     startFailed: "Session failed to start: {error}",
+    pasteSettingFailed:
+      "Could not read whether to unfold long pastes, so this one was pasted once: {error}",
   },
   sessionExit: {
     ended: "Session ended",

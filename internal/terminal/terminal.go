@@ -224,6 +224,7 @@ type Store interface {
 	SkipPermissions(providerID, projectID, cwd string) bool
 	Ultracode(providerID string) bool
 	SubagentCards(providerID string) bool
+	PasteUnfold(providerID string) bool
 	ProjectPath(projectID string) string
 	WorktreePorts() map[string]int
 	SetWorktreePort(path string, port int) error

@@ -54,6 +54,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   CHANGELOG group labels in the What's new dialog (`PatchNotesDialog`), which render a file that is English;
   and MCP tool descriptions and the `lich` CLI's `--help`, which agents read and which do not follow the prompt
   language either.
+- **"Unfold long pastes" copies two providers' own rules** (`frontend/src/lib/terminal/paste-unfold.ts`,
+  `internal/terminal/paste_unfold.go`), and is off until turned on. For Claude Code lich pastes twice wherever it
+  predicts the fold, because a repeat of the same text unfolds the `[Pasted text #N +M lines]` chip. The prediction
+  is Claude Code's rule copied from its 2.1.296 bundle (more than 800 characters, or more than `min(rows - 10, 2)`
+  newlines, up to 100 000), and nothing tells lich when that rule moves: a paste lich thinks folds and Claude Code
+  does not lands twice, and one it thinks does not stays a chip. It also assumes the paste goes to the prompt; a
+  paste into one of Claude Code's own dialogs that does not fold gets the text twice. For opencode the spawn sets
+  `experimental.disable_paste_summary` through `OPENCODE_CONFIG_CONTENT`, extending one the user exports rather than
+  replacing it; opencode's own "Disable paste summary" command is stored in its state and wins over any config, so
+  once used there the switch changes nothing. Codex, Antigravity, Crush, Cursor CLI and Kiro CLI fold with a
+  constant and no setting, so they have no switch; oh-my-pi was not measured.
 - **`LICH_WORKTREE_PORT` is reserved, never held** (`internal/terminal/worktreeport.go`): the number is a name the
   checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts. A
   Run card shortens that window rather than closing it — the process it starts is what binds the port, and

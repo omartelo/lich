@@ -24,6 +24,8 @@ import {
   skipPermissionFlags,
   skipPermissionsKey,
   supportsUltracode,
+  pasteUnfoldKey,
+  pasteUnfoldTiming,
   ultracodeKey,
   SANDBOX_RISK_ORDER,
   SKIP_RISK_ORDER,
@@ -75,6 +77,19 @@ describe("provider setting keys", () => {
       "shell",
     ]) {
       expect(supportsUltracode(id)).toBe(false)
+    }
+  })
+
+  // The Go spawn reads this exact string (store.pasteUnfoldKey).
+  it("keys the paste-unfold flag per provider", () => {
+    expect(pasteUnfoldKey("opencode")).toBe("provider.opencode.pasteUnfold")
+  })
+
+  it("offers paste unfolding only where lich can undo the fold, and says when it applies", () => {
+    expect(pasteUnfoldTiming("claude")).toBe("nextPaste")
+    expect(pasteUnfoldTiming("opencode")).toBe("nextSession")
+    for (const id of ["codex", "antigravity", "omp", "crush", "cursor", "kiro", "shell"]) {
+      expect(pasteUnfoldTiming(id)).toBeNull()
     }
   })
 

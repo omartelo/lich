@@ -29,6 +29,8 @@ export const terminal = {
   view: {
     restartFailed: "La sesión no se pudo reiniciar: {error}",
     startFailed: "La sesión no se pudo iniciar: {error}",
+    pasteSettingFailed:
+      "No se pudo leer si los pegados largos se despliegan, así que este se pegó una vez: {error}",
   },
   sessionExit: {
     ended: "La sesión terminó",

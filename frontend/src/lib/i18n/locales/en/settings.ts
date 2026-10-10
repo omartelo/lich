@@ -278,6 +278,15 @@ export const settings = {
       },
     },
   },
+  pasteUnfoldSetting: {
+    title: "Unfold long pastes",
+    searchWords: "paste fold chip summary placeholder pasted text",
+    descriptionNextPaste:
+      "A paste {provider} would fold into a placeholder lands as the full text, so you can edit it before sending. Applies to the next paste, in every {provider} session.",
+    descriptionNextSession:
+      "A paste {provider} would fold into a placeholder lands as the full text, so you can edit it before sending. Applies to sessions opened after you change it.",
+    label: "Unfold long pastes in {provider}",
+  },
   subagentCardsSetting: {
     title: "Subagents as lich sessions",
     searchWords: "agent subagent card worktree delegate background",

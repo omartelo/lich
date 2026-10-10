@@ -6,13 +6,15 @@ import { SerializeAddon } from "@xterm/addon-serialize"
 import { SearchAddon } from "@xterm/addon-search"
 import { WebLinksAddon } from "@xterm/addon-web-links"
 import { toast } from "sonner"
-import { System, Terminal as Service } from "@/lib/rpc"
+import { Store, System, Terminal as Service } from "@/lib/rpc"
 import { t } from "@/lib/i18n/i18n"
 import { errorText } from "@/lib/utils"
 import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/terminal/term-transport"
 import { chordSequence, isSearchOpenChord, pastedImageSequence } from "@/lib/terminal/term-keys"
 import { takePaste } from "@/lib/terminal/paste-queue"
+import { pasteTimes } from "@/lib/terminal/paste-unfold"
+import { pasteUnfoldKey } from "@/lib/providers-store"
 import { takeFork } from "@/lib/terminal/fork-queue"
 import { takeSetup } from "@/lib/terminal/setup-queue"
 import type { PaletteSession } from "@/lib/session/command-palette"
@@ -394,12 +396,33 @@ export function TerminalView({
     // drop a paste with no text in it.
     const onPaste = (event: ClipboardEvent) => {
       const seq = pastedImageSequence(event.clipboardData, isWindows)
-      if (seq === null) {
+      if (seq !== null) {
+        event.preventDefault()
+        event.stopPropagation()
+        writeInput(seq)
         return
       }
+      const text = event.clipboardData?.getData("text/plain") ?? ""
+      if (pasteTimes(kind, text, term.rows) === 1) {
+        return
+      }
+      // Asked at paste time rather than held, so a switch flipped in Settings
+      // answers the next paste. The clipboard has to be claimed now, before the
+      // answer: xterm would paste it once on its own.
       event.preventDefault()
       event.stopPropagation()
-      writeInput(seq)
+      Store.GetSetting(pasteUnfoldKey(kind), "").then(
+        (value) => {
+          term.paste(text)
+          if (value === "true") {
+            term.paste(text)
+          }
+        },
+        (error: unknown) => {
+          term.paste(text)
+          toast.error(t("terminal.view.pasteSettingFailed", { error: errorText(error) }))
+        },
+      )
     }
     host.addEventListener("paste", onPaste, true)
 

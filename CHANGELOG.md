@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A long paste can land as text you can edit, in Claude Code and opencode.**
+  Turn on Unfold long pastes in Settings › Providers and a paste either agent
+  would fold into a placeholder (`[Pasted text #1 +32 lines]`,
+  `[Pasted ~32 lines]`) arrives as the full text instead. Off by default.
+
 ### Changed
 
 - **The language settings open Settings › Appearance**, above the theme, where

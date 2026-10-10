@@ -52,6 +52,7 @@ type stubBins struct {
 	skipPerms         bool
 	ultracode         bool
 	subagentCardsOff  bool
+	pasteUnfold       bool
 	subagentDepth     int
 	subagentParents   map[string]int
 	inheritedSubagent map[string]int
@@ -130,6 +131,7 @@ func (s stubBins) SessionModel(_ string) string        { return s.model }
 func (s stubBins) SessionEffort(_ string) string       { return s.effort }
 func (s stubBins) Ultracode(_ string) bool             { return s.ultracode }
 func (s stubBins) SubagentCards(_ string) bool         { return !s.subagentCardsOff }
+func (s stubBins) PasteUnfold(_ string) bool           { return s.pasteUnfold }
 func (s stubBins) SessionSubagentDepth(id string) int {
 	if depth, ok := s.inheritedSubagent[id]; ok {
 		return depth

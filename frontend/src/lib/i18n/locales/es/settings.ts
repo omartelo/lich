@@ -288,6 +288,16 @@ export const settings = {
       },
     },
   },
+  pasteUnfoldSetting: {
+    title: "Desplegar pegados largos",
+    searchWords:
+      "pegar pegado plegar chip resumen marcador texto paste fold chip summary placeholder",
+    descriptionNextPaste:
+      "Un pegado que {provider} plegaría en un marcador llega como el texto completo, para que puedas editarlo antes de enviarlo. Se aplica desde el próximo pegado, en todas las sesiones de {provider}.",
+    descriptionNextSession:
+      "Un pegado que {provider} plegaría en un marcador llega como el texto completo, para que puedas editarlo antes de enviarlo. Se aplica a las sesiones abiertas después de cambiarlo.",
+    label: "Desplegar pegados largos en {provider}",
+  },
   subagentCardsSetting: {
     title: "Subagentes como sesiones de lich",
     searchWords:
