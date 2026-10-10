@@ -34,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Session shortcuts only land on cards the sidebar shows.** Next session,
+  previous session and next waiting session used to focus cards inside a folded
+  block or left out by the sidebar's search and state filter. They now step over
+  both, walking the cards in the order the sidebar draws them.
+
 - **Crush and Kiro CLI cards report everything again with lich-plugin 0.20.**
   A Crush card never learned its conversation, so resuming it started a new
   one; a Kiro card showed each tool without its detail line, such as the

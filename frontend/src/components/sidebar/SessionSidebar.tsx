@@ -49,11 +49,13 @@ import {
   folderKey,
   reorderSubset,
   runCardIn,
+  sidebarCards,
   sidebarGroups,
   type SidebarGroup,
 } from "@/lib/session/sidebar-groups"
+import { registerSidebarCards } from "@/lib/session/sidebar-cards-store"
 import { useSortableList, verticalAxis, withinList } from "@/lib/use-sortable-list"
-import { moveGroupCollapsed } from "@/lib/session/group-prefs"
+import { moveGroupCollapsed, readGroupCollapsed } from "@/lib/session/group-prefs"
 import { NewFolderDialog } from "./NewFolderDialog"
 import { WorktreeCloseDialogs } from "./WorktreeCloseDialogs"
 import { SessionGroup } from "./SessionGroup"
@@ -230,6 +232,13 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // The split's own block is built from the members, not from what is on screen:
   // a parked wall is exactly the case the user could not see before.
   const groups = sidebarGroups(visible, panes.groups)
+  // No deps: the reader closes over the groups this render drew, and a fold is
+  // read at the press, since folding re-renders its block and not this list.
+  useEffect(() =>
+    registerSidebarCards(() =>
+      sidebarCards(groups, (key) => readGroupCollapsed(projectId ?? "", key)),
+    ),
+  )
   // Read off the project's whole list rather than the filtered one: a filter is
   // a view, and a folder that vanished from the menu while a query was typed
   // would be a folder the user could not file into.

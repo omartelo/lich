@@ -5,7 +5,6 @@ import { useMatch, useNavigate } from "react-router-dom"
 import type { ClosedSession, Project, RecentProject } from "@/lib/api-types"
 import type { StoredProject as StoreProject, StoredSession } from "@/lib/api-types"
 import { ProjectService, Store } from "@/lib/rpc"
-import { storedGroups } from "@/lib/session/panes-store"
 import {
   activeSessionId,
   addSession,
@@ -29,6 +28,7 @@ import {
   type SessionState,
 } from "@/lib/session/sessions"
 import { neighborSessionId, nextWaitingSessionId } from "@/lib/session/sidebar-groups"
+import { readSidebarCards } from "@/lib/session/sidebar-cards-store"
 import { applyOrder, pinFirst } from "@/lib/reorder"
 import { displayPath } from "@/lib/paths"
 import { errorText } from "@/lib/utils"
@@ -525,15 +525,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     if (!activeProjectId) return false
     // Swallowed even with nowhere to go: the chord belongs to lich, so a project
     // with a single session must not leak it into that session's PTY.
-    const current = sessionsRef.current
     const target = neighborSessionId(
-      current,
-      activeProjectId,
-      activeSessionId(current, activeProjectId),
+      readSidebarCards(),
+      activeSessionId(sessionsRef.current, activeProjectId),
       step,
-      // The walk follows what the sidebar draws, and the split's block is drawn
-      // first: without it the step would jump a divider and come back.
-      storedGroups(activeProjectId),
     )
     if (target) {
       activateSession(activeProjectId, target)
@@ -546,13 +541,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // swallowing it: there is no move this press could have meant.
   useHotkey(hotkeys.nextWaitingSession, () => {
     if (!activeProjectId) return false
-    const current = sessionsRef.current
     const target = nextWaitingSessionId(
-      current,
-      activeProjectId,
-      activeSessionId(current, activeProjectId),
+      readSidebarCards(),
+      activeSessionId(sessionsRef.current, activeProjectId),
       isSessionWaiting,
-      storedGroups(activeProjectId),
     )
     if (!target) return false
     activateSession(activeProjectId, target)
