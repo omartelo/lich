@@ -89,7 +89,10 @@ lsappinfo list > "$RUNNER_TEMP/apps.txt"
 apps=$(grep -c 'bundle path=.*Lich.app' "$RUNNER_TEMP/apps.txt" || true)
 [ "$apps" = 1 ] || { grep -B1 -A3 'Lich.app' "$RUNNER_TEMP/apps.txt"; fail "macOS counts $apps applications in Lich.app, expected the window alone"; }
 
-# Closing the window leaves lich running with its sessions.
+# Closing the window leaves lich running with its sessions; with none running
+# it would quit, so one is opened first, through the CLI as an agent would.
+mkdir -p "$RUNNER_TEMP/proj"
+"$app/Contents/MacOS/lich" open --project "$RUNNER_TEMP/proj" --kind shell || fail "lich open exited $?"
 kill -TERM "$browser"
 for _ in $(seq 1 15); do sleep 1; pgrep -x lich-shell > /dev/null || break; done
 pgrep -x lich-shell > /dev/null && fail "the window outlived its SIGTERM"
