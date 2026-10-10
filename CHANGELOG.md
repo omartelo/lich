@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The language settings open Settings › Appearance**, above the theme, where
   someone who can't read the current language finds them first.
+- **Renaming a folder onto a name the project already has says it merges
+  them.** The two folders become one set of sessions; the rename field now
+  says so before you confirm, as New folder does, instead of merging silently.
 
 ### Fixed
 
