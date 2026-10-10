@@ -4,6 +4,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { CornerDownLeft, Search } from "lucide-react"
 import { Keys } from "@/components/common/Keys"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n/i18n"
 
 // The one centered search-and-pick surface in the app: a query at the top, rows
 // grouped under headings, a hint bar at the foot. Shared by the command palette
@@ -57,6 +58,7 @@ export function PickerDialog({
   filters,
   children,
 }: PickerDialogProps) {
+  const t = useT()
   return (
     <DialogPrimitive.Root
       open={open}
@@ -94,10 +96,10 @@ export function PickerDialog({
           </div>
 
           <div className="flex items-center gap-4 border-t bg-black/10 px-4 py-2 text-xs text-muted-foreground">
-            <Hint keys={["↑", "↓"]}>navigate</Hint>
+            <Hint keys={["↑", "↓"]}>{t("common.pickerDialog.navigate")}</Hint>
             <Hint keys={["↵"]}>{actionHint}</Hint>
-            {filters && <Hint keys={["⇥"]}>filter</Hint>}
-            <Hint keys={["esc"]}>close</Hint>
+            {filters && <Hint keys={["⇥"]}>{t("common.pickerDialog.filter")}</Hint>}
+            <Hint keys={["esc"]}>{t("common.pickerDialog.close")}</Hint>
           </div>
         </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>

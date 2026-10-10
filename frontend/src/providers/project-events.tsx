@@ -10,6 +10,7 @@ import { hydrateProjectProviderDefaults } from "@/lib/providers-store"
 import { refreshGitStatus } from "@/lib/git/use-git-status"
 import { markSessionSeen } from "@/lib/session/use-session-status"
 import { scheduledFor } from "@/lib/session/schedule"
+import { t } from "@/lib/i18n/i18n"
 import {
   activeSessionId,
   adoptSession,
@@ -65,8 +66,6 @@ const ATTENTION_TOAST_MS = 10_000
 // it carries the only remaining copy of what the user wrote, and once it goes
 // there is nowhere left to read it.
 const FORFEIT_TOAST_MS = 30_000
-
-const UNLABELED_SESSION = "A session"
 
 // What the subscriptions below reach for. Every ref is the provider's own, read
 // inside once-only subscriptions rather than closed over as state: a listener
@@ -197,11 +196,14 @@ export function useSessionEvents({
       }
       toast(
         <div className="flex min-w-0 flex-col">
-          <span>Scheduled prompt lost with {data.label}</span>
+          <span>{t("shell.projectEvents.scheduleLost", { label: data.label })}</span>
           {/* Clamped rather than cut: a prompt is capped at 8 KB, and the
               toast's job is to name it, not to hold the whole of it. */}
           <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-            Due {scheduledFor(data.at, new Date())}: {data.prompt}
+            {t("shell.projectEvents.scheduleDue", {
+              when: scheduledFor(data.at, new Date()),
+              prompt: data.prompt,
+            })}
           </span>
         </div>,
         { duration: FORFEIT_TOAST_MS, icon: <AlarmClockOff className="size-4 text-tone-wait" /> },
@@ -341,16 +343,20 @@ export function useSessionEvents({
       }
       toast(
         <div className="flex min-w-0 flex-col">
-          <span>{target || UNLABELED_SESSION} answered in its own session</span>
+          <span>
+            {t("shell.projectEvents.relayAnswered", {
+              target: target || t("shell.projectEvents.unlabeledSession"),
+            })}
+          </span>
           <span className="mt-0.5 text-xs text-muted-foreground">
-            It finished without replying through lich — open it to read the answer.
+            {t("shell.projectEvents.relayDetail")}
           </span>
         </div>,
         {
           duration: ATTENTION_TOAST_MS,
           icon: <MessageSquareDashed className="size-4 text-sky-500" />,
           action: {
-            label: "Open",
+            label: t("shell.projectEvents.open"),
             onClick: () => {
               navigate(`/projects/${projectId}`)
               activateSession(projectId, targetId)
@@ -387,7 +393,9 @@ export function useSessionEvents({
       if (!project) {
         return
       }
-      const label = project.sessions.find((s) => s.id === id)?.label ?? UNLABELED_SESSION
+      const label =
+        project.sessions.find((s) => s.id === id)?.label ??
+        t("shell.projectEvents.unlabeledSession")
       const projectName = projectsRef.current.find((p) => p.id === projectId)?.name
       // Read off the raw event like the status above, and for the same reason:
       // the store collapses a repeat "waiting", and a second prompt in one turn
@@ -406,7 +414,9 @@ export function useSessionEvents({
         setAskNotifications(true)
       } else if (notice === "notify") {
         const summary =
-          status === "waiting" ? `${label} needs your input` : `${label} has finished working`
+          status === "waiting"
+            ? t("shell.projectEvents.needsInput", { label })
+            : t("shell.projectEvents.finished", { label })
         // A failure is the backend's to log; the page has nothing to do with it.
         System.Notify(summary, projectName ?? "").catch(() => {})
       }
@@ -419,7 +429,7 @@ export function useSessionEvents({
       }
       toast(
         <div className="flex min-w-0 flex-col">
-          <span>{label} needs your input</span>
+          <span>{t("shell.projectEvents.needsInput", { label })}</span>
           {/* What it is blocked on, when the provider's event had words for it
               (docs/hooks/session-state.md). The toast is read from across the
               screen and its whole job is to say which card is worth the trip. */}
@@ -437,7 +447,7 @@ export function useSessionEvents({
           duration: ATTENTION_TOAST_MS,
           icon: <Bell className="size-4 text-tone-wait" />,
           action: {
-            label: "Open",
+            label: t("shell.projectEvents.open"),
             onClick: () => {
               navigate(`/projects/${projectId}`)
               activateSession(projectId, id)

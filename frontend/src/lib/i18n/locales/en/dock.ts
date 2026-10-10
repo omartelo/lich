@@ -1,2 +1,35 @@
 // Keys: dock.<component>.<what>, the component in camelCase after its file.
-export const dock = {} as const
+export const dock = {
+  rightDock: {
+    fileBrowser: "File browser",
+    reviewChanges: "Review changes",
+    tabCode: "Code",
+    tabReview: "Review",
+    exitFullScreen: "Exit full screen",
+    fullScreen: "Full screen",
+    closePanel: "Close panel",
+    fileTree: "The file tree",
+    reviewPanel: "The review panel",
+    resizePanel: "Resize panel",
+  },
+  searchResults: {
+    prompt: "Search the text of every file in this checkout",
+    searching: "Searching…",
+    noMatch: "No file contains “{query}”",
+  },
+  filesPanel: {
+    searchPlaceholder: "Search in files",
+    filterPlaceholder: "Filter by name",
+    searchLabel: "Search in files",
+    filterLabel: "Filter files by name",
+    matchesLabel: "What the field matches",
+    byName: "Name",
+    byText: "Text",
+    readFailed: "Could not read this folder",
+    loading: "Loading…",
+    noMatch: "No file matches",
+    empty: "No files here",
+    backToTree: "Back to file tree",
+    readOnly: "read-only",
+  },
+} as const

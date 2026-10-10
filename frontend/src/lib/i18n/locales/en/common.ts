@@ -13,4 +13,31 @@ export const common = {
     save: "Save",
     create: "Create",
   },
+  checkAgainButton: {
+    check: "Check again",
+    checking: "Checking…",
+  },
+  errorBoundary: {
+    stoppedRendering: "{label} stopped rendering",
+    reload: "Reload the window",
+    retry: "Try again",
+  },
+  stepper: {
+    reset: "Reset {name}",
+    default: "Default",
+  },
+  toolMissing: {
+    notInstalled: "{label} is not installed",
+    install: "Install {bin}",
+  },
+  pickerDialog: {
+    navigate: "navigate",
+    filter: "filter",
+    close: "close",
+  },
+  ui: {
+    dialog: {
+      close: "Close",
+    },
+  },
 } as const

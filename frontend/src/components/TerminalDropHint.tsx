@@ -1,4 +1,5 @@
 import { Paperclip } from "lucide-react"
+import { Trans } from "@/components/common/Trans"
 import { dropHintDetail } from "@/lib/terminal/drop-hint"
 
 interface TerminalDropHintProps {
@@ -17,7 +18,10 @@ export function TerminalDropHint({ label, confined }: TerminalDropHintProps) {
       <div className="grid justify-items-center gap-1.5 px-4 text-center">
         <Paperclip className="size-5 text-foreground" />
         <span className="text-sm text-foreground">
-          Attach to <span className="font-semibold">{label}</span>
+          <Trans
+            k="terminal.dropHint.attachTo"
+            params={{ label: <span className="font-semibold">{label}</span> }}
+          />
         </span>
         <span className="text-xs text-muted-foreground [@container(max-height:120px)]:hidden">
           {dropHintDetail(confined)}

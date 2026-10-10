@@ -12,6 +12,7 @@ import { usePanelWidth } from "@/lib/use-panel-width"
 import { useActiveSession } from "@/lib/session/use-active-session"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { FilesPanel } from "./FilesPanel"
+import { useT } from "@/lib/i18n/i18n"
 
 export type DockTab = "files" | "review"
 
@@ -41,6 +42,7 @@ interface RightDockProps {
 // two panels stay pure bodies. One dock width serves both tabs: it is a single
 // panel that swaps contents, not two panels competing for the edge.
 export function RightDock({ tab, onTab, onClose }: RightDockProps) {
+  const t = useT()
   const { path } = useActiveSession()
   const status = useGitStatus(path)
   const [fullscreen, setFullscreen] = useState(false)
@@ -55,7 +57,9 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
 
   return (
     <aside
-      aria-label={tab === "files" ? "File browser" : "Review changes"}
+      aria-label={
+        tab === "files" ? t("dock.rightDock.fileBrowser") : t("dock.rightDock.reviewChanges")
+      }
       className={
         fullscreen
           ? "absolute inset-0 z-20 flex flex-col rounded-lg bg-sidebar"
@@ -68,11 +72,11 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
           <TabsList className="h-auto p-0.5 bg-transparent gap-1">
             <TabsTrigger value="files" className={TAB_CLASS}>
               <Code className="size-3.5" />
-              Code
+              {t("dock.rightDock.tabCode")}
             </TabsTrigger>
             <TabsTrigger value="review" className={TAB_CLASS}>
               <FileDiff className="size-3.5" />
-              Review
+              {t("dock.rightDock.tabReview")}
               {status && status.files > 0 && (
                 <DiffStat added={status.added} deleted={status.deleted} />
               )}
@@ -87,7 +91,7 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
             </>
           )}
           <IconAction
-            label={fullscreen ? "Exit full screen" : "Full screen"}
+            label={fullscreen ? t("dock.rightDock.exitFullScreen") : t("dock.rightDock.fullScreen")}
             onClick={() => setFullscreen((v) => !v)}
           >
             {fullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
@@ -96,7 +100,7 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
             variant="ghost"
             size="icon-xs"
             onClick={onClose}
-            aria-label="Close panel"
+            aria-label={t("dock.rightDock.closePanel")}
             className="text-muted-foreground"
           >
             <X className="size-4" />
@@ -108,13 +112,19 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
             full-screen toggle and the close button reachable — and switching
             tab is itself a way out, which is what the reset key buys. */}
         <ErrorBoundary
-          label={tab === "files" ? "The file tree" : "The review panel"}
+          label={tab === "files" ? t("dock.rightDock.fileTree") : t("dock.rightDock.reviewPanel")}
           resetKey={tab}
         >
           {tab === "files" ? <FilesPanel /> : <ReviewPanel bulk={bulk} />}
         </ErrorBoundary>
       </div>
-      {!fullscreen && <ResizeHandle edge="left" label="Resize panel" handleProps={handleProps} />}
+      {!fullscreen && (
+        <ResizeHandle
+          edge="left"
+          label={t("dock.rightDock.resizePanel")}
+          handleProps={handleProps}
+        />
+      )}
     </aside>
   )
 }

@@ -50,6 +50,7 @@ import { useSettings } from "./settings"
 import { buildSessionState, fileAfterInsert, toProject } from "./project-workspace"
 import { ProjectsContext } from "./projects-context"
 import { useSessionEvents } from "./project-events"
+import { t } from "@/lib/i18n/i18n"
 
 export { useProjects } from "./projects-context"
 
@@ -83,6 +84,12 @@ const cardFromStored = (restored: StoredSession): Session => ({
 // The first session of any project is always "Session 1"; the counter then
 // points at 2 for the next one.
 const FIRST_LABEL = "Session 1"
+
+function scheduleToastTitle(at: number): string {
+  if (!at) return t("shell.projects.scheduleCleared")
+  const when = timeUntil(at, new Date())
+  return when ? t("shell.projects.scheduled", { when }) : t("shell.projects.scheduledNow")
+}
 const FIRST_NEXT_SEQ = 2
 
 // How long the undo stays on offer after a close. Long enough to notice the card
@@ -221,10 +228,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
           return false
         }
         await adopt(moved)
-        toast.success(`${moved.name} now opens ${displayPath(moved.path)}`)
+        toast.success(
+          t("shell.projects.relocated", { name: moved.name, path: displayPath(moved.path) }),
+        )
         return true
       } catch (error) {
-        toast.error(`Relocate failed: ${errorText(error)}`)
+        toast.error(t("shell.projects.relocateFailed", { error: errorText(error) }))
         return false
       }
     },
@@ -388,7 +397,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       }
       const restored = await Store.ReopenSession(closed.id, newSessionId())
       if (!restored) {
-        toast(`${closed.label} is no longer available to resume`)
+        toast(t("shell.projects.noLongerAvailable", { label: closed.label }))
         return
       }
       commit(restoreSession(sessionsRef.current, closed.projectId, cardFromStored(restored)))
@@ -435,7 +444,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     async (projectId: string, session: Session, index: number) => {
       const restored = await Store.ReopenSession(session.id, newSessionId())
       if (!restored) {
-        toast.error(`Could not bring ${session.label} back`)
+        toast.error(t("shell.projects.bringBackFailed", { label: session.label }))
         return
       }
       const next = restoreSession(sessionsRef.current, projectId, cardFromStored(restored), index)
@@ -467,10 +476,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       const parked = dropSession(projectId, sessionId, (activeID) =>
         Store.CloseSession(projectId, sessionId, activeID),
       )
-      toast(`Closed ${session.label}`, {
+      toast(t("shell.projects.closed", { label: session.label }), {
         duration: UNDO_TOAST_MS,
         action: {
-          label: "Undo",
+          label: t("shell.projects.undo"),
           // Waits on the park: the store can sit on a lock for seconds, and a
           // resume that overtook it would find the row still open and do nothing.
           onClick: () => void parked.then(() => restoreClosedSession(projectId, session, index)),
@@ -629,13 +638,18 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       .then(() => (entrypoint ? Store.SetSessionTitle(sessionId, entrypoint) : false))
       .then((renamed) => {
         commit(recordEntrypoint(sessionsRef.current, projectId, sessionId, entrypoint, !!renamed))
-        toast.success(entrypoint ? "Entrypoint set" : "Entrypoint cleared", {
-          description: entrypoint
-            ? "Runs the next time this terminal starts."
-            : "This terminal starts a plain shell again.",
-        })
+        toast.success(
+          entrypoint ? t("shell.projects.entrypointSet") : t("shell.projects.entrypointCleared"),
+          {
+            description: entrypoint
+              ? t("shell.projects.entrypointSetDescription")
+              : t("shell.projects.entrypointClearedDescription"),
+          },
+        )
       })
-      .catch((error: unknown) => toast.error(`Could not save the entrypoint: ${errorText(error)}`))
+      .catch((error: unknown) =>
+        toast.error(t("shell.projects.entrypointFailed", { error: errorText(error) })),
+      )
   }, [])
 
   // scheduleSession is written through and mirrored like every other session
@@ -646,11 +660,13 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     Store.SetSessionSchedule(sessionId, at, prompt)
       .then(() => {
         commit(setSessionSchedule(sessionsRef.current, sessionId, at, prompt))
-        toast.success(at ? `Scheduled ${timeUntil(at, new Date()) ?? "now"}` : "Schedule cleared", {
+        toast.success(scheduleToastTitle(at), {
           description: at ? scheduledFor(at, new Date()) : undefined,
         })
       })
-      .catch((error: unknown) => toast.error(`Could not schedule it: ${errorText(error)}`))
+      .catch((error: unknown) =>
+        toast.error(t("shell.projects.scheduleFailed", { error: errorText(error) })),
+      )
   }, [])
 
   const pinSession = useCallback((projectId: string, sessionId: string, pinned: boolean) => {

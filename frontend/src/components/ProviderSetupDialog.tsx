@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { refreshProviders, type ProviderState } from "@/lib/providers-store"
 import { System } from "@/lib/rpc"
+import { useT } from "@/lib/i18n/i18n"
 
 interface ProviderSetupDialogProps {
   /** Whether any harness was found on PATH. The dialog has two shapes. */
@@ -33,17 +34,20 @@ interface ProviderSetupDialogProps {
 // onOpenChange swallows Escape and the backdrop (base-ui has no dismissible flag
 // on Dialog — a controlled root that refuses to close is the equivalent).
 export function ProviderSetupDialog({ hasInstalled, known, onDone }: ProviderSetupDialogProps) {
+  const t = useT()
   return (
     <Dialog open onOpenChange={() => {}}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
-            {hasInstalled ? "Choose your agents" : "No coding agents found"}
+            {hasInstalled
+              ? t("shell.providerSetupDialog.chooseTitle")
+              : t("shell.providerSetupDialog.noneTitle")}
           </DialogTitle>
           <DialogDescription>
             {hasInstalled
-              ? "lich found these on your machine. Turn on the ones you use — the rest stay out of the New Session menu."
-              : "lich runs the agents already installed on your machine, and found none. Install one, then check again."}
+              ? t("shell.providerSetupDialog.chooseDescription")
+              : t("shell.providerSetupDialog.noneDescription")}
           </DialogDescription>
         </DialogHeader>
         {/* Nothing installed means nothing to pick, so the panel would be seven
@@ -70,12 +74,12 @@ export function ProviderSetupDialog({ hasInstalled, known, onDone }: ProviderSet
         )}
         <DialogDescription>
           {hasInstalled
-            ? "You can change this any time in Settings › Providers."
-            : "Already have one installed? Point lich at its binary in Settings › Providers."}
+            ? t("shell.providerSetupDialog.changeLater")
+            : t("shell.providerSetupDialog.pointToBinary")}
         </DialogDescription>
         <DialogFooter>
           {!hasInstalled && <CheckAgainButton onCheck={refreshProviders} size="default" />}
-          <Button onClick={onDone}>Continue</Button>
+          <Button onClick={onDone}>{t("shell.providerSetupDialog.continue")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

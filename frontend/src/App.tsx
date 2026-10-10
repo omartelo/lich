@@ -35,6 +35,7 @@ import { ProviderSetupGate } from "@/components/ProviderSetupGate"
 import { UncleanExitGate } from "@/components/UncleanExitGate"
 import { CommandPalette } from "@/components/CommandPalette"
 import { ShortcutsOverlay } from "@/components/ShortcutsOverlay"
+import { useT } from "@/lib/i18n/i18n"
 
 // Named here like every other `lich.*` pref rather than spelled at the call
 // site. Unlike the dock — opened for a task and closed after it — a hidden
@@ -45,6 +46,7 @@ const SIDEBAR_KEY = "lich.sidebar.open"
 // TerminalHost stay mounted while the Outlet swaps screens (Home, Settings) on
 // top of the terminals.
 function Layout() {
+  const t = useT()
   const { sessions } = useProjects()
   const match = useMatch("/projects/:projectId/*")
   const location = useLocation()
@@ -146,14 +148,14 @@ function Layout() {
                   registry with its scrollback. A throw inside xterm's own
                   render loop is not a React render, so nothing here sees it. */}
               <ErrorBoundary
-                label="The stage"
-                retry="Reload the stage"
+                label={t("shell.app.stage")}
+                retry={t("shell.app.reloadStage")}
                 className="absolute inset-0"
               >
                 <TerminalHost />
               </ErrorBoundary>
               <ErrorBoundary
-                label="This screen"
+                label={t("shell.app.screen")}
                 resetKey={location.pathname}
                 className="absolute inset-0 z-10"
               >
@@ -161,7 +163,10 @@ function Layout() {
               </ErrorBoundary>
             </div>
             {dock && (
-              <ErrorBoundary label="The panel" className="w-80 shrink-0 rounded-lg bg-sidebar">
+              <ErrorBoundary
+                label={t("shell.app.panel")}
+                className="w-80 shrink-0 rounded-lg bg-sidebar"
+              >
                 <RightDock tab={dock} onTab={setDock} onClose={() => setDock(null)} />
               </ErrorBoundary>
             )}

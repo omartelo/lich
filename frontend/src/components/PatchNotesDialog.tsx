@@ -6,6 +6,8 @@ import { System } from "@/lib/rpc"
 import type { PatchNotes, PatchNotesHighlight } from "@/lib/api-types"
 import { layoutHighlights, splitLeadIn } from "@/lib/update/patch-notes-layout"
 import { cn } from "@/lib/utils"
+import { Trans } from "@/components/common/Trans"
+import { useT } from "@/lib/i18n/i18n"
 
 const RELEASE_TAG_BASE = "https://github.com/omartelo/lich/releases/tag/v"
 
@@ -128,6 +130,7 @@ interface PatchNotesDialogProps {
 }
 
 export function PatchNotesDialog({ notes, onClose }: PatchNotesDialogProps) {
+  const t = useT()
   const groups = notes.groups ?? []
   const { lead, callouts } = layoutHighlights(notes.highlights)
   return (
@@ -135,7 +138,12 @@ export function PatchNotesDialog({ notes, onClose }: PatchNotesDialogProps) {
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-xl" showCloseButton={false}>
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-6 pt-5 text-[0.8125rem] text-muted-foreground">
           <DialogTitle className="text-[0.8125rem] font-medium text-foreground">
-            What's new in lich <span className="font-normal tabular-nums">v{notes.version}</span>
+            <Trans
+              k="shell.patchNotesDialog.title"
+              params={{
+                version: <span className="font-normal tabular-nums">v{notes.version}</span>,
+              }}
+            />
           </DialogTitle>
           <div className="flex gap-3 tabular-nums">
             {groups.map((group) => (
@@ -178,11 +186,11 @@ export function PatchNotesDialog({ notes, onClose }: PatchNotesDialogProps) {
             className="inline-flex items-center gap-1 text-[0.8125rem] text-muted-foreground hover:text-foreground"
             onClick={() => void System.OpenExternal(RELEASE_TAG_BASE + notes.version)}
           >
-            View full changelog
+            {t("shell.patchNotesDialog.viewChangelog")}
             <ArrowUpRight className="size-3.5" />
           </button>
           <Button size="sm" onClick={onClose}>
-            Got it
+            {t("shell.patchNotesDialog.gotIt")}
           </Button>
         </DialogFooter>
       </DialogContent>

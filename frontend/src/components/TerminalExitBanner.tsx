@@ -1,5 +1,6 @@
 import { RotateCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useT } from "@/lib/i18n/i18n"
 import { exitNotice, type SessionExit } from "@/lib/terminal/session-exit"
 
 interface TerminalExitBannerProps {
@@ -15,16 +16,17 @@ interface TerminalExitBannerProps {
 // as a dialog: the scrollback above it is what says why the process is gone, and
 // a modal would cover the one thing the user has to read before deciding.
 export function TerminalExitBanner({ exit, onRestart, onClose }: TerminalExitBannerProps) {
+  const t = useT()
   return (
     <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t border-border bg-card px-3 py-2">
       <span className="text-xs text-muted-foreground">{exitNotice(exit)}</span>
       <div className="ml-auto flex items-center gap-1">
         <Button size="xs" variant="ghost" onClick={onRestart}>
           <RotateCw />
-          Restart
+          {t("terminal.exitBanner.restart")}
         </Button>
         <Button size="xs" variant="destructive" onClick={onClose}>
-          Close
+          {t("terminal.exitBanner.close")}
         </Button>
       </div>
     </div>
