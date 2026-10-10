@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { HashRouter, Outlet, Route, Routes, useLocation, useMatch } from "react-router-dom"
-import { SettingsProvider, useSettings } from "@/providers/settings"
+import { SettingsProvider } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
 import { parseBoolPref, readPref, writePref } from "@/lib/prefs"
 import { ProjectsProvider, useProjects } from "@/providers/projects"
@@ -45,7 +45,6 @@ const SIDEBAR_KEY = "lich.sidebar.open"
 // TerminalHost stay mounted while the Outlet swaps screens (Home, Settings) on
 // top of the terminals.
 function Layout() {
-  const { hotkeys } = useSettings()
   const { sessions } = useProjects()
   const match = useMatch("/projects/:projectId/*")
   const location = useLocation()
@@ -57,7 +56,7 @@ function Layout() {
     writePref(SIDEBAR_KEY, open)
   }
   const toggleSidebar = () => morph(() => showSidebar(!sidebar))
-  useHotkey(hotkeys.toggleSidebar, toggleSidebar)
+  useHotkey("toggleSidebar", toggleSidebar)
   // A session's PTY and terminal end when the session leaves the workspace,
   // decided here and not in the view that drew it: that view is gone while
   // the stage sits in an error boundary's fallback, and a close made from the
@@ -71,7 +70,7 @@ function Layout() {
   // first rather than letting the chord quietly do nothing. The request is a
   // pending flag for exactly that reason: its consumer mounts a render later
   // (use-sidebar-intent).
-  useHotkey(hotkeys.newWorktree, () => {
+  useHotkey("newWorktree", () => {
     if (!projectId) return false
     showSidebar(true)
     requestWorktreeDialog(projectId)
@@ -87,15 +86,15 @@ function Layout() {
     showSidebar(true)
     requestSessionIntent(active.id, intent)
   }
-  useHotkey(hotkeys.renameSession, () => cardAction("rename"))
+  useHotkey("renameSession", () => cardAction("rename"))
   // A pinned card shows no × at all — closing is what the pin withholds — so
   // the shortcut withholds it too.
-  useHotkey(hotkeys.closeSession, () => !active?.pinned && cardAction("close"))
-  useHotkey(hotkeys.togglePin, () => cardAction("pin"))
-  useHotkey(hotkeys.openTerminal, () => cardAction("terminal"))
+  useHotkey("closeSession", () => !active?.pinned && cardAction("close"))
+  useHotkey("togglePin", () => cardAction("pin"))
+  useHotkey("openTerminal", () => cardAction("terminal"))
   // Delegating writes the request at the session's own prompt, and the thing
   // reading a terminal's prompt is a shell: it would run the line as a command.
-  useHotkey(hotkeys.delegate, () => active?.kind !== "shell" && cardAction("delegate"))
+  useHotkey("delegate", () => active?.kind !== "shell" && cardAction("delegate"))
   const toggleDock = (tab: DockTab) => setDock((cur) => (cur === tab ? null : tab))
   // The shortcut toggles the dock as a whole, so it reopens on the tab it was
   // last showing — the two tabs have their own footer buttons.
@@ -105,8 +104,8 @@ function Layout() {
       lastTab.current = dock
     }
   }, [dock])
-  useHotkey(hotkeys.toggleDock, () => setDock((cur) => (cur ? null : lastTab.current)))
-  useHotkey(hotkeys.searchInFiles, () => {
+  useHotkey("toggleDock", () => setDock((cur) => (cur ? null : lastTab.current)))
+  useHotkey("searchInFiles", () => {
     if (!projectId) return false
     setDock("files")
     requestFileSearch()
@@ -115,12 +114,12 @@ function Layout() {
   // the cursor to: each declines rather than being swallowed for nothing, the
   // rule every card shortcut above follows.
   const panes = usePanes(projectId)
-  useHotkey(hotkeys.splitBeside, () => {
+  useHotkey("splitBeside", () => {
     if (!panes.add()) {
       return false
     }
   })
-  useHotkey(hotkeys.otherPane, () => panes.split && panes.focusStep(1))
+  useHotkey("otherPane", () => panes.split && panes.focusStep(1))
   return (
     <div className="flex h-screen w-screen flex-col bg-canvas">
       <ProjectTabs />

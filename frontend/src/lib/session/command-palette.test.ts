@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
+  actionGroups,
+  actionTerm,
   adoptedSession,
   externalLabel,
   filterPalette,
@@ -17,6 +19,7 @@ import {
   rowKey,
 } from "./command-palette"
 import type { ClosedSession, ExternalSession, Project } from "@/lib/api-types"
+import { DEFAULT_HOTKEYS, UNASSIGNED } from "@/lib/hotkeys"
 import type { SessionState } from "./sessions"
 
 const projects: Project[] = [
@@ -589,5 +592,66 @@ describe("conversations started outside lich", () => {
       snippet: "",
       truncated: false,
     })
+  })
+})
+
+describe("actionTerm", () => {
+  it("reads the query after a leading > as the action search", () => {
+    expect(actionTerm(">")).toBe("")
+    expect(actionTerm("> pin")).toBe(" pin")
+  })
+
+  it("leaves a query that does not start with > to the jump search", () => {
+    expect(actionTerm("")).toBeNull()
+    expect(actionTerm("fix > later")).toBeNull()
+    expect(actionTerm(" >pin")).toBeNull()
+  })
+})
+
+describe("actionGroups", () => {
+  const labels = (groups: ReturnType<typeof actionGroups>) =>
+    groups.map((g) => ({
+      label: g.label,
+      rows: g.rows.map((row) => (row.kind === "action" ? `${row.action.id} ${row.keys}` : "")),
+    }))
+
+  it("groups the matching actions with the chord each is bound to", () => {
+    expect(labels(actionGroups(" pin", DEFAULT_HOTKEYS, false))).toEqual([
+      { label: "Sessions", rows: ["togglePin Ctrl+Shift+K"] },
+    ])
+  })
+
+  it("prints the chord the user rebound, the macOS way on a Mac", () => {
+    const hotkeys = {
+      ...DEFAULT_HOTKEYS,
+      settings: { mod: true, shift: true, alt: false, key: "o" },
+    }
+    expect(labels(actionGroups("settings", hotkeys, true))).toEqual([
+      { label: "App", rows: ["settings ⌘⇧O"] },
+    ])
+  })
+
+  it("lists an action bound to nothing, so it can still be run", () => {
+    const hotkeys = { ...DEFAULT_HOTKEYS, toggleDock: UNASSIGNED }
+    expect(labels(actionGroups("dock", hotkeys, false))).toEqual([
+      { label: "View", rows: ["toggleDock Unassigned"] },
+    ])
+  })
+
+  it("leaves out the palette's own action", () => {
+    const ids = actionGroups("", DEFAULT_HOTKEYS, false).flatMap((g) =>
+      g.rows.map((row) => (row.kind === "action" ? row.action.id : "")),
+    )
+    expect(ids).not.toContain("commandPalette")
+    expect(ids).toContain("searchInFiles")
+  })
+
+  it("is empty when nothing matches", () => {
+    expect(actionGroups("zzz", DEFAULT_HOTKEYS, false)).toEqual([])
+  })
+
+  it("keys an action row by its id", () => {
+    const row = actionGroups(" pin", DEFAULT_HOTKEYS, false)[0]?.rows[0]
+    expect(row && rowKey(row)).toBe("action:togglePin")
   })
 })

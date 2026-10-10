@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils"
 interface PickerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Called once the open or close animation has finished. */
+  onOpenChangeComplete?: (open: boolean) => void
   /** Names the dialog itself; read out on open, never drawn. */
   title: string
   placeholder: string
@@ -43,6 +45,7 @@ interface PickerDialogProps {
 export function PickerDialog({
   open,
   onOpenChange,
+  onOpenChangeComplete,
   title,
   placeholder,
   searchLabel,
@@ -55,7 +58,11 @@ export function PickerDialog({
   children,
 }: PickerDialogProps) {
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+    <DialogPrimitive.Root
+      open={open}
+      onOpenChange={onOpenChange}
+      onOpenChangeComplete={onOpenChangeComplete}
+    >
       <DialogPrimitive.Portal>
         <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/50 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
         <DialogPrimitive.Popup className="fixed left-1/2 top-[14vh] z-50 flex max-h-[70vh] w-full max-w-[40rem] -translate-x-1/2 flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0">
