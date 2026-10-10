@@ -175,6 +175,8 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.cost, args[1:])
 	case "mcp":
 		return c.run(c.serveMCP, args[1:])
+	case "quit":
+		return c.run(c.quit, args[1:])
 	case "rage":
 		return c.run(c.rage, args[1:])
 	case "doctor":
