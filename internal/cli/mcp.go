@@ -9,6 +9,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/omartelo/lich/internal/prompt"
 	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/spawn"
 )
@@ -97,15 +98,9 @@ const privateToolUsage = "Set this when you are a subagent or workflow step runn
 // this is the only place the whole journey — fan out, carry on, collect — is
 // told as one, and the difference between an agent that orchestrates and one
 // that never realizes it could.
-const mcpInstructions = `lich runs coding-agent sessions side by side in one window; these tools are how this session works with the others.
-
-Delegate in parallel: for work that can run beside yours, open a worker session in its own git worktree (open_session with worktree) so it gets its own checkout, then hand it the task with send_to_session. Check list_worktrees first — a branch already checked out is opened, not created. Workers are full sessions on the user's screen: visible, steerable, and yours to close (close_session) when the work is done. That is the difference from the subagents your own harness runs, and it is what the user is asking for when they say to fan work out across branches or worktrees: a subagent has no checkout of its own and no card they can open, read or take over mid-task. Reach for one of those to read something and throw it away, not to run the implementation somebody asked to see. The exception is a Claude Code session whose lich-plugin turns a general-purpose subagent into one of these cards: there your Agent tool opens the worker, in the background, and its report comes back on its own, so fan out with it and open sessions here for what a subagent cannot be.
-
-Never poll for results. A send that outlives its wait hands back a ticket and you carry on with your own work; when results are ready, one short [lich] note arrives at your prompt — collect everything at once with wait_for_answer (no ticket). That note only lands between your turns, so while a long turn of your own is running, look in with wait_for_answer and no_wait at the points where a result would change what you do next (before delegating more, after a long validation, before the final synthesis): it returns what is ready and who still owes one without waiting. One look per decision point: if nothing is ready, carry on. Calling it again in a loop is polling, and it burns the tokens this design exists to save.
-
-A subagent or workflow step running inside this session is not its agent, and lich cannot tell them apart: it sends and opens with private, then waits on its own tickets. The [lich] note and the no-ticket wait_for_answer belong to the session's own agent.
-
-When a [lich] message carrying a ticket arrives at YOUR prompt, you are the worker: do the task, then answer with ` + relay.ToolReply + ` — a concise report (what was done, where, what remains), never a transcript.`
+func mcpInstructions(lang prompt.Lang) string {
+	return fmt.Sprintf(prompt.For(lang).MCPInstructions, relay.ToolReply)
+}
 
 // serveMCP runs the stdio server until its input ends. Messages are answered
 // one at a time, in order, but input is read the whole time: a cancellation for
@@ -232,7 +227,7 @@ func (c *client) handleMCP(ctx context.Context, request jsonRPC) (jsonRPC, bool)
 
 	switch request.Method {
 	case "initialize":
-		response.Result = mcpHandshake(request.Params, c.version)
+		response.Result = mcpHandshake(request.Params, c.version, c.lang())
 	case "tools/list":
 		response.Result = map[string]any{"tools": mcpToolList()}
 	case "tools/call":
@@ -247,7 +242,7 @@ func (c *client) handleMCP(ctx context.Context, request jsonRPC) (jsonRPC, bool)
 
 // mcpHandshake answers initialize, echoing the client's protocol version when
 // it named one (see mcpProtocolVersion).
-func mcpHandshake(params json.RawMessage, version string) map[string]any {
+func mcpHandshake(params json.RawMessage, version string, lang prompt.Lang) map[string]any {
 	var asked struct {
 		ProtocolVersion string `json:"protocolVersion"`
 	}
@@ -260,7 +255,7 @@ func mcpHandshake(params json.RawMessage, version string) map[string]any {
 		"protocolVersion": protocol,
 		"capabilities":    map[string]any{"tools": map[string]any{}},
 		"serverInfo":      map[string]any{"name": relay.MCPServerName, "version": version},
-		"instructions":    mcpInstructions,
+		"instructions":    mcpInstructions(lang),
 	}
 }
 
@@ -443,7 +438,7 @@ var mcpTools = append([]mcpTool{
 			if err := c.call(ctx, method, call, waitBudget(timeout), &result); err != nil {
 				return "", err
 			}
-			return mcpOutcome(result), nil
+			return mcpOutcome(c.lang(), result), nil
 		},
 	},
 	{
@@ -478,13 +473,13 @@ var mcpTools = append([]mcpTool{
 				if err := c.call(ctx, "relay.Wait", []any{ticket, timeout}, waitBudget(timeout), &result); err != nil {
 					return "", err
 				}
-				return mcpOutcome(result), nil
+				return mcpOutcome(c.lang(), result), nil
 			}
 			var collected relay.Collected
 			if err := c.collect(ctx, noWait, timeout, &collected); err != nil {
 				return "", err
 			}
-			return collectedText(collected), nil
+			return collectedText(c.lang(), collected), nil
 		},
 	},
 	{
@@ -556,9 +551,9 @@ var mcpTools = append([]mcpTool{
 				return "", err
 			}
 			if prompt == "" {
-				return openedText(opened), nil
+				return openedText(c.lang(), opened), nil
 			}
-			return openedText(opened) + "\n" + c.handOver(ctx, opened, prompt, method), nil
+			return openedText(c.lang(), opened) + "\n" + c.handOver(ctx, opened, prompt, method), nil
 		},
 	},
 	{
@@ -592,7 +587,7 @@ var mcpTools = append([]mcpTool{
 			if err := c.call(ctx, "spawn.Close", call, openCall, &closed); err != nil {
 				return "", err
 			}
-			return closedText(closed), nil
+			return closedText(c.lang(), closed), nil
 		},
 	},
 	{
@@ -677,86 +672,77 @@ var mcpTools = append([]mcpTool{
 // failed call. The session exists either way, and a failed call would read as if
 // nothing had happened — leaving an agent that opens three workers convinced it
 // has none.
-func (c *client) handOver(ctx context.Context, opened spawn.Session, prompt, method string) string {
-	result, err := c.deliver(ctx, opened, prompt, method)
+func (c *client) handOver(ctx context.Context, opened spawn.Session, task, method string) string {
+	result, err := c.deliver(ctx, opened, task, method)
 	if err != nil {
-		send := "send_to_session"
-		if method == relaySendPrivate {
-			send = "send_to_session with private"
-		}
-		return fmt.Sprintf(
-			"The task did not reach it: %v. The session is open, so hand it the task with "+
-				"%s once whatever that says is dealt with.",
-			err, send,
-		)
+		return handOverFailure(c.lang(), err, method)
 	}
-	return mcpOutcome(result)
+	return mcpOutcome(c.lang(), result)
+}
+
+// handOverFailure words a first task that did not reach a session that is open
+// all the same, naming the call that sends it again.
+func handOverFailure(lang prompt.Lang, err error, method string) string {
+	text := prompt.For(lang)
+	send := "send_to_session"
+	if method == relaySendPrivate {
+		send = text.SendToSessionPrivate
+	}
+	return fmt.Sprintf(text.HandOverFailed, err, send)
 }
 
 // mcpOutcome words a Send or Wait result for an agent: the answer alone when
 // there is one, otherwise what to call next. A bare ticket would leave the
 // agent guessing what it is for.
-func mcpOutcome(result relay.Result) string {
+func mcpOutcome(lang prompt.Lang, result relay.Result) string {
+	text := prompt.For(lang)
 	switch result.Status {
 	case relay.StatusAnswered:
 		return result.Answer
 	case relay.StatusUnanswered:
-		return unansweredText(result.Target)
+		return unansweredText(lang, result.Target)
 	case relay.StatusUnread:
-		return unreadText(result.Target)
+		return unreadText(lang, result.Target)
 	case relay.StatusUndelivered:
-		return undeliveredText(result.Target)
+		return undeliveredText(lang, result.Target)
 	case relay.StatusStopped:
-		return stoppedText(result.Target)
+		return stoppedText(lang, result.Target)
 	case relay.StatusExpired:
-		return expiredText(result.Target)
+		return expiredText(lang, result.Target)
 	}
 	if result.Private {
-		return fmt.Sprintf(
-			"%s is still working. The errand is private: no note will announce its result and "+
-				"wait_for_answer without a ticket never returns it. Call wait_for_answer with "+
-				"ticket %q to hold the line for it — waiting on your own ticket is not polling.",
-			result.Target, result.Ticket,
-		)
+		return fmt.Sprintf(text.StillWorkingPrivate, result.Target, result.Ticket)
 	}
-	return fmt.Sprintf(
-		"%s is still working. The errand is open — if that session was not at a prompt yet, "+
-			"the task is held and goes in when it is. When its result is ready a short note "+
-			"will arrive at your own prompt, so carry on — there is nothing to poll. Collect "+
-			"it with wait_for_answer (ticket %q, or no ticket for everything at once).",
-		result.Target, result.Ticket,
-	)
+	return fmt.Sprintf(text.StillWorkingOpen, result.Target, result.Ticket)
 }
 
 // collectedText words a drain: each result in the order it arrived, then who
 // still owes one. Statuses reuse the same words a single wait answers with —
 // the reader should not meet two spellings of one outcome.
-func collectedText(collected relay.Collected) string {
+func collectedText(lang prompt.Lang, collected relay.Collected) string {
+	text := prompt.For(lang)
 	if len(collected.Results) == 0 && len(collected.Open) == 0 {
-		return "Nothing to collect: no results are waiting and no errand of yours is open."
+		return text.CollectedNothing
 	}
 	var parts []string
 	for _, result := range collected.Results {
 		switch result.Status {
 		case relay.StatusAnswered:
-			parts = append(parts, fmt.Sprintf(
-				"Answer from %q (ticket %s):\n%s", result.Target, result.Ticket, result.Answer))
+			parts = append(parts, fmt.Sprintf(text.CollectedAnswer, result.Target, result.Ticket, result.Answer))
 		case relay.StatusUnread:
-			parts = append(parts, unreadText(result.Target))
+			parts = append(parts, unreadText(lang, result.Target))
 		case relay.StatusUnanswered:
-			parts = append(parts, unansweredText(result.Target))
+			parts = append(parts, unansweredText(lang, result.Target))
 		case relay.StatusUndelivered:
-			parts = append(parts, undeliveredText(result.Target))
+			parts = append(parts, undeliveredText(lang, result.Target))
 		case relay.StatusStopped:
-			parts = append(parts, stoppedText(result.Target))
+			parts = append(parts, stoppedText(lang, result.Target))
 		case relay.StatusExpired:
-			parts = append(parts, expiredText(result.Target))
+			parts = append(parts, expiredText(lang, result.Target))
 		}
 	}
 	if len(collected.Open) > 0 {
-		parts = append(parts, fmt.Sprintf(
-			"Still working: %s. Their results will announce themselves at your prompt.",
-			relay.QuotedList(collected.Open)))
+		parts = append(parts, fmt.Sprintf(text.CollectedStillWorking, relay.QuotedList(collected.Open)))
 	}
 	return strings.Join(parts, "\n\n")
 }
@@ -765,16 +751,8 @@ func collectedText(collected relay.Collected) string {
 // and nothing read: the session never started working on it. What is usually
 // there is a question only a person can answer, so this has to send the reader
 // to that card rather than suggest waiting or trying the same thing again.
-func unreadText(target string) string {
-	return fmt.Sprintf(
-		"The %q session never picked the task up: it was typed at that prompt and "+
-			"nothing read it, so something else has that terminal — a provider still "+
-			"starting, or a question of its own on screen (Claude Code asks whether a "+
-			"directory is trusted the first time it runs in one). Nothing is queued and "+
-			"nothing was answered. Tell the user to open the %q card and clear what is "+
-			"on it; the task has to be sent again after that.",
-		target, target,
-	)
+func unreadText(lang prompt.Lang, target string) string {
+	return fmt.Sprintf(prompt.For(lang).OutcomeUnread, target)
 }
 
 // undeliveredText is what both surfaces say about a task that was held for a
@@ -782,15 +760,22 @@ func unreadText(target string) string {
 // read and nothing was typed, so the reader has to hear that the task is gone
 // rather than queued somewhere — and that the session itself is what needs
 // looking at before it is sent again.
-func undeliveredText(target string) string {
-	return fmt.Sprintf(
-		"The task never reached the %q session: it was held back because that terminal "+
-			"was not at a prompt — a worktree setup script still running, a provider that "+
-			"never came up — and the session ended or stayed that way for too long. Nothing "+
-			"is queued anymore and nothing was answered. Tell the user to open the %q card "+
-			"to see what happened there; the task has to be sent again after that.",
-		target, target,
-	)
+func undeliveredText(lang prompt.Lang, target string) string {
+	return fmt.Sprintf(prompt.For(lang).OutcomeUndelivered, target)
+}
+
+// stoppedText is what both surfaces say about a subagent worker that was closed
+// before it answered. Whoever closed it stopped the work on purpose, so there
+// is no card to send the reader to.
+func stoppedText(lang prompt.Lang, target string) string {
+	return fmt.Sprintf(prompt.For(lang).OutcomeStopped, target)
+}
+
+// expiredText is what both surfaces say about an errand nobody answered within
+// the hour a ticket lives: the ticket is gone, so a late answer has nowhere to
+// land, and the reader decides without it.
+func expiredText(lang prompt.Lang, target string) string {
+	return fmt.Sprintf(prompt.For(lang).OutcomeExpired, target)
 }
 
 // unansweredText is what both surfaces say when the target worked through the
@@ -798,34 +783,6 @@ func undeliveredText(target string) string {
 // to the other session: whatever the agent there produced is on its screen and
 // nowhere lich can reach, so an answer that reads as "nothing happened" would
 // be the one wrong thing to say.
-// stoppedText is what both surfaces say about a subagent worker that was closed
-// before it answered. Whoever closed it stopped the work on purpose, so there
-// is no card to send the reader to.
-func stoppedText(target string) string {
-	return fmt.Sprintf(
-		"The %q session was closed before it answered, so the task was stopped and no "+
-			"answer is coming.",
-		target,
-	)
-}
-
-// expiredText is what both surfaces say about an errand nobody answered within
-// the hour a ticket lives: the ticket is gone, so a late answer has nowhere to
-// land, and the reader decides without it.
-func expiredText(target string) string {
-	return fmt.Sprintf(
-		"The %q session did not answer within the hour a task is kept open, so the task "+
-			"expired and no answer is coming. Open the %q card to see where it stands.",
-		target, target,
-	)
-}
-
-func unansweredText(target string) string {
-	return fmt.Sprintf(
-		"The %q session finished its turn without answering through lich. "+
-			"Whatever it produced is in that session — tell the user to open the %q card to read it. "+
-			"If it is still working in the background, its answer can still arrive on this ticket "+
-			"for an hour.",
-		target, target,
-	)
+func unansweredText(lang prompt.Lang, target string) string {
+	return fmt.Sprintf(prompt.For(lang).OutcomeUnanswered, target)
 }

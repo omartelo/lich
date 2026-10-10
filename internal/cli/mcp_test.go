@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/omartelo/lich/internal/prompt"
 )
 
 // speak runs the MCP server over one scripted conversation and returns the
@@ -356,7 +358,7 @@ func TestMCPWaitWithoutATicketSaysAStoppedWorkerStopped(t *testing.T) {
 	if failed {
 		t.Fatalf("tool reported a failure: %s", text)
 	}
-	if want := stoppedText("docs"); !strings.Contains(text, want) {
+	if want := stoppedText(prompt.English, "docs"); !strings.Contains(text, want) {
 		t.Errorf("text = %q, want %q", text, want)
 	}
 }

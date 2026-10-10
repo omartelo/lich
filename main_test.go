@@ -30,6 +30,7 @@ var denied = map[string]reflect.Type{
 	"drop.Save":                       reflect.TypeFor[*drop.Service](),
 	"drop.Purge":                      reflect.TypeFor[*drop.Service](),
 	"drop.SetPicker":                  reflect.TypeFor[*drop.Service](),
+	"drop.SetPromptLanguage":          reflect.TypeFor[*drop.Service](),
 	"relay.Observe":                   reflect.TypeFor[*relay.Service](),
 	"relay.RunSchedules":              reflect.TypeFor[*relay.Service](),
 	"relay.ParkResume":                reflect.TypeFor[*relay.Service](),

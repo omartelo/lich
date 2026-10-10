@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 	"unicode"
+
+	"github.com/omartelo/lich/internal/prompt"
 )
 
 // newService builds a Service whose home fallback is an empty directory, so a
@@ -418,7 +420,7 @@ func TestCopyNoticeAnnouncesTheCopy(t *testing.T) {
 	want := "[lich] copy of shot.png; the original is not reachable from this session, " +
 		"edits stay in the copy."
 
-	if got := copyNotice("shot.png"); got != want {
+	if got := copyNotice(prompt.English, "shot.png"); got != want {
 		t.Fatalf("copyNotice = %q, want %q", got, want)
 	}
 }
@@ -439,7 +441,7 @@ func TestUploadAnswersWithTheNotice(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &answer); err != nil {
 		t.Fatalf("decode %s: %v", recorder.Body, err)
 	}
-	if want := copyNotice("shot.png"); answer.Notice != want {
+	if want := copyNotice(prompt.English, "shot.png"); answer.Notice != want {
 		t.Fatalf("notice = %q, want %q", answer.Notice, want)
 	}
 }
@@ -476,7 +478,7 @@ func TestUploadStripsControlCharactersFromTheName(t *testing.T) {
 			if want := filepath.Join(dir, "lich", "dropped", "s1", spec.want); answer.Path != want {
 				t.Fatalf("path = %q, want %q", answer.Path, want)
 			}
-			if want := copyNotice(spec.want); answer.Notice != want {
+			if want := copyNotice(prompt.English, spec.want); answer.Notice != want {
 				t.Fatalf("notice = %q, want %q", answer.Notice, want)
 			}
 			if i := strings.IndexFunc(answer.Notice, unicode.IsControl); i >= 0 {
@@ -910,7 +912,7 @@ func TestAttachCopiesForAConfinedSession(t *testing.T) {
 	// The copy is announced by the name the user picked, not by the copy's own:
 	// a second attachment of the same name lands as spec-2.pdf, which says
 	// nothing to whoever chose spec.pdf in the dialog.
-	if want := copyNotice("spec.pdf"); got.Notice != want {
+	if want := copyNotice(prompt.English, "spec.pdf"); got.Notice != want {
 		t.Fatalf("Attach notice = %q, want %q", got.Notice, want)
 	}
 	if bytes, err := os.ReadFile(got.Path); err != nil || string(bytes) != "bytes" {

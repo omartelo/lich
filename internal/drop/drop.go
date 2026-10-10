@@ -51,6 +51,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/omartelo/lich/internal/prompt"
 	"github.com/omartelo/lich/internal/rpc"
 
 	"github.com/omartelo/lich/internal/sandbox"
@@ -117,6 +118,24 @@ type Service struct {
 	// live reports whether a session's row is still there, open or parked. See
 	// New.
 	live func(sessionID string) bool
+	// promptLang is the language of the notice under a copy's path. See
+	// SetPromptLanguage.
+	promptLang func() prompt.Lang
+}
+
+// SetPromptLanguage wires where the copy notice reads its language. It is
+// read again for every notice, so a change in Settings reaches the next drop;
+// without it the notice is English, the default. Startup wiring, called before
+// anything serves.
+func (s *Service) SetPromptLanguage(lang func() prompt.Lang) {
+	s.promptLang = lang
+}
+
+func (s *Service) lang() prompt.Lang {
+	if s.promptLang == nil {
+		return prompt.English
+	}
+	return s.promptLang()
 }
 
 // SetPicker wires the host's file picker (internal/project), which is what the
@@ -342,7 +361,7 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	body := map[string]string{"path": path, "notice": copyNotice(name)}
+	body := map[string]string{"path": path, "notice": copyNotice(s.lang(), name)}
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		slog.Warn("drop: encode response", "path", path, "err", err)
 	}
@@ -354,11 +373,8 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 // reports back as if it had edited the original, and the user reads a path
 // they cannot tell from their own. It is one line of plain text because both
 // of them read the same prompt.
-func copyNotice(name string) string {
-	return fmt.Sprintf(
-		"[lich] copy of %s; the original is not reachable from this session, edits stay in the copy.",
-		name,
-	)
+func copyNotice(lang prompt.Lang, name string) string {
+	return fmt.Sprintf(prompt.For(lang).CopyNotice, name)
 }
 
 // attachTitle is the file chooser's own title, which is all the dialog says
@@ -410,7 +426,7 @@ func (s *Service) Attach(sessionID, root string, confined bool) (Attachment, err
 	if err != nil {
 		return Attachment{}, err
 	}
-	return Attachment{Path: copied, Notice: copyNotice(filepath.Base(path))}, nil
+	return Attachment{Path: copied, Notice: copyNotice(s.lang(), filepath.Base(path))}, nil
 }
 
 // under reports whether path is inside root. Both are cleaned but neither is

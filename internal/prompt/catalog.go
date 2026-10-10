@@ -33,4 +33,47 @@ type Catalog struct {
 	NudgeRouteCLI     string
 	NudgeRouteTools   string
 	NudgeNotice       string
+
+	// internal/relay: a subagent's report and block, a merge notice, a late
+	// scheduled prompt and the continuation parked at a usage limit.
+	SubagentReport       string
+	SubagentReportBranch string
+	BlockedNotice        string
+	ReportSummary        Plural
+	BlockedSummary       string
+	MergeNotice          string
+	MergeSummary         string
+	LateNotice           string
+	// ResumePrompt is stored in the sessions table as a parked prompt, so a row
+	// written in one language has to be recognised in every other: match it
+	// with relay's isResumePrompt, never with ==.
+	ResumePrompt string
+
+	// internal/drop: the line under a copied file's path.
+	CopyNotice string
+
+	// internal/cli: the lich command line and its MCP server, read from
+	// EnvVar. MCP tool descriptions, flag help and errors stay English.
+	MCPInstructions        string
+	HandOverFailed         string
+	SendToSessionPrivate   string
+	OutcomeUnread          string
+	OutcomeUndelivered     string
+	OutcomeUnanswered      string
+	OutcomeStopped         string
+	OutcomeExpired         string
+	StillWorkingPrivate    string
+	StillWorkingOpen       string
+	StillWorkingPrivateCLI string
+	StillWorkingOpenCLI    string
+	CollectedNothing       string
+	CollectedAnswer        string
+	CollectedStillWorking  string
+	OpenedProject          string
+	OpenedWorktree         string
+	OpenedConfined         string
+	OpenedSession          string
+	ClosedRemoved          string
+	ClosedKept             string
+	ClosedPlain            string
 }
