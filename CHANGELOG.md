@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`lich quit` ends lich and every session in it.** It is the way out now that
+  closing the window no longer is, and it returns once lich is gone, so a
+  script can start it again right after.
+
+### Changed
+
+- **Closing the window keeps your sessions running.** lich goes on in the
+  background with every agent and terminal still working; launch lich again and
+  a window opens on them, scrollback included. Run `lich quit` to end it for
+  good. Restarting for an update still ends every session.
+
 ## [0.66.0] - 2026-10-10
 
 ### Added

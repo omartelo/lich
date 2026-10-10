@@ -37,7 +37,8 @@ its CDP surface):
 - The Go binary serves the embedded frontend (`go:embed frontend/dist`) over
   loopback HTTP and launches
   `chromium --app=http://127.0.0.1:<port> --user-data-dir=<state-dir> --class=lich`.
-- Window closed → WebSocket drops → Go shuts down. No CDP needed for v1.
+- Window closed → the backend keeps serving its sessions; launching lich again opens a
+  new window on them, and `lich quit` ends it. No CDP needed for v1.
 - Still a single Go binary. **Zero Node, zero Electron, no new bundle weight.**
   New runtime requirement: a Chromium-family browser installed (fine for a
   personal harness on Arch; the launcher should probe `chromium`,
@@ -67,7 +68,7 @@ Migration progress:
    (`~/.config/lich/chromium-profile/<name>-<digest>` — localStorage lives
    there, so the listener port is pinned to 47821, `LICH_LISTEN_PORT`
    overrides; NOT `LICH_PORT`, which is the per-session hook variable).
-   Window closed = app exit. Extra flags pass through after `--`. Under Wayland
+   Closing the window leaves lich running (`lich quit` ends it). Extra flags pass through after `--`. Under Wayland
    the window is native Wayland whenever `WAYLAND_DISPLAY` is set, whatever the
    GPU; `lich -- --ozone-platform=x11` forces XWayland if a driver's Wayland
    path misbehaves (XWayland loses file drops on Hyprland, its issue #7800).
@@ -218,7 +219,7 @@ macOS ships the same window inside `Lich.app`, one bundle per architecture,
 each built and run end to end on a release runner of that architecture
 (`macos-latest` for Apple Silicon, `macos-15-intel` for Intel); a missing
 window, or one that dies at startup, falls back to a plain tab in the default browser
-(`main.go`, `openWithoutWindow`). `lich-shell` sits beside `lich` in
+(`main.go`, `openTab`). `lich-shell` sits beside `lich` in
 `Contents/MacOS`, because macOS reads a process's bundle off its executable's
 path and only a process inside the bundle is `Lich.app` to the Dock, to
 Cmd-Tab and to the menu bar; the framework goes to `Contents/Frameworks`,
