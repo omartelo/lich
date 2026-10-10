@@ -30,6 +30,7 @@ export const hotkeys = {
     settings: "设置",
     pulls: "拉取请求",
     shortcuts: "键盘快捷键",
+    quit: "退出 lich",
   },
   terminalCost: {
     a: "Ctrl+{key} 是 shell 的移到行首操作，会话将不再收到它。",

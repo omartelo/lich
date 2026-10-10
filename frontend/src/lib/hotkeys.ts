@@ -10,6 +10,7 @@ import { t } from "@/lib/i18n/i18n"
 // zoom-keys.ts instead of being character combos a user can rebind.
 export type HotkeyId =
   | "commandPalette"
+  | "quit"
   | "newSession"
   | "newWorktree"
   | "renameSession"
@@ -297,6 +298,17 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     },
     group: "app",
     combo: { mod: true, shift: false, alt: false, key: "/" },
+  },
+  // Unbound on purpose: Ctrl+Q is the terminal's XON, pressed by habit inside a
+  // session, and ending every session on a stray chord is not a default. The
+  // palette's ">" mode reaches it; Settings › Hotkeys binds it.
+  {
+    id: "quit",
+    get label() {
+      return t("hotkeys.action.quit")
+    },
+    group: "app",
+    combo: UNASSIGNED,
   },
 ]
 

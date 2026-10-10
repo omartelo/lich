@@ -134,6 +134,17 @@ export const shell = {
     rebind: "Reasígnalos en Ajustes › Atajos",
     close: "cerrar",
   },
+  quitDialog: {
+    title: "¿Salir de lich?",
+    description:
+      "Todas las sesiones terminan con él. Cerrar la ventana, en cambio, las mantiene en segundo plano.",
+    working: {
+      one: "{count} sesión está a mitad de un turno y lo pierde:",
+      other: "{count} sesiones están a mitad de un turno y lo pierden:",
+    },
+    confirm: "Salir de lich",
+    failed: "No se pudo salir de lich",
+  },
   uncleanExitGate: {
     title: "La ejecución anterior de lich terminó de forma inesperada",
     description: "Tus sesiones se restauraron, pero lo que estaban ejecutando se detuvo con ella.",

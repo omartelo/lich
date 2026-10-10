@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`lich quit` ends lich and every session in it.** It is the way out now that
   closing the window no longer is, and it returns once lich is gone, so a
   script can start it again right after.
+- **Quit lich from the window.** Type `>` in the command palette and pick Quit
+  lich; it names the sessions in the middle of a turn before ending them. It
+  has no shortcut by default; give it one in Settings › Hotkeys.
 
 ### Changed
 

@@ -130,6 +130,17 @@ export const shell = {
     rebind: "Rebind in Settings › Hotkeys",
     close: "close",
   },
+  quitDialog: {
+    title: "Quit lich?",
+    description:
+      "Every session ends with it. Closing the window instead keeps them running in the background.",
+    working: {
+      one: "{count} session is in the middle of a turn and loses it:",
+      other: "{count} sessions are in the middle of a turn and lose it:",
+    },
+    confirm: "Quit lich",
+    failed: "Could not quit lich",
+  },
   uncleanExitGate: {
     title: "lich's previous run ended unexpectedly",
     description: "Your sessions were restored, but whatever they were running stopped with it.",

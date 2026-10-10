@@ -35,6 +35,7 @@ import { ProviderSetupGate } from "@/components/ProviderSetupGate"
 import { UncleanExitGate } from "@/components/UncleanExitGate"
 import { CommandPalette } from "@/components/CommandPalette"
 import { ShortcutsOverlay } from "@/components/ShortcutsOverlay"
+import { QuitDialog } from "@/components/QuitDialog"
 import { useT } from "@/lib/i18n/i18n"
 
 // Named here like every other `lich.*` pref rather than spelled at the call
@@ -213,6 +214,8 @@ function App() {
           {/* Read-only list of what is bound; beside the palette because both
               are app-wide overlays opened by a shortcut. */}
           <ShortcutsOverlay />
+          {/* Needs the provider for the sessions mid-turn it names. */}
+          <QuitDialog />
         </ProjectsProvider>
       </HashRouter>
       {/* Holds its prompt until a provider has been chosen, so a first launch

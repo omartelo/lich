@@ -130,6 +130,16 @@ export const shell = {
     rebind: "在设置 › 快捷键中重新绑定",
     close: "关闭",
   },
+  quitDialog: {
+    title: "退出 lich？",
+    description: "所有会话都会随之结束。改为关闭窗口，会话会在后台继续运行。",
+    working: {
+      one: "{count} 个会话正在进行一轮操作，将会中断：",
+      other: "{count} 个会话正在进行一轮操作，将会中断：",
+    },
+    confirm: "退出 lich",
+    failed: "无法退出 lich",
+  },
   uncleanExitGate: {
     title: "lich 上次运行意外结束",
     description: "你的会话已恢复，但它们正在运行的内容已随之停止。",
