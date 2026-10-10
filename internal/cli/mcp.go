@@ -434,7 +434,10 @@ var mcpTools = append([]mcpTool{
 			method := sendMethod(args.flag("private"))
 			var result relay.Result
 			timeout := args.seconds("timeout_seconds")
-			call := []any{c.sessionID(), args.text("session"), args.text("project"), args.text("prompt"), timeout}
+			call := []any{relay.SendOptions{
+				From: c.sessionID(), Target: args.text("session"), Project: args.text("project"),
+				Prompt: args.text("prompt"), WaitSeconds: timeout,
+			}}
 			if err := c.call(ctx, method, call, waitBudget(timeout), &result); err != nil {
 				return "", err
 			}
@@ -580,10 +583,10 @@ var mcpTools = append([]mcpTool{
 		}, "session"),
 		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			var closed spawn.Closed
-			call := []any{
-				c.sessionID(), args.text("session"), args.text("project"),
-				args.text("worktree"), args.flag("force"),
-			}
+			call := []any{spawn.CloseOptions{
+				From: c.sessionID(), Target: args.text("session"), Project: args.text("project"),
+				Worktree: args.text("worktree"), Force: args.flag("force"),
+			}}
 			if err := c.call(ctx, "spawn.Close", call, openCall, &closed); err != nil {
 				return "", err
 			}

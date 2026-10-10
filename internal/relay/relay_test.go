@@ -540,7 +540,7 @@ func TestTheEnterWaitsForTheTargetToFinishTakingThePasteIn(t *testing.T) {
 	svc.submitDelay = time.Millisecond
 	term.noise("s2", 3)
 
-	go svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	go svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 
 	if !awaitWritten(term, "s2", submit) {
 		t.Fatal("the Enter never arrived")
@@ -565,7 +565,7 @@ func TestTheTargetsKeyboardIsHeldForTheWholeSubmission(t *testing.T) {
 	svc.submitDelay = time.Millisecond
 	term.noise("s2", 3)
 
-	go svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	go svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 
 	if !awaitWritten(term, "s2", submit) {
 		t.Fatal("the Enter never arrived")
@@ -609,7 +609,7 @@ func TestSendDeliversAndReplyAnswers(t *testing.T) {
 		wg  sync.WaitGroup
 	)
 	wg.Go(func() {
-		got, err = svc.Send(context.Background(), "s1", "docs", "", "run the tests", 30)
+		got, err = svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 30})
 	})
 
 	ticketID := waitForTicket(svc)
@@ -664,7 +664,7 @@ func TestAMessageFromOutsideLichIsAttributedToTheCommandLine(t *testing.T) {
 	svc := newRelay(workspace(), term, nil)
 
 	go func() { _ = svc.Reply("", waitForTicket(svc), "ok") }()
-	if _, err := svc.Send(context.Background(), "", "docs", "", "hello", 30); err != nil {
+	if _, err := svc.Send(context.Background(), SendOptions{Target: "docs", Prompt: "hello", WaitSeconds: 30}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -726,7 +726,9 @@ func TestARosterNameReachesTheSameSession(t *testing.T) {
 	svc := newRelay(workspace(), term, nil)
 
 	go func() { _ = svc.Reply("", waitForTicket(svc), "ok") }()
-	got, err := svc.Send(context.Background(), "s1", RosterName("/src/lich", "s2"), "", "hello", 30)
+	got, err := svc.Send(context.Background(), SendOptions{
+		From: "s1", Target: RosterName("/src/lich", "s2"), Prompt: "hello", WaitSeconds: 30,
+	})
 	if err != nil {
 		t.Fatalf("Send by roster name: %v", err)
 	}
@@ -748,7 +750,7 @@ func TestARenamedSessionAnswersToItsNewName(t *testing.T) {
 	svc := newRelay(workspace(), term, nil)
 
 	go func() { _ = svc.Reply("", waitForTicket(svc), "ok") }()
-	got, err := svc.Send(context.Background(), "s1", "reviewer", "", "hello", 30)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "reviewer", Prompt: "hello", WaitSeconds: 30})
 	if err != nil {
 		t.Fatalf("Send by the renamed roster name: %v", err)
 	}
@@ -769,7 +771,9 @@ func TestADerivedNameIsGoneOnceTheSessionRenames(t *testing.T) {
 	term.renamed("s2", "reviewer")
 	svc := newRelay(workspace(), term, nil)
 
-	_, err := svc.Send(context.Background(), "s1", RosterName("/src/lich", "s2"), "", "hello", 30)
+	_, err := svc.Send(context.Background(), SendOptions{
+		From: "s1", Target: RosterName("/src/lich", "s2"), Prompt: "hello", WaitSeconds: 30,
+	})
 	if err == nil {
 		t.Fatal("Send by the derived name = nil, want no session under it")
 	}
@@ -795,7 +799,7 @@ func TestTheLabelWinsARosterCollision(t *testing.T) {
 	svc := newRelay(collide, term, nil)
 
 	go func() { _ = svc.Reply("", waitForTicket(svc), "ok") }()
-	if _, err := svc.Send(context.Background(), "s1", "lich-s3", "", "hello", 30); err != nil {
+	if _, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "lich-s3", Prompt: "hello", WaitSeconds: 30}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if term.written("s2") == "" {
@@ -811,7 +815,7 @@ func TestTheLabelWinsARosterCollision(t *testing.T) {
 func TestAnUnknownNameNamesWhatIsReachable(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
 
-	_, err := svc.Send(context.Background(), "s1", "ghost", "", "hello", 30)
+	_, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "ghost", Prompt: "hello", WaitSeconds: 30})
 	if err == nil {
 		t.Fatal("want an error for an unknown name")
 	}
@@ -827,7 +831,7 @@ func TestAnUnknownNameNamesWhatIsReachable(t *testing.T) {
 func TestWithNothingReachableTheErrorSaysSo(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1"), nil)
 
-	_, err := svc.Send(context.Background(), "s1", "docs", "", "hello", 30)
+	_, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "hello", WaitSeconds: 30})
 	if err == nil {
 		t.Fatal("want an error when nothing is live")
 	}
@@ -846,7 +850,7 @@ func TestBothCardsAreMarkedAndCleared(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_, _ = svc.Send(context.Background(), "s1", "docs", "", "run the tests", 30)
+		_, _ = svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 30})
 	}()
 	ticketID := waitForTicket(svc)
 
@@ -897,7 +901,7 @@ func TestAnExternalSenderMarksOnlyTheTarget(t *testing.T) {
 		}
 		_ = svc.Reply("", waitForTicket(svc), "ok")
 	}()
-	if _, err := svc.Send(context.Background(), "", "docs", "", "hello", 30); err != nil {
+	if _, err := svc.Send(context.Background(), SendOptions{Target: "docs", Prompt: "hello", WaitSeconds: 30}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -924,7 +928,7 @@ func TestAnUndeliveredMessageMarksNobody(t *testing.T) {
 	term.writeErr = errors.New("pty closed")
 	svc := newRelay(workspace(), term, events)
 
-	if _, err := svc.Send(context.Background(), "s1", "docs", "", "hello", 30); err == nil {
+	if _, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "hello", WaitSeconds: 30}); err == nil {
 		t.Fatal("want an error when the message cannot be typed")
 	}
 	if got := events.snapshot(); len(got) != 0 {
@@ -972,7 +976,7 @@ func TestATurnThatEndsWithoutAnAnswerEndsTheWait(t *testing.T) {
 
 	done := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 30)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 30})
 		done <- got
 	}()
 	waitForTicket(svc)
@@ -1010,7 +1014,7 @@ func TestTheSenderIsToldAtItsPromptWhenTheTargetStallsUnattended(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	svc := newRelay(workspace(), term, nil)
 
-	got, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -1067,7 +1071,7 @@ func TestAQueuedRequestIgnoresTheTurnAlreadyRunning(t *testing.T) {
 
 	done := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 2)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 2})
 		done <- got
 	}()
 	ticketID := waitForTicket(svc)
@@ -1135,13 +1139,15 @@ func TestADoneWithTwoErrandsOpenStallsBothAndAsksForTheTicket(t *testing.T) {
 
 	first := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "run the tests and report the failures", 5)
+		got, _ := svc.Send(context.Background(), SendOptions{
+			From: "s1", Target: "docs", Prompt: "run the tests and report the failures", WaitSeconds: 5,
+		})
 		first <- got
 	}()
 	awaitDelivered(t, svc, 1)
 	second := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s3", "docs", "", "build the docs", 5)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s3", Target: "docs", Prompt: "build the docs", WaitSeconds: 5})
 		second <- got
 	}()
 	awaitDelivered(t, svc, 2)
@@ -1196,7 +1202,7 @@ func TestADoneWithOneErrandOpenStallsItWithoutANotice(t *testing.T) {
 
 	only := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 5})
 		only <- got
 	}()
 	awaitDelivered(t, svc, 1)
@@ -1234,7 +1240,7 @@ func TestASecondErrandQueuedMidTurnSurvivesTheFirstsEnd(t *testing.T) {
 
 	first := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "task one", 5)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "task one", WaitSeconds: 5})
 		first <- got
 	}()
 	awaitDelivered(t, svc, 1)
@@ -1242,7 +1248,7 @@ func TestASecondErrandQueuedMidTurnSurvivesTheFirstsEnd(t *testing.T) {
 
 	second := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s3", "docs", "", "task two", 5)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s3", Target: "docs", Prompt: "task two", WaitSeconds: 5})
 		second <- got
 	}()
 	awaitDelivered(t, svc, 2)
@@ -1304,7 +1310,7 @@ func TestABusyReportInsideTheDeliveryWindowCountsForTheTicket(t *testing.T) {
 		}
 	}
 
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send = %v, want nil", err)
 	}
@@ -1333,7 +1339,7 @@ func TestADoneInsideTheDeliveryWindowSpendsTheSkip(t *testing.T) {
 
 	done := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 2)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 2})
 		done <- got
 	}()
 	if !awaitWrites(term, "s2", 2) {
@@ -1356,7 +1362,7 @@ func TestAnAnsweredTicketIsNotAlsoStalled(t *testing.T) {
 
 	done := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "hello", 30)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "hello", WaitSeconds: 30})
 		done <- got
 	}()
 	ticketID := waitForTicket(svc)
@@ -1381,7 +1387,7 @@ func TestASessionThatEndedStopsTheWaitOutright(t *testing.T) {
 
 	done := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "hello", 30)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "hello", WaitSeconds: 30})
 		done <- got
 	}()
 	// A ticket registered but not yet stamped is one an idle report leaves for
@@ -1410,7 +1416,7 @@ func TestAnotherSessionsTurnLeavesTheTicketAlone(t *testing.T) {
 
 	done := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "hello", 1)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "hello", WaitSeconds: 1})
 		done <- got
 	}()
 	waitForTicket(svc)
@@ -1432,7 +1438,7 @@ func TestAnAnswerNobodyWaitedForIsStashedAndNudged(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	svc := newRelay(workspace(), term, nil)
 
-	got, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -1490,7 +1496,7 @@ func TestAnAnswerSomeoneIsWaitingForIsNotAlsoTyped(t *testing.T) {
 
 	done := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "hello", 30)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "hello", WaitSeconds: 30})
 		done <- got
 	}()
 	ticketID := waitForTicket(svc)
@@ -1513,7 +1519,7 @@ func TestAnExternalSenderHasNoPromptToAnswerAt(t *testing.T) {
 	term := newFakeTerminal("s2")
 	svc := newRelay(workspace(), term, nil)
 
-	got, err := svc.Send(context.Background(), "", "docs", "", "hello", 1)
+	got, err := svc.Send(context.Background(), SendOptions{Target: "docs", Prompt: "hello", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -1531,7 +1537,7 @@ func TestAnExternalSenderHasNoPromptToAnswerAt(t *testing.T) {
 func TestSendRefusesAnAmbiguousLabel(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s3", "s5"), nil)
 
-	_, err := svc.Send(context.Background(), "s1", "api", "", "hello", 30)
+	_, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "api", Prompt: "hello", WaitSeconds: 30})
 	if err == nil {
 		t.Fatal("want an error for a label two live sessions answer to")
 	}
@@ -1550,7 +1556,7 @@ func TestSendNarrowsAnAmbiguousLabelByProject(t *testing.T) {
 		ticketID := waitForTicket(svc)
 		_ = svc.Reply("", ticketID, "ok")
 	}()
-	got, err := svc.Send(context.Background(), "s1", "api", "revu", "hello", 30)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "api", Project: "revu", Prompt: "hello", WaitSeconds: 30})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -1579,7 +1585,9 @@ func TestSendRejectsUnreachableTargets(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := svc.Send(context.Background(), "s1", tt.target, "", "hello", 30); err == nil {
+			if _, err := svc.Send(context.Background(), SendOptions{
+				From: "s1", Target: tt.target, Prompt: "hello", WaitSeconds: 30,
+			}); err == nil {
 				t.Fatalf("want an error for target %q", tt.target)
 			}
 		})
@@ -1591,7 +1599,7 @@ func TestSendReportsADeliveryFailure(t *testing.T) {
 	term.writeErr = errors.New("pty closed")
 	svc := newRelay(workspace(), term, nil)
 
-	if _, err := svc.Send(context.Background(), "s1", "docs", "", "hello", 30); err == nil {
+	if _, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "hello", WaitSeconds: 30}); err == nil {
 		t.Fatal("want an error when the message cannot be typed")
 	}
 	svc.mu.Lock()
@@ -1605,7 +1613,7 @@ func TestSendReportsADeliveryFailure(t *testing.T) {
 func TestSendPendsWhenTheWaitRunsOutAndWaitPicksItUp(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
 
-	got, err := svc.Send(context.Background(), "s1", "docs", "", "long errand", 1)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "long errand", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -1639,7 +1647,7 @@ func TestReplyRefusesUnknownAndRepeatedTickets(t *testing.T) {
 
 	done := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "hello", 30)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "hello", WaitSeconds: 30})
 		done <- got
 	}()
 	ticketID := waitForTicket(svc)
@@ -1669,7 +1677,7 @@ func TestReplyWithoutATicketAnswersTheOneOpenErrand(t *testing.T) {
 
 	only := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 30)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 30})
 		only <- got
 	}()
 	if !events.awaitMark("s1", DirectionOut) {
@@ -1701,7 +1709,9 @@ func TestReplyWithoutATicketIsRefusedWithTwoErrandsOpen(t *testing.T) {
 
 	first := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s1", "docs", "", "run the tests and report the failures", 30)
+		got, _ := svc.Send(context.Background(), SendOptions{
+			From: "s1", Target: "docs", Prompt: "run the tests and report the failures", WaitSeconds: 30,
+		})
 		first <- got
 	}()
 	if !events.awaitMark("s1", DirectionOut) {
@@ -1709,7 +1719,7 @@ func TestReplyWithoutATicketIsRefusedWithTwoErrandsOpen(t *testing.T) {
 	}
 	second := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send(context.Background(), "s3", "docs", "", "build the docs", 30)
+		got, _ := svc.Send(context.Background(), SendOptions{From: "s3", Target: "docs", Prompt: "build the docs", WaitSeconds: 30})
 		second <- got
 	}()
 	if !events.awaitMark("s3", DirectionOut) {
@@ -1814,7 +1824,9 @@ func TestReplyWithoutATicketNeedsAnErrandItCanName(t *testing.T) {
 	}
 
 	term.setUp("s2", true)
-	go func() { _, _ = svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1) }()
+	go func() {
+		_, _ = svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
+	}()
 	if waitForTicket(svc) == "" {
 		t.Fatal("the queued errand never registered")
 	}
@@ -1854,13 +1866,15 @@ func TestSendBoundsThePrompt(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	svc := newRelay(workspace(), term, nil)
 
-	if _, err := svc.Send(context.Background(), "s1", "docs", "", "", 30); err == nil {
+	if _, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", WaitSeconds: 30}); err == nil {
 		t.Error("want an error for an empty prompt")
 	}
-	if _, err := svc.Send(context.Background(), "s1", "docs", "", "\x1b\x07", 30); err == nil {
+	if _, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "\x1b\x07", WaitSeconds: 30}); err == nil {
 		t.Error("want an error for a prompt that is only control characters")
 	}
-	if _, err := svc.Send(context.Background(), "s1", "docs", "", strings.Repeat("a", 8193), 30); err == nil {
+	if _, err := svc.Send(context.Background(), SendOptions{
+		From: "s1", Target: "docs", Prompt: strings.Repeat("a", 8193), WaitSeconds: 30,
+	}); err == nil {
 		t.Error("want an error for a prompt of 8193 characters")
 	}
 
@@ -1868,7 +1882,9 @@ func TestSendBoundsThePrompt(t *testing.T) {
 		ticketID := waitForTicket(svc)
 		_ = svc.Reply("", ticketID, "ok")
 	}()
-	if _, err := svc.Send(context.Background(), "s1", "docs", "", strings.Repeat("a", 8192), 30); err != nil {
+	if _, err := svc.Send(context.Background(), SendOptions{
+		From: "s1", Target: "docs", Prompt: strings.Repeat("a", 8192), WaitSeconds: 30,
+	}); err != nil {
 		t.Errorf("a prompt of 8192 characters was refused: %v", err)
 	}
 }
@@ -1890,7 +1906,7 @@ func TestReplyTruncatesAnOversizedAnswer(t *testing.T) {
 
 			done := make(chan Result, 1)
 			go func() {
-				got, _ := svc.Send(context.Background(), "s1", "docs", "", "hello", 30)
+				got, _ := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "hello", WaitSeconds: 30})
 				done <- got
 			}()
 			ticketID := waitForTicket(svc)
@@ -2031,7 +2047,7 @@ func TestSendDeliversOnceTheSetupScriptFinishes(t *testing.T) {
 
 	// One second is long enough for the setup to finish and the delivery to
 	// land inside the call; nobody answers, so the errand ends pending.
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send = %v, want the message held until the agent was up", err)
 	}
@@ -2053,7 +2069,7 @@ func TestSendQueuesForASessionThatIsNotAtAPromptYet(t *testing.T) {
 	term.setUp("s2", true)
 	svc := newRelay(workspace(), term, nil)
 
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send = %v, want a ticket for a task that is queued", err)
 	}
@@ -2093,7 +2109,7 @@ func TestSendDoesNotBlockOnASessionThatIsNotReady(t *testing.T) {
 	svc := newRelay(workspace(), term, nil)
 
 	start := time.Now()
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("Send = %v, want a ticket", err)
@@ -2118,7 +2134,7 @@ func TestQueuedTaskGivesUpWhenTheTargetNeverReachesAPrompt(t *testing.T) {
 	// holding the line and is what it hears.
 	svc.deliveryLimit = 100 * time.Millisecond
 
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send = %v, want a ticket", err)
 	}
@@ -2144,7 +2160,7 @@ func TestQueuedTaskReportsTheTargetDyingToTheInbox(t *testing.T) {
 
 	// The wait runs out with the task still queued: the sender has moved on, so
 	// the news has to reach it the way an answer would.
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send = %v, want a ticket", err)
 	}
@@ -2204,7 +2220,7 @@ func TestATaskNobodyPicksUpComesBackUnread(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	svc := withReceipts(term)
 
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 5})
 	if err != nil {
 		t.Fatalf("Send = %v, want nil", err)
 	}
@@ -2245,7 +2261,7 @@ func TestATaskNobodyReadIsTypedInAgain(t *testing.T) {
 		}
 	}
 
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send = %v, want nil", err)
 	}
@@ -2270,7 +2286,7 @@ func TestNoRetryIntoATerminalThatIsNotReady(t *testing.T) {
 		}
 	}
 
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 5})
 	if err != nil {
 		t.Fatalf("Send = %v, want nil", err)
 	}
@@ -2291,7 +2307,7 @@ func TestATaskTheTargetStartsWorkingOnIsNotUnread(t *testing.T) {
 		svc.Observe("s2", stateBusy)
 	}()
 
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send = %v, want nil", err)
 	}
@@ -2308,7 +2324,7 @@ func TestABusyTargetIsNotCheckedForReceipt(t *testing.T) {
 	svc := withReceipts(term)
 	svc.Observe("s2", stateBusy)
 
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send = %v, want nil", err)
 	}
@@ -2327,7 +2343,7 @@ func TestAWaitingTargetIsTreatedAsMidTurn(t *testing.T) {
 	svc.Observe("s2", stateBusy)
 	svc.Observe("s2", stateWaiting)
 
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send = %v, want nil", err)
 	}
@@ -2349,7 +2365,7 @@ func TestWaitingAfterDoneStillArmsTheReceiptCheck(t *testing.T) {
 	svc.Observe("s2", stateDone)
 	svc.Observe("s2", stateWaiting)
 
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 5)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 5})
 	if err != nil {
 		t.Fatalf("Send = %v, want nil", err)
 	}
@@ -2366,7 +2382,7 @@ func TestSilenceIsOnlyReadWhereTheProviderReports(t *testing.T) {
 	svc.receiptWindow = 40 * time.Millisecond
 	svc.SetPlugins(fakePlugins{installed: false})
 
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send = %v, want nil", err)
 	}
@@ -2385,7 +2401,7 @@ func TestTheSenderIsToldAtItsPromptWhenNobodyWasWaiting(t *testing.T) {
 	// case: an agent holds a tool call for a fraction of what an errand takes.
 	svc.receiptWindow = 1200 * time.Millisecond
 
-	result, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	result, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send = %v, want nil", err)
 	}
@@ -2465,7 +2481,9 @@ func TestTheMessageNamesTheToolWhenTheTargetHasIt(t *testing.T) {
 	svc := newRelay(workspace(), term, nil)
 	svc.SetPlugins(fakePlugins{installed: true, tools: true})
 
-	if _, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1); err != nil {
+	if _, err := svc.Send(context.Background(), SendOptions{
+		From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1,
+	}); err != nil {
 		t.Fatalf("Send = %v", err)
 	}
 	typed := strings.Join(term.writesTo("s2"), "")
@@ -2479,7 +2497,9 @@ func TestTheMessageNamesOnlyTheCommandWithoutTheTool(t *testing.T) {
 	svc := newRelay(workspace(), term, nil)
 	svc.SetPlugins(fakePlugins{installed: true, tools: false})
 
-	if _, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1); err != nil {
+	if _, err := svc.Send(context.Background(), SendOptions{
+		From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1,
+	}); err != nil {
 		t.Fatalf("Send = %v", err)
 	}
 	typed := strings.Join(term.writesTo("s2"), "")
@@ -2498,7 +2518,9 @@ func TestWithoutAPluginCheckTheMessageNamesTheCommand(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	svc := newRelay(workspace(), term, nil)
 
-	if _, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1); err != nil {
+	if _, err := svc.Send(context.Background(), SendOptions{
+		From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1,
+	}); err != nil {
 		t.Fatalf("Send = %v", err)
 	}
 	if typed := strings.Join(term.writesTo("s2"), ""); strings.Contains(typed, ToolReply) {
@@ -2941,7 +2963,7 @@ func TestAnInterruptedTurnDoesNotEndTheErrand(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	svc := newRelay(workspace(), term, nil)
 
-	got, err := svc.Send(context.Background(), "s1", "docs", "", "run the tests", 1)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "docs", Prompt: "run the tests", WaitSeconds: 1})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -2989,7 +3011,7 @@ func TestSendReachesASessionByItsID(t *testing.T) {
 	svc := newRelay(workspace(), term, nil)
 
 	go func() { _ = svc.Reply("", waitForTicket(svc), "ok") }()
-	got, err := svc.Send(context.Background(), "s1", "s5", "", "hello", 30)
+	got, err := svc.Send(context.Background(), SendOptions{From: "s1", Target: "s5", Prompt: "hello", WaitSeconds: 30})
 	if err != nil {
 		t.Fatalf("Send by id: %v", err)
 	}
@@ -3003,8 +3025,8 @@ func TestSendReachesASessionByItsID(t *testing.T) {
 func TestSendRefusesTheCallersOwnIDLikeItsLabel(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
 
-	_, byLabel := svc.Send(context.Background(), "s1", "sender", "", "hello", 30)
-	_, byID := svc.Send(context.Background(), "s1", "s1", "", "hello", 30)
+	_, byLabel := svc.Send(context.Background(), SendOptions{From: "s1", Target: "sender", Prompt: "hello", WaitSeconds: 30})
+	_, byID := svc.Send(context.Background(), SendOptions{From: "s1", Target: "s1", Prompt: "hello", WaitSeconds: 30})
 	if byLabel == nil || byID == nil {
 		t.Fatalf("byLabel = %v, byID = %v, want both refused", byLabel, byID)
 	}

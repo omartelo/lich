@@ -110,7 +110,7 @@ func TestFoldersOfAProjectWithNoneIsAnEmptyList(t *testing.T) {
 func TestFileMovesASessionIntoAFolderAndAnnouncesIt(t *testing.T) {
 	svc, sessions, events := filer(t)
 
-	filed, err := svc.File("s1", "shared-b", "", " Apps ")
+	filed, err := svc.File(FileOptions{From: "s1", Target: "shared-b", Folder: " Apps "})
 	if err != nil {
 		t.Fatalf("File: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestFileMovesASessionIntoAFolderAndAnnouncesIt(t *testing.T) {
 func TestFileWithoutATargetFilesTheCaller(t *testing.T) {
 	svc, sessions, _ := filer(t)
 
-	if _, err := svc.File("s1", "", "", "Planning"); err != nil {
+	if _, err := svc.File(FileOptions{From: "s1", Folder: "Planning"}); err != nil {
 		t.Fatalf("File: %v", err)
 	}
 	if sessions.folders["s1"] != "Planning" {
@@ -143,7 +143,7 @@ func TestFileWithoutATargetFilesTheCaller(t *testing.T) {
 func TestFileIntoNoFolderTakesTheSessionOut(t *testing.T) {
 	svc, sessions, events := filer(t)
 
-	filed, err := svc.File("s1", "alone", "", "  ")
+	filed, err := svc.File(FileOptions{From: "s1", Target: "alone", Folder: "  "})
 	if err != nil {
 		t.Fatalf("File: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestFileIntoNoFolderTakesTheSessionOut(t *testing.T) {
 func TestFileOutsideASessionNeedsATarget(t *testing.T) {
 	svc, _, _ := filer(t)
 
-	_, err := svc.File("", "", "", "Apps")
+	_, err := svc.File(FileOptions{Folder: "Apps"})
 	if err == nil || !strings.Contains(err.Error(), "name the session") {
 		t.Fatalf("File = %v, want it to say what the caller must do", err)
 	}
@@ -174,7 +174,7 @@ func TestFileThatCannotBeWrittenAnnouncesNothing(t *testing.T) {
 	svc, sessions, events := filer(t)
 	sessions.folderErr = errors.New("disk is gone")
 
-	if _, err := svc.File("s1", "alone", "", "Infra"); err == nil {
+	if _, err := svc.File(FileOptions{From: "s1", Target: "alone", Folder: "Infra"}); err == nil {
 		t.Fatal("reported a filing the store refused")
 	}
 	if len(events.events) != 0 {
@@ -324,7 +324,10 @@ func TestFolderCallsReportAWorkspaceThatCannotBeRead(t *testing.T) {
 
 	calls := map[string]func() error{
 		"Folders": func() error { _, err := svc.Folders("s1", ""); return err },
-		"File":    func() error { _, err := svc.File("s1", "alone", "", "Infra"); return err },
+		"File": func() error {
+			_, err := svc.File(FileOptions{From: "s1", Target: "alone", Folder: "Infra"})
+			return err
+		},
 		"RenameFolder": func() error {
 			_, err := svc.RenameFolder("s1", "", "Apps", "Applications")
 			return err

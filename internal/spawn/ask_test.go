@@ -13,7 +13,7 @@ import (
 func TestAskHandsTheModTheQuestionAndReturnsTheAnswer(t *testing.T) {
 	svc, term := newControlService(t)
 	term.outcome = terminal.ModOutcome{ID: "m1", State: terminal.ModAcked, OK: true, Answer: "Fixing the login test."}
-	got, err := svc.Ask(context.Background(), "s1", "auth-fix", "", "what are you on?")
+	got, err := svc.Ask(context.Background(), AskOptions{From: "s1", Target: "auth-fix", Question: "what are you on?"})
 	if err != nil {
 		t.Fatalf("Ask: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestAskRefusesBeforeReachingTheSession(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, term := newControlService(t)
-			_, err := svc.Ask(context.Background(), "s1", tc.target, "", "why?")
+			_, err := svc.Ask(context.Background(), AskOptions{From: "s1", Target: tc.target, Question: "why?"})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want one saying %q", err, tc.want)
 			}
@@ -70,7 +70,7 @@ func TestAskFailsEveryWayWithoutAnAnswer(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, term := newControlService(t)
 			term.outcome = tc.out
-			_, err := svc.Ask(context.Background(), "s1", "auth-fix", "", "why?")
+			_, err := svc.Ask(context.Background(), AskOptions{From: "s1", Target: "auth-fix", Question: "why?"})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want one saying %q", err, tc.want)
 			}
@@ -81,7 +81,7 @@ func TestAskFailsEveryWayWithoutAnAnswer(t *testing.T) {
 func TestAskPassesTheTerminalsRefusalOn(t *testing.T) {
 	svc, term := newControlService(t)
 	term.runErr = errors.New("an ask needs a question, and none was given")
-	_, err := svc.Ask(context.Background(), "s1", "auth-fix", "", " ")
+	_, err := svc.Ask(context.Background(), AskOptions{From: "s1", Target: "auth-fix", Question: " "})
 	if !errors.Is(err, term.runErr) || !strings.HasPrefix(err.Error(), `"auth-fix": `) {
 		t.Fatalf("err = %v, want the terminal's, naming the session", err)
 	}

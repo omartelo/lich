@@ -44,6 +44,17 @@ type Controlled struct {
 	State     string `json:"state"`
 }
 
+// ControlOptions is one Control call, an object for the reason CloseOptions
+// is one.
+type ControlOptions struct {
+	From    string `json:"from"`
+	Target  string `json:"target"`
+	Project string `json:"project"`
+	Action  string `json:"action"`
+	Value   string `json:"value"`
+	Args    string `json:"args"`
+}
+
 // Control gives a running Claude Code session one command through its mod
 // (docs/hooks/mod-control.md) and waits a bounded time for the mod to confirm
 // it. action is one of the mod's kinds, value what that kind carries, and args
@@ -52,9 +63,9 @@ type Controlled struct {
 // through, or that the session ended. A command the session never took is
 // withdrawn and is the error, and so is an ack that says the command failed,
 // each naming the session.
-func (s *Service) Control(
-	ctx context.Context, fromID, target, projectName, action, value, args string,
-) (Controlled, error) {
+func (s *Service) Control(ctx context.Context, opts ControlOptions) (Controlled, error) {
+	fromID, target, projectName := opts.From, opts.Target, opts.Project
+	action, value, args := opts.Action, opts.Value, opts.Args
 	cmd, err := modCommandFor(action, value, args)
 	if err != nil {
 		return Controlled{}, err

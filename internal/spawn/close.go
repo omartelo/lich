@@ -41,6 +41,17 @@ type Closed struct {
 	Removed bool `json:"removed"`
 }
 
+// CloseOptions is one Close call, an object for the reason OpenOptions is one:
+// an option a newer lich adds is dropped by an older backend, and one an older
+// lich does not send is its zero value.
+type CloseOptions struct {
+	From     string `json:"from"`
+	Target   string `json:"target"`
+	Project  string `json:"project"`
+	Worktree string `json:"worktree"`
+	Force    bool   `json:"force"`
+}
+
 // Close closes a session, and settles what happens to the checkout it was the
 // last one in.
 //
@@ -53,7 +64,8 @@ type Closed struct {
 //
 // A session that shares its checkout with another, or lives in the project's own
 // directory, has nothing at stake and closes on the spot.
-func (s *Service) Close(fromID, target, projectName, worktree string, force bool) (Closed, error) {
+func (s *Service) Close(opts CloseOptions) (Closed, error) {
+	fromID, target, projectName, worktree, force := opts.From, opts.Target, opts.Project, opts.Worktree, opts.Force
 	if worktree != "" && worktree != KeepWorktree && worktree != RemoveWorktree {
 		return Closed{}, fmt.Errorf(
 			"%q is not something to do with a worktree — %q keeps the checkout, %q deletes it",

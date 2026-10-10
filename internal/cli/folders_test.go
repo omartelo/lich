@@ -20,14 +20,12 @@ func TestMCPFileSessionPostsItsArgumentsInOrder(t *testing.T) {
 		t.Fatalf("tool reported a failure: %s", text)
 	}
 	call := f.only(t)
-	want := []any{"s1", "auth-fix", "lich", "Apps"}
-	if call.method != "spawn.File" || len(call.args) != len(want) {
-		t.Fatalf("call = %s %v, want spawn.File %v", call.method, call.args, want)
+	if call.method != "spawn.File" {
+		t.Fatalf("method = %q, want spawn.File", call.method)
 	}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	want := spawn.FileOptions{From: "s1", Target: "auth-fix", Project: "lich", Folder: "Apps"}
+	if got := optionsOf[spawn.FileOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 	if !strings.Contains(text, `"auth-fix" under "Apps"`) {
 		t.Errorf("result = %q, want where the session is now", text)
@@ -46,7 +44,7 @@ func TestMCPFileSessionIntoAnEmptyFolderTakesItOut(t *testing.T) {
 	if failed {
 		t.Fatalf("tool reported a failure: %s", text)
 	}
-	if got := f.only(t).args[3]; got != "" {
+	if got := optionsOf[spawn.FileOptions](t, f.only(t)).Folder; got != "" {
 		t.Errorf("folder sent as %v, want the empty name", got)
 	}
 	if !strings.Contains(text, `out of "Apps"`) {

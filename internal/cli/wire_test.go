@@ -532,11 +532,11 @@ func TestOpenSubagentOverTheRealDispatcher(t *testing.T) {
 	}
 }
 
-// TestCloseOverTheRealDispatcher proves the five arguments `lich close` posts
-// land on spawn.Close in the order it declares them. It closes the last session
-// in a dirty checkout, the case that reads every one of them: a worktree word in
-// the project's slot resolves no session at all, and a --force that misses its
-// own is a removal refused rather than the one the caller asked for.
+// TestCloseOverTheRealDispatcher proves the options `lich close` posts land on
+// spawn.Close's fields. It closes the last session in a dirty checkout, the
+// case that reads every one of them: a worktree word in the project's field
+// resolves no session at all, and a --force that misses its own is a removal
+// refused rather than the one the caller asked for.
 func TestCloseOverTheRealDispatcher(t *testing.T) {
 	git := &spawnGit{dirty: true}
 	env, _, term := wiredSpawn(t, git)
@@ -592,10 +592,9 @@ func TestRenameWithoutATargetRenamesTheCallersOwnSession(t *testing.T) {
 	}
 }
 
-// TestControlOverTheRealDispatcher proves the six arguments `lich control`
-// posts land on spawn.Control in the order it declares them, the context it
-// takes first included: the action, the name and its arguments are strings side
-// by side, and shifted by one the session would run the wrong command.
+// TestControlOverTheRealDispatcher proves the options `lich control` posts land
+// on spawn.Control's fields: the action, the name and its arguments are strings
+// side by side, and a misnamed tag would run the wrong command.
 func TestControlOverTheRealDispatcher(t *testing.T) {
 	env, _, term := wiredSpawn(t, &spawnGit{})
 
@@ -613,9 +612,9 @@ func TestControlOverTheRealDispatcher(t *testing.T) {
 	}
 }
 
-// TestAskOverTheRealDispatcher proves the four arguments `lich ask` posts land
-// on spawn.Ask in the order it declares them: the target, the project and the
-// question are strings side by side.
+// TestAskOverTheRealDispatcher proves the options `lich ask` posts land on
+// spawn.Ask's fields: the target, the project and the question are strings side
+// by side.
 func TestAskOverTheRealDispatcher(t *testing.T) {
 	env, _, term := wiredSpawn(t, &spawnGit{})
 
@@ -645,10 +644,9 @@ func TestWorktreesOverTheRealDispatcher(t *testing.T) {
 	}
 }
 
-// TestFileOverTheRealDispatcher proves the four arguments `lich file` posts land
-// on spawn.File in the order it declares them. Target and folder are two strings
-// side by side, and swapped the command files the wrong session under the name
-// of the right one.
+// TestFileOverTheRealDispatcher proves the options `lich file` posts land on
+// spawn.File's fields. Target and folder are two strings side by side, and
+// swapped the command files the wrong session under the name of the right one.
 func TestFileOverTheRealDispatcher(t *testing.T) {
 	env, rows, _ := wiredSpawn(t, &spawnGit{})
 
@@ -757,6 +755,82 @@ func TestOpenAcrossVersions(t *testing.T) {
 			}
 			if term.kind != "codex" {
 				t.Errorf("started %q, want codex", term.kind)
+			}
+		})
+	}
+}
+
+// postRaw posts body to method on dispatcher as a client of another release
+// would, and fails the test unless the call succeeds.
+func postRaw(t *testing.T, dispatcher *rpc.Handler, method, body string) {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	dispatcher.ServeHTTP(recorder, httptest.NewRequest("POST", "/rpc/"+method, strings.NewReader(body)))
+	if recorder.Code != 200 {
+		t.Fatalf("status = %d, body = %q", recorder.Code, recorder.Body.String())
+	}
+}
+
+// TestSpawnCallsAcrossVersions is TestOpenAcrossVersions for the rest of the
+// spawn calls a session makes: each body carries a field the backend does not
+// know and leaves out one it does, and the call still lands on the target.
+func TestSpawnCallsAcrossVersions(t *testing.T) {
+	cases := []struct {
+		method, body string
+		landed       func(*spawnStore, *spawnTerminal) bool
+	}{
+		{
+			"spawn.Close",
+			`[{"from":"s1","target":"auth-fix","project":"lich","worktree":"remove","optionFromTheFuture":true}]`,
+			func(_ *spawnStore, term *spawnTerminal) bool { return term.closed == "s2" },
+		},
+		{
+			"spawn.Control",
+			`[{"from":"s1","target":"auth-fix","project":"lich","action":"command","value":"/compact","optionFromTheFuture":true}]`,
+			func(_ *spawnStore, term *spawnTerminal) bool {
+				return term.ranOn == "s2" && term.ran.Name == "/compact"
+			},
+		},
+		{
+			"spawn.Ask",
+			`[{"from":"s1","target":"auth-fix","project":"lich","question":"why?","optionFromTheFuture":true}]`,
+			func(_ *spawnStore, term *spawnTerminal) bool {
+				return term.ranOn == "s2" && term.ran.Question == "why?"
+			},
+		},
+		{
+			"spawn.File",
+			`[{"from":"s1","target":"auth-fix","folder":"Infra","optionFromTheFuture":true}]`,
+			func(rows *spawnStore, _ *spawnTerminal) bool { return rows.filed == [2]string{"s2", "Infra"} },
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.method, func(t *testing.T) {
+			rows, term := &spawnStore{}, &spawnTerminal{}
+			dispatcher := rpc.New()
+			dispatcher.Register("spawn", spawn.New(rows, &spawnGit{}, term, nil))
+
+			postRaw(t, dispatcher, tc.method, tc.body)
+			if !tc.landed(rows, term) {
+				t.Errorf("the call did not land on the target: rows %+v, terminal %+v", rows, term)
+			}
+		})
+	}
+}
+
+// TestSendsAcrossVersions is the same for the three ways to send: a field the
+// backend does not know is dropped, and the project left out searches them all.
+func TestSendsAcrossVersions(t *testing.T) {
+	for _, method := range []string{"relay.Send", "relay.SendPrivate", "relay.SendSubagent"} {
+		t.Run(method, func(t *testing.T) {
+			term := &wiredTerminal{}
+			dispatcher := rpc.New()
+			dispatcher.Register("relay", relay.New(wiredSessions{}, term, nil))
+
+			postRaw(t, dispatcher, method,
+				`[{"from":"s1","target":"docs","prompt":"run the tests","waitSeconds":1,"optionFromTheFuture":true}]`)
+			if !strings.Contains(term.message(), "run the tests") {
+				t.Errorf("typed %q, want the prompt", term.message())
 			}
 		})
 	}

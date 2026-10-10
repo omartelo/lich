@@ -30,12 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Upgrading lich while it runs no longer breaks `lich open` (with or
-  without `--subagent`) and the `open_session` tool.** After a package manager installed a lich with a new
-  `lich open` option, opening a session was refused with "want 8 arguments,
-  got 9" until you restarted lich. Opening now accepts options from a newer or
-  an older lich. It holds from the upgrade after this one on: this release
-  itself still needs one restart.
+- **Upgrading lich while it runs no longer breaks the commands sessions use
+  to work with each other.** After a package manager installed a lich whose
+  `lich open` had a new option, opening a session was refused with "want 8
+  arguments, got 9" until you restarted lich, and `send`, `close`, `control`,
+  `ask` and `file` (and their MCP tools) would break the same way the day one
+  of them grew an option. They now accept options from a newer or an older
+  lich. It holds from the upgrade after this one on: this release itself still
+  needs one restart.
 
 - **History search shows the line it matched for a word written with accents
   or in capitals.** Searching `índice` for a conversation that says `Índice`,

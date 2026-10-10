@@ -29,7 +29,7 @@ func (c *client) ask(args []string) error {
 
 	var out spawn.Answered
 	question := strings.Join(flags.Args()[1:], " ")
-	call := []any{c.sessionID(), flags.Arg(0), *project, question}
+	call := []any{spawn.AskOptions{From: c.sessionID(), Target: flags.Arg(0), Project: *project, Question: question}}
 	if err := c.call(context.Background(), "spawn.Ask", call, askCall, &out); err != nil {
 		return err
 	}
@@ -61,7 +61,10 @@ var askTools = []mcpTool{
 		}, "session", "question"),
 		Run: func(ctx context.Context, c *client, args mcpArgs) (string, error) {
 			var out spawn.Answered
-			call := []any{c.sessionID(), args.text("session"), args.text("project"), args.text("question")}
+			call := []any{spawn.AskOptions{
+				From: c.sessionID(), Target: args.text("session"), Project: args.text("project"),
+				Question: args.text("question"),
+			}}
 			if err := c.call(ctx, "spawn.Ask", call, askCall, &out); err != nil {
 				return "", err
 			}

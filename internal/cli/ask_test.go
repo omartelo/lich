@@ -2,7 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -24,8 +23,9 @@ func TestAskPostsTheQuestionAndPrintsTheAnswer(t *testing.T) {
 	if call.method != "spawn.Ask" {
 		t.Errorf("method = %q", call.method)
 	}
-	if want := []any{"s1", "auth-fix", "lich", "what are you on?"}; !reflect.DeepEqual(call.args, want) {
-		t.Errorf("args = %v, want %v", call.args, want)
+	want := spawn.AskOptions{From: "s1", Target: "auth-fix", Project: "lich", Question: "what are you on?"}
+	if got := optionsOf[spawn.AskOptions](t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 	if stdout != "Fixing the login test.\n" {
 		t.Errorf("stdout = %q", stdout)
@@ -75,7 +75,8 @@ func TestMCPAskSessionAnswersWithTheAnswer(t *testing.T) {
 	if failed || text != "Fixing the login test." {
 		t.Fatalf("text = %q, failed = %v", text, failed)
 	}
-	if want := []any{"s1", "auth-fix", "", "what are you on?"}; !reflect.DeepEqual(f.only(t).args, want) {
-		t.Errorf("args = %v, want %v", f.only(t).args, want)
+	want := spawn.AskOptions{From: "s1", Target: "auth-fix", Question: "what are you on?"}
+	if got := optionsOf[spawn.AskOptions](t, f.only(t)); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 }
