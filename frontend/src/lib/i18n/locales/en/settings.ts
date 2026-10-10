@@ -46,6 +46,8 @@ export const settings = {
     zoomTitle: "Zoom",
     zoomOut: "Zoom out",
     zoomIn: "Zoom in",
+    resetZoom: "Reset the zoom",
+    resetTextSize: "Reset the terminal text size",
     textSizeTitle: "Terminal text size",
     textSmaller: "Smaller terminal text",
     textLarger: "Larger terminal text",
@@ -332,6 +334,11 @@ export const settings = {
     install: "Install",
   },
   versionControlSettings: {
+    // The block names itself after the open project: accountFor starts with
+    // the text of account, which is what the settings index matches on.
+    account: "GitHub account",
+    accountFor: "GitHub account for {name}",
+    accountSearchWords: "login gh switch",
     openProject: "Open a project to configure its version control.",
     accountDescription:
       "Which account lich runs gh as for this project — pull requests, checks and PR checkouts. gh keeps one active account per host, so a repository only another account can see reads as not found. Accounts on an enterprise host are listed with it.",
@@ -360,10 +367,10 @@ export const settings = {
     description:
       "Session status, titles, git refresh and resume, inside the provider CLIs that can run it.",
     installing: "Installing lich plugin for {name}…",
-    installed: "Plugin installed — {hint}",
+    installed: "Plugin installed. Restart your sessions to apply.",
     installFailed: "Install failed",
     updating: "Updating lich plugin for {name}…",
-    updated: "Plugin updated — {hint}",
+    updated: "Plugin updated. Restart your sessions to apply.",
     updateFailed: "Update failed",
     checked: "Checked.",
     checkFailed: "Check failed — are you online?",
@@ -373,7 +380,15 @@ export const settings = {
     install: "Install",
     updateTo: "Update to v{version}",
     installVersion: "Install v{version}",
-    hint: "{provider}: {hint}",
+    codexHint: "Codex: run /hooks in a Codex session to trust the plugin's hooks.",
+    crushHint:
+      "Crush: reports its session id and refreshes git status. It has no end-of-turn event, so its cards show no status and keep their own name.",
+    ompHint:
+      "oh-my-pi: reports its status, name and git changes. It has no observed approval event, so a session waiting on your permission shows a spinner rather than a bell.",
+    antigravityHint:
+      "Antigravity: reports its status, name and git changes. It has no observed approval event, so a session waiting on your permission shows a spinner rather than a bell.",
+    cursorHint:
+      "Cursor CLI: runs the plugin installed in Claude Code, so it reports what that version reports and updates with it. lich adds only its own tools here. Like the two above, it raises no approval event, so a session waiting on your permission shows a spinner rather than a bell.",
     checkForUpdates: "Check for updates",
   },
   helpSettings: {

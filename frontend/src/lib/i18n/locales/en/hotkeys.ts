@@ -46,6 +46,7 @@ export const hotkeys = {
     v: "Ctrl+{key} is the image paste lich sends the agent; sessions will no longer see it.",
     Backspace: "Ctrl+{key} is the erase word lich sends the agent; sessions will no longer see it.",
   },
+  unassigned: "Unassigned",
   shortcuts: {
     terminalTitle: "Terminal",
     passthroughTitle: "Passed through to the agent",

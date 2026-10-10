@@ -8,10 +8,10 @@ export const shell = {
     later: "Depois",
     installVersion: "Instalar v{version}",
     updating: "Atualizando o plugin do lich…",
-    updated: "Plugin atualizado: {hint}",
+    updated: "Plugin atualizado. Reinicie suas sessões para aplicar.",
     updateFailed: "Falha na atualização",
-    installed: "Plugin instalado: {hint}",
-    codexTrust: "Codex: {hint}",
+    installed: "Plugin instalado. Reinicie suas sessões para aplicar.",
+    codexTrust: "Codex: rode /hooks em uma sessão do Codex para confiar nos hooks do plugin.",
     installFailed: "Falha na instalação: {error}",
     title: "Ativar a integração com agentes",
     description:
@@ -39,6 +39,8 @@ export const shell = {
   emptySessions: {
     title: "Nenhuma sessão aberta",
     description: "Abra uma sessão para começar a trabalhar neste projeto.",
+    noAgent:
+      "Nenhum agente encontrado no PATH, então isto abre um terminal. Defina um em Configurações › Provedores.",
     newTerminal: "Novo terminal",
     newSession: "Nova sessão",
   },

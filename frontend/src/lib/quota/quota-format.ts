@@ -1,5 +1,6 @@
 import type { QuotaPlan, QuotaWindow } from "@/lib/api-types"
 import { t } from "@/lib/i18n/i18n"
+import { formatUnit } from "@/lib/i18n/unit-format"
 
 const HOUR_S = 60 * 60
 const DAY_S = 24 * HOUR_S
@@ -45,10 +46,10 @@ export function shortWindow(seconds: number): string {
     return ""
   }
   if (seconds < DAY_S) {
-    return `${Math.round(seconds / HOUR_S)}h`
+    return formatUnit(Math.round(seconds / HOUR_S), "hour")
   }
   const days = Math.round(seconds / DAY_S)
-  return days === 7 ? "wk" : `${days}d`
+  return days === 7 ? t("env.quota.weekShort") : formatUnit(days, "day")
 }
 
 // formatWindow names a window's length in full — "5h", "7d", "30d" — for the
@@ -58,9 +59,9 @@ export function formatWindow(seconds: number): string {
     return ""
   }
   if (seconds < DAY_S) {
-    return `${Math.round(seconds / HOUR_S)}h`
+    return formatUnit(Math.round(seconds / HOUR_S), "hour")
   }
-  return `${Math.round(seconds / DAY_S)}d`
+  return formatUnit(Math.round(seconds / DAY_S), "day")
 }
 
 // timeLeft is how long until a window starts over, in the two coarsest units
@@ -81,11 +82,11 @@ export function timeLeft(resetsAt: string | undefined, now: Date): string {
   }
   if (seconds >= DAY_S) {
     const days = Math.floor(seconds / DAY_S)
-    return `${days}d ${Math.floor((seconds % DAY_S) / HOUR_S)}h`
+    return `${formatUnit(days, "day")} ${formatUnit(Math.floor((seconds % DAY_S) / HOUR_S), "hour")}`
   }
   if (seconds >= HOUR_S) {
     const hours = Math.floor(seconds / HOUR_S)
-    return `${hours}h ${Math.floor((seconds % HOUR_S) / 60)}m`
+    return `${formatUnit(hours, "hour")} ${formatUnit(Math.floor((seconds % HOUR_S) / 60), "minute")}`
   }
-  return `${Math.max(1, Math.floor(seconds / 60))}m`
+  return formatUnit(Math.max(1, Math.floor(seconds / 60)), "minute")
 }

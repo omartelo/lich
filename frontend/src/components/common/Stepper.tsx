@@ -12,8 +12,8 @@ interface StepperProps {
   step: number
   /** What clicking the value returns to. */
   fallback: number
-  /** The setting's name, for the reset control's label ("Reset the zoom"). */
-  name: string
+  /** The reset control's whole label, already translated ("Reset the zoom"). */
+  resetLabel: string
   onChange: (next: number) => void
   /** Glyphs for decrement and increment — zoom uses magnifiers, size ∓. */
   decrementIcon: ReactNode
@@ -34,7 +34,7 @@ export function Stepper({
   max,
   step,
   fallback,
-  name,
+  resetLabel,
   onChange,
   decrementIcon,
   incrementIcon,
@@ -66,16 +66,14 @@ export function Stepper({
               // is the default, which is most of the time. At the default the
               // click is simply a no-op.
               className="min-w-16 tabular-nums"
-              aria-label={custom ? t("common.stepper.reset", { name }) : display}
+              aria-label={custom ? resetLabel : display}
               onClick={() => custom && onChange(fallback)}
             />
           }
         >
           {display}
         </TooltipTrigger>
-        <TooltipContent>
-          {custom ? t("common.stepper.reset", { name }) : t("common.stepper.default")}
-        </TooltipContent>
+        <TooltipContent>{custom ? resetLabel : t("common.stepper.default")}</TooltipContent>
       </Tooltip>
       <Button
         variant="outline"

@@ -10,6 +10,7 @@ export const env = {
     percentUsed: "{percent}% usado",
   },
   quota: {
+    weekShort: "sem",
     tokenLogin: "Login por token",
   },
   paths: {

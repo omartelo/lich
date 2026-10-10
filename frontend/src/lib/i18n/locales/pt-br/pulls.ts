@@ -2,6 +2,10 @@ import type { Shape } from "../../catalog"
 import type { pulls as en } from "../en/pulls"
 
 export const pulls = {
+  prHandoff: {
+    resolveConflicts: "Resolver conflitos",
+    fixChecks: "Corrigir erros de CI",
+  },
   byline: {
     someone: "alguém",
   },

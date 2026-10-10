@@ -49,6 +49,7 @@ export const hotkeys = {
     Backspace:
       "Ctrl+{key} é o apagar palavra que o lich envia ao agente; as sessões não o receberão mais.",
   },
+  unassigned: "Sem atalho",
   shortcuts: {
     terminalTitle: "Terminal",
     passthroughTitle: "Repassados ao agente",

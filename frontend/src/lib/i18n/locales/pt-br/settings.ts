@@ -47,6 +47,8 @@ export const settings = {
     templateFailed: "Não foi possível salvar o modelo de tema: {error}",
     zoomTitle: "Zoom",
     zoomOut: "Diminuir zoom",
+    resetZoom: "Redefinir o zoom",
+    resetTextSize: "Redefinir o tamanho do texto do terminal",
     zoomIn: "Aumentar zoom",
     textSizeTitle: "Tamanho do texto do terminal",
     textSmaller: "Diminuir texto do terminal",
@@ -340,6 +342,9 @@ export const settings = {
     install: "Instalar",
   },
   versionControlSettings: {
+    account: "Conta do GitHub",
+    accountFor: "Conta do GitHub para {name}",
+    accountSearchWords: "login gh trocar",
     openProject: "Abra um projeto para configurar o controle de versão dele.",
     accountDescription:
       "Qual conta o lich usa para rodar o gh neste projeto: pull requests, checks e checkouts de PR. O gh mantém uma conta ativa por host, então um repositório que só outra conta enxerga aparece como não encontrado. Contas de um host enterprise aparecem listadas com ele.",
@@ -368,10 +373,10 @@ export const settings = {
     description:
       "Status da sessão, títulos, atualização do git e retomada, dentro das CLIs de provedor que conseguem rodá-lo.",
     installing: "Instalando o plugin do lich para {name}…",
-    installed: "Plugin instalado: {hint}",
+    installed: "Plugin instalado. Reinicie suas sessões para aplicar.",
     installFailed: "A instalação falhou",
     updating: "Atualizando o plugin do lich para {name}…",
-    updated: "Plugin atualizado: {hint}",
+    updated: "Plugin atualizado. Reinicie suas sessões para aplicar.",
     updateFailed: "A atualização falhou",
     checked: "Verificado.",
     checkFailed: "A verificação falhou: você está online?",
@@ -381,7 +386,15 @@ export const settings = {
     install: "Instalar",
     updateTo: "Atualizar para v{version}",
     installVersion: "Instalar v{version}",
-    hint: "{provider}: {hint}",
+    codexHint: "Codex: rode /hooks em uma sessão do Codex para confiar nos hooks do plugin.",
+    crushHint:
+      "Crush: informa o id da sessão e atualiza o status do git. Não tem evento de fim de turno, então seus cards não mostram status e mantêm o próprio nome.",
+    ompHint:
+      "oh-my-pi: informa status, nome e mudanças do git. Não tem evento de aprovação observado, então uma sessão esperando sua permissão mostra um spinner em vez de um sino.",
+    antigravityHint:
+      "Antigravity: informa status, nome e mudanças do git. Não tem evento de aprovação observado, então uma sessão esperando sua permissão mostra um spinner em vez de um sino.",
+    cursorHint:
+      "Cursor CLI: roda o plugin instalado no Claude Code, então informa o que aquela versão informa e atualiza junto com ela. O lich adiciona aqui apenas as próprias ferramentas. Como os dois acima, não emite evento de aprovação, então uma sessão esperando sua permissão mostra um spinner em vez de um sino.",
     checkForUpdates: "Buscar atualizações",
   },
   helpSettings: {

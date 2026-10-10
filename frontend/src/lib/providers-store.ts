@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react"
 import type { BinaryCheck, DetectedProvider } from "./api-types"
 import { Providers, Store } from "./rpc"
+import { tIn } from "@/lib/i18n/i18n"
 import { errorText } from "./utils"
 import { PROVIDER_KINDS, type ProviderKind, type SessionKind } from "@/lib/session/sessions"
 
@@ -293,12 +294,11 @@ export function noProviderInstalled(list: ProviderState[]): boolean {
   return list.length > 0 && !list.some((provider) => provider.installed)
 }
 
-// NO_AGENT_REASON is what the empty screen says when its own button will open a
-// terminal rather than an agent. A shell nobody asked for is the surprise this
-// sentence exists to remove, so it names both the reason and where the machine
-// is told about an agent lich could not find on its own.
-export const NO_AGENT_REASON =
-  "No agent found on PATH, so this opens a terminal — set one in Settings › Providers."
+// NO_AGENT_REASON is the English text of what the empty screen says when its own
+// button will open a terminal rather than an agent (shell.emptySessions.noAgent,
+// which the screen reads in the interface language): the sentence names both the
+// reason and where the machine is told about an agent lich could not find.
+export const NO_AGENT_REASON = tIn("en", "shell.emptySessions.noAgent")
 
 // No project binaries known — a project nothing was read for, and every caller
 // asking the machine-wide question. Frozen and shared so the default argument is

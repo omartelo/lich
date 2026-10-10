@@ -14,9 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   separate *Prompt language* for the text lich hands your agents (relayed tasks,
   results-ready notices, subagent reports, merge and late-prompt notices, the
   `lich` CLI and MCP results, the briefing at spawn), so you can read lich in one
-  language and talk to your agents in another. The interface translation is
-  partial for now: the sidebar and these two settings; the rest of the window
-  stays English until follow-up releases. A session started after you change the
+  language and talk to your agents in another. The whole interface is
+  available in English and Brazilian Portuguese; the text lich hands your agents
+  follows the prompt language. A session started after you change the
   prompt language gets it everywhere; one already open gets it in relayed
   messages only.
 

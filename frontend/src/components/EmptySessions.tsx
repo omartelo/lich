@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom"
 import { EmptyScreen } from "@/components/common/EmptyScreen"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/providers/projects"
-import { NO_AGENT_REASON, useProjectSessionKind } from "@/lib/providers-store"
+import { useProjectSessionKind } from "@/lib/providers-store"
 import { sessionsOf } from "@/lib/session/sessions"
 import { useT } from "@/lib/i18n/i18n"
 
@@ -28,7 +28,9 @@ export function EmptySessions() {
     <EmptyScreen
       icon={SquareTerminal}
       title={t("shell.emptySessions.title")}
-      description={noAgent ? NO_AGENT_REASON : t("shell.emptySessions.description")}
+      description={
+        noAgent ? t("shell.emptySessions.noAgent") : t("shell.emptySessions.description")
+      }
     >
       <Button onClick={() => newSession(projectId)}>
         {noAgent ? <SquareTerminal data-icon="inline-start" /> : <Plus data-icon="inline-start" />}

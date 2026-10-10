@@ -8,6 +8,7 @@ import { t, tIn } from "@/lib/i18n/i18n"
 export interface ShortcutRow {
   label: string
   keys: string
+  unassigned?: boolean
 }
 
 export interface ShortcutGroup {
@@ -61,6 +62,7 @@ export function shortcutGroups(
     rows: HOTKEY_ACTIONS.filter((action) => action.group === group.id).map((action) => ({
       label: action.label,
       keys: formatCombo(hotkeys[action.id], isMac),
+      unassigned: !hotkeys[action.id].key,
     })),
   }))
   return [

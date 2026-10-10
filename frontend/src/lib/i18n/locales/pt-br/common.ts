@@ -24,7 +24,6 @@ export const common = {
     retry: "Tentar novamente",
   },
   stepper: {
-    reset: "Redefinir {name}",
     default: "Padrão",
   },
   toolMissing: {

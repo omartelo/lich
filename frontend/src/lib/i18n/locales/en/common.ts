@@ -23,7 +23,6 @@ export const common = {
     retry: "Try again",
   },
   stepper: {
-    reset: "Reset {name}",
     default: "Default",
   },
   toolMissing: {

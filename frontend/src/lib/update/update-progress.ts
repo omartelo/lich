@@ -4,6 +4,7 @@
 
 import type { AppUpdateProgress } from "@/lib/api-types"
 import { t } from "@/lib/i18n/i18n"
+import { formatUnit } from "@/lib/i18n/unit-format"
 
 /** internal/appupdate.ProgressEventName. */
 export const UPDATE_PROGRESS_EVENT = "appupdate-progress"
@@ -22,7 +23,7 @@ export function isUpdateProgress(data: unknown): data is AppUpdateProgress {
 
 /** Megabytes with one decimal: the assets run 10–120 MB, so no smaller unit. */
 export function formatMegabytes(bytes: number): string {
-  return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`
+  return formatUnit(bytes / BYTES_PER_MB, "megabyte", "short", 1)
 }
 
 /** DownloadReading is the bar and its caption: percent is null while the total

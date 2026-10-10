@@ -16,7 +16,7 @@ import { ContextRing, usageColor } from "./ContextRing"
 import { SessionModel } from "./SessionModel"
 import { PlanQuota } from "./PlanQuota"
 import { FooterReadout } from "./FooterReadout"
-import { useT } from "@/lib/i18n/i18n"
+import { useLocale, useT } from "@/lib/i18n/i18n"
 
 interface FooterSessionProps {
   sessionId: string
@@ -156,9 +156,16 @@ function HandsOnReadout({ sessionId, kind }: FooterSessionProps) {
 
 function FooterClock() {
   const now = useNow()
+  const locale = useLocale()
+  const date = now.toLocaleDateString(locale, {
+    weekday: "short",
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  })
   return (
     <time dateTime={now.toISOString()} className="whitespace-nowrap px-2 tabular-nums">
-      {now.toDateString()} · {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+      {date} · {now.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
     </time>
   )
 }

@@ -1,5 +1,9 @@
 // Keys: pulls.<component>.<what>, the component in camelCase after its file.
 export const pulls = {
+  prHandoff: {
+    resolveConflicts: "Resolve conflicts",
+    fixChecks: "Fix CI errors",
+  },
   byline: {
     someone: "someone",
   },
