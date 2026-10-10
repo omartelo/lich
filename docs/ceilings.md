@@ -1081,7 +1081,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   terminal dies on that terminal's SIGHUP without its clean exit, so the next launch reports an unclean exit.
   On Windows a GUI-subsystem process with no window receives no console close event: logoff ends it without
   the clean exit, which the next launch reports as unclean. On macOS logout quits user processes; whether
-  the backend gets SIGTERM first is not known.
+  the backend gets SIGTERM first is not known. Whether the window holding its close for the question (above) can stall a
+  logout is not measured on any OS; Chromium is expected to skip `beforeunload` when the session ends.
 - **Reopening from the Dock or Finder is unverified on macOS, and Windows reopen is unmeasured**: a second
   launch reaches the running lich over `system.ShowWindow` on every OS (`singleton.Show`), which the macOS
   e2e exercises by running the binary in `Lich.app` directly. LaunchServices may instead activate the
