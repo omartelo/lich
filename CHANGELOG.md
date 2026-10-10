@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selection or a file. `lich sessions --json` and `whoami --json` now also carry
   each session's `path` and `projectPath`, and `send --project` now takes a
   directory, as `lich --help` already said it did.
+- **Simplified Chinese (简体中文) joins the language settings.** Both Settings ›
+  Appearance pickers, the *Interface language* and the *Prompt language*, now
+  offer Simplified Chinese next to English, Brazilian Portuguese and
+  Spanish. A browser set to any Chinese variant picks it by default for the
+  interface.
 
 - **Two language settings, English and Brazilian Portuguese.** Settings ›
   Appearance now has an *Interface language* for lich's own screens and a

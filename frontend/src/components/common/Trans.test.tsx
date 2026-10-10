@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { resetLocale, setLocale } from "@/lib/i18n/i18n"
+import { zhCN } from "@/lib/i18n/locales/zh-cn"
 import { Trans } from "./Trans"
 
 afterEach(() => {
@@ -28,5 +29,12 @@ describe("Trans", () => {
     setLocale("es")
     const html = renderToStaticMarkup(<Trans k="common.count.file" params={{ count: 2 }} />)
     expect(html).toBe("2 archivos")
+  })
+
+  it("renders Simplified Chinese", () => {
+    vi.stubGlobal("localStorage", { setItem: () => {}, getItem: () => null })
+    setLocale("zh-CN")
+    const html = renderToStaticMarkup(<Trans k="common.count.file" params={{ count: 2 }} />)
+    expect(html).toBe(zhCN.common.count.file.other.replace("{count}", "2"))
   })
 })

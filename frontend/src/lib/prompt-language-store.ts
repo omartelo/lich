@@ -7,7 +7,7 @@ import { Store } from "@/lib/rpc"
 // every message, a spawn reads it for the briefing and LICH_PROMPT_LANG.
 // This store is the page's copy, loaded once and written through.
 //
-// The tags are the interface's own (en, pt-BR): both sides ship the same set.
+// The tags are the interface's own (en, pt-BR, zh-CN): both sides ship the same set.
 
 // SETTING_KEY and GLOBAL_SCOPE mirror the Go side's promptLanguageKey and its
 // global (project-less) scope.

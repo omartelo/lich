@@ -70,7 +70,7 @@ func verbs(format string) []string {
 
 func TestParse(t *testing.T) {
 	for tag, want := range map[string]Lang{
-		"en": English, "pt-BR": PortugueseBR, "": English, "fr": English, "pt-br": English,
+		"en": English, "pt-BR": PortugueseBR, "": English, "fr": English, "pt-br": English, "zh-CN": ChineseCN,
 	} {
 		if got := Parse(tag); got != want {
 			t.Errorf("Parse(%q) = %q, want %q", tag, got, want)
@@ -96,6 +96,7 @@ func TestPickFollowsEachLanguagesPluralRule(t *testing.T) {
 	}{
 		{English, 0, "other"}, {English, 1, "one"}, {English, 2, "other"},
 		{PortugueseBR, 0, "one"}, {PortugueseBR, 1, "one"}, {PortugueseBR, 2, "other"},
+		{ChineseCN, 0, "other"}, {ChineseCN, 1, "other"}, {ChineseCN, 2, "other"},
 	}
 	for _, tc := range cases {
 		if got := For(tc.lang).Pick(tc.n, forms); got != tc.want {

@@ -12,6 +12,7 @@ import {
 import { en } from "./locales/en"
 import { es } from "./locales/es"
 import { ptBR } from "./locales/pt-br"
+import { zhCN } from "./locales/zh-cn"
 
 function stubStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial))
@@ -102,6 +103,23 @@ describe("t", () => {
     expect(t("common.count.file", { count: 2 })).toBe("2 arquivos")
   })
 
+  it("renders Simplified Chinese with its single plural form", () => {
+    stubStorage()
+    setLocale("zh-CN")
+    const forms = zhCN.common.count.file
+    expect(forms.one).toBe(forms.other)
+    expect(t("common.count.file", { count: 1 })).toBe(forms.other.replace("{count}", "1"))
+    expect(t("common.count.file", { count: 0 })).toBe(forms.other.replace("{count}", "0"))
+    expect(t("common.action.cancel")).toBe(zhCN.common.action.cancel)
+    expect(t("common.action.cancel")).not.toBe("Cancel")
+  })
+
+  it("matches any Chinese browser language to zh-CN", () => {
+    expect(matchLocale("zh-CN")).toBe("zh-CN")
+    expect(matchLocale("zh")).toBe("zh-CN")
+    expect(matchLocale("zh-Hans-CN")).toBe("zh-CN")
+  })
+
   it("rejects misuse at compile time", () => {
     // @ts-expect-error a key that does not exist
     expect(() => t("sidebar.nothing.here")).toThrow()
@@ -135,7 +153,7 @@ const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) 
 // translation that renames, drops or invents a placeholder.
 describe("every locale against English", () => {
   const source = leaves(en as unknown as Tree)
-  const locales = { "pt-BR": ptBR, es }
+  const locales = { "pt-BR": ptBR, es, "zh-CN": zhCN }
 
   it("covers every locale the picker offers", () => {
     expect(Object.keys(locales)).toEqual(LOCALES.filter((locale) => locale !== "en"))
