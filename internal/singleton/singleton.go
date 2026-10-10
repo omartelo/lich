@@ -146,7 +146,7 @@ const (
 	// which legitimately expects a busy port and retries the bind itself (so a
 	// failure here is genuine).
 	BindFailureIsReal BindVerdict = iota
-	// BindFailureIsDuplicate: another live lich holds the port — show its
+	// BindFailureIsDuplicate: another live lich holds the port: show its
 	// window and exit 0. Re-launching an app you already have open should give
 	// you the window, not an error.
 	BindFailureIsDuplicate

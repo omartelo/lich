@@ -638,7 +638,7 @@ export interface PatchNotes {
   groups: PatchNotesGroup[] | null
 }
 
-/** internal/tray.Labels — the tray menu's words, in the interface language.
+/** internal/tray.Labels: the tray menu's words, in the interface language.
  * running carries a {count} placeholder. */
 export interface TrayLabels {
   show: string

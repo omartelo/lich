@@ -464,8 +464,8 @@ func denyInternal(d *rpc.Handler) {
 }
 
 // runChromium serves the embedded frontend on the loopback listener, opens it
-// in a Chromium --app window — lich's own on Linux, the system browser
-// elsewhere (internal/chromium) — and serves until lich is told to quit. The
+// in a Chromium --app window (lich's own on Linux, the system browser
+// elsewhere, internal/chromium) and serves until lich is told to quit. The
 // window is not the app's lifecycle: closing it leaves every session running,
 // and a second launch opens a new one on them (handleBindFailure).
 func runChromium(term *terminal.Service, configDir string, coord *restart.Coordinator, window *restart.Window) {
@@ -495,8 +495,8 @@ func runChromium(term *terminal.Service, configDir string, coord *restart.Coordi
 	serve(coord, window)
 }
 
-// serve opens the window and returns when lich is told to quit — `lich quit`,
-// a restart, SIGINT or SIGTERM — so the caller's defers still run. The window
+// serve opens the window and returns when lich is told to quit (`lich quit`,
+// a restart, SIGINT or SIGTERM), so the caller's defers still run. The window
 // is closed on the way out rather than left to die with the process, so
 // Chromium flushes its profile first.
 func serve(coord *restart.Coordinator, window *restart.Window) {
