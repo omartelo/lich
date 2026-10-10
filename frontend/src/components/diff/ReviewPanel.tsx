@@ -34,6 +34,7 @@ import { CommentBatch } from "./CommentBatch"
 import type { DiffBulk } from "./diff-bulk"
 import { DiscardDialog } from "./DiscardDialog"
 import { FileDiff } from "./FileDiff"
+import { Hint } from "@/components/common/Hint"
 
 // How often the diff *text* is re-read while the panel is open. The status
 // counts invalidate it the moment they move, but they cannot see an edit that
@@ -366,15 +367,11 @@ function SourceRow({ source, onSource, endedAt, unavailable }: SourceRowProps) {
           <ToggleGroupItem value="worktree" size="sm" className="h-6 px-2.5 text-xs">
             {t("diff.reviewPanel.workingTree")}
           </ToggleGroupItem>
-          <ToggleGroupItem
-            value="turn"
-            size="sm"
-            className="h-6 px-2.5 text-xs"
-            disabled={dead}
-            title={dead ? unavailable : t("diff.reviewPanel.lastTurnHint")}
-          >
-            {t("diff.reviewPanel.lastTurn")}
-          </ToggleGroupItem>
+          <Hint label={dead ? unavailable : t("diff.reviewPanel.lastTurnHint")}>
+            <ToggleGroupItem value="turn" size="sm" className="h-6 px-2.5 text-xs" disabled={dead}>
+              {t("diff.reviewPanel.lastTurn")}
+            </ToggleGroupItem>
+          </Hint>
         </ToggleGroup>
         {/* The one thing the panel can state without claiming authorship: when
             the window closed. Absent while there is no window to date, which is

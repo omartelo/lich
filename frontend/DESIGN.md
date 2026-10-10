@@ -154,6 +154,14 @@ Short specs; the code is the detail. All follow the idiom above.
 - **Stepper / numeric field** — icon buttons flanking a bordered value box (`tabular-nums`).
 - **Switch** — off `bg-input` (`bg-input/80` in dark), on `bg-primary`.
 - **Toast** (sonner) — popover surface, hairline, semantic glyph.
+- **Tooltip**: always `ui/tooltip`, in one of two shapes, so a hover reads the same everywhere:
+  - *Label*: names a control or says why it is disabled, in a few words. Wrap the element in `<Hint label>`
+    (`common/Hint`); an icon-only button keeps its `aria-label` too. A disabled `Button` takes no pointer
+    events, so the reason goes on a `<span>` around it. A label that is `undefined` renders no tooltip.
+  - *Card*: several lines about the thing under the pointer (a name over its path, a gauge's breakdown).
+    `<TooltipContent variant="card">` with the parts written out, as in `SessionTooltip`.
+  - A native `title` is only for text that truncates and needs its full value on hover: a file path, a
+    commit headline. Never on a control.
 - **Footer** — two independently ordered sides, configured globally in Appearance › Footer. Actions default
   left; checkout, model, context, plan usage and hands-on time default right. Cost stays opt-in. The editor
   offers full-width Available/Left/Right drop areas, compact items, menus for keyboard moves, and a

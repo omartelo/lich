@@ -21,6 +21,7 @@ import { HomeTab } from "./HomeTab"
 import { OpenProjectMenu } from "./OpenProjectMenu"
 import { useT } from "@/lib/i18n/i18n"
 import { Trans } from "@/components/common/Trans"
+import { Hint } from "@/components/common/Hint"
 
 export function ProjectTabs() {
   const { projects, sessions, homeId, closeProject, reorderProjects } = useProjects()
@@ -124,34 +125,36 @@ export function ProjectTabs() {
         </div>
         <div aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />
         <NotificationsButton />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={openProjectPulls}
-          disabled={!activeProjectId}
-          title={t("tabs.projectTabs.pullRequests")}
-          aria-label={t("tabs.projectTabs.pullRequests")}
-          className={cn(
-            "shrink-0 text-muted-foreground",
-            onPulls && "bg-accent text-accent-foreground",
-          )}
-        >
-          <GitPullRequestArrow className="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={openProjectSettings}
-          disabled={!activeProjectId}
-          title={t("tabs.projectTabs.settings")}
-          aria-label={t("tabs.projectTabs.settings")}
-          className={cn(
-            "shrink-0 text-muted-foreground",
-            onSettings && "bg-accent text-accent-foreground",
-          )}
-        >
-          <Settings className="size-4" />
-        </Button>
+        <Hint label={t("tabs.projectTabs.pullRequests")} side="bottom">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={openProjectPulls}
+            disabled={!activeProjectId}
+            aria-label={t("tabs.projectTabs.pullRequests")}
+            className={cn(
+              "shrink-0 text-muted-foreground",
+              onPulls && "bg-accent text-accent-foreground",
+            )}
+          >
+            <GitPullRequestArrow className="size-4" />
+          </Button>
+        </Hint>
+        <Hint label={t("tabs.projectTabs.settings")} side="bottom">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={openProjectSettings}
+            disabled={!activeProjectId}
+            aria-label={t("tabs.projectTabs.settings")}
+            className={cn(
+              "shrink-0 text-muted-foreground",
+              onSettings && "bg-accent text-accent-foreground",
+            )}
+          >
+            <Settings className="size-4" />
+          </Button>
+        </Hint>
       </div>
       <ConfirmDialog
         open={pending !== null}

@@ -1,5 +1,6 @@
 import { Folder, GitBranch } from "lucide-react"
 import { baseName, displayPath, unknownCwd } from "@/lib/paths"
+import { Hint } from "@/components/common/Hint"
 
 /** host is set when the session's shell runs somewhere lich cannot read into:
  * the readout says so rather than naming the checkout, which is a directory the
@@ -25,12 +26,11 @@ export function FooterCheckout({
       : branch || baseName(path) || displayPath(path)
   const Icon = showBranch ? GitBranch : Folder
   return (
-    <span
-      title={host || display !== "path" ? label : path}
-      className="flex min-w-0 max-w-56 items-center gap-1.5 px-2 select-text"
-    >
-      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
-      <span className="truncate">{label}</span>
-    </span>
+    <Hint label={host || display !== "path" ? label : path}>
+      <span className="flex min-w-0 max-w-56 items-center gap-1.5 px-2 select-text">
+        <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+        <span className="truncate">{label}</span>
+      </span>
+    </Hint>
   )
 }

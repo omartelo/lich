@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useT } from "@/lib/i18n/i18n"
+import { Hint } from "@/components/common/Hint"
 
 /** The match position xterm's search addon reports: the active match index
  * (0-based, -1 when none) and the total count. */
@@ -57,30 +58,36 @@ export function TerminalSearchBar({
             ? "0/0"
             : ""}
       </span>
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label={t("terminal.searchBar.previous")}
-        onClick={() => onFind("prev")}
-      >
-        <ArrowUp className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label={t("terminal.searchBar.next")}
-        onClick={() => onFind("next")}
-      >
-        <ArrowDown className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label={t("terminal.searchBar.close")}
-        onClick={onClose}
-      >
-        <X className="h-3.5 w-3.5" />
-      </Button>
+      <Hint label={t("terminal.searchBar.previous")}>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label={t("terminal.searchBar.previous")}
+          onClick={() => onFind("prev")}
+        >
+          <ArrowUp className="h-3.5 w-3.5" />
+        </Button>
+      </Hint>
+      <Hint label={t("terminal.searchBar.next")}>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label={t("terminal.searchBar.next")}
+          onClick={() => onFind("next")}
+        >
+          <ArrowDown className="h-3.5 w-3.5" />
+        </Button>
+      </Hint>
+      <Hint label={t("terminal.searchBar.close")}>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label={t("terminal.searchBar.close")}
+          onClick={onClose}
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </Hint>
     </div>
   )
 }

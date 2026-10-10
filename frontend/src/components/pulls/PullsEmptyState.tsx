@@ -6,6 +6,7 @@ import { useT } from "@/lib/i18n/i18n"
 import { ProjectService } from "@/lib/rpc"
 import { Button } from "@/components/ui/button"
 import { errorText } from "@/lib/utils"
+import { Hint } from "@/components/common/Hint"
 
 interface PullsEmptyStateProps {
   path: string
@@ -65,19 +66,21 @@ export function PullsEmptyState({
         )}
       </p>
       <div className="flex flex-wrap justify-center gap-2">
-        <span title={handOffBlocked ?? undefined}>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void handOff()}
-            disabled={handingOff || handOffBlocked !== null}
-          >
-            <Bot />
-            {handingOff
-              ? t("pulls.pullsEmptyState.openingSession")
-              : t("pulls.pullsEmptyState.createWithAgent")}
-          </Button>
-        </span>
+        <Hint label={handOffBlocked ?? undefined}>
+          <span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handOff()}
+              disabled={handingOff || handOffBlocked !== null}
+            >
+              <Bot />
+              {handingOff
+                ? t("pulls.pullsEmptyState.openingSession")
+                : t("pulls.pullsEmptyState.createWithAgent")}
+            </Button>
+          </span>
+        </Hint>
         <Button variant="ghost" size="sm" onClick={() => void openPR()} disabled={opening}>
           <GitPullRequestArrow />
           {opening ? t("pulls.pullsEmptyState.opening") : t("pulls.pullsEmptyState.openOnGitHub")}

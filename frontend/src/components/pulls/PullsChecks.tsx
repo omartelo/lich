@@ -5,6 +5,7 @@ import { useT } from "@/lib/i18n/i18n"
 import { checkDuration } from "@/lib/pulls/check-duration"
 import { System } from "@/lib/rpc"
 import { cn } from "@/lib/utils"
+import { Hint } from "@/components/common/Hint"
 
 const stateIcon = {
   passed: { icon: Check, className: "text-tone-pass" },
@@ -39,26 +40,29 @@ function CheckRow({ check }: { check: CheckItem }) {
     }
   }
   return (
-    <button
-      type="button"
-      onClick={open}
-      disabled={!check.url}
-      title={check.url || undefined}
-      className="group flex w-full items-center gap-3 px-6 py-2 text-left transition-colors hover:bg-accent/50 disabled:cursor-default disabled:hover:bg-transparent"
-    >
-      <Icon className={cn("size-4 shrink-0", className)} />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm">{check.name}</span>
-        {check.description && (
-          <span className="block truncate text-xs text-muted-foreground">{check.description}</span>
+    <Hint label={check.url || undefined}>
+      <button
+        type="button"
+        onClick={open}
+        disabled={!check.url}
+        className="group flex w-full items-center gap-3 px-6 py-2 text-left transition-colors hover:bg-accent/50 disabled:cursor-default disabled:hover:bg-transparent"
+      >
+        <Icon className={cn("size-4 shrink-0", className)} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm">{check.name}</span>
+          {check.description && (
+            <span className="block truncate text-xs text-muted-foreground">
+              {check.description}
+            </span>
+          )}
+        </span>
+        {duration && (
+          <span className="shrink-0 tabular-nums text-xs text-muted-foreground">{duration}</span>
         )}
-      </span>
-      {duration && (
-        <span className="shrink-0 tabular-nums text-xs text-muted-foreground">{duration}</span>
-      )}
-      {check.url && (
-        <ExternalLink className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-      )}
-    </button>
+        {check.url && (
+          <ExternalLink className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        )}
+      </button>
+    </Hint>
   )
 }

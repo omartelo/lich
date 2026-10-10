@@ -69,6 +69,7 @@ import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePanelWidth } from "@/lib/use-panel-width"
 import { useWorktreeDialogIntent } from "@/lib/use-sidebar-intent"
 import { type RunMenuAction, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
+import { Hint } from "@/components/common/Hint"
 
 // Named here like every other `lich.*` pref rather than spelled at the call
 // site. The bounds go with it: the floor is the header row's natural width
@@ -507,22 +508,23 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     >
       <div className="mb-2 flex items-center gap-1">
         <DropdownMenu>
-          <DropdownMenuTrigger
-            title={t("sidebar.sessionSidebar.newSession")}
-            aria-label={t("sidebar.sessionSidebar.newSession")}
-            render={
-              <Button
-                variant="ghost"
-                className="w-full flex-1 justify-start gap-2 text-foreground hover:bg-accent aria-expanded:bg-accent"
+          <Hint label={t("sidebar.sessionSidebar.newSession")} side="bottom">
+            <DropdownMenuTrigger
+              aria-label={t("sidebar.sessionSidebar.newSession")}
+              render={
+                <Button
+                  variant="ghost"
+                  className="w-full flex-1 justify-start gap-2 text-foreground hover:bg-accent aria-expanded:bg-accent"
+                />
+              }
+            >
+              <Plus
+                className="size-4 text-muted-foreground"
+                style={{ viewTransitionName: SIDEBAR_MORPH.newSession }}
               />
-            }
-          >
-            <Plus
-              className="size-4 text-muted-foreground"
-              style={{ viewTransitionName: SIDEBAR_MORPH.newSession }}
-            />
-            {t("sidebar.sessionSidebar.newSessionButton")}
-          </DropdownMenuTrigger>
+              {t("sidebar.sessionSidebar.newSessionButton")}
+            </DropdownMenuTrigger>
+          </Hint>
           <DropdownMenuContent align="start" className="max-w-56">
             <SessionLaunchMenuItems
               providers={enabled}
@@ -539,25 +541,30 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             />
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button
-          variant="ghost"
-          title={t("sidebar.sessionSidebar.filter")}
-          aria-label={t("sidebar.sessionSidebar.filter")}
-          aria-pressed={filterOpen}
-          onClick={toggleFilter}
-          className="size-8 shrink-0 justify-center px-0 text-muted-foreground hover:bg-accent hover:text-foreground aria-pressed:bg-accent aria-pressed:text-foreground"
-        >
-          <Search className="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          title={t("sidebar.sessionSidebar.collapse")}
-          aria-label={t("sidebar.sessionSidebar.collapse")}
-          onClick={onCollapse}
-          className="size-8 shrink-0 justify-center px-0 text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <PanelLeftClose className="size-4" style={{ viewTransitionName: SIDEBAR_MORPH.toggle }} />
-        </Button>
+        <Hint label={t("sidebar.sessionSidebar.filter")} side="bottom">
+          <Button
+            variant="ghost"
+            aria-label={t("sidebar.sessionSidebar.filter")}
+            aria-pressed={filterOpen}
+            onClick={toggleFilter}
+            className="size-8 shrink-0 justify-center px-0 text-muted-foreground hover:bg-accent hover:text-foreground aria-pressed:bg-accent aria-pressed:text-foreground"
+          >
+            <Search className="size-4" />
+          </Button>
+        </Hint>
+        <Hint label={t("sidebar.sessionSidebar.collapse")} side="bottom">
+          <Button
+            variant="ghost"
+            aria-label={t("sidebar.sessionSidebar.collapse")}
+            onClick={onCollapse}
+            className="size-8 shrink-0 justify-center px-0 text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <PanelLeftClose
+              className="size-4"
+              style={{ viewTransitionName: SIDEBAR_MORPH.toggle }}
+            />
+          </Button>
+        </Hint>
       </div>
       {/* Revealed rather than resident: 36px is half a session card off a list
           that already scrolls, and unlike the dock's file tree — a panel opened

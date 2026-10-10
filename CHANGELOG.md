@@ -51,6 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Every button's hover hint is the app's own tooltip.** The tab bar,
+  sidebar, footer readouts, shortcut settings and pull request actions showed
+  the browser's plain title box, which ignored the theme and took a second to
+  appear; they now match the rest of the window.
+
 - **macOS is no longer experimental.** The Homebrew cask has held up in real
   use on Apple Silicon and Intel, so the README, the install guide, the site
   and the cask list macOS beside Linux and Windows as supported.

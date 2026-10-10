@@ -331,19 +331,22 @@ test("a usage event for the active session repaints the footer, not the sidebar"
   await budget.act(() => bus.emit(USAGE_EVENT, usageEvent("s1")))
   // Contract changed: readings can be placed independently on either side.
   // Only the model/context readers repaint; actions, time and cards stay absent.
+  // Contract changed: the model readout carries its full name in a Hint, so its
+  // tooltip parts repaint with it.
   expect(budget.take()).toEqual({
     SessionContext: 1,
     SessionModel: 1,
+    Hint: 1,
     ProviderIcon: 1,
     BrandIcon: 1,
     ContextReadout: 1,
     ContextRing: 1,
     FooterReadout: 1,
-    Tooltip: 1,
-    TooltipRoot: 1,
-    TooltipTrigger: 2,
-    TooltipContent: 1,
-    TooltipPortal: 1,
+    Tooltip: 2,
+    TooltipRoot: 2,
+    TooltipTrigger: 4,
+    TooltipContent: 2,
+    TooltipPortal: 2,
   })
   await budget.unmount()
 })

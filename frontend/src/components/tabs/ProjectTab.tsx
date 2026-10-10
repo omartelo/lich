@@ -67,10 +67,7 @@ export function ProjectTab({ project, sessionIds, to, active, onClose }: Project
             }}
           />
         </TooltipTrigger>
-        <TooltipContent
-          side="bottom"
-          className="max-w-xs border border-border bg-card text-foreground"
-        >
+        <TooltipContent side="bottom" variant="card">
           <div className="flex flex-col gap-1.5">
             <span className="font-medium">{project.name}</span>
             <span className="break-all font-mono text-muted-foreground">{project.path}</span>

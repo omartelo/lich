@@ -10,6 +10,7 @@ import { DEFAULT_FOOTER_LAYOUT, resolveFooterLayout, type FooterLayout } from "@
 import { FooterSession } from "./FooterSession"
 import { FooterCheckout } from "./FooterCheckout"
 import { FooterSettings } from "./settings/FooterSettings"
+import { hoverHint } from "@/test/hint"
 
 const state = vi.hoisted(() => ({
   usage: null as SessionUsage | null,
@@ -229,7 +230,8 @@ test.each(["path", "branch"] as const)(
       ),
     )
     expect(container.querySelector("button, [aria-haspopup]")).toBeNull()
-    expect(container.querySelector("[title]")?.getAttribute("title")).toBe(
+    // Contract changed: the full value rides a Hint instead of a native title.
+    expect(await hoverHint(container.firstElementChild as Element)).toBe(
       display === "path" ? "/project/.worktrees/a-long-worktree" : "feature/footer",
     )
   },
@@ -249,9 +251,8 @@ test("a hosted shell says the cwd is unknown instead of naming the checkout", as
   expect(container.textContent).toBe("cwd unknown · inside tmux")
   // The path must not survive as the tooltip either: it is a directory the user
   // is not standing in, and a hover would hand it over as though it were.
-  expect(container.querySelector("[title]")?.getAttribute("title")).toBe(
-    "cwd unknown · inside tmux",
-  )
+  // Contract changed: the hover text rides a Hint instead of a native title.
+  expect(await hoverHint(container.firstElementChild as Element)).toBe("cwd unknown · inside tmux")
 })
 
 test("the branch readout keeps speaking for the checkout while the shell is hosted", async () => {

@@ -11,6 +11,7 @@ import { createElement } from "react"
 import { beforeEach, expect, it, vi } from "vitest"
 import { clearRemoteCache } from "@/lib/remote-cache"
 import { Pulls } from "./Pulls"
+import { hoverHint } from "@/test/hint"
 
 const PROJECT_ID = "p1"
 const PROJECT_PATH = "/repo"
@@ -113,7 +114,10 @@ it("offers nothing to hand over without a session on the checkout", async () => 
   await mounted.act(() => {})
 
   expect(agentButton().disabled).toBe(true)
-  expect(agentButton().parentElement?.title).toBe("No session on this checkout to hand it to")
+  // Contract changed: the reason rides a Hint on the wrapper instead of its title.
+  expect(await hoverHint(agentButton().parentElement as Element)).toBe(
+    "No session on this checkout to hand it to",
+  )
   await mounted.unmount()
 })
 
@@ -123,6 +127,7 @@ it("offers nothing to hand over on a detached HEAD", async () => {
   await mounted.act(() => {})
 
   expect(agentButton().disabled).toBe(true)
-  expect(agentButton().parentElement?.title).toBe("HEAD is not on a branch")
+  // Contract changed: the reason rides a Hint on the wrapper instead of its title.
+  expect(await hoverHint(agentButton().parentElement as Element)).toBe("HEAD is not on a branch")
   await mounted.unmount()
 })

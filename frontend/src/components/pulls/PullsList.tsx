@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { usePanelVisible } from "@/lib/use-panel-visible"
 import { cn } from "@/lib/utils"
+import { Hint } from "@/components/common/Hint"
 
 // The dot's colour is the only chroma in a row, so it has to mean something: a
 // check that failed, one still running, one that passed. A pull request with no
@@ -146,14 +147,15 @@ export function PullsList({
         <div className="flex items-center gap-1.5">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-              placeholder={t("pulls.pullsList.filterPlaceholder")}
-              aria-label={t("pulls.pullsList.filterLabel")}
-              title={qualifierHelp()}
-              className="h-8 pl-8 text-sm"
-            />
+            <Hint label={qualifierHelp()}>
+              <Input
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder={t("pulls.pullsList.filterPlaceholder")}
+                aria-label={t("pulls.pullsList.filterLabel")}
+                className="h-8 pl-8 text-sm"
+              />
+            </Hint>
           </div>
           <IconAction label={t("pulls.pullsList.hide")} onClick={toggle}>
             <PanelLeftClose className="size-3.5" />
@@ -194,12 +196,11 @@ export function PullsList({
         <span className="uppercase tracking-wide">
           {t(`pulls.pullsList.state.${parsed.state}`)}
           {list.length >= PULLS_PAGE_LIMIT && (
-            <span
-              className="ml-1.5 normal-case"
-              title={t("pulls.pullsList.cappedHint", { limit: PULLS_PAGE_LIMIT })}
-            >
-              {t("pulls.pullsList.capped", { limit: PULLS_PAGE_LIMIT })}
-            </span>
+            <Hint label={t("pulls.pullsList.cappedHint", { limit: PULLS_PAGE_LIMIT })}>
+              <span className="ml-1.5 normal-case">
+                {t("pulls.pullsList.capped", { limit: PULLS_PAGE_LIMIT })}
+              </span>
+            </Hint>
           )}
         </span>
         <DropdownMenu>

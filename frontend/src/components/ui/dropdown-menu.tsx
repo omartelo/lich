@@ -14,9 +14,12 @@ function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
   return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />
 }
 
-function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {
-  return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />
-}
+// forwardRef for the reason ui/tooltip.tsx gives: a Hint renders this trigger
+// through its own `render`, and needs the DOM node to anchor on.
+const DropdownMenuTrigger = React.forwardRef<HTMLButtonElement, MenuPrimitive.Trigger.Props>(
+  (props, ref) => <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" ref={ref} {...props} />,
+)
+DropdownMenuTrigger.displayName = "DropdownMenuTrigger"
 
 function DropdownMenuContent({
   align = "start",

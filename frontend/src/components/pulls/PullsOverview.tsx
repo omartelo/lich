@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { commentFieldClass } from "./CommentBox"
+import { Hint } from "@/components/common/Hint"
 
 // What the tab and the reviewer row under it both read. Split because only the
 // description is written here, and only what is written needs a project to be
@@ -273,12 +274,11 @@ function ReviewerChip({ reviewer }: { reviewer: PullRequestReviewer }) {
   // belongs to the person who left it — so its own glyph hides nothing.
   const Icon = reviewer.isTeam ? Users : verdict.icon
   return (
-    <span
-      className={cn("flex items-center gap-1 font-medium", verdict.tone)}
-      title={t(verdict.label)}
-    >
-      <Icon className="size-3.5" />
-      {reviewer.login}
-    </span>
+    <Hint label={t(verdict.label)}>
+      <span className={cn("flex items-center gap-1 font-medium", verdict.tone)}>
+        <Icon className="size-3.5" />
+        {reviewer.login}
+      </span>
+    </Hint>
   )
 }

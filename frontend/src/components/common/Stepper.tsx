@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { Button } from "@/components/ui/button"
+import { Hint } from "@/components/common/Hint"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useT } from "@/lib/i18n/i18n"
 
@@ -45,15 +46,17 @@ export function Stepper({
   const custom = value !== fallback
   return (
     <div className="flex items-center gap-2">
-      <Button
-        variant="outline"
-        size="icon"
-        aria-label={decrementLabel}
-        disabled={value <= min}
-        onClick={() => onChange(value - step)}
-      >
-        {decrementIcon}
-      </Button>
+      <Hint label={decrementLabel}>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label={decrementLabel}
+          disabled={value <= min}
+          onClick={() => onChange(value - step)}
+        >
+          {decrementIcon}
+        </Button>
+      </Hint>
       <Tooltip>
         <TooltipTrigger
           render={
@@ -75,15 +78,17 @@ export function Stepper({
         </TooltipTrigger>
         <TooltipContent>{custom ? resetLabel : t("common.stepper.default")}</TooltipContent>
       </Tooltip>
-      <Button
-        variant="outline"
-        size="icon"
-        aria-label={incrementLabel}
-        disabled={value >= max}
-        onClick={() => onChange(value + step)}
-      >
-        {incrementIcon}
-      </Button>
+      <Hint label={incrementLabel}>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label={incrementLabel}
+          disabled={value >= max}
+          onClick={() => onChange(value + step)}
+        >
+          {incrementIcon}
+        </Button>
+      </Hint>
     </div>
   )
 }

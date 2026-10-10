@@ -3,6 +3,7 @@ import { formatModel } from "@/lib/model-name"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useSessionUsage } from "@/lib/session/use-session-usage"
 import type { SessionKind } from "@/lib/session/sessions"
+import { Hint } from "@/components/common/Hint"
 
 interface SessionModelProps {
   sessionId: string
@@ -26,15 +27,14 @@ export function SessionModel({ sessionId, kind }: SessionModelProps) {
     return null
   }
   return (
-    <span
-      className="flex min-w-0 max-w-64 items-center gap-1.5 px-2"
-      title={`${usage.model}${usage.effort ? ` · ${usage.effort}` : ""}`}
-    >
-      <ProviderIcon kind={provider} size={14} />
-      <span className="truncate">
-        {formatModel(usage.model)}
-        {usage.effort ? ` · ${usage.effort}` : ""}
+    <Hint label={`${usage.model}${usage.effort ? ` · ${usage.effort}` : ""}`}>
+      <span className="flex min-w-0 max-w-64 items-center gap-1.5 px-2">
+        <ProviderIcon kind={provider} size={14} />
+        <span className="truncate">
+          {formatModel(usage.model)}
+          {usage.effort ? ` · ${usage.effort}` : ""}
+        </span>
       </span>
-    </span>
+    </Hint>
   )
 }

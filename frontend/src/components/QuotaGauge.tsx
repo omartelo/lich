@@ -94,7 +94,7 @@ function AheadMark() {
           aria-label={t("shell.quotaGauge.aheadOfPace")}
         />
       </TooltipTrigger>
-      <TooltipContent side="top" className="border border-border bg-card text-foreground">
+      <TooltipContent side="top" variant="card">
         {t("shell.quotaGauge.aheadTooltip")}
       </TooltipContent>
     </Tooltip>
@@ -113,7 +113,7 @@ function LockedReading({ reason }: { reason: string }) {
       <TooltipTrigger render={<span className="cursor-help underline decoration-dotted" />}>
         {t("shell.quotaGauge.locked")}
       </TooltipTrigger>
-      <TooltipContent side="top" className="border border-border bg-card text-foreground">
+      <TooltipContent side="top" variant="card">
         {reason}
       </TooltipContent>
     </Tooltip>
