@@ -48,7 +48,7 @@ func filedEvent(t *testing.T, events *fakeEvents) FiledEvent {
 func TestOpenFilesTheSessionWithItsInsert(t *testing.T) {
 	svc, sessions, _, _, events := newService(t)
 
-	opened, err := svc.Open("s1", "", "", "", "", "", "", " Apps ", false)
+	opened, err := svc.Open(OpenOptions{From: "s1", Folder: " Apps "})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestOpenFilesTheSessionWithItsInsert(t *testing.T) {
 func TestOpenWithoutAFolderFilesNothing(t *testing.T) {
 	svc, sessions, _, _, _ := newService(t)
 
-	if _, err := svc.Open("s1", "", "", "", "", "", "", "", false); err != nil {
+	if _, err := svc.Open(OpenOptions{From: "s1"}); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if len(sessions.rows) != 1 || sessions.rows[0].folder != "" || len(sessions.folders) != 0 {

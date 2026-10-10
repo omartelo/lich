@@ -188,9 +188,13 @@ func New(sessions Sessions, worktrees Worktrees, term Terminal, events Events) *
 	return &Service{sessions: sessions, worktrees: worktrees, term: term, events: events}
 }
 
-// Open creates a session and starts its PTY.
+// OpenOptions is one Open call. It travels as a single JSON object rather than
+// as positional arguments because a package manager replaces the lich binary
+// under a running backend: a newer CLI's option the backend does not know is
+// dropped, and one an older CLI does not send is its zero value, where a
+// positional list refuses both on its count.
 //
-// fromID is the session the caller runs in, empty for the command line run
+// From is the session the caller runs in, empty for the command line run
 // outside one. It decides two defaults: the project the session lands in and the
 // provider it runs, both taken from the caller unless named. A caller with no
 // session of its own must name the project — there is nothing to inherit. It is
@@ -198,31 +202,43 @@ func New(sessions Sessions, worktrees Worktrees, term Terminal, events Events) *
 // request that created it: the card says where it came from for as long as it
 // exists.
 //
-// projectName is a project already on screen, by name, or a directory path — and
+// Project is a project already on screen, by name, or a directory path — and
 // a path is the only way to reach a project the window is not holding, which is
 // what opening one from the command line means. See ensureProject.
 //
-// worktree, when given, is the branch name of a new git worktree created off
-// base (the project's current branch when base is empty); the session is rooted
+// Worktree, when given, is the branch name of a new git worktree created off
+// Base (the project's current branch when Base is empty); the session is rooted
 // there, labelled after it, and runs the project's worktree setup script before
-// its provider, exactly as the window's own worktree flow does. A base without a
-// worktree has nothing to branch, and is refused rather than ignored.
+// its provider, exactly as the window's own worktree flow does. A Base without a
+// Worktree has nothing to branch, and is refused rather than ignored.
 //
-// model, when given, is the model the provider is spawned on, in that provider's
+// Model, when given, is the model the provider is spawned on, in that provider's
 // own spelling. It is recorded on the row so every later spawn repeats it.
-// effort, when given, is the reasoning effort, passed and recorded the same way.
-// ultracode turns Claude Code's ultracode on, at whatever effort the session
+// Effort, when given, is the reasoning effort, passed and recorded the same way.
+// Ultracode turns Claude Code's ultracode on, at whatever effort the session
 // runs; it is recorded the same way, and refused for every other provider.
 //
-// folder, when given, is the folder the session is filed under from its first
+// Folder, when given, is the folder the session is filed under from its first
 // frame: it is written with the row, so the card arrives in the folder's block
 // rather than among its checkout's cards and then jumps.
-func (s *Service) Open(
-	fromID, projectName, kind, worktree, base, model, effort, folder string, ultracode bool,
-) (Session, error) {
+type OpenOptions struct {
+	From      string `json:"from"`
+	Project   string `json:"project"`
+	Kind      string `json:"kind"`
+	Worktree  string `json:"worktree"`
+	Base      string `json:"base"`
+	Model     string `json:"model"`
+	Effort    string `json:"effort"`
+	Folder    string `json:"folder"`
+	Ultracode bool   `json:"ultracode"`
+}
+
+// Open creates a session and starts its PTY.
+func (s *Service) Open(opts OpenOptions) (Session, error) {
 	return s.openSession(request{
-		fromID: fromID, projectName: projectName, kind: kind, worktree: worktree, base: base,
-		model: model, effort: effort, folder: folder, ultracode: ultracode,
+		fromID: opts.From, projectName: opts.Project, kind: opts.Kind, worktree: opts.Worktree,
+		base: opts.Base, model: opts.Model, effort: opts.Effort, folder: opts.Folder,
+		ultracode: opts.Ultracode,
 	})
 }
 

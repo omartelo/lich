@@ -542,11 +542,11 @@ var mcpTools = append([]mcpTool{
 			}
 			method := sendMethod(args.flag("private"))
 			var opened spawn.Session
-			call := []any{
-				c.sessionID(), args.text("project"), args.text("kind"),
-				args.text("worktree"), args.text("base"), args.text("model"),
-				args.text("effort"), args.text("folder"), args.flag("ultracode"),
-			}
+			call := []any{spawn.OpenOptions{
+				From: c.sessionID(), Project: args.text("project"), Kind: args.text("kind"),
+				Worktree: args.text("worktree"), Base: args.text("base"), Model: args.text("model"),
+				Effort: args.text("effort"), Folder: args.text("folder"), Ultracode: args.flag("ultracode"),
+			}}
 			if err := c.call(ctx, "spawn.Open", call, openCall, &opened); err != nil {
 				return "", err
 			}

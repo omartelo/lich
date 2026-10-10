@@ -68,7 +68,7 @@ func TestWorktreesRefusesAProjectItCannotResolve(t *testing.T) {
 func TestOpenUsesACheckoutThatIsAlreadyThere(t *testing.T) {
 	svc, sessions, worktrees, term, _ := closer(t)
 
-	opened, err := svc.Open("s1", "", "", "shared", "", "", "", "", false)
+	opened, err := svc.Open(OpenOptions{From: "s1", Worktree: "shared"})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestOpenStoresTheProjectsOwnCheckoutAsTheRoot(t *testing.T) {
 	svc, sessions, worktrees, term, _ := closer(t)
 	worktrees.checkouts = append(worktrees.checkouts, project.Worktree{Name: "main", Path: "/src/lich"})
 
-	opened, err := svc.Open("s1", "", "", "main", "", "", "", "", false)
+	opened, err := svc.Open(OpenOptions{From: "s1", Worktree: "main"})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestOpenStoresTheProjectsOwnCheckoutAsTheRoot(t *testing.T) {
 func TestOpenFallsBackWhenTheBranchNameIsAlreadyACard(t *testing.T) {
 	svc, _, _, _, _ := closer(t)
 
-	opened, err := svc.Open("s1", "", "", "alone", "", "", "", "", false)
+	opened, err := svc.Open(OpenOptions{From: "s1", Worktree: "alone"})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

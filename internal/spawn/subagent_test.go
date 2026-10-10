@@ -148,7 +148,7 @@ func TestOpenSubagentMarksTheRow(t *testing.T) {
 	if sessions.subagents[opened.ID] != 1 {
 		t.Errorf("subagents = %v, want the worker one level deep", sessions.subagents)
 	}
-	if plain, _ := svc.Open("s1", "", "", "", "", "", "", "", false); sessions.subagents[plain.ID] != 0 {
+	if plain, _ := svc.Open(OpenOptions{From: "s1"}); sessions.subagents[plain.ID] != 0 {
 		t.Error("a plain Open was marked as a subagent")
 	}
 }

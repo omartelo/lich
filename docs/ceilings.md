@@ -1060,14 +1060,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   without systemd logs one warning per burst of work and sleeps, and a desktop that ignores logind idle
   inhibitors sleeps silently. The hold was measured on Linux only; on Windows and macOS CI proves the request
   is registered (`powercfg /requests`, `pmset -g assertions`), not that the machine stays up.
-- **A `lich` upgraded under a running lich cannot open sessions until the window restarts**
-  (`internal/rpc/rpc.go`, `spawn.Open`): the RPC matches arguments by position and count, and a package manager
-  replaces the binary without restarting the backend it is serving. `spawn.Open` grows an argument with each
-  option `lich open` gains (`--effort`, `--folder`, `--ultracode`), so the new CLI, and the `lich mcp` of every session opened
-  after the upgrade, is refused with "want 8 arguments, got 9" until lich is restarted. Every other call whose
-  argument list changes breaks the same way; one that only grows a result field does not, and a new method
-  breaks only itself: a `lich` newer than the backend has `relay.SendPrivate` refused, so `--private` sends fail
-  and every other send works.
+- **A `lich` upgraded under a running lich is refused by any call whose argument list changed**
+  (`internal/rpc/rpc.go`): the RPC matches arguments by position and count, and a package manager replaces the
+  binary without restarting the backend it is serving, so the new CLI, and the `lich mcp` of every session
+  opened after the upgrade, speaks to an older backend until lich is restarted. `spawn.Open` is out of this
+  trap: it takes one options object (`spawn.OpenOptions`), so an option the backend does not know yet is
+  dropped and one an older client does not send is its zero value. That holds between releases that both
+  carry it; the release that moved it to the object is refused with "want 1 arguments, got 9" (and the other
+  way round) by a lich from before it, once. Every other call is still positional and breaks the same way when
+  its argument list changes, `spawn.OpenSubagent` and `relay.Send` among them; one that only grows a result
+  field does not, and a new method breaks only itself: a `lich` newer than the backend has
+  `relay.SendPrivate` refused, so `--private` sends fail and every other send works.
 - **A reasoning effort reaches five providers, and Cursor only through its model name**
   (`internal/terminal/command.go`, `effortFlags`): `lich open --effort` and `open_session`'s `effort` are refused
   for opencode, whose `--variant` lives on `run` only (1.18.31), and for Crush, which has no such option

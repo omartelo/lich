@@ -100,6 +100,24 @@ func (f *fakeLich) only(t *testing.T) recorded {
 	return f.calls[0]
 }
 
+// openOptionsOf reads a spawn.Open call back the way the backend decodes it:
+// one options object, the only argument.
+func openOptionsOf(t *testing.T, call recorded) spawn.OpenOptions {
+	t.Helper()
+	if len(call.args) != 1 {
+		t.Fatalf("args = %v, want one options object", call.args)
+	}
+	raw, err := json.Marshal(call.args[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var opts spawn.OpenOptions
+	if err := json.Unmarshal(raw, &opts); err != nil {
+		t.Fatal(err)
+	}
+	return opts
+}
+
 // testVersion is what the build under test calls itself. Pinned as a literal
 // rather than read from anywhere, so a command that prints the wrong string
 // fails here.
@@ -830,14 +848,9 @@ func TestOpenNamesBothWaysToAddressTheNewSession(t *testing.T) {
 	if call.method != "spawn.Open" {
 		t.Errorf("method = %q", call.method)
 	}
-	want := []any{"s1", "", "", "auth-fix", "", "", "", "", false}
-	if len(call.args) != len(want) {
-		t.Fatalf("args = %v, want %v", call.args, want)
-	}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	want := spawn.OpenOptions{From: "s1", Worktree: "auth-fix"}
+	if got := openOptionsOf(t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 	// The label and the roster name both address the session (docs/cli.md), and
 	// the caller's next move is to address it — printing one of them would send
@@ -861,14 +874,12 @@ func TestOpenPassesEveryFlagThrough(t *testing.T) {
 	}
 
 	call := f.only(t)
-	want := []any{"s1", "revu", "codex", "hotfix", "origin/main", "gpt-5.2", "xhigh", "Apps", true}
-	if len(call.args) != len(want) {
-		t.Fatalf("args = %v, want %v", call.args, want)
+	want := spawn.OpenOptions{
+		From: "s1", Project: "revu", Kind: "codex", Worktree: "hotfix", Base: "origin/main",
+		Model: "gpt-5.2", Effort: "xhigh", Folder: "Apps", Ultracode: true,
 	}
-	for i := range want {
-		if call.args[i] != want[i] {
-			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
-		}
+	if got := openOptionsOf(t, call); got != want {
+		t.Errorf("options = %+v, want %+v", got, want)
 	}
 }
 
