@@ -378,6 +378,8 @@ export const settings = {
     unsupported: "v{version}，此 lich 不支持",
     install: "安装",
     updateTo: "更新到 v{version}",
+    updateAll: "全部更新",
+    updatingAll: "正在更新所有 CLI 中的 lich 插件…",
     installVersion: "安装 v{version}",
     codexHint: "Codex：在 Codex 会话中运行 /hooks 以信任该插件的钩子。",
     crushHint:
