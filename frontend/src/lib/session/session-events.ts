@@ -137,6 +137,14 @@ export const CLOSED_EVENT = "session-closed"
 // the way a click on it would (see relay.FocusEventName). Payload: { id }.
 export const FOCUS_EVENT = "session-focus"
 
+// launchFocus is the card a window lich opened for `lich focus` starts on. It
+// rides the page URL as ?focus=<id> because the focus event went out before the
+// page was there to hear it (restart.Window.ShowSession). Null when the URL
+// names none.
+export function launchFocus(href: string): string | null {
+  return new URL(href).searchParams.get("focus")
+}
+
 // Global event the backend emits when sessions were filed under a folder, or
 // taken out of one, outside the window: an agent running `lich file` or
 // `lich rename-folder`, or their MCP tools (see spawn.FiledEventName). Payload:

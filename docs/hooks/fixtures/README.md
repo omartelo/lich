@@ -5,7 +5,7 @@ The contracts in the parent directory are prose; these are the same contracts as
 what lich does with it.
 
 They exist because the two sides of every hook live in different repositories:
-lich owns the server side, the plugin ([`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin))
+lich owns the server side, the plugin ([`lichdotdev/lich-plugin`](https://github.com/lichdotdev/lich-plugin))
 owns the scripts that build the payloads. A field renamed on one side used to
 break the other silently — nothing in either repo's tests would go red. Both
 sides asserting against the same lines turns that into a failing test on

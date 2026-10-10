@@ -45,14 +45,18 @@ func Args(url, dataDir, class string, extra []string) []string {
 // crash one second in reached Wait at nineteen and was read as a closed window.
 const startupGrace = 30 * time.Second
 
-// Run opens the window and blocks until the user closes it — the window
-// process exiting is the app lifecycle. ErrNoShell comes back untouched,
+// closeRequest is what lich writes on the window's stdin to close it; any byte
+// does (shell/src/main.rs, watch_stdin).
+var closeRequest = []byte{'q'}
+
+// Run opens the window and blocks until it closes. The backend outlives it: the
+// caller decides what the end means (EndingOf). ErrNoShell comes back untouched,
 // because the answer to an install with no window is not this function's to
 // give. Extra args pass through to Chromium (e.g. --ozone-platform=wayland).
-// onStart, when non-nil, receives the window process once launched, so the
-// caller can close the window itself (the restart flow terminates it to
-// relaunch lich); it is called before the blocking wait.
-func Run(url, dataDir, class string, extra []string, onStart func(*os.Process)) error {
+// onStart, when non-nil, receives a func that closes the window once it is
+// launched, before the blocking wait: lich's own close, for quitting and
+// restarting, which the page is not asked about (a close the user makes is).
+func Run(url, dataDir, class string, extra []string, onStart func(close func() error)) error {
 	start := func(window Result) error {
 		// Here and not in launch: Focus resolves the same directory against a
 		// lich that has already done this, and renaming a profile a running
@@ -109,7 +113,7 @@ func fallsBack(step string, err error, elapsed time.Duration) bool {
 // launch starts the resolved window on the profile and waits for it to exit. A
 // window that exits with an error comes back as an ExitError, with the end of
 // what it wrote to stderr.
-func launch(window Result, url, dataDir, class string, extra []string, onStart func(*os.Process)) error {
+func launch(window Result, url, dataDir, class string, extra []string, onStart func(close func() error)) error {
 	dataDir = window.ProfileDir(dataDir)
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return fmt.Errorf("chromium profile dir: %w", err)
@@ -124,7 +128,8 @@ func launch(window Result, url, dataDir, class string, extra []string, onStart f
 	// crash) closes the write end with it, and the window goes. Left running,
 	// it was the orphan the next launch's window was forwarded to by CEF's
 	// process singleton. Only the write end is held here; Go marks both ends
-	// close-on-exec, so no session inherits it.
+	// close-on-exec, so no session inherits it. The same pipe carries lich's
+	// own request to close the window (closeRequest), the same on every OS.
 	r, w, err := os.Pipe()
 	if err != nil {
 		return fmt.Errorf("launch %s: %w", window.Path, err)
@@ -136,7 +141,10 @@ func launch(window Result, url, dataDir, class string, extra []string, onStart f
 		return fmt.Errorf("launch %s: %w", window.Path, err)
 	}
 	if onStart != nil {
-		onStart(cmd.Process)
+		onStart(func() error {
+			_, err := w.Write(closeRequest)
+			return err
+		})
 	}
 	return tail.exit(cmd.Wait())
 }

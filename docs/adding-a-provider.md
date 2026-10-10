@@ -107,7 +107,7 @@ somebody else's flag.
 
 ## The plugin
 
-The companion repository (`omartelo/lich-plugin`) owns the client side of every
+The companion repository (`lichdotdev/lich-plugin`) owns the client side of every
 [hook contract](hooks/README.md), and lich cannot see it break. Move the
 contract first — the tables in `docs/hooks/` — then both sides.
 

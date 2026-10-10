@@ -1,8 +1,8 @@
 // The shell is a browser only by construction, and its reflexes leak into an
 // --app window that has no tabs, no address bar and no way back: the accelerators
-// still fire, a dropped file still navigates. One of each is fatal — Ctrl+W
-// closes the window, which quits lich, and a file drop replaces the app with the
-// file, with no address bar to return from.
+// still fire, a dropped file still navigates. One of each costs the user the
+// window: Ctrl+W closes it, leaving lich running with nothing on screen, and a
+// file drop replaces the app with the file, with no address bar to return from.
 //
 // They only reach the browser when nothing on the page claims them first, which
 // is why they misfire everywhere except a focused terminal — xterm already

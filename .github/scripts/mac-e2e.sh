@@ -6,8 +6,10 @@
 # which is what the Dock reads: a second entry is a subprocess with an
 # NSApplication of its own, and a Dock tile of its own with it, four of them
 # before kurogane#14), a second launch is forwarded to the window without
-# opening a second browser in it (#470), the window closes on SIGTERM, which
-# is what the restart flow sends, and lich exits with it. Its config lives under a HOME of its own.
+# opening a second browser in it (#470), the window closes on SIGTERM, a close
+# request like the user's, lich keeps running without it,
+# a launch opens a new window on it, and `lich quit` ends it. Its config lives
+# under a HOME of its own.
 # What a failure leaves behind goes to $RUNNER_TEMP/diag for the artifact the
 # workflow uploads.
 #
@@ -72,8 +74,9 @@ sleep 10
 browser=$(pgrep -x lich-shell || true)
 test -n "$browser" || fail "the window died"
 
-# A second launch: lich finds the first on its port and hands the window its
-# URL, which CEF forwards to the running browser. The forward used to open a
+# A second launch: lich finds the first on its port and asks it for its window;
+# with one open, that lich hands it its URL again, which CEF forwards to the
+# running browser. The forward used to open a
 # second browser in it, a page more on CDP and a process that outlived the
 # window's close (#470); the window now raises itself and the count stays one.
 "$app/Contents/MacOS/lich" || fail "the duplicate launch exited $?"
@@ -86,11 +89,29 @@ lsappinfo list > "$RUNNER_TEMP/apps.txt"
 apps=$(grep -c 'bundle path=.*Lich.app' "$RUNNER_TEMP/apps.txt" || true)
 [ "$apps" = 1 ] || { grep -B1 -A3 'Lich.app' "$RUNNER_TEMP/apps.txt"; fail "macOS counts $apps applications in Lich.app, expected the window alone"; }
 
+# Closing the window leaves lich running with its sessions; with none running
+# it would quit, so one is opened first, through the CLI as an agent would.
+mkdir -p "$RUNNER_TEMP/proj"
+"$app/Contents/MacOS/lich" open --project "$RUNNER_TEMP/proj" --kind shell || fail "lich open exited $?"
 kill -TERM "$browser"
-for _ in $(seq 1 15); do sleep 1; pgrep -x lich > /dev/null || break; done
-if pgrep -x lich > /dev/null; then
-  fail "lich is still running after its window closed"
-fi
-grep -q 'window closed, exiting' "$log" || fail "lich did not log the window closing"
+for _ in $(seq 1 15); do sleep 1; pgrep -x lich-shell > /dev/null || break; done
+pgrep -x lich-shell > /dev/null && fail "the window outlived its SIGTERM"
+sleep 2
+pgrep -x lich > /dev/null || fail "lich exited with its window"
+grep -q 'window closed, lich keeps running' "$log" || fail "lich did not log the window closing"
+
+# Launched again, lich asks the running one for its window, and that backend
+# opens it: the same extra switches, so the page is on CDP again.
+"$app/Contents/MacOS/lich" || fail "the reopening launch exited $?"
+for _ in $(seq 1 30); do
+  sleep 1
+  curl -sf http://127.0.0.1:9334/json > "$pages" 2>/dev/null && grep -q '"title": *"lich"' "$pages" && break
+done
+grep -q '"title": *"lich"' "$pages" || fail "a second launch did not reopen the window on the running lich"
+
+"$app/Contents/MacOS/lich" quit || fail "lich quit exited $?"
+for _ in $(seq 1 10); do pgrep -x lich > /dev/null || break; sleep 1; done
+pgrep -x lich > /dev/null && fail "lich is still running after lich quit"
+pgrep -x lich-shell > /dev/null && fail "the window outlived lich quit"
 cat "$pages"
 grep 'Lich.app' "$RUNNER_TEMP/apps.txt"

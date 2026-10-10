@@ -30,6 +30,7 @@ export const hotkeys = {
     settings: "Ajustes",
     pulls: "Pull requests",
     shortcuts: "Atajos de teclado",
+    quit: "Salir de lich",
   },
   terminalCost: {
     a: "Ctrl+{key} es el movimiento del shell al inicio de la línea; las sesiones dejarán de recibirlo.",

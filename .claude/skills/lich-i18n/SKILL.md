@@ -26,7 +26,7 @@ Classify every string first. Who reads it?
 | The user, on a lich screen | `locales/<lang>/<namespace>.ts`, read with `t()` / `useT()` | interface |
 | An agent, composed in Go (relay, briefing, notices, MCP/CLI output) | a field of `prompt.Catalog` (`internal/prompt/catalog.go`) | prompt |
 | An agent, typed by the frontend into a PTY | `locales/<lang>/prompts.ts`, read with `prompt()` from `lib/i18n/prompt.ts` | prompt |
-| An agent, added by a lich-plugin mod | `hooks/prompt-text.js` in `omartelo/lich-plugin` | prompt |
+| An agent, added by a lich-plugin mod | `hooks/prompt-text.js` in `lichdotdev/lich-plugin` | prompt |
 | Nobody localizes it | error text through `errorText()`, CHANGELOG, MCP tool descriptions, CLI `--help`, identifiers | none |
 
 Then, in the same PR:
@@ -85,7 +85,7 @@ language at the **end** of every list so parallel additions merge as a union.
 - `CHANGELOG.md` `[Unreleased]` › Added.
 - README / README.zh-CN only if they enumerate languages.
 
-**Companion repo** `omartelo/lich-plugin` (separate PR, after lich's)
+**Companion repo** `lichdotdev/lich-plugin` (separate PR, after lich's)
 - `hooks/prompt-text.js`: a catalog object registered under the exact tag.
 - `tests/prompt-text.test.mjs`: parity, literals, one render per hook for the new tag.
 - The mod engine never follows `$` across an import: hooks read `$.env.get("LICH_PROMPT_LANG")` at the

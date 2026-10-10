@@ -137,7 +137,7 @@ tasks:
       - cmd: |
           set -e
           # Ctrl+C reaches the whole process group and takes Vite with it;
-          # closing the window instead leaves it running (Task's shell has no
+          # closing the window instead leaves it, and the dev backend, running (Task's shell has no
           # kill and its `$!` is not a pid). The next run's Vite then dies on
           # strictPort in the background, unseen, while the window loads the
           # survivor, which serves whatever checkout it was started from. So

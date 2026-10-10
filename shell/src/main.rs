@@ -10,10 +10,12 @@
 // startup grace, which lich reads as a window that could not open.
 #![windows_subsystem = "windows"]
 use kurogane::{
-    App, ChromeCommand, CommandDecision, KeyDecision, WindowClosing, WindowOptions, WindowPlacement,
+    App, AppHandle, BrowserId, ChromeCommand, CommandDecision, KeyDecision, UnloadDecision,
+    WindowClosing, WindowOptions, WindowPlacement,
 };
 use std::io::{ErrorKind, Read};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 mod geometry;
 
@@ -224,6 +226,14 @@ fn main() {
             if let Some(path) = &geometry_file {
                 remember_window(path, closing);
             }
+        })
+        .on_before_unload(|unload, app| {
+            let decision =
+                unload_decision(unload.is_reload(), CLOSED_BY_LICH.load(Ordering::Acquire));
+            if decision == UnloadDecision::Stay {
+                announce_close_request(app, unload.browser());
+            }
+            decision
         });
     // Chromium keeps the key for its cookie store in the Keychain, granted to
     // one code identity; an ad-hoc signed binary gets a new one every build,
@@ -279,36 +289,89 @@ fn main() {
             None => app.chromium_flag(name),
         };
     }
+    let instance = app.build().unwrap_or_else(|err| exit_on(&err));
     // Last, after the fork in sandbox_available: that one must be the only
     // thread. Reached only from lich, whose end is what ends this window; a
     // shell launched by hand keeps whatever stdin it was given.
     if launch.exit_on_stdin_eof {
-        std::thread::spawn(|| {
-            if wait_for_eof(std::io::stdin()) {
+        let app = instance.handle().clone();
+        std::thread::spawn(move || {
+            // lich is the one closing it, quitting or restarting, and has
+            // already decided: the page's beforeunload still runs on a forced
+            // close of a Chrome-style browser, and is answered Leave
+            // (unload_decision).
+            if watch_stdin(std::io::stdin(), || {
+                CLOSED_BY_LICH.store(true, Ordering::Release);
+                app.close_all_browsers(true);
+            }) {
                 std::process::exit(0);
             }
         });
     }
-    app.run_or_exit();
+    if let Err(err) = instance.run() {
+        exit_on(&err);
+    }
 }
 
-/// Blocks until stdin ends, and reports whether it really did. lich holds the
-/// write end of the pipe it hands the window for as long as it lives and never
-/// writes to it, so a true here is lich gone and the window it opened goes with
-/// it. What that buys is written where the pipe is made
-/// (internal/chromium/chromium.go, launch).
+/// Reports a window that could not start, with each cause, and exits 1: what
+/// lich reads as a window that failed to open.
+fn exit_on(err: &kurogane::RuntimeError) -> ! {
+    eprintln!("\nApplication failed to start:\n{err}\n");
+    let mut cause = std::error::Error::source(err);
+    while let Some(error) = cause {
+        eprintln!("Caused by: {error}");
+        cause = error.source();
+    }
+    std::process::exit(1);
+}
+
+/// Set once lich has asked, through stdin, for the window to close.
+static CLOSED_BY_LICH: AtomicBool = AtomicBool::new(false);
+
+/// The answer to the page asking to stay, which lich's page does when the window
+/// is closed and lich should ask whether to keep running. A reload leaves: the
+/// page asks to stay for a close, not to refuse Ctrl+R. So does a close lich
+/// asked for itself (watch_stdin), which has nobody left to ask. Anything else
+/// stays, and the page is told (announce_close_request) so it can ask.
+fn unload_decision(reload: bool, closed_by_lich: bool) -> UnloadDecision {
+    if reload || closed_by_lich {
+        UnloadDecision::Leave
+    } else {
+        UnloadDecision::Stay
+    }
+}
+
+/// Tells the page that its window was asked to close and stayed. The page
+/// cannot tell on its own: beforeunload fires for a reload too, and nothing
+/// fires when the unload is refused.
+fn announce_close_request(app: &AppHandle, browser: BrowserId) {
+    if let Some(page) = app.get_browser_handle(browser) {
+        page.execute_javascript(CLOSE_REQUESTED_SCRIPT, "", 0);
+    }
+}
+
+/// The event lich's page listens for (frontend/src/lib/close-request.ts).
+const CLOSE_REQUESTED_SCRIPT: &str = "window.dispatchEvent(new Event('lich-close-requested'))";
+
+/// Watches the pipe lich hands the window and reports whether it ended. lich
+/// holds the write end for as long as it lives, so an end-of-file is lich gone,
+/// and the window it opened goes with it. What that buys is written where the
+/// pipe is made (internal/chromium/chromium.go, launch). Anything lich writes
+/// is a request to close the window, which `close` carries out; lich writes
+/// when it closes the window itself, quitting or restarting, so the close is
+/// the same on every platform and the page is not asked.
 ///
 /// A failed read is not that news and answers false, leaving the window open:
 /// only a real end-of-file says lich died. A signal landing on this thread
 /// mid-read surfaces as Interrupted, which plain Read does not retry, and on
 /// Windows a lich-shell.exe started by hand has no stdin handle to read at all
 /// (#![windows_subsystem = "windows"]), so the very first read fails.
-fn wait_for_eof(mut stdin: impl Read) -> bool {
+fn watch_stdin(mut stdin: impl Read, mut close: impl FnMut()) -> bool {
     let mut byte = [0u8; 1];
     loop {
         match stdin.read(&mut byte) {
             Ok(0) => return true,
-            Ok(_) => {}
+            Ok(_) => close(),
             Err(err) if err.kind() == ErrorKind::Interrupted => {}
             Err(_) => return false,
         }
@@ -547,31 +610,55 @@ mod tests {
         );
     }
 
+    /// Counts the closes watch_stdin asked for, and reports its answer.
+    fn watched(stdin: impl Read) -> (bool, usize) {
+        let mut closes = 0;
+        let ended = watch_stdin(stdin, || closes += 1);
+        (ended, closes)
+    }
+
     #[test]
-    fn returns_once_stdin_ends_whatever_was_written() {
-        assert!(wait_for_eof(std::io::Cursor::new(b"noise")));
-        assert!(wait_for_eof(std::io::empty()));
+    fn returns_once_stdin_ends() {
+        assert_eq!(watched(std::io::empty()), (true, 0));
+    }
+
+    #[test]
+    fn closes_the_window_for_each_write_and_ends_with_stdin() {
+        assert_eq!(watched(std::io::Cursor::new(b"q")), (true, 1));
+        assert_eq!(watched(std::io::Cursor::new(b"qq")), (true, 2));
     }
 
     #[test]
     fn reads_on_past_a_signal() {
-        assert!(wait_for_eof(Reads::new(vec![
-            Err(ErrorKind::Interrupted.into()),
-            Ok(1),
-            Err(ErrorKind::Interrupted.into()),
-            Ok(0),
-        ])));
+        assert_eq!(
+            watched(Reads::new(vec![
+                Err(ErrorKind::Interrupted.into()),
+                Ok(1),
+                Err(ErrorKind::Interrupted.into()),
+                Ok(0),
+            ])),
+            (true, 1)
+        );
     }
 
     #[test]
     fn keeps_the_window_open_when_the_read_itself_fails() {
-        assert!(!wait_for_eof(Reads::new(vec![Err(
-            ErrorKind::BrokenPipe.into()
-        )])));
-        assert!(!wait_for_eof(Reads::new(vec![
-            Ok(1),
-            Err(ErrorKind::Other.into())
-        ])));
+        assert_eq!(
+            watched(Reads::new(vec![Err(ErrorKind::BrokenPipe.into())])),
+            (false, 0)
+        );
+        assert_eq!(
+            watched(Reads::new(vec![Ok(1), Err(ErrorKind::Other.into())])),
+            (false, 1)
+        );
+    }
+
+    #[test]
+    fn a_reload_or_a_close_lich_asked_for_leaves_and_any_other_close_stays() {
+        assert_eq!(unload_decision(true, false), UnloadDecision::Leave);
+        assert_eq!(unload_decision(false, true), UnloadDecision::Leave);
+        assert_eq!(unload_decision(true, true), UnloadDecision::Leave);
+        assert_eq!(unload_decision(false, false), UnloadDecision::Stay);
     }
 
     /// A stdin whose reads are scripted, so the error paths are reachable.

@@ -262,6 +262,27 @@ export const settings = {
     used: "usado",
     resets: "renova",
   },
+  closeSetting: {
+    title: "Ao fechar a janela",
+    searchWords: "sair encerrar segundo plano fechar janela bandeja manter rodando",
+    description:
+      "O que o lich faz com as sessões quando você fecha a janela. Sem nenhuma rodando, fechar a janela encerra o lich.",
+    choice: {
+      ask: {
+        label: "Perguntar",
+        consequence: "O lich pergunta toda vez se continua rodando em segundo plano.",
+      },
+      background: {
+        label: "Manter rodando",
+        consequence:
+          "A janela fecha e as sessões continuam trabalhando; abrir o lich de novo as traz de volta.",
+      },
+      quit: {
+        label: "Encerrar",
+        consequence: "Fechar a janela encerra o lich e todas as sessões nele.",
+      },
+    },
+  },
   restoreSetting: {
     title: "Sessões restauradas",
     searchWords: "retomar conversa começar nova reiniciar perguntar",

@@ -16,7 +16,7 @@ Bugs and ideas are welcome, and so are patches. This file is the short version;
   for first.
 - **A security problem** → not an issue. See [SECURITY.md](SECURITY.md).
 - **The session hooks** (titles, git refresh, resume) ship from
-  [lich-plugin](https://github.com/omartelo/lich-plugin) — report those there.
+  [lich-plugin](https://github.com/lichdotdev/lich-plugin) — report those there.
 
 ## Getting it running
 
@@ -45,8 +45,10 @@ task --list   # everything else
 
 `task dev` gets its own database, port and Chromium profile, so it never
 touches the workspace of a lich you have installed. Stop it with Ctrl+C — that
-takes the Vite server with it; closing the window leaves Vite running, and the
-next `task dev` refuses to start on the port it still holds.
+takes the Vite server and the dev backend with it. Closing the window leaves
+both running, as an installed lich's backend outlives its window: `LICH_DEV=1 go
+run . quit` ends the dev backend, and the next `task dev` refuses to start while
+Vite still holds its port.
 
 The frontend is **pnpm**, not npm — `npm install` errors out.
 

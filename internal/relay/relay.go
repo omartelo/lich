@@ -495,7 +495,7 @@ type Service struct {
 	// worker running, the state a test that does not care is in.
 	workerFinished func(workerID string) error
 	// raiseWindow brings lich's window to the front (SetRaiseWindow).
-	raiseWindow func()
+	raiseWindow func(sessionID string)
 }
 
 // Plugins is what the relay needs to know about the companion plugin

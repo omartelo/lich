@@ -134,6 +134,35 @@ export const shell = {
     rebind: "Reasígnalos en Ajustes › Atajos",
     close: "cerrar",
   },
+  quitDialog: {
+    title: "¿Salir de lich?",
+    description:
+      "Todas las sesiones terminan con él. Cerrar la ventana, en cambio, las mantiene en segundo plano.",
+    working: {
+      one: "{count} sesión está a mitad de un turno y lo pierde:",
+      other: "{count} sesiones están a mitad de un turno y lo pierden:",
+    },
+    confirm: "Salir de lich",
+    failed: "No se pudo salir de lich",
+  },
+  tray: {
+    show: "Mostrar lich",
+    running: "Sesiones en ejecución: {count}",
+    quit: "Salir de lich",
+  },
+  closeDialog: {
+    title: "¿Mantener lich en ejecución?",
+    running: {
+      one: "{count} sesión está en ejecución. En segundo plano sigue trabajando, y abrir lich de nuevo la devuelve a la pantalla.",
+      other:
+        "{count} sesiones están en ejecución. En segundo plano siguen trabajando, y abrir lich de nuevo las devuelve a la pantalla.",
+    },
+    dontAsk: "No volver a preguntar",
+    changeInSettings: "· cámbialo en Ajustes › Apariencia",
+    keep: "Mantener en ejecución",
+    quit: "Salir de lich",
+    failed: "No se pudo cerrar la ventana",
+  },
   uncleanExitGate: {
     title: "La ejecución anterior de lich terminó de forma inesperada",
     description: "Tus sesiones se restauraron, pero lo que estaban ejecutando se detuvo con ella.",
