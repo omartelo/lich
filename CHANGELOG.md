@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a light terminal. lich now tells the terminal apps that ask (mode 2031) and
   they repaint in the new look.
 
+- **The Pull requests screen no longer reopens on a pull request that is no
+  longer in its list.** Merge the one you were reading, come back later, and
+  the screen showed it again beside "No open pull requests". It now reopens on
+  the last one only while the list still has it.
+
 ## [0.65.0] - 2026-10-10
 
 > [!IMPORTANT]

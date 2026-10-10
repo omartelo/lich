@@ -101,10 +101,27 @@ export function Pulls({ list = false }: PullsProps) {
   // the pull request being read for the checkout's own. The remembered number
   // stands in for the one the URL is missing — read once per project, never
   // from the write below, so the selection cannot chase itself.
+  //
+  // It only stands in while the list still carries it: a pull request merged
+  // since is not what a list of open ones should reopen on. Until the list has
+  // answered there is no telling, so the detail waits rather than paint the
+  // stale one and then take it back.
   const remembered = useMemo(() => (list ? readLastPull(projectId ?? "") : 0), [list, projectId])
-  const selected = Number(number) || remembered
+  // The filter box lives here, not in the column: its `is:` state decides which
+  // pull requests gh is asked for, and that is a fetch rather than a filter.
+  // Remembered like the sort beside it: a review interrupted by another project
+  // is otherwise a query typed twice.
+  const [query, setQuery] = useState(() => readPullsQuery(projectId ?? ""))
+  const parsedQuery = useMemo(() => parsePullsQuery(query), [query])
+  // An empty path is the hook's own "nothing to look up", so the single pull
+  // request screen never spends a gh call on a list it does not show.
+  const listPath = list && hasGH ? projectPath || path : ""
+  const pulls = usePullRequests(listPath, parsedQuery.state)
+  const awaitingList = remembered > 0 && !number && pulls.loading
+  const rememberedListed = pulls.list.some((pr) => pr.number === remembered)
+  const selected = Number(number) || (rememberedListed ? remembered : 0)
   const { detail, loading, error, refresh } = usePullRequestDetail(
-    hasGH ? path : "",
+    hasGH && !awaitingList ? path : "",
     branch,
     head,
     selected,
@@ -113,12 +130,6 @@ export function Pulls({ list = false }: PullsProps) {
   // route: the screen reaches one by number or by branch, and only the answer
   // says which pull request that was.
   const conversation = usePullRequestConversation(path, detail?.number ?? 0, head)
-  // The filter box lives here, not in the column: its `is:` state decides which
-  // pull requests gh is asked for, and that is a fetch rather than a filter.
-  // Remembered like the sort beside it: a review interrupted by another project
-  // is otherwise a query typed twice.
-  const [query, setQuery] = useState(() => readPullsQuery(projectId ?? ""))
-  const parsedQuery = useMemo(() => parsePullsQuery(query), [query])
   // Stored on every keystroke rather than on some settle: a box half-typed when
   // the user walks off is still what they were about to search for, and one
   // short localStorage write per character is cheaper than the timer that would
@@ -127,10 +138,6 @@ export function Pulls({ list = false }: PullsProps) {
     writePullsQuery(projectId ?? "", next)
     setQuery(next)
   }
-  // An empty path is the hook's own "nothing to look up", so the single pull
-  // request screen never spends a gh call on a list it does not show.
-  const listPath = list && hasGH ? projectPath || path : ""
-  const pulls = usePullRequests(listPath, parsedQuery.state)
   const { checkouts, refresh: refreshCheckouts } = useCheckouts(projectPath)
   // Where the pull request's own branch already lives, if anywhere. Every
   // "work on this PR" decision hangs off it: whether to create a checkout,
@@ -427,7 +434,7 @@ export function Pulls({ list = false }: PullsProps) {
         onConversationRefresh={conversation.refresh}
       />
     )
-  } else if (loading) {
+  } else if (loading || awaitingList) {
     body = <PullSkeleton />
   } else {
     body = (
