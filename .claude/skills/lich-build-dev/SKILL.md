@@ -28,8 +28,10 @@ A new worktree has no `frontend/node_modules` and no `frontend/dist`. `go vet` a
 
 ## 2. The local gate, in order
 
-One step at a time, each inside a memory cap: `/tmp` is tmpfs, and the gate steps run in parallel have
-killed the user's window with SIGBUS. Never start two of these at once, nor a gate next to a `task dev` build.
+One step at a time, each inside the memory jail from `CLAUDE.md` › Local Gate (`cap` below is that command):
+gate steps run in parallel have killed the user's window with SIGBUS. Never start two of these at once, nor a
+gate next to a `task dev` build. Keep `$T` short: `go test` hands it to the tests as their TMPDIR, and the
+sandbox suite's Unix sockets break past the 108-byte path limit.
 
 ```bash
 W=$(git rev-parse --show-toplevel); T=/var/tmp/lich-gate; mkdir -p "$T"
