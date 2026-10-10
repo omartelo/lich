@@ -172,6 +172,7 @@ export function AppearanceSettings() {
 
   return (
     <>
+      <LanguageSettings />
       <ThemePicker
         themes={themes}
         brokenThemes={brokenThemes}
@@ -221,7 +222,6 @@ export function AppearanceSettings() {
 
       <FontSetting />
       <FooterSettings />
-      <LanguageSettings />
 
       <ImportThemeDialog
         open={importOpen}
