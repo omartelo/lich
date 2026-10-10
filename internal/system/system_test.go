@@ -470,4 +470,9 @@ func TestShowWindowAndQuitReachWhatMainWired(t *testing.T) {
 	if err := s.Quit(QuitOptions{}); !errors.Is(err, refused) {
 		t.Fatalf("Quit = %v, want the wired quit's error", err)
 	}
+	closed := errors.New("no lich window is open")
+	s.SetCloseWindow(func() error { return closed })
+	if err := s.CloseWindow(CloseWindowOptions{}); !errors.Is(err, closed) {
+		t.Fatalf("CloseWindow = %v, want the wired close's error", err)
+	}
 }

@@ -11,6 +11,12 @@ func (s *Service) SetShowWindow(show func()) {
 	s.showWindow = show
 }
 
+// SetCloseWindow wires how lich closes its window and keeps running. Called at
+// startup.
+func (s *Service) SetCloseWindow(closeWindow func() error) {
+	s.closeWindow = closeWindow
+}
+
 // SetQuit wires how lich ends. Called at startup.
 func (s *Service) SetQuit(quit func() error) {
 	s.quit = quit
@@ -26,6 +32,17 @@ type ShowWindowOptions struct{}
 // asked for, not when it is on screen.
 func (s *Service) ShowWindow(ShowWindowOptions) {
 	s.showWindow()
+}
+
+// CloseWindowOptions is one CloseWindow call, an object for the reason
+// ShowWindowOptions is.
+type CloseWindowOptions struct{}
+
+// CloseWindow closes lich's window and leaves lich running with its sessions:
+// the page's answer when the user chose to keep it running in the background.
+// The page is not asked again on the way out.
+func (s *Service) CloseWindow(CloseWindowOptions) error {
+	return s.closeWindow()
 }
 
 // QuitOptions is one Quit call, an object for the reason ShowWindowOptions is.

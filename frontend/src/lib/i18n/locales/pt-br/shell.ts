@@ -150,6 +150,19 @@ export const shell = {
     running: "Sessões rodando: {count}",
     quit: "Encerrar o lich",
   },
+  closeDialog: {
+    title: "Manter o lich rodando?",
+    running: {
+      one: "{count} sessão está rodando. Em segundo plano ela continua trabalhando, e abrir o lich de novo a traz de volta à tela.",
+      other:
+        "{count} sessões estão rodando. Em segundo plano elas continuam trabalhando, e abrir o lich de novo as traz de volta à tela.",
+    },
+    dontAsk: "Não perguntar de novo",
+    changeInSettings: "· mude em Configurações › Aparência",
+    keep: "Manter rodando",
+    quit: "Encerrar o lich",
+    failed: "Não foi possível fechar a janela",
+  },
   uncleanExitGate: {
     title: "A execução anterior do lich terminou de forma inesperada",
     description: "Suas sessões foram restauradas, mas o que elas estavam executando parou junto.",

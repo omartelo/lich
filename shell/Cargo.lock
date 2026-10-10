@@ -239,7 +239,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "kurogane"
 version = "0.0.6-alpha.2"
-source = "git+https://github.com/omartelo/kurogane?rev=c004c49ca0ffee9f98586b9601dfab138187ee95#c004c49ca0ffee9f98586b9601dfab138187ee95"
+source = "git+https://github.com/omartelo/kurogane?rev=be7fba11b065863c344a6f2cb439259d9308373a#be7fba11b065863c344a6f2cb439259d9308373a"
 dependencies = [
  "ctrlc",
  "kurogane-layout",
@@ -263,7 +263,7 @@ dependencies = [
 [[package]]
 name = "kurogane-layout"
 version = "0.0.6-alpha.2"
-source = "git+https://github.com/omartelo/kurogane?rev=c004c49ca0ffee9f98586b9601dfab138187ee95#c004c49ca0ffee9f98586b9601dfab138187ee95"
+source = "git+https://github.com/omartelo/kurogane?rev=be7fba11b065863c344a6f2cb439259d9308373a#be7fba11b065863c344a6f2cb439259d9308373a"
 dependencies = [
  "dirs",
  "thiserror",

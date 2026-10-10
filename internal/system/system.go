@@ -43,10 +43,11 @@ type Service struct {
 	// notify posts one desktop notification; injected in tests, zenity in
 	// production (see Notify).
 	notify func(text, title string) error
-	// showWindow and quit are the window and the exit, wired by main
-	// (SetShowWindow, SetQuit).
-	showWindow func()
-	quit       func() error
+	// showWindow, closeWindow and quit are the window and the exit, wired by
+	// main (SetShowWindow, SetCloseWindow, SetQuit).
+	showWindow  func()
+	closeWindow func() error
+	quit        func() error
 }
 
 func New(env []string, logPath, version string, uncleanExit bool) *Service {

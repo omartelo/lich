@@ -121,8 +121,9 @@ func main() {
 	// session was worked in this run is still in memory until something writes
 	// it (internal/terminal.handsOn).
 	defer term.FlushHandsOn()
-	window := newWindow(term.Transport(), configDir, chromiumArgs)
-	coord := registerServices(db, term, hub, configDir, logPath, env, launchEnv, window)
+	coord := newCoordinator()
+	window := newWindow(term.Transport(), configDir, chromiumArgs, term.LiveCount, coord.Quit)
+	registerServices(db, term, hub, configDir, logPath, env, launchEnv, window, coord)
 
 	term.SetRestart(coord.Do)
 
@@ -174,11 +175,8 @@ func resolveEnv() (launchEnv, env []string) {
 // in the order main built them: a service that hands another one a callback has
 // to exist first. It is lifted out of main only for its length; nothing here
 // runs anywhere else.
-//
-// It returns the restart coordinator because the terminal takes it after the
-// mounts below, and main is where the run ends.
 func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub,
-	configDir, logPath string, env, launchEnv []string, window *restart.Window) *restart.Coordinator {
+	configDir, logPath string, env, launchEnv []string, window *restart.Window, coord *restart.Coordinator) {
 	proj := project.New(project.ZenityPicker{})
 	// gh has one active account per host; a project can name a different one.
 	proj.SetAccounts(db.GHAccountForPath)
@@ -239,16 +237,6 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	plugins := agentplugin.New(db)
 	dispatcher.Register("agentplugin", plugins)
 	go plugins.RepairRegistrations()
-	// In-place restart: the update flow (install.sh) POSTs /restart after
-	// replacing the binary. os.Environ() here carries the pinned LICH_LISTEN_PORT
-	// so the successor rebinds the same port. A missing executable path only
-	// disables restart; the app still runs.
-	exe, err := os.Executable()
-	if err != nil {
-		slog.Warn("resolve executable — restart disabled", "err", err)
-		exe = ""
-	}
-	coord := restart.New(exe, os.Environ())
 	dispatcher.Register("appupdate", appupdate.New(version, coord.Install, hub.Emit))
 	dispatcher.Register("patchnotes", patchnotes.New(version, changelog))
 	dispatcher.Register("store", db)
@@ -261,6 +249,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	// one way to end a lich whose window is closed.
 	sys.SetShowWindow(window.Show)
 	sys.SetQuit(coord.Quit)
+	sys.SetCloseWindow(window.Dismiss)
 	dispatcher.Register("system", sys)
 	// Deleting a session for good takes any prompt parked on it, and the row is
 	// the only copy of what the user wrote. Both channels are used, and neither
@@ -361,7 +350,6 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 	term.Mount("/drop", http.HandlerFunc(drops.Upload))
 	term.Mount("/blob", http.HandlerFunc(proj.ServeBlob))
 	term.Mount("/events", hub)
-	return coord
 }
 
 // denyInternal hides the methods that exist for Go callers inside this process
@@ -404,7 +392,7 @@ func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub
 //   - spawn.CloseFinishedWorker closes a session with none of spawn.Close's
 //     checks; the relay calls it for a worker that reported back.
 //   - relay.SetPlugins, relay.SetWorkerFinished, relay.SetPromptLanguage, drop.SetPromptLanguage, project.SetAccounts, project.SetProjects,
-//     system.SetShowWindow, system.SetQuit,
+//     system.SetShowWindow, system.SetQuit, system.SetCloseWindow,
 //     quota.SetSessions, store.SetSessionGone, store.SetScheduleForfeited,
 //     store.SetBranchOf, store.SetTranscriptOf, store.SetConversationsOf,
 //     store.SetCheckoutsOf, terminal.SetDropDir,
@@ -429,6 +417,7 @@ func denyInternal(d *rpc.Handler) {
 		"store.Close",
 		"system.SetShowWindow",
 		"system.SetQuit",
+		"system.SetCloseWindow",
 		"store.SetSessionGone",
 		"store.SetScheduleForfeited",
 		"store.SetBranchOf",
@@ -539,13 +528,16 @@ type windowTarget struct {
 	class      string
 }
 
-// pageOn is the page opened on a session's card, which the page reads off its
-// focus parameter at load; an empty id is the plain page.
+// pageOn is the page lich's own window opens, on a session's card when focus
+// names one (the page reads it off its focus parameter at load). shell=1 says
+// the page is in lich's window, whose close it can ask about; a plain tab of the
+// macOS fallback cannot answer it, and would show the browser's own dialog.
 func (t windowTarget) pageOn(focus string) string {
-	if focus == "" {
-		return t.url
+	page := t.url + "&shell=1"
+	if focus != "" {
+		page += "&focus=" + url.QueryEscape(focus)
 	}
-	return t.url + "&focus=" + url.QueryEscape(focus)
+	return page
 }
 
 func newWindowTarget(info terminal.TransportInfo, configDir string) windowTarget {
@@ -569,19 +561,49 @@ func newWindowTarget(info terminal.TransportInfo, configDir string) windowTarget
 	return target
 }
 
+// newCoordinator is the in-place restart: the update flow (install.sh) POSTs
+// /restart after replacing the binary. os.Environ() here carries the pinned
+// LICH_LISTEN_PORT so the successor rebinds the same port. A missing executable
+// path only disables restart; the app still runs.
+func newCoordinator() *restart.Coordinator {
+	exe, err := os.Executable()
+	if err != nil {
+		slog.Warn("resolve executable — restart disabled", "err", err)
+		exe = ""
+	}
+	return restart.New(exe, os.Environ())
+}
+
 // newWindow builds the keeper of this lich's window. Extra CLI args after `--`
 // pass through to Chromium (e.g. `lich -- --ozone-platform=wayland`), on every
-// window it opens.
-func newWindow(info terminal.TransportInfo, configDir string, extra []string) *restart.Window {
+// window it opens. live counts the sessions with a process, and quit ends lich:
+// a window closed with none running leaves nothing to keep it for.
+func newWindow(info terminal.TransportInfo, configDir string, extra []string,
+	live func() int, quit func() error) *restart.Window {
 	target := newWindowTarget(info, configDir)
 	return restart.NewWindow(
-		func(focus string, onStart func(*os.Process)) error {
+		func(focus string, onStart func(close func() error)) error {
 			slog.Info("chromium shell opening", "addr", target.addr)
 			return chromium.Run(target.pageOn(focus), target.profileDir, target.class, extra, onStart)
 		},
 		func() { focusRunning(configDir, &singleton.Info{Port: info.Port, Token: info.Token}) },
-		func(end restart.WindowEnd) { windowEnded(end, target, configDir) },
+		func(end restart.WindowEnd) {
+			windowEnded(end, target, configDir)
+			quitIfIdle(end, live, quit)
+		},
 	)
+}
+
+// quitIfIdle ends lich when the user closed its window with no session running:
+// the backend outlives the window to keep sessions alive, and there are none.
+func quitIfIdle(end restart.WindowEnd, live func() int, quit func() error) {
+	if chromium.EndingOf(end.Err, end.First, end.Uptime) != chromium.WindowClosed || live() > 0 {
+		return
+	}
+	slog.Info("window closed with no session running, quitting")
+	if err := quit(); err != nil {
+		slog.Warn("quit after the window closed", "err", err)
+	}
 }
 
 // windowEnded performs what chromium.EndingOf says a window's end means.

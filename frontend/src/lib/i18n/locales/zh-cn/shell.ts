@@ -145,6 +145,18 @@ export const shell = {
     running: "运行中的会话：{count}",
     quit: "退出 lich",
   },
+  closeDialog: {
+    title: "让 lich 继续运行？",
+    running: {
+      one: "{count} 个会话正在运行。它们会在后台继续工作，再次打开 lich 即可回到屏幕上。",
+      other: "{count} 个会话正在运行。它们会在后台继续工作，再次打开 lich 即可回到屏幕上。",
+    },
+    dontAsk: "不再询问",
+    changeInSettings: "· 可在设置 › 外观中更改",
+    keep: "继续运行",
+    quit: "退出 lich",
+    failed: "无法关闭窗口",
+  },
   uncleanExitGate: {
     title: "lich 上次运行意外结束",
     description: "你的会话已恢复，但它们正在运行的内容已随之停止。",

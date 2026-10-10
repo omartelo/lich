@@ -36,6 +36,7 @@ import { UncleanExitGate } from "@/components/UncleanExitGate"
 import { CommandPalette } from "@/components/CommandPalette"
 import { ShortcutsOverlay } from "@/components/ShortcutsOverlay"
 import { QuitDialog } from "@/components/QuitDialog"
+import { CloseDialog } from "@/components/CloseDialog"
 import { syncTrayLabels } from "@/lib/tray"
 import { useT } from "@/lib/i18n/i18n"
 
@@ -218,6 +219,7 @@ function App() {
           <ShortcutsOverlay />
           {/* Needs the provider for the sessions mid-turn it names. */}
           <QuitDialog />
+          <CloseDialog />
         </ProjectsProvider>
       </HashRouter>
       {/* Holds its prompt until a provider has been chosen, so a first launch

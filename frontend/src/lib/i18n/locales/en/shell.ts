@@ -146,6 +146,19 @@ export const shell = {
     running: "Sessions running: {count}",
     quit: "Quit lich",
   },
+  closeDialog: {
+    title: "Keep lich running?",
+    running: {
+      one: "{count} session is running. In the background it keeps working, and opening lich again brings it back on screen.",
+      other:
+        "{count} sessions are running. In the background they keep working, and opening lich again brings them back on screen.",
+    },
+    dontAsk: "Don't ask again",
+    changeInSettings: "· change it in Settings › Appearance",
+    keep: "Keep running",
+    quit: "Quit lich",
+    failed: "Could not close the window",
+  },
   uncleanExitGate: {
     title: "lich's previous run ended unexpectedly",
     description: "Your sessions were restored, but whatever they were running stopped with it.",

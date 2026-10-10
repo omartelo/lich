@@ -1045,12 +1045,21 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   X11, Windows and macOS reopen it where it was. The geometry lives in `lich-window` in the Chromium
   profile directory, so `task dev` keeps its own, and a window killed outright (SIGKILL, a crash) keeps
   the one it had before.
-- **Closing the window does not quit lich** (`main.go` `serve`, `internal/restart.Window`): the backend keeps
-  every session's process running with nothing on screen, and with them the pinned port (47821), the
+- **Closing the window does not quit lich** (`main.go` `serve`, `internal/restart.Window`): with a session
+  running, the window asks whether lich keeps running in the background or quits, and the answer can be kept
+  (Settings › Appearance › When the window closes); with none running, closing it quits. Kept running, the
+  backend holds every session's process with nothing on screen, and with them the pinned port (47821), the
   keep-awake assertion while a session works, the providers' spend and the desktop notifications. The tray
   icon (below) is all that says it runs. Launching lich again opens a window on it; `lich quit` (or SIGINT /
-  SIGTERM) ends it. `task dev` behaves the same: closing its window leaves the dev backend on 47822 until
-  Ctrl+C or `LICH_DEV=1 go run . quit`.
+  SIGTERM) ends it. `task dev` behaves the same: kept running, the dev backend stays on 47822 until Ctrl+C or
+  `LICH_DEV=1 go run . quit`.
+- **A window closed before it was ever touched does not ask** (`frontend/src/lib/close-request.ts`): the
+  page holds the close by cancelling `beforeunload`, and Chromium ignores that on a page the user never
+  clicked or typed into, so a window closed straight after it opened keeps lich running without asking
+  (or quits, with no session running). Only lich's own window asks: the macOS tab fallback never holds
+  its close. The hold rests on `App::on_before_unload`, a hook on the `lich-close-prompt` branch of the
+  kurogane fork that is not upstream yet; lich-shell answers a reload and a close lich itself asked for
+  (quitting, restarting, through the window's stdin) with Leave, and everything else with Stay.
 - **The tray icon is Linux and Windows only, and late** (`internal/tray`): macOS's menu-bar item needs cgo
   and lich is built without it, so a windowless lich on a Mac shows nothing. On Linux it is a
   StatusNotifierItem: GNOME draws none without the AppIndicator extension, and a desktop with no tray host
@@ -1095,6 +1104,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `~/.omp/agent/mcp.json`, `~/.gemini/config/mcp_config.json` and Kiro's agent. A built binary launched
   with only `XDG_CONFIG_HOME` (or `APPDATA`) moved rewrites the developer's real agents to point at a scratch
   binary that is deleted later. Give a rig its own `HOME` and `XDG_*` both, and check those files afterwards.
+  Two side effects of that HOME: a `node` reached through a mise shim stops trusting the developer's mise
+  config and exits, so call the real binary (`mise which node`); and a rig given its own D-Bus
+  (`dbus-run-session`, so its tray stays off the developer's bar) activates portals and a notification
+  daemon that outlive it, which are found by their `DBUS_SESSION_BUS_ADDRESS` and stopped by PID.
 - **Opened as a tab lich cannot close it or tell it closed** (`main.go`, `openTab`, macOS only): lich serves a
   plain tab it did not spawn, so `lich quit` leaves the tab open on a dead page, and a second launch opens
   another tab rather than raising the first.

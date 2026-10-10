@@ -114,6 +114,8 @@ async function post(path: string): Promise<void> {
 }
 
 export const Terminal = {
+  /** How many sessions have a process running right now. */
+  LiveCount: () => call<number>("terminal.LiveCount", []),
   /** Whether a session cannot start in cwd because the directory is gone — a
    * worktree removed outside lich. False for every uncertainty, so only a
    * provable absence closes a session. */
@@ -614,6 +616,8 @@ export const System = {
   /** End lich: the window closes and every session's process ends with it. The
    * reply can be lost to the exit it announces. */
   Quit: () => call<null>("system.Quit", [{}]),
+  /** Close lich's window and keep lich running with its sessions. */
+  CloseWindow: () => call<null>("system.CloseWindow", [{}]),
   /** Raise a desktop notification: a headline and an optional second line.
    * The caller decides it is warranted — the backend only delivers. */
   Notify: (summary: string, detail: string) => call<null>("system.Notify", [summary, detail]),

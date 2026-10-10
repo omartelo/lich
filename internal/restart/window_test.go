@@ -2,14 +2,14 @@ package restart
 
 import (
 	"errors"
-	"os"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-// fakeWindow stands in for chromium.Run: each run reports a process and then
-// blocks until the test closes the window it opened.
+// fakeWindow stands in for chromium.Run: each run hands over its close and
+// then blocks until the test, or that close, ends the window it opened.
 type fakeWindow struct {
 	runs    chan chan error
 	ends    chan WindowEnd
@@ -17,15 +17,21 @@ type fakeWindow struct {
 	// focused is the card each run was opened on, read only after its run
 	// has been received.
 	focused []string
+	// closes counts the closes asked of the open window.
+	closes atomic.Int32
 }
 
 func newFakeWindow() (*fakeWindow, *Window) {
 	f := &fakeWindow{runs: make(chan chan error, 4), ends: make(chan WindowEnd, 4), focuses: make(chan struct{}, 4)}
 	w := NewWindow(
-		func(focus string, onStart func(*os.Process)) error {
+		func(focus string, onStart func(close func() error)) error {
 			f.focused = append(f.focused, focus)
-			onStart(&os.Process{Pid: 42})
-			closed := make(chan error)
+			closed := make(chan error, 1)
+			onStart(func() error {
+				f.closes.Add(1)
+				closed <- nil
+				return nil
+			})
 			f.runs <- closed
 			return <-closed
 		},
@@ -98,7 +104,7 @@ func TestWindowShowWhileStartingDoesNothing(t *testing.T) {
 	release := make(chan struct{})
 	focused := 0
 	w := NewWindow(
-		func(string, func(*os.Process)) error { <-release; return nil },
+		func(string, func(func() error)) error { <-release; return nil },
 		func() { focused++ },
 		func(WindowEnd) {},
 	)
@@ -111,19 +117,13 @@ func TestWindowShowWhileStartingDoesNothing(t *testing.T) {
 }
 
 func TestWindowClose(t *testing.T) {
-	t.Run("terminates the open window and reports no end", func(t *testing.T) {
+	t.Run("closes the open window and reports no end", func(t *testing.T) {
 		f, w := newFakeWindow()
 		w.Show()
-		closed := f.opened(t)
-		var terminated *os.Process
-		w.terminate = func(p *os.Process) error {
-			terminated = p
-			closed <- nil
-			return nil
-		}
+		f.opened(t)
 		w.Close()
-		if terminated == nil || terminated.Pid != 42 {
-			t.Fatalf("terminated %v, want the window's process", terminated)
+		if got := f.closes.Load(); got != 1 {
+			t.Fatalf("closes = %d, want the open window closed once", got)
 		}
 		select {
 		case end := <-f.ends:
@@ -133,9 +133,11 @@ func TestWindowClose(t *testing.T) {
 	})
 
 	t.Run("no window open is nothing to close", func(t *testing.T) {
-		_, w := newFakeWindow()
-		w.terminate = func(*os.Process) error { t.Fatal("terminated with no window"); return nil }
+		f, w := newFakeWindow()
 		w.Close()
+		if got := f.closes.Load(); got != 0 {
+			t.Fatalf("closes = %d with no window, want none", got)
+		}
 	})
 
 	t.Run("no window opens once quitting", func(t *testing.T) {
@@ -150,10 +152,23 @@ func TestWindowClose(t *testing.T) {
 	})
 
 	t.Run("a failed close does not wait", func(t *testing.T) {
-		f, w := newFakeWindow()
+		release := make(chan struct{})
+		w := NewWindow(
+			func(_ string, onStart func(func() error)) error {
+				onStart(func() error { return errors.New("broken pipe") })
+				<-release
+				return nil
+			},
+			func() {}, func(WindowEnd) {},
+		)
 		w.Show()
-		closed := f.opened(t)
-		w.terminate = func(*os.Process) error { return errors.New("no such process") }
+		deadline := time.Now().Add(time.Second)
+		for !w.hasStarted() {
+			if time.Now().After(deadline) {
+				t.Fatal("the window never started")
+			}
+			time.Sleep(time.Millisecond)
+		}
 		done := make(chan struct{})
 		go func() { w.Close(); close(done) }()
 		select {
@@ -161,8 +176,28 @@ func TestWindowClose(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("Close waited on a window it could not close")
 		}
-		closed <- nil
+		close(release)
 	})
+}
+
+// Dismiss is the page's "keep running": the window closes, lich does not, and
+// the end is reported as a close, so a later Show opens a window again.
+func TestWindowDismiss(t *testing.T) {
+	f, w := newFakeWindow()
+	if err := w.Dismiss(); err == nil {
+		t.Fatal("Dismiss with no window = nil, want an error")
+	}
+	w.Show()
+	f.opened(t)
+	if err := w.Dismiss(); err != nil {
+		t.Fatalf("Dismiss = %v", err)
+	}
+	if end := f.ended(t); end.Err != nil {
+		t.Fatalf("end = %+v, want a clean close", end)
+	}
+	w.Show()
+	f.opened(t) <- nil
+	f.ended(t)
 }
 
 func TestWindowShowSessionOpensOnTheCard(t *testing.T) {
@@ -189,4 +224,10 @@ func TestWindowShowSessionOpensOnTheCard(t *testing.T) {
 	if !slices.Equal(f.focused, []string{"s2", ""}) {
 		t.Fatalf("opened on %q, want a plain Show to open on no card", f.focused)
 	}
+}
+
+func (w *Window) hasStarted() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.closeWindow != nil
 }

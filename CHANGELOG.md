@@ -18,10 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Closing the window keeps your sessions running.** lich goes on in the
-  background with every agent and terminal still working; launch lich again and
-  a window opens on them, scrollback included. Run `lich quit` to end it for
-  good. Restarting for an update still ends every session.
+- **Closing the window can keep your sessions running.** With a session
+  running, lich asks whether to keep going in the background or quit; kept
+  running, every agent and terminal goes on working, and launching lich again
+  opens a window on them, scrollback included. Tick "Don't ask again", or pick
+  the answer in Settings › Appearance › When the window closes. With nothing
+  running, closing the window quits as before. Restarting for an update still
+  ends every session.
 - **A tray icon while lich runs** (Linux and Windows): Show lich brings the
   window back, the menu counts the sessions running, and Quit lich ends it.
 - **lich opens where you left it.** A new window, whether reopened on a lich

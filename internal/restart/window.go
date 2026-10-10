@@ -1,16 +1,17 @@
 package restart
 
 import (
+	"errors"
 	"log/slog"
-	"os"
 	"sync"
 	"time"
 )
 
 // closeWait bounds how long quitting waits for a window it asked to close. The
-// wait is for Chromium to flush the profile (terminateProcess says why); a
-// window that outstays it goes with this process anyway, through the stdin pipe
-// it reads for EOF (internal/chromium).
+// wait is for Chromium to flush the profile, where the page's prefs live (a
+// window killed rather than closed loses what was written in its last seconds,
+// #199); a window that outstays it goes with this process anyway, through the
+// stdin pipe it reads for EOF (internal/chromium).
 const closeWait = 5 * time.Second
 
 // WindowEnd is how one window ended: what its run returned, whether it was the
@@ -29,8 +30,8 @@ type Window struct {
 	// open is set from the moment a window is asked for until its run returns,
 	// so a second Show while one is still starting does not open a second.
 	open bool
-	// process is the open window's process, nil until it has started.
-	process *os.Process
+	// closeWindow closes the open window, nil until it has started.
+	closeWindow func() error
 	// exited is closed when the open window's run returns.
 	exited chan struct{}
 	opened bool
@@ -38,21 +39,20 @@ type Window struct {
 	// again and the one closing is not reported as having ended.
 	closing bool
 	// run opens a window on focus's card (none when empty) and blocks until it
-	// ends, handing its process to onStart once it is up (chromium.Run).
-	run func(focus string, onStart func(*os.Process)) error
+	// ends, handing onStart the way to close it once it is up (chromium.Run).
+	run func(focus string, onStart func(close func() error)) error
 	// focus brings the open window to the front.
 	focus func()
 	// ended hears how each window ended.
-	ended     func(WindowEnd)
-	terminate func(*os.Process) error
+	ended func(WindowEnd)
 }
 
 // NewWindow returns a keeper with no window open. run opens one, on a session's
 // card when it names one, and blocks until it ends; focus brings an open one
 // forward, and ended is called, on the window's own goroutine, each time one
 // ends.
-func NewWindow(run func(focus string, onStart func(*os.Process)) error, focus func(), ended func(WindowEnd)) *Window {
-	return &Window{run: run, focus: focus, ended: ended, terminate: terminateProcess}
+func NewWindow(run func(focus string, onStart func(close func() error)) error, focus func(), ended func(WindowEnd)) *Window {
+	return &Window{run: run, focus: focus, ended: ended}
 }
 
 // Show opens a window when none is open, and brings the open one forward
@@ -73,7 +73,7 @@ func (w *Window) ShowSession(id string) {
 		return
 	}
 	if w.open {
-		started := w.process != nil
+		started := w.closeWindow != nil
 		w.mu.Unlock()
 		if started {
 			w.focus()
@@ -93,7 +93,7 @@ func (w *Window) keep(first bool, focus string) {
 	err := w.run(focus, w.started)
 	w.mu.Lock()
 	w.open = false
-	w.process = nil
+	w.closeWindow = nil
 	close(w.exited)
 	closing := w.closing
 	w.mu.Unlock()
@@ -103,10 +103,26 @@ func (w *Window) keep(first bool, focus string) {
 	w.ended(WindowEnd{Err: err, First: first, Uptime: time.Since(started)})
 }
 
-func (w *Window) started(p *os.Process) {
+func (w *Window) started(closeWindow func() error) {
 	w.mu.Lock()
-	w.process = p
+	w.closeWindow = closeWindow
 	w.mu.Unlock()
+}
+
+// errNoWindow is Dismiss with no window up to close.
+var errNoWindow = errors.New("no lich window is open")
+
+// Dismiss closes the open window and leaves lich running, which is what the
+// page asks for when the user answers that lich keeps running in the
+// background. The window's end is reported like any other close.
+func (w *Window) Dismiss() error {
+	w.mu.Lock()
+	closeWindow := w.closeWindow
+	w.mu.Unlock()
+	if closeWindow == nil {
+		return errNoWindow
+	}
+	return closeWindow()
 }
 
 // Close asks the open window to close and waits, up to closeWait, for it to
@@ -115,12 +131,12 @@ func (w *Window) started(p *os.Process) {
 func (w *Window) Close() {
 	w.mu.Lock()
 	w.closing = true
-	process, exited := w.process, w.exited
+	closeWindow, exited := w.closeWindow, w.exited
 	w.mu.Unlock()
-	if process == nil {
+	if closeWindow == nil {
 		return
 	}
-	if err := w.terminate(process); err != nil {
+	if err := closeWindow(); err != nil {
 		slog.Warn("close window", "err", err)
 		return
 	}
