@@ -43,7 +43,9 @@ function handsOnParts(seconds: number): string[] | null {
     return [formatUnit(minutes, "minute")]
   }
   const rest = formatUnit(minutes % 60, "minute")
-  const padded = /^\d+\s?\p{Script=Latin}/u.test(rest) ? rest.replace(/^\d+/, (n) => n.padStart(2, "0")) : rest
+  const padded = /^\d+\s?\p{Script=Latin}/u.test(rest)
+    ? rest.replace(/^\d+/, (n) => n.padStart(2, "0"))
+    : rest
   return [formatUnit(hours, "hour"), padded]
 }
 

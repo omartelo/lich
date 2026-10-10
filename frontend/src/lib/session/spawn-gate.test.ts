@@ -33,7 +33,10 @@ describe("spawnDecision", () => {
       resumable,
       probe({ resumeAvailable: () => Promise.resolve(false) }),
     )
-    expect(decision).toEqual({ verdict: "fresh", notice: "The previous conversation is no longer available — starting a new session." })
+    expect(decision).toEqual({
+      verdict: "fresh",
+      notice: "The previous conversation is no longer available — starting a new session.",
+    })
   })
 
   // Crush keeps one conversation database per checkout, so the directory is
@@ -67,8 +70,11 @@ describe("spawnDecision", () => {
         },
       }),
     )
-    expect(decision).toEqual({ verdict: "park", notice:
-        "This session's worktree is gone, so the session was closed. Re-create the worktree to pick it up again." })
+    expect(decision).toEqual({
+      verdict: "park",
+      notice:
+        "This session's worktree is gone, so the session was closed. Re-create the worktree to pick it up again.",
+    })
     expect(asked).toBe(false)
   })
 
@@ -112,7 +118,10 @@ describe("spawnDecision", () => {
         restoreChoice: () => Promise.resolve("resume"),
       }),
     )
-    expect(decision).toEqual({ verdict: "fresh", notice: "The previous conversation is no longer available — starting a new session." })
+    expect(decision).toEqual({
+      verdict: "fresh",
+      notice: "The previous conversation is no longer available — starting a new session.",
+    })
   })
 
   it("asks when the stored default cannot be read", async () => {
