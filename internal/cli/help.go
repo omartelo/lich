@@ -180,10 +180,10 @@ var commands = []command{
 	{
 		name: "mcp",
 		args: "",
-		about: "Serve the session commands above as MCP tools over stdio — cost is\n" +
-			"not one of them. lich registers this itself for the providers that\n" +
-			"support it; you only run it by hand to point another MCP client at\n" +
-			"lich.",
+		about: "Serve the session commands above as MCP tools over stdio — all but\n" +
+			"whoami, insert, focus and cost. lich registers this itself for the\n" +
+			"providers that support it; you only run it by hand to point another\n" +
+			"MCP client at lich.",
 	},
 	{
 		name: "rage",
