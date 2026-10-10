@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import type { ChecksRollup, PullRequestDetail } from "@/lib/api-types"
+import { useT, type PlainMessageKey } from "@/lib/i18n/i18n"
 import type { ThreadTally } from "@/lib/pulls/conversation-timeline"
 import { conflictsWithBase } from "@/lib/pulls/merge-gate"
 import { cn } from "@/lib/utils"
@@ -49,6 +50,7 @@ function Stat({
 }
 
 export function ChecksStat({ checks }: { checks: ChecksRollup }) {
+  const t = useT()
   const { passed, failed, pending, total } = checks
   if (total === 0) {
     return null
@@ -56,20 +58,20 @@ export function ChecksStat({ checks }: { checks: ChecksRollup }) {
   if (failed > 0) {
     return (
       <Stat icon={X} tone="fail">
-        {failed} of {total} checks failing
+        {t("pulls.pullsStats.checksFailing", { failed, total })}
       </Stat>
     )
   }
   if (pending > 0) {
     return (
       <Stat icon={Clock} tone="pending">
-        {pending} of {total} checks running
+        {t("pulls.pullsStats.checksRunning", { pending, total })}
       </Stat>
     )
   }
   return (
     <Stat icon={Check} tone="pass">
-      {passed === 1 ? "1 check passed" : `${passed} checks passed`}
+      {t("pulls.pullsStats.checksPassed", { count: passed })}
     </Stat>
   )
 }
@@ -79,33 +81,34 @@ export function ChecksStat({ checks }: { checks: ChecksRollup }) {
 // They read as muted rather than as another colour — there is nothing left to
 // act on, so nothing for the eye to catch.
 export function StateStat({ state, isDraft }: { state: string; isDraft: boolean }) {
+  const t = useT()
   if (state === "MERGED") {
     return (
       <Stat icon={GitMerge} tone="muted">
-        Merged
+        {t("pulls.pullsStats.merged")}
       </Stat>
     )
   }
   if (state === "CLOSED") {
     return (
       <Stat icon={X} tone="muted">
-        Closed
+        {t("pulls.pullsStats.closed")}
       </Stat>
     )
   }
   return (
     <Stat icon={GitPullRequestArrow} tone={isDraft ? "pending" : "pass"}>
-      {isDraft ? "Draft" : "Open"}
+      {isDraft ? t("pulls.pullsStats.draft") : t("pulls.pullsStats.open")}
     </Stat>
   )
 }
 
 // gh's aggregate verdict, in the header's words. A repository that requires no
 // review reports "" and gets no entry: there is no review to be waiting on.
-const REVIEW_STAT: Record<string, { icon: LucideIcon; tone: Tone; label: string }> = {
-  APPROVED: { icon: Check, tone: "pass", label: "Approved" },
-  CHANGES_REQUESTED: { icon: X, tone: "fail", label: "Changes requested" },
-  REVIEW_REQUIRED: { icon: CircleDashed, tone: "muted", label: "Review required" },
+const REVIEW_STAT: Record<string, { icon: LucideIcon; tone: Tone; label: PlainMessageKey }> = {
+  APPROVED: { icon: Check, tone: "pass", label: "pulls.pullsStats.approved" },
+  CHANGES_REQUESTED: { icon: X, tone: "fail", label: "pulls.pullsStats.changesRequested" },
+  REVIEW_REQUIRED: { icon: CircleDashed, tone: "muted", label: "pulls.pullsStats.reviewRequired" },
 }
 
 // Whether the chip carries a thread count, and so has somewhere to lead. The
@@ -130,6 +133,7 @@ export function ReviewStat({
   /** The review threads, as threadTally counts them. */
   threads: ThreadTally
 }) {
+  const t = useT()
   const stat = REVIEW_STAT[decision]
   if (!stat) {
     return null
@@ -137,25 +141,26 @@ export function ReviewStat({
   if (!reviewStatCountsThreads(decision, threads)) {
     return (
       <Stat icon={stat.icon} tone={stat.tone}>
-        {stat.label}
+        {t(stat.label)}
       </Stat>
     )
   }
   if (threads.open > 0) {
     return (
       <Stat icon={stat.icon} tone={stat.tone}>
-        {stat.label} · {threads.open} of {threads.total} threads unresolved
+        {t("pulls.pullsStats.threadsUnresolved", { open: threads.open, total: threads.total })}
       </Stat>
     )
   }
   return (
     <Stat icon={CheckCheck} tone="pending">
-      {stat.label} · all threads resolved
+      {t("pulls.pullsStats.threadsResolved")}
     </Stat>
   )
 }
 
 export function MergeableStat({ detail }: { detail: PullRequestDetail }) {
+  const t = useT()
   // gh reports UNKNOWN for a pull request that is over, and "Checking
   // mergeability…" against something already merged reads as a stuck screen.
   if (detail.state !== "OPEN") {
@@ -168,20 +173,20 @@ export function MergeableStat({ detail }: { detail: PullRequestDetail }) {
   if (conflictsWithBase(detail)) {
     return (
       <Stat icon={X} tone="fail">
-        Conflicts with {detail.baseRefName}
+        {t("pulls.pullsStats.conflictsWith", { base: detail.baseRefName })}
       </Stat>
     )
   }
   if (detail.mergeable === "MERGEABLE") {
     return (
       <Stat icon={GitMerge} tone="pass">
-        Mergeable
+        {t("pulls.pullsStats.mergeable")}
       </Stat>
     )
   }
   return (
     <Stat icon={CircleDashed} tone="muted">
-      Checking mergeability…
+      {t("pulls.pullsStats.checkingMergeability")}
     </Stat>
   )
 }

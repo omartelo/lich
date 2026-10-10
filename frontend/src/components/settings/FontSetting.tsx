@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { useT } from "@/lib/i18n/i18n"
 import { Fonts as FontService } from "@/lib/rpc"
 import { useRemoteResource } from "@/lib/use-remote-resource"
 import { DEFAULT_FONT, useSettings } from "@/providers/settings"
@@ -20,6 +21,7 @@ import { SettingRow } from "./SettingBlock"
 const NO_FAMILIES: string[] = []
 
 export function FontSetting() {
+  const t = useT()
   const { font, setFont } = useSettings()
   // Kept for the next visit: this is fontconfig's whole roster, and it is the
   // same answer every time — a picker that empties itself back to two entries
@@ -39,25 +41,25 @@ export function FontSetting() {
 
   return (
     <SettingRow
-      title="Terminal font"
+      title={t("settings.fontSetting.title")}
       description={
         // The sample renders in the family itself: the answer to "which one is
         // this" is the shape of the glyphs, not the name.
-        <span style={{ fontFamily: font }}>the quick brown fox 0O1lI</span>
+        <span style={{ fontFamily: font }}>{t("settings.fontSetting.sample")}</span>
       }
     >
       <Combobox items={options} value={font} onValueChange={(value) => value && setFont(value)}>
         <ComboboxTrigger
           render={<Button variant="outline" className="w-64 justify-between font-normal" />}
-          aria-label="Terminal font"
+          aria-label={t("settings.fontSetting.title")}
         >
           <span className="truncate">
             <ComboboxValue />
           </span>
         </ComboboxTrigger>
         <ComboboxContent>
-          <ComboboxInput showTrigger={false} placeholder="Search fonts" />
-          <ComboboxEmpty>No font matches.</ComboboxEmpty>
+          <ComboboxInput showTrigger={false} placeholder={t("settings.fontSetting.search")} />
+          <ComboboxEmpty>{t("settings.fontSetting.empty")}</ComboboxEmpty>
           <ComboboxList>
             {(family: string) => (
               <ComboboxItem key={family} value={family} title={family}>

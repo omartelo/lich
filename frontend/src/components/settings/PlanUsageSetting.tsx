@@ -3,6 +3,8 @@ import { accountLine } from "@/lib/quota/quota-format"
 import { usePlanQuotaFor } from "@/lib/quota/use-plan-quota"
 import { useNow } from "@/lib/use-now"
 import { QuotaGauge, gaugeGrid } from "@/components/QuotaGauge"
+import { Trans } from "@/components/common/Trans"
+import { useT } from "@/lib/i18n/i18n"
 import { cn } from "@/lib/utils"
 import { SettingBlock } from "./SettingBlock"
 
@@ -22,6 +24,7 @@ const loginCommand: Record<string, string> = {
 // plan from (oh-my-pi, Crush and Kiro CLI; Antigravity without agy on PATH;
 // opencode without a Go subscription key) and until the first reading lands.
 export function PlanUsageSetting({ providerId }: { providerId: string }) {
+  const t = useT()
   const plan = usePlanQuotaFor(providerId)
   const now = useNow()
   if (!plan) {
@@ -29,8 +32,8 @@ export function PlanUsageSetting({ providerId }: { providerId: string }) {
   }
   return (
     <SettingBlock
-      title="Plan usage"
-      description="How much of each window your subscription has spent, read from your account and refreshed every 5 minutes while lich is open."
+      title={t("settings.planUsageSetting.title")}
+      description={t("settings.planUsageSetting.description")}
     >
       <PlanBody plan={plan} now={now} />
     </SettingBlock>
@@ -38,29 +41,31 @@ export function PlanUsageSetting({ providerId }: { providerId: string }) {
 }
 
 function PlanBody({ plan, now }: { plan: QuotaPlan; now: Date }) {
+  const t = useT()
   if (plan.status === "signed-out") {
     const command = loginCommand[plan.provider]
     return (
       <p className="text-xs text-muted-foreground">
-        Signed out.
-        {command && (
-          <>
-            {" Run "}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">
-              {command}
-            </code>
-            {" to read plan usage."}
-          </>
+        {command ? (
+          <Trans
+            k="settings.planUsageSetting.signedOutRun"
+            params={{
+              command: (
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">
+                  {command}
+                </code>
+              ),
+            }}
+          />
+        ) : (
+          t("settings.planUsageSetting.signedOut")
         )}
       </p>
     )
   }
   if (plan.status === "error") {
     return (
-      <p className="text-xs text-muted-foreground">
-        Could not read plan usage. The provider's usage endpoint is undocumented and may have
-        changed.
-      </p>
+      <p className="text-xs text-muted-foreground">{t("settings.planUsageSetting.readFailed")}</p>
     )
   }
   return (
@@ -72,8 +77,8 @@ function PlanBody({ plan, now }: { plan: QuotaPlan; now: Date }) {
           {plan.plan}
         </span>
         <span />
-        <span className="text-right">used</span>
-        <span className="text-right">resets</span>
+        <span className="text-right">{t("settings.planUsageSetting.used")}</span>
+        <span className="text-right">{t("settings.planUsageSetting.resets")}</span>
       </div>
       {(plan.windows ?? []).map((window) => (
         <QuotaGauge key={window.label} window={window} now={now} />

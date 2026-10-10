@@ -25,6 +25,7 @@ import { formatAge, subscribeAge } from "@/lib/session/session-age"
 import { isIdEvent, TURN_EVENT } from "@/lib/session/session-events"
 import { useSessionEverReported, useSessionStatus } from "@/lib/session/use-session-status"
 import { useGitStatus } from "@/lib/git/use-git-status"
+import { useT } from "@/lib/i18n/i18n"
 import { useInject } from "@/lib/use-inject"
 import { useWidthAtLeast } from "@/lib/use-width-at-least"
 import { errorText } from "@/lib/utils"
@@ -46,13 +47,6 @@ const DIFF_POLL_MS = 2_000
 // reader has to look at the diff that just changed before deciding.
 const REVERT_UNDO_MS = 10_000
 
-// Said in full on the option itself, because the card cannot: the pair of
-// snapshots brackets wall-clock time, so every hand that touched the checkout
-// while the turn ran is inside it. Nothing here can attribute a line, and the
-// wording must not imply otherwise.
-const LAST_TURN_HINT =
-  "What changed on disk while the last turn ran — including edits from a formatter, your editor, or you."
-
 // ReviewPanel is the Review tab's body: the active session's diff, one
 // collapsible file at a time, read either from the working tree or from the
 // session's last finished turn. Context-menu actions write file/line references
@@ -62,6 +56,7 @@ const LAST_TURN_HINT =
 // the project root. The dock (RightDock) owns the surrounding chrome: width,
 // full screen, the tab bar and the close button.
 export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
+  const t = useT()
   const { sessionId, path, kind, hasLastTurn } = useActiveSession()
   const inject = useInject(sessionId)
   const status = useGitStatus(path)
@@ -238,7 +233,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
         await ProjectService.DiscardFile(path, rel)
       }
     } catch (err: unknown) {
-      toast.error(`Failed to discard changes: ${errorText(err)}`)
+      toast.error(t("diff.reviewPanel.discardFailed", { error: errorText(err) }))
     }
     void refresh()
   }
@@ -251,20 +246,22 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
     try {
       const undo = await ProjectService.RevertLines(path, rel, lines)
       const { added, deleted } = revertStat(lines)
-      toast(`Reverted +${added} -${deleted} in ${name}`, {
+      toast(t("diff.reviewPanel.reverted", { added, deleted, name }), {
         duration: REVERT_UNDO_MS,
         action: {
-          label: "Undo",
+          label: t("diff.reviewPanel.undo"),
           onClick: () =>
             void ProjectService.RestoreLines(path, rel, undo)
               .catch((err: unknown) =>
-                toast.error(`Couldn't undo the revert in ${name}`, { description: errorText(err) }),
+                toast.error(t("diff.reviewPanel.undoFailed", { name }), {
+                  description: errorText(err),
+                }),
               )
               .finally(() => void refresh()),
         },
       })
     } catch (err: unknown) {
-      toast.error(`Couldn't revert lines in ${name}`, { description: errorText(err) })
+      toast.error(t("diff.reviewPanel.revertFailed", { name }), { description: errorText(err) })
     }
     void refresh()
   }
@@ -321,11 +318,12 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
 // rendered as text — the agent writes markdown, and a panel that parsed it would
 // be claiming to know which provider's flavour this is.
 function SaidBand({ text, note }: { text: string; note: string }) {
+  const t = useT()
   return (
     <div className="flex shrink-0 flex-col gap-1 border-b border-border bg-muted px-2.5 pt-2 pb-2.5">
       <span className="flex items-baseline gap-1.5">
         <span className="text-2xs font-medium tracking-wider text-muted-foreground uppercase">
-          Said
+          {t("diff.reviewPanel.said")}
         </span>
         {/* Which turn is speaking: the one thing the words themselves cannot
             say, and the diff beside them has no window to date while it runs. */}
@@ -349,6 +347,7 @@ interface SourceRowProps {
 // same shape the Code tab gives its filter field, so the two tabs read as
 // siblings rather than as two different panels.
 function SourceRow({ source, onSource, endedAt, unavailable }: SourceRowProps) {
+  const t = useT()
   const age = useAge(source === "turn" ? endedAt : null)
   const dead = unavailable !== ""
   return (
@@ -361,20 +360,20 @@ function SourceRow({ source, onSource, endedAt, unavailable }: SourceRowProps) {
           value={[source]}
           onValueChange={(next) => next[0] && onSource(next[0] as DiffSource)}
           spacing={1}
-          aria-label="Which changes to show"
+          aria-label={t("diff.reviewPanel.sourceLabel")}
           className="border border-border p-[0.1875rem]"
         >
           <ToggleGroupItem value="worktree" size="sm" className="h-6 px-2.5 text-xs">
-            Working tree
+            {t("diff.reviewPanel.workingTree")}
           </ToggleGroupItem>
           <ToggleGroupItem
             value="turn"
             size="sm"
             className="h-6 px-2.5 text-xs"
             disabled={dead}
-            title={dead ? unavailable : LAST_TURN_HINT}
+            title={dead ? unavailable : t("diff.reviewPanel.lastTurnHint")}
           >
-            Last turn
+            {t("diff.reviewPanel.lastTurn")}
           </ToggleGroupItem>
         </ToggleGroup>
         {/* The one thing the panel can state without claiming authorship: when
@@ -382,7 +381,7 @@ function SourceRow({ source, onSource, endedAt, unavailable }: SourceRowProps) {
             also what tells an empty turn from an unrecorded one at a glance. */}
         {age !== "" && (
           <span className="ml-auto shrink-0 pr-1 text-[0.6875rem] text-muted-foreground">
-            ended {age} ago
+            {t("diff.reviewPanel.ended", { age })}
           </span>
         )}
       </div>
@@ -440,16 +439,21 @@ function PanelBody({
   bulk,
   sides,
 }: PanelBodyProps) {
+  const t = useT()
   if (failed) {
     // The two sources fail for different reasons, and the working tree's answer
     // — read for a path that is not a checkout — says nothing true about a turn
     // lich could not render.
     return (
-      <Notice>{source === "turn" ? "Could not read the last turn" : "Not a git repository"}</Notice>
+      <Notice>
+        {source === "turn"
+          ? t("diff.reviewPanel.turnReadFailed")
+          : t("diff.reviewPanel.notRepository")}
+      </Notice>
     )
   }
   if (files === null) {
-    return <Notice>Loading…</Notice>
+    return <Notice>{t("diff.reviewPanel.loading")}</Notice>
   }
   if (source === "turn") {
     // A turn that changed nothing, a turn nobody recorded and a turn whose
@@ -461,29 +465,29 @@ function PanelBody({
     if (notice === "empty") {
       return (
         <Notice>
-          <span className="block text-foreground">Nothing changed in this window.</span>
-          No file on disk moved between the last turn starting and ending.
+          <span className="block text-foreground">{t("diff.reviewPanel.emptyTitle")}</span>
+          {t("diff.reviewPanel.emptyBody")}
         </Notice>
       )
     }
     if (notice === "unrecorded") {
       return (
         <Notice>
-          <span className="block text-foreground">No last turn recorded.</span>
-          This fills in when a turn ends here.
+          <span className="block text-foreground">{t("diff.reviewPanel.unrecordedTitle")}</span>
+          {t("diff.reviewPanel.unrecordedBody")}
         </Notice>
       )
     }
     if (notice === "lost") {
       return (
         <Notice>
-          <span className="block text-foreground">This turn’s record was lost.</span>A turn ended
-          here and lich could not snapshot the checkout for it. The next one is recorded as usual.
+          <span className="block text-foreground">{t("diff.reviewPanel.lostTitle")}</span>
+          {t("diff.reviewPanel.lostBody")}
         </Notice>
       )
     }
   } else if (files.length === 0) {
-    return <Notice>No uncommitted changes</Notice>
+    return <Notice>{t("diff.reviewPanel.noChanges")}</Notice>
   }
   return (
     <FileList>
@@ -509,6 +513,7 @@ function PanelBody({
 // reads as broken. Its content width is each card's width, which is what the
 // cards themselves measure against.
 function FileList({ children }: { children: ReactNode }) {
+  const t = useT()
   const list = useRef<HTMLDivElement>(null)
   const fits = useWidthAtLeast(list, SPLIT_MIN_WIDTH_PX)
   const squeezed = useSettings().diffLayout === "split" && fits === false
@@ -520,7 +525,7 @@ function FileList({ children }: { children: ReactNode }) {
       {squeezed && (
         <p className="flex items-center gap-1.5 px-1 pb-1.5 text-[0.6875rem] text-muted-foreground">
           <Columns2 className="size-3.5" />
-          Side-by-side needs a wider panel
+          {t("diff.reviewPanel.squeezed")}
         </p>
       )}
       {children}

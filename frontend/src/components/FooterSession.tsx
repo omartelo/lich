@@ -16,6 +16,7 @@ import { ContextRing, usageColor } from "./ContextRing"
 import { SessionModel } from "./SessionModel"
 import { PlanQuota } from "./PlanQuota"
 import { FooterReadout } from "./FooterReadout"
+import { useT } from "@/lib/i18n/i18n"
 
 interface FooterSessionProps {
   sessionId: string
@@ -66,13 +67,17 @@ function SessionCost({ sessionId }: { sessionId: string }) {
 }
 
 function ContextReadout({ usage }: { usage: SessionUsage }) {
+  const t = useT()
   return (
     <FooterReadout
-      label="Context window"
+      label={t("shell.footerSession.contextWindow")}
       className={usageColor(usage.percent)}
       detail={
         <span className="font-mono">
-          {usage.tokens.toLocaleString()} / {usage.window.toLocaleString()} tokens
+          {t("shell.footerSession.contextTokens", {
+            tokens: usage.tokens.toLocaleString(),
+            window: usage.window.toLocaleString(),
+          })}
         </span>
       }
     >
@@ -82,10 +87,15 @@ function ContextReadout({ usage }: { usage: SessionUsage }) {
 }
 
 function CostReadout({ usage, budget }: { usage: SessionUsage; budget: number }) {
+  const t = useT()
   if (usage.costUsd === null && !usage.costMiss) return null
   return (
     <FooterReadout
-      label={usage.costUsd === null ? "Cost unavailable" : "Session cost"}
+      label={
+        usage.costUsd === null
+          ? t("shell.footerSession.costUnavailable")
+          : t("shell.footerSession.sessionCost")
+      }
       className={usageColor(budgetShare(usage.costUsd ?? 0, budget))}
       detail={
         usage.costUsd === null && usage.costMiss ? (
@@ -94,12 +104,13 @@ function CostReadout({ usage, budget }: { usage: SessionUsage; budget: number })
           <div className="flex flex-col gap-1">
             {budget > 0 && (
               <span>
-                {formatCost(usage.costUsd ?? 0)} of {formatCost(budget)} budget
+                {t("shell.footerSession.costOfBudget", {
+                  cost: formatCost(usage.costUsd ?? 0),
+                  budget: formatCost(budget),
+                })}
               </span>
             )}
-            <span>
-              API cost across this session's conversations. Subscription charges may differ.
-            </span>
+            <span>{t("shell.footerSession.costNote")}</span>
           </div>
         )
       }
@@ -110,6 +121,7 @@ function CostReadout({ usage, budget }: { usage: SessionUsage; budget: number })
 }
 
 function HandsOnReadout({ sessionId, kind }: FooterSessionProps) {
+  const t = useT()
   const provider = useSessionAgent(sessionId) ?? kind
   const now = useNow()
   const handsOn = useRemoteResource(
@@ -119,14 +131,17 @@ function HandsOnReadout({ sessionId, kind }: FooterSessionProps) {
   )
   if (handsOn.error)
     return (
-      <FooterReadout label="Hands-on time" detail="Could not read hands-on time.">
+      <FooterReadout
+        label={t("shell.footerSession.handsOnTime")}
+        detail={t("shell.footerSession.handsOnFailed")}
+      >
         —
       </FooterReadout>
     )
   if (!formatHandsOn(handsOn.data)) return null
   return (
     <FooterReadout
-      label="Hands-on time"
+      label={t("shell.footerSession.handsOnTime")}
       detail={
         <div className="flex flex-col gap-1">
           <span>{spellHandsOn(handsOn.data)}</span>

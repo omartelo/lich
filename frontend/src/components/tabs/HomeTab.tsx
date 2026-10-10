@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom"
 import { Home } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n/i18n"
 
 interface HomeTabProps {
   // The screen Home was last showing (project-route), like every other tab.
@@ -12,13 +13,14 @@ interface HomeTabProps {
 // home directory. Icon-only and rendered outside the project reorder list, so
 // it is never draggable and never closable.
 export function HomeTab({ to, active }: HomeTabProps) {
+  const t = useT()
   const navigate = useNavigate()
   return (
     <button
       type="button"
       onClick={() => navigate(to)}
-      title="Home"
-      aria-label="Home"
+      title={t("tabs.homeTab.home")}
+      aria-label={t("tabs.homeTab.home")}
       className={cn(
         "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground",
         active && "bg-sidebar text-foreground",

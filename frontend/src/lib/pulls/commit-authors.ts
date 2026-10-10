@@ -1,12 +1,10 @@
 import type { PullRequestCommit } from "@/lib/api-types"
-import { count } from "@/lib/utils"
+import { t } from "@/lib/i18n/i18n"
 
 // How many addresses or accounts the line names before it folds the rest into a
 // count. Three is enough to recognise the mistake; a branch that made it under
 // four different identities has a bigger problem than a list can render.
 const NAMED = 3
-
-const NO_ACCOUNT = "linked to no GitHub account"
 
 // Whether gh reported an author for this commit at all. A web-flow merge commit
 // carries none, and calling that one unattributed would be the false alarm this
@@ -28,11 +26,15 @@ export function commitMetaLine(commit: PullRequestCommit): string {
   const date = Number.isNaN(at.getTime()) ? "" : at.toLocaleDateString()
   const who = commit.login ? `@${commit.login}` : commit.name
   const landed =
-    who && date ? `${who} committed ${date}` : who || (date && `Committed ${date}`) || ""
+    who && date
+      ? t("pulls.commitAuthors.committed", { who, date })
+      : who || (date && t("pulls.commitAuthors.committedOn", { date })) || ""
   if (!unattributed(commit)) {
     return landed
   }
-  return landed ? `${landed} · ${NO_ACCOUNT}` : `Committed by an address ${NO_ACCOUNT}`
+  return landed
+    ? `${landed} · ${t("pulls.commitAuthors.noAccount")}`
+    : t("pulls.commitAuthors.committedByNoAccount")
 }
 
 /** The one line above the commit list, or "" when there is nothing to say.
@@ -56,19 +58,27 @@ export function commitAuthorNotice(
     // Only when the pull request's own author is a login: gh reports none for a
     // deleted account, and comparing against "" would call every commit a stray.
     authorLogin && strays.length > 0
-      ? `${count(strays.length, "commit")} landed under ${list(distinct(strays.map((c) => `@${c.login}`)))}, not @${authorLogin}.`
+      ? t("pulls.commitAuthors.strays", {
+          count: strays.length,
+          logins: list(distinct(strays.map((c) => `@${c.login}`))),
+          author: authorLogin,
+        })
       : "",
-    orphans.length > 0
-      ? `${count(orphans.length, "commit")} ${orphans.length === 1 ? "is" : "are"} ${NO_ACCOUNT}${emails(orphans)}.`
-      : "",
+    orphans.length > 0 ? orphanSentence(orphans) : "",
   ]
     .filter(Boolean)
     .join(" ")
 }
 
-function emails(commits: PullRequestCommit[]): string {
+function orphanSentence(commits: PullRequestCommit[]): string {
   const addresses = distinct(commits.map((c) => c.email).filter(Boolean))
-  return addresses.length > 0 ? `: ${list(addresses)}` : ""
+  if (addresses.length === 0) {
+    return t("pulls.commitAuthors.orphans", { count: commits.length })
+  }
+  return t("pulls.commitAuthors.orphansWithEmails", {
+    count: commits.length,
+    emails: list(addresses),
+  })
 }
 
 function distinct(values: string[]): string[] {
@@ -80,5 +90,5 @@ function distinct(values: string[]): string[] {
 function list(values: string[]): string {
   const hidden = values.length - NAMED
   const shown = values.slice(0, NAMED).join(", ")
-  return hidden > 0 ? `${shown} and ${hidden} more` : shown
+  return hidden > 0 ? t("pulls.commitAuthors.andMore", { shown, hidden }) : shown
 }

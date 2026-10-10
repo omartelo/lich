@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/omartelo/lich/internal/prompt"
 )
 
 // A scheduled prompt is the user's own words parked on a session to be typed at
@@ -80,7 +82,7 @@ func (s *Service) deliverDue() {
 			}
 			// Learned here as well as when parked: a continuation parked before
 			// a restart is still lich's to drop when its session moves on.
-			if sess.ScheduledPrompt == resumePrompt {
+			if isResumePrompt(sess.ScheduledPrompt) {
 				s.markResume(sess.ID)
 			}
 			if sess.ScheduledAt > now {
@@ -101,7 +103,7 @@ func (s *Service) deliverDue() {
 			if s.events != nil {
 				s.events.Emit(ScheduleEventName, ScheduleEvent{ID: sess.ID})
 			}
-			text := lateNotice(sess.ScheduledAt, now) + sess.ScheduledPrompt
+			text := lateNotice(s.lang(), sess.ScheduledAt, now) + sess.ScheduledPrompt
 			if err := s.deliver(sess.ID, text, nil); err != nil {
 				slog.Warn("relay: scheduled prompt not delivered", "session", sess.Label, "err", err)
 			}
@@ -127,12 +129,12 @@ const scheduleClock = "2006-01-02 15:04"
 // feature has: a prompt found on the very next pass is on time by every measure
 // this package can take, and announcing that second would put a notice in front
 // of every prompt lich ever delivers.
-func lateNotice(at, now int64) string {
+func lateNotice(lang prompt.Lang, at, now int64) string {
 	late := time.Duration(now-at) * time.Second
 	if late <= scheduleTick {
 		return ""
 	}
-	return fmt.Sprintf("[lich] Scheduled for %s, delivered %s late.\n\n",
+	return fmt.Sprintf(prompt.For(lang).LateNotice,
 		time.Unix(at, 0).Format(scheduleClock), lateBy(late))
 }
 

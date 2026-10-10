@@ -39,7 +39,8 @@ import {
   sectionLabel,
   type SettingHit,
 } from "@/lib/settings-index"
-import { useLocale } from "@/lib/i18n/i18n"
+import { useLocale, useT } from "@/lib/i18n/i18n"
+import { Trans } from "@/components/common/Trans"
 import { HighlightProvider, type HighlightTarget } from "./setting-highlight"
 import { cn } from "@/lib/utils"
 
@@ -115,6 +116,7 @@ const SECTION_IDS = ALL_SECTIONS.map((section) => section.id)
 // kept beside it. The route carries the project id, which the provider and
 // version control panes use for that project's overrides.
 export function Settings() {
+  const t = useT()
   const { projectId } = useParams()
   const providers = useProviders()
   // Seeded from the store and written through, so leaving the screen — a
@@ -241,8 +243,8 @@ export function Settings() {
             value={query}
             onChange={(event) => search(event.target.value)}
             onKeyDown={onSearchKey}
-            placeholder="Search settings"
-            aria-label="Search settings"
+            placeholder={t("settings.settings.search")}
+            aria-label={t("settings.settings.search")}
           />
         </div>
 
@@ -253,7 +255,7 @@ export function Settings() {
           <>
             {hits.length > 0 && (
               <p className="px-5 pb-1.5 font-mono text-2xs uppercase tracking-wider text-muted-foreground">
-                {hits.length} {hits.length === 1 ? "setting" : "settings"}
+                {t("settings.settings.resultCount", { count: hits.length })}
               </p>
             )}
             <nav className="flex min-h-0 flex-col gap-0.5 overflow-y-auto px-2 pb-3">
@@ -293,8 +295,10 @@ export function Settings() {
             </nav>
             {hits.length === 0 && (
               <p className="px-5 text-xs leading-relaxed text-muted-foreground">
-                Nothing matches <span className="text-foreground">{query.trim()}</span>. The search
-                reads the name of every setting, not their values.
+                <Trans
+                  k="settings.settings.noMatch"
+                  params={{ query: <span className="text-foreground">{query.trim()}</span> }}
+                />
               </p>
             )}
           </>

@@ -29,6 +29,7 @@ import { enabledProviders, useProviders, useStoredDefaultProvider } from "@/lib/
 import { errorText } from "@/lib/utils"
 import { readPref, writePref } from "@/lib/prefs"
 import { runWithToast } from "@/lib/toast-async"
+import { useT } from "@/lib/i18n/i18n"
 
 // AgentPluginGate checks on startup whether the lich plugin is installed and
 // current in the provider CLIs the user turned on. Missing → an install modal
@@ -44,6 +45,7 @@ import { runWithToast } from "@/lib/toast-async"
 // harnesses they use would stack two modals and offer one they are about to turn
 // off.
 export function AgentPluginGate() {
+  const t = useT()
   const [offer, setOffer] = useState<Status[]>([])
   const [picked, setPicked] = useState<string[]>([])
   const [installing, setInstalling] = useState(false)
@@ -86,11 +88,14 @@ export function AgentPluginGate() {
   }
 
   const promptUpdate = (version: string, providers: Status[]) => {
-    toast(`lich plugin ${version} is available`, {
+    toast(t("shell.agentPluginGate.updateAvailable", { version }), {
       duration: Infinity,
-      action: { label: "Update", onClick: () => void runUpdate(providers) },
+      action: {
+        label: t("shell.agentPluginGate.update"),
+        onClick: () => void runUpdate(providers),
+      },
       cancel: {
-        label: "Later",
+        label: t("shell.agentPluginGate.later"),
         onClick: () => writePref(UPDATE_DISMISSED_KEY, version),
       },
     })
@@ -103,21 +108,24 @@ export function AgentPluginGate() {
       id: PLUGIN_INCOMPATIBLE_EVENT,
       duration: Infinity,
       action: version
-        ? { label: `Install v${version}`, onClick: () => void runUpdate(providers) }
+        ? {
+            label: t("shell.agentPluginGate.installVersion", { version }),
+            onClick: () => void runUpdate(providers),
+          }
         : undefined,
     })
   }
 
   const runUpdate = (providers: Status[]) =>
     runWithToast(
-      "Updating lich plugin…",
+      t("shell.agentPluginGate.updating"),
       () =>
         installAll(
           providers.map((p) => p.provider),
           AgentPlugin.Update,
         ),
-      `Plugin updated — ${RESTART_HINT}`,
-      "Update failed",
+      t("shell.agentPluginGate.updated", { hint: RESTART_HINT }),
+      t("shell.agentPluginGate.updateFailed"),
     )
 
   const close = () => setOffer([])
@@ -127,12 +135,14 @@ export function AgentPluginGate() {
     try {
       await installAll(picked, AgentPlugin.Install)
       close()
-      toast.success(`Plugin installed — ${RESTART_HINT}`)
+      toast.success(t("shell.agentPluginGate.installed", { hint: RESTART_HINT }))
       if (picked.includes("codex")) {
-        toast.info(`Codex: ${CODEX_TRUST_HINT}`, { duration: Infinity })
+        toast.info(t("shell.agentPluginGate.codexTrust", { hint: CODEX_TRUST_HINT }), {
+          duration: Infinity,
+        })
       }
     } catch (error) {
-      toast.error(`Install failed: ${errorText(error)}`)
+      toast.error(t("shell.agentPluginGate.installFailed", { error: errorText(error) }))
     } finally {
       setInstalling(false)
     }
@@ -152,12 +162,8 @@ export function AgentPluginGate() {
     <Dialog open={offer.length > 0} onOpenChange={(open) => !open && !installing && close()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Enable the agent integration</DialogTitle>
-          <DialogDescription>
-            The lich plugin reports your sessions' status and titles to the app, refreshes their git
-            status, and lets a restored session resume its conversation. Install it into the CLIs
-            you use.
-          </DialogDescription>
+          <DialogTitle>{t("shell.agentPluginGate.title")}</DialogTitle>
+          <DialogDescription>{t("shell.agentPluginGate.description")}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col">
           {offer.map((status) => (
@@ -176,7 +182,7 @@ export function AgentPluginGate() {
               <span className="font-medium">{status.name}</span>
               {status.provider === "codex" && (
                 <span className="ml-auto text-xs text-muted-foreground">
-                  needs /hooks to trust it
+                  {t("shell.agentPluginGate.needsHooks")}
                 </span>
               )}
             </label>
@@ -184,13 +190,15 @@ export function AgentPluginGate() {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={dismissForever} disabled={installing}>
-            Don't ask again
+            {t("shell.agentPluginGate.dontAskAgain")}
           </Button>
           <Button variant="ghost" onClick={close} disabled={installing}>
-            Not now
+            {t("shell.agentPluginGate.notNow")}
           </Button>
           <Button onClick={() => void runInstall()} disabled={installing || picked.length === 0}>
-            {installing ? "Installing…" : "Install"}
+            {installing
+              ? t("shell.agentPluginGate.installing")
+              : t("shell.agentPluginGate.install")}
           </Button>
         </DialogFooter>
       </DialogContent>

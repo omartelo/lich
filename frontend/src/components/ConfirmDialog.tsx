@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useT } from "@/lib/i18n/i18n"
 
 interface ConfirmDialogProps {
   open: boolean
@@ -15,7 +16,7 @@ interface ConfirmDialogProps {
   onCancel: () => void
   title: string
   description: ReactNode
-  /** Label of the dismiss button. Defaults to "Cancel". */
+  /** Label of the dismiss button. Defaults to the shared Cancel. */
   cancelLabel?: string
   /** The action buttons, rendered after the shared Cancel. */
   children: ReactNode
@@ -30,9 +31,10 @@ export function ConfirmDialog({
   onCancel,
   title,
   description,
-  cancelLabel = "Cancel",
+  cancelLabel,
   children,
 }: ConfirmDialogProps) {
+  const t = useT()
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
       <DialogContent className="sm:max-w-xl">
@@ -42,7 +44,7 @@ export function ConfirmDialog({
         </DialogHeader>
         <DialogFooter>
           <Button variant="ghost" onClick={onCancel}>
-            {cancelLabel}
+            {cancelLabel ?? t("common.action.cancel")}
           </Button>
           {children}
         </DialogFooter>

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { IconAction } from "@/components/common/IconAction"
 import type { DraftReviewComment, ReviewThread as Thread } from "@/lib/api-types"
 import { formatLineRef } from "@/lib/git/diff"
+import { useT } from "@/lib/i18n/i18n"
 import type { DraftScope } from "@/lib/pulls/draft-store"
 import { cn, errorText } from "@/lib/utils"
 import { Byline } from "./Byline"
@@ -69,6 +70,7 @@ export function ReviewThread({
   // draft is filed. Owned outside the tree because three separate things destroy
   // this component — the tab strip, folding the file, and a diff refetch
   // rebuilding the CodeMirror widget this lives in (draft-store).
+  const t = useT()
   const [draft, setDraft] = useDraft(pull, "reply", thread.id)
   const replying = draft !== null
   const [busy, setBusy] = useState(false)
@@ -90,7 +92,7 @@ export function ReviewThread({
       await actions.reply(last.id, draft ?? "")
       setDraft(null)
     } catch (err: unknown) {
-      toast.error(`Reply failed: ${errorText(err)}`)
+      toast.error(t("pulls.reviewThread.replyFailed", { error: errorText(err) }))
     } finally {
       setBusy(false)
     }
@@ -101,7 +103,12 @@ export function ReviewThread({
     try {
       await actions.resolve(thread.id, resolved)
     } catch (err: unknown) {
-      toast.error(`${resolved ? "Resolve" : "Reopen"} failed: ${errorText(err)}`)
+      const error = errorText(err)
+      toast.error(
+        resolved
+          ? t("pulls.reviewThread.resolveFailed", { error })
+          : t("pulls.reviewThread.reopenFailed", { error }),
+      )
     } finally {
       setBusy(false)
     }
@@ -141,14 +148,18 @@ export function ReviewThread({
               {thread.line > 0 && `:${lineRef(thread)}`}
             </span>
           ) : (
-            <span className="shrink-0">Line {thread.line}</span>
+            <span className="shrink-0">{t("pulls.reviewThread.line", { line: thread.line })}</span>
           )}
-          {thread.isResolved && <span className="shrink-0 text-tone-pass">Resolved</span>}
-          {thread.isOutdated && <span className="shrink-0">· outdated</span>}
+          {thread.isResolved && (
+            <span className="shrink-0 text-tone-pass">{t("pulls.reviewThread.resolved")}</span>
+          )}
+          {thread.isOutdated && (
+            <span className="shrink-0">{t("pulls.reviewThread.outdated")}</span>
+          )}
           {/* Closed, the count is all that says how much is under the line. */}
           {!open && (
             <span className="shrink-0 text-muted-foreground/70">
-              {comments.length} {comments.length === 1 ? "comment" : "comments"}
+              {t("pulls.reviewThread.comments", { count: comments.length })}
             </span>
           )}
         </button>
@@ -158,7 +169,7 @@ export function ReviewThread({
           disabled={busy}
           onClick={() => void setResolved(!thread.isResolved)}
         >
-          {thread.isResolved ? "Reopen" : "Resolve"}
+          {thread.isResolved ? t("pulls.reviewThread.reopen") : t("pulls.reviewThread.resolve")}
         </Button>
       </div>
 
@@ -186,9 +197,9 @@ export function ReviewThread({
             onChange={setDraft}
             onSubmit={() => void send()}
             onCancel={() => setDraft(null)}
-            submitLabel="Reply"
+            submitLabel={t("pulls.reviewThread.reply")}
             busy={busy}
-            placeholder="Reply to this thread"
+            placeholder={t("pulls.reviewThread.replyPlaceholder")}
             autoFocus
           />
         ) : (
@@ -199,7 +210,7 @@ export function ReviewThread({
             className="flex items-center gap-1.5 self-start rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
           >
             <CornerDownRight className="size-3.5" />
-            Reply
+            {t("pulls.reviewThread.reply")}
           </button>
         ))}
     </div>
@@ -222,6 +233,7 @@ export function PendingComments({ drafts, onEdit, onRemove }: PendingCommentsPro
   // followed the index would save its text over a comment nobody was editing.
   // The store replaces comments rather than mutating them, so the reference is
   // stable for exactly as long as the comment is unchanged.
+  const t = useT()
   const [editing, setEditing] = useState<DraftReviewComment | null>(null)
   const [draft, setDraft] = useState("")
 
@@ -238,17 +250,17 @@ export function PendingComments({ drafts, onEdit, onRemove }: PendingCommentsPro
               setEditing(null)
             }}
             onCancel={() => setEditing(null)}
-            submitLabel="Save"
+            submitLabel={t("common.action.save")}
             autoFocus
           />
         ) : (
           <div key={index} className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Pencil className="size-3.5" />
-              Pending — sent when you submit the review
+              {t("pulls.reviewThread.pending")}
               <span className="ml-auto flex items-center gap-0.5">
                 <IconAction
-                  label="Edit this comment"
+                  label={t("pulls.reviewThread.edit")}
                   onClick={() => {
                     setDraft(comment.body)
                     setEditing(comment)
@@ -256,7 +268,7 @@ export function PendingComments({ drafts, onEdit, onRemove }: PendingCommentsPro
                 >
                   <Pencil className="size-3.5" />
                 </IconAction>
-                <IconAction label="Discard this comment" onClick={() => onRemove(index)}>
+                <IconAction label={t("pulls.reviewThread.discard")} onClick={() => onRemove(index)}>
                   <Trash2 className="size-3.5" />
                 </IconAction>
               </span>

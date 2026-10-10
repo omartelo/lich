@@ -16,6 +16,7 @@ import { shownLayout, SPLIT_MIN_WIDTH_PX } from "@/lib/git/diff-layout"
 import { type BlobSides, previewKind } from "@/lib/git/preview"
 import { hideWhitespace, whitespaceOnly } from "@/lib/git/whitespace"
 import { languageAbbr, splitPath } from "@/lib/git/lang-badge"
+import { useT } from "@/lib/i18n/i18n"
 import { isAnchored } from "@/lib/pulls/review-slots"
 import { useWidthAtLeast } from "@/lib/use-width-at-least"
 import { cn, errorText } from "@/lib/utils"
@@ -90,6 +91,7 @@ export function FileDiff({
   onRevertLines,
   sides,
 }: FileDiffProps) {
+  const t = useT()
   // What the reader has pulled into this file's gaps. Held here, above the
   // editor, because the document is built from it: an expanded gap is context
   // lines in the doc, never a second document cropped to a range.
@@ -176,10 +178,12 @@ export function FileDiff({
         }
         setExpansions((held) => appendExpansion(held, gap, texts))
       } catch (error) {
-        toast.error(`Couldn't read ${file.newPath}`, { description: errorText(error) })
+        toast.error(t("diff.fileDiff.readFailed", { path: file.newPath }), {
+          description: errorText(error),
+        })
       }
     },
-    [file.newPath],
+    [file.newPath, t],
   )
 
   const card = useRef<HTMLElement>(null)
@@ -238,17 +242,20 @@ export function FileDiff({
         {!file.binary && (
           <span className="flex shrink-0 items-center gap-1.5">
             {onlyWhitespace ? (
-              <span className="text-muted-foreground">Whitespace only</span>
+              <span className="text-muted-foreground">{t("diff.fileDiff.whitespaceOnly")}</span>
             ) : (
               <DiffStat added={shown.added} deleted={shown.deleted} />
             )}
           </span>
         )}
-        <IconAction label="Add file as context" onClick={() => onInject(`@${file.newPath} `)}>
+        <IconAction
+          label={t("diff.fileDiff.addAsContext")}
+          onClick={() => onInject(`@${file.newPath} `)}
+        >
           <Paperclip className="size-3.5" />
         </IconAction>
         {onDiscard && (
-          <IconAction label="Discard Changes" onClick={onDiscard}>
+          <IconAction label={t("diff.fileDiff.discard")} onClick={onDiscard}>
             <Undo2 className="size-3.5" />
           </IconAction>
         )}
@@ -267,7 +274,7 @@ export function FileDiff({
                 setExpanded(!next)
               }}
             />
-            Viewed
+            {t("diff.fileDiff.viewed")}
           </label>
         )}
       </div>
@@ -275,7 +282,9 @@ export function FileDiff({
         (file.binary ? (
           <BinaryDiffBody file={file} sides={sides} />
         ) : onlyWhitespace ? (
-          <p className="px-9 py-2 text-xs text-muted-foreground">Only whitespace changed</p>
+          <p className="px-9 py-2 text-xs text-muted-foreground">
+            {t("diff.fileDiff.onlyWhitespaceChanged")}
+          </p>
         ) : (
           <LazyDiffBody
             key={layout}

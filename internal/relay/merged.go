@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/omartelo/lich/internal/prompt"
 	"github.com/omartelo/lich/internal/providers"
 )
 
@@ -26,8 +27,10 @@ func (s *Service) AnnounceMerge(checkout string, number int, title, branch, base
 	if err != nil {
 		return fmt.Errorf("read sessions: %w", err)
 	}
-	message := mergeNotice(number, title, branch, base)
-	note := &Notification{Status: NotifyCompleted, Summary: fmt.Sprintf("Pull request #%d merged into %s", number, base)}
+	lang := s.lang()
+	message := mergeNotice(lang, number, title, branch, base)
+	summary := fmt.Sprintf(prompt.For(lang).MergeSummary, number, base)
+	note := &Notification{Status: NotifyCompleted, Summary: summary}
 	for _, p := range projects {
 		for _, sess := range p.Sessions {
 			if !s.runsAgentIn(sess.ID, sess.Kind, sessionCwd(sess.Path, p.Path), checkout) {
@@ -62,10 +65,6 @@ func sessionCwd(sessionPath, projectPath string) string {
 // nothing beyond keeping its record straight: a notice that read as a task would
 // start one (deleting the branch, pulling the base) in a checkout the user may
 // be about to remove.
-func mergeNotice(number int, title, branch, base string) string {
-	return fmt.Sprintf(
-		"[lich] Pull request #%d %q (branch %s) was merged into %s from lich. "+
-			"This is a notice, not a task: update whatever you keep about this work's state, and do nothing else.",
-		number, sanitize(title), branch, base,
-	)
+func mergeNotice(lang prompt.Lang, number int, title, branch, base string) string {
+	return fmt.Sprintf(prompt.For(lang).MergeNotice, number, sanitize(title), branch, base)
 }

@@ -1,5 +1,6 @@
 import { ExternalLink } from "lucide-react"
 import type { ProviderState } from "@/lib/providers-store"
+import { useT } from "@/lib/i18n/i18n"
 import { System } from "@/lib/rpc"
 
 // What a provider lich could not find owes the user: the page that documents
@@ -10,13 +11,8 @@ import { System } from "@/lib/rpc"
 // The same page is worth offering for a provider that *is* installed, where the
 // question is how to drive it rather than how to get it, so the label is the
 // caller's: it is the only thing that differs between the two.
-export function ProviderDocsLink({
-  provider,
-  label = "How to install",
-}: {
-  provider: ProviderState
-  label?: string
-}) {
+export function ProviderDocsLink({ provider, label }: { provider: ProviderState; label?: string }) {
+  const t = useT()
   if (provider.docs === "") {
     return null
   }
@@ -26,7 +22,7 @@ export function ProviderDocsLink({
       className="inline-flex items-center gap-1 underline-offset-2 hover:text-foreground hover:underline"
       onClick={() => void System.OpenExternal(provider.docs)}
     >
-      {label}
+      {label ?? t("settings.providerDocsLink.howToInstall")}
       <ExternalLink className="size-3" aria-label={provider.name} />
     </button>
   )

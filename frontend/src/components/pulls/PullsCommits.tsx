@@ -2,6 +2,7 @@ import { useState } from "react"
 import { ChevronRight } from "lucide-react"
 import { Notice } from "@/components/common/Notice"
 import type { PullRequestCommit } from "@/lib/api-types"
+import { useT } from "@/lib/i18n/i18n"
 import { commitAuthorNotice, commitMetaLine } from "@/lib/pulls/commit-authors"
 import { cn } from "@/lib/utils"
 
@@ -21,8 +22,9 @@ export function PullsCommits({
   commits: PullRequestCommit[] | null
   authorLogin: string
 }) {
+  const t = useT()
   if (!commits || commits.length === 0) {
-    return <Notice className="px-6 py-5 text-sm">No commits.</Notice>
+    return <Notice className="px-6 py-5 text-sm">{t("pulls.pullsCommits.none")}</Notice>
   }
   const notice = commitAuthorNotice(commits, authorLogin)
   return (

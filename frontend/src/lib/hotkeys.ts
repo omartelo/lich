@@ -1,3 +1,5 @@
+import { t } from "@/lib/i18n/i18n"
+
 // Global keyboard shortcuts. Combos are user-configurable and persisted to the
 // workspace database, the way the theme selection is (see settings.tsx). `mod`
 // is the platform primary modifier — Ctrl on Windows/Linux, Cmd on macOS — so a
@@ -34,9 +36,24 @@ export type HotkeyId =
 export type HotkeyGroup = "sessions" | "view" | "app"
 
 export const HOTKEY_GROUPS: readonly { id: HotkeyGroup; label: string }[] = [
-  { id: "sessions", label: "Sessions" },
-  { id: "view", label: "View" },
-  { id: "app", label: "App" },
+  {
+    id: "sessions",
+    get label() {
+      return t("hotkeys.group.sessions")
+    },
+  },
+  {
+    id: "view",
+    get label() {
+      return t("hotkeys.group.view")
+    },
+  },
+  {
+    id: "app",
+    get label() {
+      return t("hotkeys.group.app")
+    },
+  },
 ]
 
 export interface Combo {
@@ -83,7 +100,9 @@ export interface HotkeyAction {
 export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   {
     id: "newSession",
-    label: "New session",
+    get label() {
+      return t("hotkeys.action.newSession")
+    },
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "t" },
   },
@@ -92,13 +111,17 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   // window, which a page opened in a browser cannot take back.
   {
     id: "newWorktree",
-    label: "New worktree session",
+    get label() {
+      return t("hotkeys.action.newWorktree")
+    },
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "b" },
   },
   {
     id: "renameSession",
-    label: "Rename the active session",
+    get label() {
+      return t("hotkeys.action.renameSession")
+    },
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "e" },
   },
@@ -108,25 +131,33 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   // O, M, A, R) and Ctrl+Shift+U, which starts Unicode entry under IBus.
   {
     id: "closeSession",
-    label: "Close the active session",
+    get label() {
+      return t("hotkeys.action.closeSession")
+    },
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "x" },
   },
   {
     id: "togglePin",
-    label: "Pin or unpin the active session",
+    get label() {
+      return t("hotkeys.action.togglePin")
+    },
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "k" },
   },
   {
     id: "openTerminal",
-    label: "Open a terminal in the session's directory",
+    get label() {
+      return t("hotkeys.action.openTerminal")
+    },
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "l" },
   },
   {
     id: "delegate",
-    label: "Delegate to another session",
+    get label() {
+      return t("hotkeys.action.delegate")
+    },
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "h" },
   },
@@ -134,13 +165,17 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   // same shape turned sideways, because the tab strip is horizontal.
   {
     id: "nextSession",
-    label: "Next session",
+    get label() {
+      return t("hotkeys.action.nextSession")
+    },
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "ArrowDown" },
   },
   {
     id: "prevSession",
-    label: "Previous session",
+    get label() {
+      return t("hotkeys.action.prevSession")
+    },
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "ArrowUp" },
   },
@@ -148,7 +183,9 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   // letters the list above still leaves free.
   {
     id: "nextWaitingSession",
-    label: "Next session waiting for input",
+    get label() {
+      return t("hotkeys.action.nextWaitingSession")
+    },
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "y" },
   },
@@ -157,31 +194,41 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   // apart from Enter itself — which the user still has.
   {
     id: "focusTerminal",
-    label: "Focus the session terminal",
+    get label() {
+      return t("hotkeys.action.focusTerminal")
+    },
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "Enter" },
   },
   {
     id: "nextProject",
-    label: "Next project",
+    get label() {
+      return t("hotkeys.action.nextProject")
+    },
     group: "view",
     combo: { mod: true, shift: true, alt: false, key: "ArrowRight" },
   },
   {
     id: "prevProject",
-    label: "Previous project",
+    get label() {
+      return t("hotkeys.action.prevProject")
+    },
     group: "view",
     combo: { mod: true, shift: true, alt: false, key: "ArrowLeft" },
   },
   {
     id: "toggleSidebar",
-    label: "Toggle the session sidebar",
+    get label() {
+      return t("hotkeys.action.toggleSidebar")
+    },
     group: "view",
     combo: { mod: true, shift: true, alt: false, key: "s" },
   },
   {
     id: "toggleDock",
-    label: "Toggle the right dock",
+    get label() {
+      return t("hotkeys.action.toggleDock")
+    },
     group: "view",
     combo: { mod: true, shift: true, alt: false, key: "d" },
   },
@@ -189,7 +236,9 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   // O, the free letter that reads as "open", is Chromium's own.
   {
     id: "searchInFiles",
-    label: "Search in files",
+    get label() {
+      return t("hotkeys.action.searchInFiles")
+    },
     group: "view",
     combo: UNASSIGNED,
   },
@@ -202,19 +251,25 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   // the terminal's find, which is a different chord and stays the terminal's.
   {
     id: "splitBeside",
-    label: "Show another session beside this one",
+    get label() {
+      return t("hotkeys.action.splitBeside")
+    },
     group: "view",
     combo: { mod: true, shift: true, alt: false, key: "g" },
   },
   {
     id: "otherPane",
-    label: "Focus the next pane",
+    get label() {
+      return t("hotkeys.action.otherPane")
+    },
     group: "view",
     combo: { mod: true, shift: true, alt: false, key: "f" },
   },
   {
     id: "commandPalette",
-    label: "Command palette",
+    get label() {
+      return t("hotkeys.action.commandPalette")
+    },
     group: "app",
     combo: { mod: true, shift: false, alt: false, key: "k" },
   },
@@ -223,19 +278,25 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   // also the free one.
   {
     id: "settings",
-    label: "Settings",
+    get label() {
+      return t("hotkeys.action.settings")
+    },
     group: "app",
     combo: { mod: true, shift: false, alt: false, key: "," },
   },
   {
     id: "pulls",
-    label: "Pull requests",
+    get label() {
+      return t("hotkeys.action.pulls")
+    },
     group: "app",
     combo: { mod: true, shift: true, alt: false, key: "p" },
   },
   {
     id: "shortcuts",
-    label: "Keyboard shortcuts",
+    get label() {
+      return t("hotkeys.action.shortcuts")
+    },
     group: "app",
     combo: { mod: true, shift: false, alt: false, key: "/" },
   },
@@ -365,24 +426,30 @@ export function hotkeyConflicts(hotkeys: Hotkeys): Partial<Record<HotkeyId, Hotk
 // held to: a bound chord is caught in the window capture phase and stopped
 // there, so it never reaches the PTY. lich does not veto the user's choice —
 // the recorder only has to say what the choice costs.
-const TERMINAL_CHORDS: Record<string, string> = {
-  a: "the shell's move to the start of the line",
-  c: "the shell's interrupt",
-  d: "the shell's end of input",
-  e: "the shell's move to the end of the line",
-  k: "the shell's kill to the end of the line",
-  l: "the shell's clear screen",
-  q: "the shell's resume output",
-  r: "the shell's history search",
-  s: "the shell's stop output",
-  u: "the shell's kill to the start of the line",
-  w: "the shell's erase word",
-  z: "the shell's suspend",
+const TERMINAL_CHORD_KEYS = new Set([
+  "a",
+  "c",
+  "d",
+  "e",
+  "k",
+  "l",
+  "q",
+  "r",
+  "s",
+  "u",
+  "w",
+  "z",
   // Not the shell's: the two the session terminal spends for itself, and the
   // one a provider binds inside it (shortcuts.ts, terminal/term-keys.ts).
-  f: "the session terminal's own search",
-  v: "the image paste lich sends the agent",
-  Backspace: "the erase word lich sends the agent",
+  "f",
+  "v",
+  "Backspace",
+] as const)
+
+type TerminalChordKey = typeof TERMINAL_CHORD_KEYS extends Set<infer K> ? K : never
+
+function isTerminalChordKey(key: string): key is TerminalChordKey {
+  return (TERMINAL_CHORD_KEYS as Set<string>).has(key)
 }
 
 // terminalCost is the one line the recorder shows for a chord the terminal side
@@ -396,8 +463,10 @@ export function terminalCost(combo: Combo): string {
   if (!combo.mod || combo.shift || combo.alt) {
     return ""
   }
-  const spent = TERMINAL_CHORDS[combo.key]
-  return spent ? `Ctrl+${formatKey(combo.key)} is ${spent}; sessions will no longer see it.` : ""
+  if (!isTerminalChordKey(combo.key)) {
+    return ""
+  }
+  return t(`hotkeys.terminalCost.${combo.key}`, { key: formatKey(combo.key) })
 }
 
 function formatKey(key: string): string {

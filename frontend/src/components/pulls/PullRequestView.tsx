@@ -12,6 +12,7 @@ import {
   Wrench,
   X,
 } from "lucide-react"
+import { t, useT, type PlainMessageKey } from "@/lib/i18n/i18n"
 import { ProjectService, System } from "@/lib/rpc"
 import type {
   MergeMethod,
@@ -76,10 +77,10 @@ export interface SessionAction {
   run: () => void
 }
 
-const MERGE_LABELS: Record<MergeMethod, string> = {
-  squash: "Squash and merge",
-  merge: "Create a merge commit",
-  rebase: "Rebase and merge",
+const MERGE_LABELS: Record<MergeMethod, PlainMessageKey> = {
+  squash: "pulls.mergeMessageDialog.squashAndMerge",
+  merge: "pulls.mergeMessageDialog.createMergeCommit",
+  rebase: "pulls.pullRequestView.rebaseAndMerge",
 }
 
 // What the hover says when nothing blocks the merge but CI is red. GitHub only
@@ -90,8 +91,7 @@ function failingChecks(failed: number): string | undefined {
   if (failed === 0) {
     return undefined
   }
-  const checks = failed === 1 ? "check is" : "checks are"
-  return `${failed} ${checks} failing — GitHub will still merge this`
+  return t("pulls.pullRequestView.failingChecks", { count: failed })
 }
 
 interface PullRequestViewProps {
@@ -138,6 +138,7 @@ export function PullRequestView({
   conversationLoading,
   onConversationRefresh,
 }: PullRequestViewProps) {
+  const t = useT()
   const [merging, setMerging] = useState(false)
   const [handingOff, setHandingOff] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -198,7 +199,11 @@ export function PullRequestView({
       // gh's refusal names a kind of cause, never the rule behind it; the note
       // is the only thing on screen that can, so it rides along when there is
       // one to say.
-      toast.error([`Merge failed: ${errorText(err)}`, ruleNote].filter(Boolean).join(" "))
+      toast.error(
+        [t("pulls.pullRequestView.mergeFailed", { error: errorText(err) }), ruleNote]
+          .filter(Boolean)
+          .join(" "),
+      )
     } finally {
       setMerging(false)
     }
@@ -207,7 +212,11 @@ export function PullRequestView({
   // A draft or a conflicting pull request can still be reviewed — only one that
   // is already over cannot, which is why this does not reuse the merge gate.
   const reviewBlocked =
-    detail.state !== "OPEN" ? `Pull request is ${detail.state.toLowerCase()}` : null
+    detail.state === "OPEN"
+      ? null
+      : detail.state === "MERGED"
+        ? t("pulls.mergeGate.merged")
+        : t("pulls.mergeGate.closed")
 
   // Every write to a thread re-reads the conversation rather than patching what
   // is on screen: GitHub decides what a reply and a resolve actually did, and a
@@ -260,13 +269,18 @@ export function PullRequestView({
       setVerdict(null)
       toast.success(
         event === "approve"
-          ? `Approved #${detail.number}`
-          : `Review sent on #${detail.number}${pending > 0 ? ` — ${pending} comments` : ""}`,
+          ? t("pulls.pullRequestView.approvedToast", { number: detail.number })
+          : pending > 0
+            ? t("pulls.pullRequestView.reviewSentWithComments", {
+                number: detail.number,
+                count: pending,
+              })
+            : t("pulls.pullRequestView.reviewSent", { number: detail.number }),
       )
       onRefresh()
       onConversationRefresh()
     } catch (err: unknown) {
-      toast.error(`Review failed: ${errorText(err)}`)
+      toast.error(t("pulls.pullRequestView.reviewFailed", { error: errorText(err) }))
     } finally {
       setSubmitting(false)
     }
@@ -291,7 +305,7 @@ export function PullRequestView({
                 className="bg-accent/55 text-foreground hover:bg-accent"
               >
                 <SquareTerminal />
-                {session.busy ? "Opening…" : session.label}
+                {session.busy ? t("pulls.pullRequestView.opening") : session.label}
               </Button>
             </span>
             {/* Whatever is wrong with this pull request, handed to the session
@@ -309,7 +323,7 @@ export function PullRequestView({
                   onClick={() => void handOff()}
                 >
                   <Wrench />
-                  {handingOff ? "Opening session…" : handoff.label}
+                  {handingOff ? t("pulls.pullRequestView.openingSession") : handoff.label}
                 </Button>
               </span>
             )}
@@ -331,10 +345,10 @@ export function PullRequestView({
                 >
                   <Check />
                   {submitting
-                    ? "Approving…"
+                    ? t("pulls.pullRequestView.approving")
                     : detail.reviewDecision === "APPROVED"
-                      ? "Approved"
-                      : "Approve"}
+                      ? t("pulls.pullRequestView.approved")
+                      : t("pulls.pullRequestView.approve")}
                 </Button>
               ) : (
                 <DropdownMenu>
@@ -342,7 +356,7 @@ export function PullRequestView({
                     render={
                       <Button size="sm" variant="ghost" disabled={reviewBlocked !== null}>
                         <MessageSquare />
-                        Submit review
+                        {t("pulls.pullRequestView.submitReview")}
                         <span className="tabular-nums text-muted-foreground">{pending}</span>
                         <ChevronDown />
                       </Button>
@@ -350,17 +364,17 @@ export function PullRequestView({
                   />
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => setVerdict("comment")}>
-                      Comment
+                      {t("pulls.pullRequestView.comment")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setVerdict("approve")}>
-                      Approve
+                      {t("pulls.pullRequestView.approve")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setVerdict("request_changes")}>
-                      Request changes
+                      {t("pulls.pullRequestView.requestChanges")}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => clearPendingReview(detail.url)}>
-                      Discard {pending} pending {pending === 1 ? "comment" : "comments"}
+                      {t("pulls.pullRequestView.discardPending", { count: pending })}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -377,7 +391,9 @@ export function PullRequestView({
                   render={
                     <Button size="sm" disabled={merging || (blocked !== null && !bypass)}>
                       <GitMerge />
-                      {merging ? "Merging…" : "Merge"}
+                      {merging
+                        ? t("pulls.pullRequestView.merging")
+                        : t("pulls.pullRequestView.merge")}
                       {/* The checks readout says this too, a line above — but
                           the decision is taken here, and a count beside the
                           button is the only place it cannot be missed. */}
@@ -411,8 +427,11 @@ export function PullRequestView({
                       key={method}
                       onClick={() => void merge(method, "", "", bypass)}
                     >
-                      {MERGE_LABELS[method]}
-                      {bypass && ", bypass rules"}
+                      {bypass
+                        ? t("pulls.pullRequestView.methodBypass", {
+                            method: t(MERGE_LABELS[method]),
+                          })
+                        : t(MERGE_LABELS[method])}
                     </DropdownMenuItem>
                   ))}
                   {/* Rebase replays the branch's own commits, so gh takes no
@@ -423,8 +442,12 @@ export function PullRequestView({
                       key={`${method}-edit`}
                       onClick={() => setEdit(mergeEditFor(method, detail))}
                     >
-                      {MERGE_LABELS[method]}, edit message…
-                      {bypass && " (bypasses rules)"}
+                      {t(
+                        bypass
+                          ? "pulls.pullRequestView.editMessageBypass"
+                          : "pulls.pullRequestView.editMessage",
+                        { method: t(MERGE_LABELS[method]) },
+                      )}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
@@ -432,12 +455,17 @@ export function PullRequestView({
             </span>
             {/* HEAD moving refetches on its own; this covers what it can't see —
                 a review, a check finishing, a PR opened from the terminal. */}
-            <Button variant="ghost" size="sm" onClick={onRefresh} aria-label="Refresh">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRefresh}
+              aria-label={t("pulls.pullRequestView.refresh")}
+            >
               <RefreshCw />
             </Button>
             <Button variant="ghost" size="sm" onClick={() => void System.OpenExternal(detail.url)}>
               <ExternalLink />
-              Open
+              {t("pulls.pullRequestView.open")}
             </Button>
           </div>
         </div>
@@ -482,27 +510,27 @@ export function PullRequestView({
 
         <div role="tablist" className="mt-4 flex gap-1">
           <TabButton active={tab === "overview"} onClick={() => showTab("overview")}>
-            Overview
+            {t("pulls.pullRequestView.tab.overview")}
           </TabButton>
           <TabButton active={tab === "commits"} onClick={() => showTab("commits")}>
-            Commits
+            {t("pulls.pullRequestView.tab.commits")}
             {commitCount > 0 && (
               <span className="tabular-nums text-muted-foreground">{commitCount}</span>
             )}
           </TabButton>
           <TabButton active={tab === "files"} onClick={() => showTab("files")}>
-            Files changed
+            {t("pulls.pullRequestView.tab.files")}
             {detail.changedFiles > 0 && (
               <span className="tabular-nums text-muted-foreground">{detail.changedFiles}</span>
             )}
           </TabButton>
           <TabButton active={tab === "conversation"} onClick={() => showTab("conversation")}>
-            Conversation
+            {t("pulls.pullRequestView.tab.conversation")}
             {talk > 0 && <span className="tabular-nums text-muted-foreground">{talk}</span>}
           </TabButton>
           {detail.checks.total > 0 && (
             <TabButton active={tab === "checks"} onClick={() => showTab("checks")}>
-              Checks
+              {t("pulls.pullRequestView.tab.checks")}
               <span className="tabular-nums text-muted-foreground">{detail.checks.total}</span>
             </TabButton>
           )}

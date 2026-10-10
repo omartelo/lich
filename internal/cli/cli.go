@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/omartelo/lich/internal/doctor"
+	"github.com/omartelo/lich/internal/prompt"
 	"github.com/omartelo/lich/internal/rage"
 	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/singleton"
@@ -226,6 +227,14 @@ type client struct {
 	// the same reason bundle exists — the real walk binds the pinned port and
 	// opens the workspace database.
 	diagnose func() ([]doctor.Check, error)
+}
+
+// lang is the language the session's agent was spawned to hear, exported by
+// lich as prompt.EnvVar. This process runs outside lich and has no way to read
+// the setting itself; a session spawned before the setting changed keeps the
+// language it was born with.
+func (c *client) lang() prompt.Lang {
+	return prompt.Parse(c.env(prompt.EnvVar))
 }
 
 // errHelpShown ends a subcommand that was asked for its help rather than for
@@ -504,7 +513,7 @@ func (c *client) wait(args []string) error {
 				return err
 			}
 		} else {
-			fmt.Fprintln(c.stdout, collectedText(collected))
+			fmt.Fprintln(c.stdout, collectedText(c.lang(), collected))
 		}
 		return collectedOutcome(collected)
 	}
@@ -601,7 +610,7 @@ func (c *client) open(args []string) error {
 		}
 		return failure
 	}
-	fmt.Fprint(c.stdout, openedText(opened))
+	fmt.Fprint(c.stdout, openedText(c.lang(), opened))
 	if failure != nil {
 		return failure
 	}
@@ -702,23 +711,17 @@ func (c *client) deliver(ctx context.Context, opened spawn.Session, prompt, meth
 // what the session can do — an empty home, no credentials it was not granted,
 // writes only inside its checkout — and a caller that discovers that from a
 // failure inside the session has to diagnose it from the far end.
-func openedText(opened spawn.Session) string {
-	where := fmt.Sprintf("project %q", opened.Project)
+func openedText(lang prompt.Lang, opened spawn.Session) string {
+	text := prompt.For(lang)
+	where := fmt.Sprintf(text.OpenedProject, opened.Project)
 	if opened.Path != "" {
-		where = fmt.Sprintf("%s, in worktree %s", where, opened.Path)
+		where = fmt.Sprintf(text.OpenedWorktree, where, opened.Path)
 	}
 	confined := ""
 	if opened.Confined {
-		confined = " It runs confined: an empty home holding only its agent's own state, the " +
-			"machine read-only, and writes only inside its checkout."
+		confined = text.OpenedConfined
 	}
-	return fmt.Sprintf(
-		"Opened session %q (%s) in %s.%s\n"+
-			"It answers to %q and to %q. Its agent may still be starting — a fresh "+
-			"worktree runs the project's setup script first — so a task you send it "+
-			"is held until the agent is up rather than lost.\n",
-		opened.Label, opened.Kind, where, confined, opened.Label, opened.Name,
-	)
+	return fmt.Sprintf(text.OpenedSession, opened.Label, opened.Kind, where, confined, opened.Name)
 }
 
 // rage writes the bug report bundle to a file and says what it wrote. It talks
@@ -847,24 +850,21 @@ func (c *client) close(args []string) error {
 	if *asJSON {
 		return c.emit(closed)
 	}
-	fmt.Fprint(c.stdout, closedText(closed))
+	fmt.Fprint(c.stdout, closedText(c.lang(), closed))
 	return nil
 }
 
 // closedText says what is gone and what is not. A checkout that was kept is the
 // one outcome with something left to come back to, so it says how.
-func closedText(closed spawn.Closed) string {
+func closedText(lang prompt.Lang, closed spawn.Closed) string {
+	text := prompt.For(lang)
 	switch {
 	case closed.Removed:
-		return fmt.Sprintf("Closed %q and removed its worktree %s.\n", closed.Label, closed.Worktree)
+		return fmt.Sprintf(text.ClosedRemoved, closed.Label, closed.Worktree)
 	case closed.Kept:
-		return fmt.Sprintf(
-			"Closed %q. Its worktree %s is still there, and the session is parked: opening a "+
-				"session on that branch again picks its conversation back up.\n",
-			closed.Label, closed.Worktree,
-		)
+		return fmt.Sprintf(text.ClosedKept, closed.Label, closed.Worktree)
 	default:
-		return fmt.Sprintf("Closed %q.\n", closed.Label)
+		return fmt.Sprintf(text.ClosedPlain, closed.Label)
 	}
 }
 
@@ -962,41 +962,31 @@ func (c *client) report(result relay.Result, asJSON bool) error {
 		return nil
 	}
 	if result.Status == relay.StatusUnanswered {
-		fmt.Fprintln(c.stdout, unansweredText(result.Target))
+		fmt.Fprintln(c.stdout, unansweredText(c.lang(), result.Target))
 		return nil
 	}
 	if result.Status == relay.StatusUnread {
-		fmt.Fprintln(c.stdout, unreadText(result.Target))
+		fmt.Fprintln(c.stdout, unreadText(c.lang(), result.Target))
 		return nil
 	}
 	if result.Status == relay.StatusUndelivered {
-		fmt.Fprintln(c.stdout, undeliveredText(result.Target))
+		fmt.Fprintln(c.stdout, undeliveredText(c.lang(), result.Target))
 		return nil
 	}
 	if result.Status == relay.StatusStopped {
-		fmt.Fprintln(c.stdout, stoppedText(result.Target))
+		fmt.Fprintln(c.stdout, stoppedText(c.lang(), result.Target))
 		return nil
 	}
 	if result.Status == relay.StatusExpired {
-		fmt.Fprintln(c.stdout, expiredText(result.Target))
+		fmt.Fprintln(c.stdout, expiredText(c.lang(), result.Target))
 		return nil
 	}
+	text := prompt.For(c.lang())
 	if result.Private {
-		fmt.Fprintf(c.stdout,
-			"%s is still working. The errand is private: no note will be typed at the sending "+
-				"session's prompt, and `lich wait` without a ticket will not return it. "+
-				"Hold the line for it with:\n  lich wait %s\n",
-			result.Target, result.Ticket,
-		)
+		fmt.Fprintf(c.stdout, text.StillWorkingPrivateCLI, result.Target, result.Ticket)
 		return nil
 	}
-	fmt.Fprintf(c.stdout,
-		"%s is still working. The errand is open — a message that session was not ready "+
-			"for is held until it is — and a note will be typed at the sending session's "+
-			"prompt when its result is ready. To hold the line for it instead:\n"+
-			"  lich wait %s\n",
-		result.Target, result.Ticket,
-	)
+	fmt.Fprintf(c.stdout, text.StillWorkingOpenCLI, result.Target, result.Ticket)
 	return nil
 }
 

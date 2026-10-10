@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n/i18n"
 // Pure tree assembly for the file browser: git ls-files hands the frontend a
 // flat, sorted list of repo-relative slash-separated paths; buildTree nests
 // them for rendering. No DOM, so it runs under vitest's node environment.
@@ -116,10 +117,10 @@ function sortTree(nodes: TreeNode[]): void {
 export function treeFootnote(cut: boolean, hidden: string[]): string {
   const parts: string[] = []
   if (hidden.length > 0) {
-    parts.push(`Hidden: ${hidden.join(", ")}.`)
+    parts.push(t("git.fileTree.hidden", { names: hidden.join(", ") }))
   }
   if (cut) {
-    parts.push("This folder has more files than the tree can list.")
+    parts.push(t("git.fileTree.cut"))
   }
   return parts.join(" ")
 }

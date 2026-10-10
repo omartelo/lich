@@ -1,6 +1,7 @@
 import { useRef } from "react"
 import type { PointerEvent as ReactPointerEvent } from "react"
 import { dragTrack, offsetOf } from "@/lib/session/pane-grid"
+import { useT } from "@/lib/i18n/i18n"
 
 interface PaneSeamsProps {
   /** Share of the axis each track takes; a seam sits between adjacent pairs. */
@@ -40,6 +41,7 @@ export function PaneSeams({
   // The tracks as they were when the drag started: every move is measured from
   // that, so a pointer returning to where it began restores the original sizes
   // rather than accumulating rounding.
+  const t = useT()
   const drag = useRef<{ index: number; start: number; tracks: number[] } | null>(null)
   const vertical = axis === "cols"
 
@@ -67,7 +69,9 @@ export function PaneSeams({
             key={`${axis}-${index}`}
             role="separator"
             aria-orientation={vertical ? "vertical" : "horizontal"}
-            aria-label={vertical ? "Resize the columns" : "Resize the rows"}
+            aria-label={
+              vertical ? t("shell.paneSeams.resizeColumns") : t("shell.paneSeams.resizeRows")
+            }
             className={
               vertical
                 ? "absolute z-10 w-1.5 -translate-x-1/2 cursor-col-resize touch-none transition-colors hover:bg-accent"

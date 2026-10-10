@@ -5,6 +5,7 @@ import { useNow } from "@/lib/use-now"
 import { QuotaGauge } from "./QuotaGauge"
 import { usageColor } from "./ContextRing"
 import { FooterReadout } from "./FooterReadout"
+import { useT } from "@/lib/i18n/i18n"
 
 interface PlanQuotaProps {
   plan: QuotaPlan
@@ -13,6 +14,7 @@ interface PlanQuotaProps {
 // A session can spend a different login from lich's own. Keep the account
 // beside its windows, and omit the name when the provider cannot identify it.
 export function PlanQuota({ plan }: PlanQuotaProps) {
+  const t = useT()
   // A locked window must remain visible even when another window is fuller.
   const hottest =
     plan.status === "ok"
@@ -21,14 +23,15 @@ export function PlanQuota({ plan }: PlanQuotaProps) {
   if (!hottest) return null
   return (
     <FooterReadout
-      label="Plan usage"
+      label={t("shell.planQuota.planUsage")}
       title={plan.plan ? `${plan.name} · ${plan.plan}` : plan.name}
       tooltipClassName="py-3"
       className={hottest.lockedReason ? "text-destructive" : usageColor(hottest.percent)}
       detail={<PlanDetails plan={plan} />}
     >
       <Gauge className="size-3.5" aria-hidden="true" />
-      {shortWindow(hottest.seconds)} {hottest.lockedReason ? "Locked" : `${hottest.percent}%`}
+      {shortWindow(hottest.seconds)}{" "}
+      {hottest.lockedReason ? t("shell.planQuota.locked") : `${hottest.percent}%`}
     </FooterReadout>
   )
 }

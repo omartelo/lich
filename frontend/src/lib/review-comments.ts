@@ -19,6 +19,7 @@
 // replaced, never mutated, so subscribers keep a stable reference until
 // something actually changes.
 
+import { prompt } from "./i18n/prompt"
 import { bracketedPaste } from "./terminal/bracketed-paste"
 
 export interface ReviewComment {
@@ -110,7 +111,7 @@ export function composeReviewComments(list: readonly ReviewComment[], note = "")
   if (note.trim() !== "") {
     items.push(`- ${continuation(note.trim())}`)
   }
-  return bracketedPaste(`Review comments:\n\n${items.join("\n")}`)
+  return bracketedPaste(`${prompt("prompts.reviewComments.header")}\n\n${items.join("\n")}`)
 }
 
 // A comment written across several lines stays one list item: its own newlines

@@ -1,4 +1,5 @@
 import { formatCombo, HOTKEY_ACTIONS, HOTKEY_GROUPS, type Hotkeys } from "@/lib/hotkeys"
+import { t, tIn } from "@/lib/i18n/i18n"
 
 // The rows the shortcuts overlay lists, and the read-only half of the Hotkeys
 // settings pane. Two sources: the rebindable actions, read from the user's
@@ -14,14 +15,19 @@ export interface ShortcutGroup {
   rows: ShortcutRow[]
 }
 
-export const TERMINAL_TITLE = "Terminal"
-export const PASSTHROUGH_TITLE = "Passed through to the agent"
+export const TERMINAL_TITLE = tIn("en", "hotkeys.shortcuts.terminalTitle")
+export const PASSTHROUGH_TITLE = tIn("en", "hotkeys.shortcuts.passthroughTitle")
 
 // lich's own chord, and not a rebindable one: it shadows Chromium's Find in
 // --app mode, and an accelerator answers to a fixed chord (TerminalView). Ctrl
 // on macOS too, for the same reason as the rows below.
 export const terminalRows: ShortcutRow[] = [
-  { label: "Search the session's output", keys: "Ctrl+F" },
+  {
+    get label() {
+      return t("hotkeys.shortcuts.searchOutput")
+    },
+    keys: "Ctrl+F",
+  },
 ]
 
 // These are spelled out rather than built from a Combo: they are matched on
@@ -32,9 +38,9 @@ export function passthroughRows(isWindows: boolean, isMac = false): ShortcutRow[
     // Claude Code reads the clipboard itself on this one; Windows binds it to
     // Alt+V, so the chord lich sends differs by platform (term-keys.ts). A paste
     // of an image with no text sends the same chord, which is how ⌘V gets there.
-    { label: "Attach an image from the clipboard", keys: imageAttachKeys(isWindows, isMac) },
-    { label: "Insert a newline without sending", keys: "Shift+Enter" },
-    { label: "Erase the previous word", keys: "Ctrl+Backspace" },
+    { label: t("hotkeys.shortcuts.attachImage"), keys: imageAttachKeys(isWindows, isMac) },
+    { label: t("hotkeys.shortcuts.newline"), keys: "Shift+Enter" },
+    { label: t("hotkeys.shortcuts.eraseWord"), keys: "Ctrl+Backspace" },
   ]
 }
 
@@ -59,7 +65,7 @@ export function shortcutGroups(
   }))
   return [
     ...bound,
-    { title: TERMINAL_TITLE, rows: terminalRows },
-    { title: PASSTHROUGH_TITLE, rows: passthroughRows(isWindows, isMac) },
+    { title: t("hotkeys.shortcuts.terminalTitle"), rows: terminalRows },
+    { title: t("hotkeys.shortcuts.passthroughTitle"), rows: passthroughRows(isWindows, isMac) },
   ]
 }

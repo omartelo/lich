@@ -53,6 +53,8 @@ import { isSessionKind } from "@/lib/session/sessions"
 import type { ExternalSession, Project } from "@/lib/api-types"
 import { Store } from "@/lib/rpc"
 import { cn, errorText } from "@/lib/utils"
+import { useT } from "@/lib/i18n/i18n"
+import { Trans } from "@/components/common/Trans"
 
 // CommandPalette is the app-wide quick switcher: one shortcut (Ctrl/Cmd+K by
 // default, rebindable in Settings) to jump to any session across every project,
@@ -67,6 +69,7 @@ export function CommandPalette() {
   const { projects, sessions, activateSession, openRecent, resumeClosedSession } = useProjects()
   const { hotkeys } = useSettings()
   const navigate = useNavigate()
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [tab, setTab] = useState<PaletteTab>("All")
@@ -109,7 +112,12 @@ export function CommandPalette() {
   const forget = (session: PaletteHistory) => {
     dropParked(session.id)
     void Store.ForgetSession(session.id).catch((error: unknown) => {
-      toast.error(`Could not forget ${session.label}: ${errorText(error)}`)
+      toast.error(
+        t("palette.commandPalette.forgetFailed", {
+          label: session.label,
+          error: errorText(error),
+        }),
+      )
     })
   }
 
@@ -130,7 +138,7 @@ export function CommandPalette() {
         label,
       )
     } catch (error: unknown) {
-      toast.error(`Could not resume ${label}: ${errorText(error)}`)
+      toast.error(t("palette.commandPalette.resumeFailed", { label, error: errorText(error) }))
       return
     }
     await resumeClosedSession(adoptedSession(session, id))
@@ -245,7 +253,7 @@ export function CommandPalette() {
       return
     }
     if (!runHotkey(action.id)) {
-      toast(`${action.label} is not available here`)
+      toast(t("palette.commandPalette.actionUnavailable", { label: action.label }))
     }
   }
 
@@ -305,10 +313,10 @@ export function CommandPalette() {
       open={open}
       onOpenChange={(next) => (next ? setOpen(true) : close())}
       onOpenChangeComplete={runPicked}
-      title="Command palette"
-      placeholder="Jump to a session, project or something said, or type > for actions…"
-      searchLabel="Search sessions and projects"
-      resultsLabel="Results"
+      title={t("palette.commandPalette.title")}
+      placeholder={t("palette.commandPalette.placeholder")}
+      searchLabel={t("palette.commandPalette.searchLabel")}
+      resultsLabel={t("palette.commandPalette.resultsLabel")}
       query={query}
       onQueryChange={setQuery}
       onKeyDown={onInputKeyDown}
@@ -326,16 +334,31 @@ export function CommandPalette() {
         // missed, never an empty workspace.
         tab === "History" && query.trim() === "" && history.length === 0 ? (
           <PickerEmpty>
-            <span className="block text-foreground">Nothing closed yet</span>
+            <span className="block text-foreground">
+              {t("palette.commandPalette.nothingClosed")}
+            </span>
             <span className="mx-auto mt-2 block max-w-[44ch] leading-relaxed">
-              Close a session and it waits here — its branch, its agent and its conversation — until
-              its worktree is removed.
+              {t("palette.commandPalette.nothingClosedHint")}
             </span>
           </PickerEmpty>
         ) : (
           <PickerEmpty>
-            No matches for <span className="font-mono text-foreground/80">{query.trim()}</span>
-            {term === null && tab !== "All" && <> in {tab.toLowerCase()}</>}
+            {term === null && tab !== "All" ? (
+              <Trans
+                k="palette.commandPalette.noMatchesInTab"
+                params={{
+                  query: <span className="font-mono text-foreground/80">{query.trim()}</span>,
+                  tab: t(`palette.commandPalette.tab.${tab}`).toLocaleLowerCase(),
+                }}
+              />
+            ) : (
+              <Trans
+                k="palette.commandPalette.noMatches"
+                params={{
+                  query: <span className="font-mono text-foreground/80">{query.trim()}</span>,
+                }}
+              />
+            )}
           </PickerEmpty>
         )
       ) : (
@@ -346,7 +369,10 @@ export function CommandPalette() {
             trailing={
               group.note ??
               (group.total > group.rows.length
-                ? `${group.rows.length} of ${group.total}`
+                ? t("palette.commandPalette.shownOfTotal", {
+                    shown: group.rows.length,
+                    total: group.total,
+                  })
                 : undefined)
             }
           >
@@ -382,8 +408,13 @@ function FilterTabs({
   counts: readonly (number | null)[]
   onPick: (tab: PaletteTab) => void
 }) {
+  const t = useT()
   return (
-    <div role="tablist" aria-label="Filter results" className="flex flex-wrap items-center gap-1">
+    <div
+      role="tablist"
+      aria-label={t("palette.commandPalette.filterLabel")}
+      className="flex flex-wrap items-center gap-1"
+    >
       {PALETTE_TABS.map((name, i) => {
         const count = counts[i]
         const current = name === tab
@@ -405,7 +436,7 @@ function FilterTabs({
               !current && count === 0 && "opacity-40",
             )}
           >
-            {name}
+            {t(`palette.commandPalette.tab.${name}`)}
             {count !== null && count !== undefined && (
               <span className="font-mono text-[0.625rem] opacity-70">{count}</span>
             )}
@@ -578,6 +609,7 @@ function HistoryRow({
   onSelect: () => void
   onRun: () => void
 }) {
+  const t = useT()
   const closedAt = agoLabel(session.closedAt)
   const note = historyIndexNote(session)
   return (
@@ -598,7 +630,7 @@ function HistoryRow({
           {session.gone ? (
             <span className="flex shrink-0 items-center gap-1 text-tone-wait">
               <TriangleAlert className="size-3 shrink-0" />
-              checkout gone
+              {t("palette.commandPalette.checkoutGone")}
             </span>
           ) : (
             session.branch && (
@@ -670,6 +702,7 @@ function MessageRow({
   onSelect: () => void
   onRun: () => void
 }) {
+  const t = useT()
   return (
     <PickerRow selected={selected} onSelect={onSelect} onRun={onRun}>
       <MessageSquareText className="size-4 shrink-0 text-muted-foreground" />
@@ -681,7 +714,7 @@ function MessageRow({
       </span>
       {message.count > 1 && (
         <span className="shrink-0 font-mono text-[0.625rem] text-muted-foreground">
-          {message.count} matches
+          {t("palette.commandPalette.matches", { count: message.count })}
         </span>
       )}
     </PickerRow>
@@ -701,6 +734,7 @@ function ProjectRow({
   onSelect: () => void
   onRun: () => void
 }) {
+  const t = useT()
   return (
     <PickerRow selected={selected} onSelect={onSelect} onRun={onRun}>
       <Folder className="size-4 shrink-0 text-muted-foreground" />
@@ -709,7 +743,7 @@ function ProjectRow({
         <span className="truncate font-mono text-xs text-muted-foreground">{project.path}</span>
       </span>
       <span className="shrink-0 font-mono text-[0.625rem] text-muted-foreground">
-        {sessionCount} {sessionCount === 1 ? "session" : "sessions"}
+        {t("palette.commandPalette.sessions", { count: sessionCount })}
       </span>
     </PickerRow>
   )
@@ -731,6 +765,7 @@ function ClosedProjectRow({
   onSelect: () => void
   onRun: () => void
 }) {
+  const t = useT()
   const Icon = missing ? FolderX : Folder
   return (
     <PickerRow selected={selected} onSelect={onSelect} onRun={onRun}>
@@ -740,7 +775,7 @@ function ClosedProjectRow({
         <span className="truncate font-mono text-xs text-muted-foreground">{project.path}</span>
       </span>
       <span className="shrink-0 font-mono text-[0.625rem] text-muted-foreground">
-        {missing ? "relocate" : "reopen"}
+        {missing ? t("palette.commandPalette.relocate") : t("palette.commandPalette.reopen")}
       </span>
     </PickerRow>
   )

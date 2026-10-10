@@ -17,6 +17,7 @@ import {
   ViewPlugin,
   WidgetType,
 } from "@codemirror/view"
+import { t } from "@/lib/i18n/i18n"
 
 export interface RevertLayer {
   /** Per document line, the change block it belongs to, or null (diff-blocks). */
@@ -70,8 +71,8 @@ class RevertWidget extends WidgetType {
     const button = document.createElement("button")
     button.type = "button"
     button.className = "cm-diff-revert"
-    button.title = "Revert this change"
-    button.innerHTML = `${UNDO_ICON}<span>Revert</span>`
+    button.title = t("git.codemirror.revertTitle")
+    button.innerHTML = `${UNDO_ICON}<span>${t("git.codemirror.revert")}</span>`
     // Pressing it must not move the editor's selection off whatever was selected.
     button.addEventListener("mousedown", (event) => event.preventDefault())
     button.addEventListener("click", () => this.onRevert(this.block))

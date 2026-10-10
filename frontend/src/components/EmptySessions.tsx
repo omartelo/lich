@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button"
 import { useProjects } from "@/providers/projects"
 import { NO_AGENT_REASON, useProjectSessionKind } from "@/lib/providers-store"
 import { sessionsOf } from "@/lib/session/sessions"
+import { useT } from "@/lib/i18n/i18n"
 
 // A sessionless project is a legal state: the user is asked for a session rather
 // than having a replacement PTY spawned behind their back. The route matches for
 // every project, so the emptiness gate lives here — the router cannot express it
 // without covering the running terminals underneath.
 export function EmptySessions() {
+  const t = useT()
   const { sessions, newSession } = useProjects()
   const { projectId = "" } = useParams()
   // What the button will actually spawn is decided in the store, for every
@@ -25,12 +27,12 @@ export function EmptySessions() {
   return (
     <EmptyScreen
       icon={SquareTerminal}
-      title="No session open"
-      description={noAgent ? NO_AGENT_REASON : "Open a session to start working in this project."}
+      title={t("shell.emptySessions.title")}
+      description={noAgent ? NO_AGENT_REASON : t("shell.emptySessions.description")}
     >
       <Button onClick={() => newSession(projectId)}>
         {noAgent ? <SquareTerminal data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
-        {noAgent ? "New terminal" : "New session"}
+        {noAgent ? t("shell.emptySessions.newTerminal") : t("shell.emptySessions.newSession")}
       </Button>
     </EmptyScreen>
   )

@@ -24,6 +24,8 @@ import { LanguageSettings } from "./LanguageSettings"
 import { ImportThemeDialog } from "./ImportThemeDialog"
 import { ThemePicker } from "./ThemePicker"
 import { Button } from "@/components/ui/button"
+import { Trans } from "@/components/common/Trans"
+import { useT } from "@/lib/i18n/i18n"
 import { THEME_TEMPLATE_FILENAME } from "@/lib/themes"
 import { errorText } from "@/lib/utils"
 
@@ -32,6 +34,7 @@ import { errorText } from "@/lib/utils"
 // the footer an editor — and both open in place, below their own row, so the
 // pane never stops being one list.
 export function AppearanceSettings() {
+  const t = useT()
   const [themePendingRemoval, setThemePendingRemoval] = useState<{
     id: string
     name: string
@@ -66,7 +69,7 @@ export function AppearanceSettings() {
   const onChooseThemeFile = async () => {
     setImporting(true)
     try {
-      const path = await ProjectService.PickFile("Import Theme")
+      const path = await ProjectService.PickFile(t("settings.appearanceSettings.importPickTitle"))
       if (!path) return
       const result = await importTheme(path, false)
       setImportOpen(false)
@@ -74,9 +77,9 @@ export function AppearanceSettings() {
         setThemePendingOverwrite({ path, theme: result.theme })
         return
       }
-      toast.success(`Imported theme: ${result.theme.name}`)
+      toast.success(t("settings.appearanceSettings.imported", { name: result.theme.name }))
     } catch (error) {
-      toast.error(`Theme import failed: ${errorText(error)}`)
+      toast.error(t("settings.appearanceSettings.importFailed", { error: errorText(error) }))
     } finally {
       setImporting(false)
     }
@@ -94,10 +97,14 @@ export function AppearanceSettings() {
       }
       setPackPendingOverwrite(null)
       toast.success(
-        `Installed ${themeCount(result.themes?.length ?? 0)} from ${result.pack} v${result.version}`,
+        t("settings.appearanceSettings.installed", {
+          count: result.themes?.length ?? 0,
+          pack: result.pack,
+          version: result.version,
+        }),
       )
     } catch (error) {
-      toast.error(`Theme install failed: ${errorText(error)}`)
+      toast.error(t("settings.appearanceSettings.installFailed", { error: errorText(error) }))
     } finally {
       setImporting(false)
     }
@@ -109,11 +116,17 @@ export function AppearanceSettings() {
       const result = await updateThemeFromGit(item.id)
       toast.success(
         result.upToDate
-          ? `${result.pack} is already at v${result.version}`
-          : `Updated ${result.pack} to v${result.version}`,
+          ? t("settings.appearanceSettings.upToDate", {
+              pack: result.pack,
+              version: result.version,
+            })
+          : t("settings.appearanceSettings.updated", {
+              pack: result.pack,
+              version: result.version,
+            }),
       )
     } catch (error) {
-      toast.error(`Theme update failed: ${errorText(error)}`)
+      toast.error(t("settings.appearanceSettings.updateFailed", { error: errorText(error) }))
     } finally {
       setUpdatingID(null)
     }
@@ -123,10 +136,10 @@ export function AppearanceSettings() {
     if (!themePendingOverwrite) return
     try {
       const result = await importTheme(themePendingOverwrite.path, true)
-      toast.success(`Imported theme: ${result.theme.name}`)
+      toast.success(t("settings.appearanceSettings.imported", { name: result.theme.name }))
       setThemePendingOverwrite(null)
     } catch (error) {
-      toast.error(`Theme import failed: ${errorText(error)}`)
+      toast.error(t("settings.appearanceSettings.importFailed", { error: errorText(error) }))
     }
   }
 
@@ -136,21 +149,24 @@ export function AppearanceSettings() {
     }
     try {
       await removeTheme(themePendingRemoval.id)
-      toast.success(`Removed theme: ${themePendingRemoval.name}`)
+      toast.success(t("settings.appearanceSettings.removed", { name: themePendingRemoval.name }))
       setThemePendingRemoval(null)
     } catch (error) {
-      toast.error(`Theme removal failed: ${errorText(error)}`)
+      toast.error(t("settings.appearanceSettings.removeFailed", { error: errorText(error) }))
     }
   }
 
   const onDownloadThemeTemplate = async () => {
     try {
-      const path = await ProjectService.PickSaveFile("Save Theme Template", THEME_TEMPLATE_FILENAME)
+      const path = await ProjectService.PickSaveFile(
+        t("settings.appearanceSettings.templatePickTitle"),
+        THEME_TEMPLATE_FILENAME,
+      )
       if (!path) return
       await Themes.SaveTemplate(path)
-      toast.success(`Saved theme template to ${path}`)
+      toast.success(t("settings.appearanceSettings.templateSaved", { path }))
     } catch (error) {
-      toast.error(`Theme template failed: ${errorText(error)}`)
+      toast.error(t("settings.appearanceSettings.templateFailed", { error: errorText(error) }))
     }
   }
 
@@ -169,7 +185,7 @@ export function AppearanceSettings() {
         updatingID={updatingID}
       />
 
-      <SettingRow title="Zoom">
+      <SettingRow title={t("settings.appearanceSettings.zoomTitle")}>
         <Stepper
           value={zoom}
           display={`${Math.round(zoom * 100)}%`}
@@ -181,12 +197,12 @@ export function AppearanceSettings() {
           onChange={setZoom}
           decrementIcon={<ZoomOut />}
           incrementIcon={<ZoomIn />}
-          decrementLabel="Zoom out"
-          incrementLabel="Zoom in"
+          decrementLabel={t("settings.appearanceSettings.zoomOut")}
+          incrementLabel={t("settings.appearanceSettings.zoomIn")}
         />
       </SettingRow>
 
-      <SettingRow title="Terminal text size">
+      <SettingRow title={t("settings.appearanceSettings.textSizeTitle")}>
         <Stepper
           value={terminalFontSize}
           display={`${terminalFontSize}px`}
@@ -198,8 +214,8 @@ export function AppearanceSettings() {
           onChange={setTerminalFontSize}
           decrementIcon={<Minus />}
           incrementIcon={<Plus />}
-          decrementLabel="Smaller terminal text"
-          incrementLabel="Larger terminal text"
+          decrementLabel={t("settings.appearanceSettings.textSmaller")}
+          incrementLabel={t("settings.appearanceSettings.textLarger")}
         />
       </SettingRow>
 
@@ -218,13 +234,16 @@ export function AppearanceSettings() {
       <ConfirmDialog
         open={packPendingOverwrite !== null}
         onCancel={() => setPackPendingOverwrite(null)}
-        title="Replace imported themes?"
+        title={t("settings.appearanceSettings.replaceThemesTitle")}
         description={
-          <>
-            The repository carries themes that are already installed:{" "}
-            <span className="font-medium">{packPendingOverwrite?.conflicts.join(", ")}</span>.
-            Install anyway? This permanently deletes the previous versions.
-          </>
+          <Trans
+            k="settings.appearanceSettings.replaceThemesDescription"
+            params={{
+              themes: (
+                <span className="font-medium">{packPendingOverwrite?.conflicts.join(", ")}</span>
+              ),
+            }}
+          />
         }
       >
         <Button
@@ -234,44 +253,41 @@ export function AppearanceSettings() {
             if (packPendingOverwrite) void installRepository(packPendingOverwrite.url, true)
           }}
         >
-          Replace themes
+          {t("settings.appearanceSettings.replaceThemes")}
         </Button>
       </ConfirmDialog>
       <ConfirmDialog
         open={themePendingRemoval !== null}
         onCancel={() => setThemePendingRemoval(null)}
-        title="Remove imported theme?"
+        title={t("settings.appearanceSettings.removeThemeTitle")}
         description={
-          <>
-            Delete <span className="font-medium">{themePendingRemoval?.name}</span>? This removes
-            the imported theme file from lich.
-          </>
+          <Trans
+            k="settings.appearanceSettings.removeThemeDescription"
+            params={{ name: <span className="font-medium">{themePendingRemoval?.name}</span> }}
+          />
         }
       >
         <Button variant="destructive" onClick={() => void onRemoveTheme()}>
-          Remove theme
+          {t("settings.appearanceSettings.removeTheme")}
         </Button>
       </ConfirmDialog>
       <ConfirmDialog
         open={themePendingOverwrite !== null}
         onCancel={() => setThemePendingOverwrite(null)}
-        title="Replace imported theme?"
+        title={t("settings.appearanceSettings.replaceThemeTitle")}
         description={
-          <>
-            A theme with the id{" "}
-            <span className="font-medium">{themePendingOverwrite?.theme.id}</span> already exists.
-            Import anyway? This permanently deletes the previous theme.
-          </>
+          <Trans
+            k="settings.appearanceSettings.replaceThemeDescription"
+            params={{
+              id: <span className="font-medium">{themePendingOverwrite?.theme.id}</span>,
+            }}
+          />
         }
       >
         <Button variant="destructive" onClick={() => void onOverwriteTheme()}>
-          Replace theme
+          {t("settings.appearanceSettings.replaceTheme")}
         </Button>
       </ConfirmDialog>
     </>
   )
-}
-
-function themeCount(count: number): string {
-  return count === 1 ? "1 theme" : `${count} themes`
 }

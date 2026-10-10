@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/omartelo/lich/internal/prompt"
 )
 
 // Collecting without waiting is how a sender busy in a turn of its own looks in
@@ -79,7 +81,7 @@ func TestMCPWaitNoWaitRefusesATicket(t *testing.T) {
 // loop is the polling they forbid.
 func TestMCPInstructionsTellWhenToLookWithoutWaiting(t *testing.T) {
 	for _, want := range []string{"no_wait", "before delegating more", "before the final synthesis", "in a loop"} {
-		if !strings.Contains(mcpInstructions, want) {
+		if !strings.Contains(mcpInstructions(prompt.English), want) {
 			t.Errorf("instructions are missing %q", want)
 		}
 	}

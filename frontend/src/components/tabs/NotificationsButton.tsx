@@ -14,6 +14,7 @@ import { notificationsFrom } from "@/lib/session/notifications"
 import { useProjects } from "@/providers/projects"
 import type { SessionStatus } from "@/lib/session/session-events"
 import { dismissSessionNotification, usePendingStatuses } from "@/lib/session/use-session-status"
+import { useT } from "@/lib/i18n/i18n"
 
 function StatusIcon({ status }: { status: SessionStatus }) {
   if (status === "waiting") {
@@ -30,6 +31,7 @@ function StatusIcon({ status }: { status: SessionStatus }) {
 // session state.
 export function NotificationsButton() {
   const { projects, sessions, activateSession } = useProjects()
+  const t = useT()
   const navigate = useNavigate()
   // The focused session (active project + its active session) is on screen, so
   // it is dropped from the queue — same match the provider derives it from.
@@ -44,11 +46,15 @@ export function NotificationsButton() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        title="Notifications"
+        title={t("tabs.notificationsButton.title")}
         // The count belongs in the trigger's own name: it rode an aria-label on
         // the dot below, which is a plain span with no role, so nothing
         // announced it.
-        aria-label={items.length > 0 ? `Notifications, ${items.length} pending` : "Notifications"}
+        aria-label={
+          items.length > 0
+            ? t("tabs.notificationsButton.titlePending", { count: items.length })
+            : t("tabs.notificationsButton.title")
+        }
         render={
           <Button
             variant="ghost"
@@ -70,7 +76,9 @@ export function NotificationsButton() {
             and throws outside a Menu.Group (it writes the label id into the
             group context). These are a header and a placeholder, not labels. */}
         <div className="flex items-center justify-between px-2 py-1.5">
-          <span className="text-xs font-semibold tracking-wide text-foreground">Notifications</span>
+          <span className="text-xs font-semibold tracking-wide text-foreground">
+            {t("tabs.notificationsButton.title")}
+          </span>
           {items.length > 0 && (
             <span className="text-xs tabular-nums text-muted-foreground">{items.length}</span>
           )}
@@ -78,7 +86,7 @@ export function NotificationsButton() {
         <DropdownMenuSeparator />
         {items.length === 0 ? (
           <div className="px-2 py-6 text-center text-xs text-muted-foreground">
-            You&apos;re all caught up
+            {t("tabs.notificationsButton.caughtUp")}
           </div>
         ) : (
           items.map((item) => (
@@ -93,7 +101,7 @@ export function NotificationsButton() {
                 <span className="truncate text-xs text-muted-foreground">{item.projectName}</span>
               </span>
               <CloseButton
-                label={`Dismiss ${item.sessionLabel}`}
+                label={t("tabs.notificationsButton.dismiss", { name: item.sessionLabel })}
                 className="group-data-highlighted:opacity-100"
                 onClick={(event) => {
                   event.stopPropagation()

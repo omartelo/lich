@@ -1,4 +1,5 @@
 import type { BaseStatus, PullRequestDetail } from "@/lib/api-types"
+import { prompt } from "@/lib/i18n/prompt"
 import { conflictsWithBase } from "@/lib/pulls/merge-gate"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 
@@ -11,8 +12,10 @@ const NAMED_CHECKS = 8
 /** One thing wrong with a pull request, and the prompt that hands it over. */
 export interface PullRequestHandoff {
   label: string
-  /** Ready to write into a PTY: the prompt as one bracketed paste. */
-  prompt: string
+  /** Ready to write into a PTY: the prompt as one bracketed paste. A getter, so
+   * the prompt language is read when the prompt is used, not when the card
+   * rendered. */
+  readonly prompt: string
 }
 
 // pullRequestHandoff names the pull request's current problem, worst first: a
@@ -29,34 +32,42 @@ export function pullRequestHandoff(detail: PullRequestDetail): PullRequestHandof
   if (conflictsWithBase(detail)) {
     return {
       label: "Resolve conflicts",
-      prompt: bracketedPaste(
-        `Pull request #${detail.number} (${detail.headRefName}) has merge conflicts with ${detail.baseRefName}. Resolve them.`,
-      ),
+      get prompt() {
+        return bracketedPaste(
+          prompt("prompts.pullRequest.conflicts", {
+            number: detail.number,
+            branch: detail.headRefName,
+            base: detail.baseRefName,
+          }),
+        )
+      },
     }
   }
   if (detail.checks.failed > 0) {
-    return { label: "Fix CI errors", prompt: bracketedPaste(checksPrompt(detail)) }
+    return {
+      label: "Fix CI errors",
+      get prompt() {
+        return bracketedPaste(checksPrompt(detail))
+      },
+    }
   }
   return null
 }
 
 function checksPrompt(detail: PullRequestDetail): string {
-  const head = `CI is failing on pull request #${detail.number} (${detail.headRefName}).`
+  const params = { number: detail.number, branch: detail.headRefName }
   const failed = (detail.checkRuns ?? []).filter((run) => run.state === "failed")
   // gh reports the counts and the runs from the same rollup, but the runs are
   // the half that can come back empty — a status context with no name, an older
   // gh. The count is what the header showed, so it is what the prompt owes.
   if (failed.length === 0) {
-    return `${head} ${detail.checks.failed} ${detail.checks.failed === 1 ? "check is" : "checks are"} red; find out which and fix them.`
+    return prompt("prompts.pullRequest.checksUnnamed", { ...params, count: detail.checks.failed })
   }
   const named = failed.slice(0, NAMED_CHECKS)
   const lines = named.map((run) => `- ${run.name}${run.url ? ` — ${run.url}` : ""}`)
   const omitted = failed.length - named.length
-  const tail =
-    omitted > 0
-      ? `\n\n…and ${omitted} more failing ${omitted === 1 ? "check" : "checks"} not listed.`
-      : ""
-  return `${head} Fix these checks:\n\n${lines.join("\n")}${tail}`
+  const tail = omitted > 0 ? prompt("prompts.pullRequest.checksOmitted", { count: omitted }) : ""
+  return prompt("prompts.pullRequest.checksListed", { ...params, checks: lines.join("\n") }) + tail
 }
 
 // createPullRequestPrompt hands the writing of a branch's first pull request to
@@ -64,9 +75,7 @@ function checksPrompt(detail: PullRequestDetail): string {
 // The base, draft or not, and the template are left to it and to gh: the text
 // sits at the prompt unsent, so a reader who wants otherwise edits it there.
 export function createPullRequestPrompt(branch: string): string {
-  return bracketedPaste(
-    `Branch ${branch} has no pull request yet. Open one with \`gh pr create\`: push the branch first if it is not on the remote, write the title and body from the commits and the diff against the base branch, and follow the repository's pull request template if it has one.`,
-  )
+  return bracketedPaste(prompt("prompts.pullRequest.create", { branch }))
 }
 
 // offersPullRequest says whether a branch with no open pull request is one a

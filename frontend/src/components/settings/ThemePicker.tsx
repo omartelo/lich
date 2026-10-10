@@ -3,6 +3,7 @@ import { ChevronDown, RefreshCw, Trash2, Upload } from "lucide-react"
 import type { BrokenTheme, ThemeDefinition } from "@/lib/api-types"
 import { bundledThemes, repoLabel, SYSTEM_THEME } from "@/lib/themes"
 import type { Theme } from "@/providers/settings"
+import { useT } from "@/lib/i18n/i18n"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -111,17 +112,21 @@ export function ThemePicker({
   onRemoveBroken,
   updatingID,
 }: ThemePickerProps) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const system = value === SYSTEM_THEME
 
   return (
     <div className="min-w-0">
-      <SettingRow title="Theme" description="Colors the interface and the terminal.">
+      <SettingRow
+        title={t("settings.themePicker.title")}
+        description={t("settings.themePicker.description")}
+      >
         <Button
           type="button"
           variant="outline"
           aria-expanded={open}
-          aria-label="Choose a theme"
+          aria-label={t("settings.themePicker.choose")}
           className="h-10 justify-between gap-3 pl-1.5"
           onClick={() => setOpen((wasOpen) => !wasOpen)}
         >
@@ -131,7 +136,9 @@ export function ThemePicker({
             ) : (
               <ThemeMiniature theme={resolved} className="h-7 w-11" />
             )}
-            <span className="text-sm font-medium">{system ? "System" : resolved.name}</span>
+            <span className="text-sm font-medium">
+              {system ? t("settings.themePicker.system") : resolved.name}
+            </span>
           </span>
           <ChevronDown className={cn("transition-transform", open && "rotate-180")} />
         </Button>
@@ -140,10 +147,12 @@ export function ThemePicker({
       {open && (
         <div className="min-w-0">
           <div className="mb-2 flex items-center justify-between gap-4">
-            <span className="text-xs text-muted-foreground">{themeCount(themes.length + 1)}</span>
+            <span className="text-xs text-muted-foreground">
+              {t("settings.themePicker.count", { count: themes.length + 1 })}
+            </span>
             <Button type="button" variant="ghost" size="xs" onClick={onImport}>
               <Upload />
-              Import
+              {t("settings.themePicker.import")}
             </Button>
           </div>
           {/* Two rows that grow sideways: a tenth theme costs width, which
@@ -151,8 +160,8 @@ export function ThemePicker({
               the screen. */}
           <div className="grid grid-flow-col grid-rows-2 auto-cols-[9.5rem] gap-3 overflow-x-auto px-0.5 pb-3">
             <ThemeCard
-              name="System"
-              caption="follows the OS"
+              name={t("settings.themePicker.system")}
+              caption={t("settings.themePicker.followsOs")}
               selected={system}
               onSelect={() => onSelect(SYSTEM_THEME)}
               preview={<SystemMiniature themes={themes} className="h-22 w-full" />}
@@ -163,10 +172,10 @@ export function ThemePicker({
                 name={theme.name}
                 caption={
                   value === theme.id
-                    ? "in use"
+                    ? t("settings.themePicker.inUse")
                     : theme.source
                       ? `${repoLabel(theme.source.url)} v${theme.source.version}`
-                      : "bundled"
+                      : t("settings.themePicker.bundled")
                 }
                 selected={value === theme.id}
                 onSelect={() => onSelect(theme.id)}
@@ -182,7 +191,9 @@ export function ThemePicker({
                                 type="button"
                                 variant="ghost"
                                 size="icon-xs"
-                                aria-label={`Update ${theme.name}`}
+                                aria-label={t("settings.themePicker.updateNamed", {
+                                  name: theme.name,
+                                })}
                                 disabled={updatingID !== null}
                                 onClick={(event) => {
                                   event.stopPropagation()
@@ -193,7 +204,7 @@ export function ThemePicker({
                           >
                             <RefreshCw className={updatingID === theme.id ? "animate-spin" : ""} />
                           </TooltipTrigger>
-                          <TooltipContent>Check the repository for a newer version</TooltipContent>
+                          <TooltipContent>{t("settings.themePicker.updateHint")}</TooltipContent>
                         </Tooltip>
                       )}
                       <Tooltip>
@@ -203,7 +214,9 @@ export function ThemePicker({
                               type="button"
                               variant="ghost"
                               size="icon-xs"
-                              aria-label={`Remove ${theme.name}`}
+                              aria-label={t("settings.themePicker.removeNamed", {
+                                name: theme.name,
+                              })}
                               onClick={(event) => {
                                 event.stopPropagation()
                                 onRemove(theme)
@@ -213,7 +226,9 @@ export function ThemePicker({
                         >
                           <Trash2 />
                         </TooltipTrigger>
-                        <TooltipContent>{`Remove ${theme.name}`}</TooltipContent>
+                        <TooltipContent>
+                          {t("settings.themePicker.removeNamed", { name: theme.name })}
+                        </TooltipContent>
                       </Tooltip>
                     </>
                   )
@@ -226,10 +241,6 @@ export function ThemePicker({
       )}
     </div>
   )
-}
-
-function themeCount(count: number): string {
-  return count === 1 ? "1 theme" : `${count} themes`
 }
 
 interface ThemeCardProps {

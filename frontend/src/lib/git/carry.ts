@@ -2,6 +2,7 @@ import { toast } from "sonner"
 import { ProjectService } from "@/lib/rpc"
 import type { Worktree } from "@/lib/api-types"
 import { errorText } from "@/lib/utils"
+import { t } from "@/lib/i18n/i18n"
 
 // carryInto copies a checkout's uncommitted work (a forked session's, or the
 // project's own picked from the + dialog) into the worktree that was just
@@ -22,14 +23,12 @@ export async function carryInto(from: string, wt: Worktree): Promise<void> {
   // saying which of the two things the user asked for did not happen is the
   // part git cannot do.
   if (wt.reused) {
-    toast.warning(
-      `${wt.name} already existed, so it was checked out as it stands — the uncommitted work was not carried over.`,
-    )
+    toast.warning(t("git.carry.reused", { name: wt.name }))
     return
   }
   try {
     await ProjectService.CarryUncommitted(from, wt.path)
   } catch (err: unknown) {
-    toast.error(`Couldn’t carry the uncommitted work over: ${errorText(err)}`)
+    toast.error(t("git.carry.failed", { error: errorText(err) }))
   }
 }

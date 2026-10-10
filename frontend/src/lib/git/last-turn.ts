@@ -1,6 +1,7 @@
 import type { LastTurn } from "@/lib/api-types"
 import type { SessionStatus } from "@/lib/session/session-events"
 import type { SessionKind } from "@/lib/session/sessions"
+import { t } from "@/lib/i18n/i18n"
 
 // What the Review panel draws for the session's last finished turn. The four
 // answers are kept apart because conflating them is the one mistake this
@@ -64,9 +65,7 @@ const NO_TURN_PROVIDERS: Partial<Record<SessionKind, string>> = {
 // learn the offer was withheld rather than missing.
 export function turnUnavailableReason(kind: SessionKind | ""): string {
   const name = kind === "" ? undefined : NO_TURN_PROVIDERS[kind]
-  return name === undefined
-    ? ""
-    : `${name} reports neither the start nor the end of a turn, so there is no window to bracket.`
+  return name === undefined ? "" : t("git.lastTurn.noTurnWindow", { name })
 }
 
 // saidNote is what the recap band says about whose words it is showing. The
@@ -78,5 +77,5 @@ export function turnUnavailableReason(kind: SessionKind | ""): string {
 // covers both a session blocked mid-turn and one sitting at its prompt with the
 // turn already over, and a label naming the wrong turn is worse than none.
 export function saidNote(status: SessionStatus | null): string {
-  return status === "busy" ? "from the previous turn" : ""
+  return status === "busy" ? t("git.lastTurn.saidPreviousTurn") : ""
 }

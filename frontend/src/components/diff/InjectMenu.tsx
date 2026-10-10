@@ -6,6 +6,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { useT } from "@/lib/i18n/i18n"
 
 interface InjectMenuProps {
   /** Path written into the terminal, relative to the checkout. */
@@ -58,29 +59,36 @@ export function InjectMenu({
   revertCount = 0,
   children,
 }: InjectMenuProps) {
+  const t = useT()
   return (
     <ContextMenu onOpenChange={onOpenChange}>
       <ContextMenuTrigger render={<div className="isolate py-1" ref={containerRef} />}>
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => onInject(`@${path} `)}>Inject file</ContextMenuItem>
+        <ContextMenuItem onClick={() => onInject(`@${path} `)}>
+          {t("diff.injectMenu.injectFile")}
+        </ContextMenuItem>
         <ContextMenuItem
           disabled={lineRef === null}
           onClick={() => lineRef && onInject(`${path}:${lineRef} `)}
         >
-          {lineRef === null ? "Inject lines" : `Inject lines ${lineRef}`}
+          {lineRef === null
+            ? t("diff.injectMenu.injectLines")
+            : t("diff.injectMenu.injectLinesRange", { lines: lineRef })}
         </ContextMenuItem>
         {onSessionComment && (
           <ContextMenuItem disabled={lineRef === null} onClick={onSessionComment}>
-            {lineRef === null ? "Comment for the session…" : `Comment for the session ${lineRef}…`}
+            {lineRef === null
+              ? t("diff.injectMenu.sessionComment")
+              : t("diff.injectMenu.sessionCommentRange", { lines: lineRef })}
           </ContextMenuItem>
         )}
         {onReviewComment && (
           <ContextMenuItem disabled={lineRef === null} onClick={onReviewComment}>
             {lineRef === null
-              ? "Comment on the pull request…"
-              : `Comment on the pull request ${lineRef}…`}
+              ? t("diff.injectMenu.reviewComment")
+              : t("diff.injectMenu.reviewCommentRange", { lines: lineRef })}
           </ContextMenuItem>
         )}
         {onRevert && (
@@ -88,8 +96,8 @@ export function InjectMenu({
             <ContextMenuSeparator />
             <ContextMenuItem variant="destructive" disabled={revertCount === 0} onClick={onRevert}>
               {revertCount === 0
-                ? "Revert selected lines"
-                : `Revert ${revertCount} changed line${revertCount === 1 ? "" : "s"}`}
+                ? t("diff.injectMenu.revertSelected")
+                : t("diff.injectMenu.revert", { count: revertCount })}
             </ContextMenuItem>
           </>
         )}

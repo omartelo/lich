@@ -12,6 +12,7 @@ import {
 import { splitPath } from "@/lib/git/lang-badge"
 import { ProjectService } from "@/lib/rpc"
 import { useRemoteResource } from "@/lib/use-remote-resource"
+import { useT } from "@/lib/i18n/i18n"
 
 // How long typing has to pause before the checkout is read: one search reads
 // every file the tree lists, and a word typed at speed is not five searches.
@@ -45,6 +46,7 @@ export function SearchResults({
   listingNote,
   onOpen,
 }: SearchResultsProps) {
+  const t = useT()
   const settled = useSettled(query.trim(), SETTLE_MS)
   // Reset on the checkout only: a new query keeps the last answer on screen
   // until its own lands, so typing does not flash the list empty on every
@@ -57,19 +59,19 @@ export function SearchResults({
   const groups = useMemo(() => groupMatches(data.matches), [data.matches])
 
   if (settled === "") {
-    return <Notice>Search the text of every file in this checkout</Notice>
+    return <Notice>{t("dock.searchResults.prompt")}</Notice>
   }
   if (error !== null) {
     return <Notice>{error}</Notice>
   }
   if (loading && data === NO_SEARCH) {
-    return <Notice>Searching…</Notice>
+    return <Notice>{t("dock.searchResults.searching")}</Notice>
   }
   const footnote = [searchFootnote(data), listingNote].filter(Boolean).join(" ")
   return (
     <>
       {groups.length === 0 ? (
-        <Notice className="flex-1">No file contains “{settled}”</Notice>
+        <Notice className="flex-1">{t("dock.searchResults.noMatch", { query: settled })}</Notice>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto" data-search-list="">
           <p className="px-3 pt-2 pb-1 text-2xs uppercase tracking-wide text-muted-foreground">

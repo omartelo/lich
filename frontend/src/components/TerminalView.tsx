@@ -7,6 +7,7 @@ import { SearchAddon } from "@xterm/addon-search"
 import { WebLinksAddon } from "@xterm/addon-web-links"
 import { toast } from "sonner"
 import { System, Terminal as Service } from "@/lib/rpc"
+import { t } from "@/lib/i18n/i18n"
 import { errorText } from "@/lib/utils"
 import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/terminal/term-transport"
@@ -251,7 +252,7 @@ export function TerminalView({
         entry.live?.term.focus()
       })
       .catch((error: unknown) => {
-        toast.error(`Session failed to restart: ${errorText(error)}`)
+        toast.error(t("terminal.view.restartFailed", { error: errorText(error) }))
       })
   }
 
@@ -611,7 +612,7 @@ export function TerminalView({
         // them are worth another try once the cause is fixed; the one that is
         // not (a checkout that is gone) never reaches the spawn, having been
         // settled by the gate in TerminalHost.
-        toast.error(`Session failed to start: ${errorText(error)}`)
+        toast.error(t("terminal.view.startFailed", { error: errorText(error) }))
         return
       }
       if (!stillInWorkspaceRef.current()) {

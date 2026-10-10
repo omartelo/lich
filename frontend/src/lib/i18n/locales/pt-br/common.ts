@@ -14,4 +14,31 @@ export const common = {
     save: "Salvar",
     create: "Criar",
   },
+  checkAgainButton: {
+    check: "Verificar novamente",
+    checking: "Verificando…",
+  },
+  errorBoundary: {
+    stoppedRendering: "{label} parou de renderizar",
+    reload: "Recarregar a janela",
+    retry: "Tentar novamente",
+  },
+  stepper: {
+    reset: "Redefinir {name}",
+    default: "Padrão",
+  },
+  toolMissing: {
+    notInstalled: "{label} não está instalado",
+    install: "Instalar {bin}",
+  },
+  pickerDialog: {
+    navigate: "navegar",
+    filter: "filtrar",
+    close: "fechar",
+  },
+  ui: {
+    dialog: {
+      close: "Fechar",
+    },
+  },
 } satisfies Shape<typeof en>

@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/button"
 import { SettingBlock } from "./SettingBlock"
 import { PatchNotesDialog } from "@/components/PatchNotesDialog"
 import { PluginSetting } from "./PluginSetting"
+import { useT } from "@/lib/i18n/i18n"
 import { PatchNotes } from "@/lib/rpc"
 import { runUpdateCheck } from "@/lib/update/update-check"
 import { useRemoteResource } from "@/lib/use-remote-resource"
 import type { PatchNotes as PatchNotesData } from "@/lib/api-types"
 
 export function UpdatesSettings() {
+  const t = useT()
   const [notesOpen, setNotesOpen] = useState(false)
   const [checking, setChecking] = useState(false)
   const [checkResult, setCheckResult] = useState("")
@@ -25,11 +27,11 @@ export function UpdatesSettings() {
       const status = await runUpdateCheck()
       setCheckResult(
         status.updateAvailable
-          ? `lich ${status.latestVersion} is available — follow the prompt.`
-          : "You're on the latest version.",
+          ? t("settings.updatesSettings.available", { version: status.latestVersion })
+          : t("settings.updatesSettings.upToDate"),
       )
     } catch {
-      setCheckResult("Check failed — are you online?")
+      setCheckResult(t("settings.updatesSettings.checkFailed"))
     } finally {
       setChecking(false)
     }
@@ -41,13 +43,15 @@ export function UpdatesSettings() {
     <>
       <SettingBlock
         icon={<RefreshCw className="size-4" />}
-        title="Application"
-        description={`lich ${notes ? `v${notes.version}` : ""} — checks for updates on startup and hourly.`}
+        title={t("settings.updatesSettings.applicationTitle")}
+        description={t("settings.updatesSettings.applicationDescription", {
+          version: notes ? `v${notes.version}` : "",
+        })}
       >
         <div className="flex items-center gap-3">
           <Button size="sm" onClick={() => void checkApp()} disabled={checking}>
             {checking ? spinner : null}
-            Check for updates
+            {t("settings.updatesSettings.checkForUpdates")}
           </Button>
           {checkResult && <span className="text-xs text-muted-foreground">{checkResult}</span>}
         </div>
@@ -55,9 +59,11 @@ export function UpdatesSettings() {
 
       <SettingBlock
         icon={<Sparkles className="size-4" />}
-        title="What's new"
+        title={t("settings.updatesSettings.whatsNewTitle")}
         description={
-          notes?.groups ? `Patch notes for v${notes.version}.` : "No patch notes for this build."
+          notes?.groups
+            ? t("settings.updatesSettings.patchNotesFor", { version: notes.version })
+            : t("settings.updatesSettings.noPatchNotes")
         }
       >
         <Button
@@ -66,7 +72,7 @@ export function UpdatesSettings() {
           onClick={() => setNotesOpen(true)}
           disabled={!notes?.groups}
         >
-          View patch notes
+          {t("settings.updatesSettings.viewPatchNotes")}
         </Button>
         {notesOpen && notes && (
           <PatchNotesDialog notes={notes} onClose={() => setNotesOpen(false)} />

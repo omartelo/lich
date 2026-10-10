@@ -5,6 +5,7 @@ import { IconAction } from "@/components/common/IconAction"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { splitPath } from "@/lib/git/lang-badge"
+import { useT } from "@/lib/i18n/i18n"
 import {
   addReviewNote,
   clearReviewComments,
@@ -26,6 +27,7 @@ interface CommentBatchProps {
 // so far, and the one action that hands them all to the session as a single
 // prompt. Nothing at all until the first comment is written.
 export function CommentBatch({ target, onInject }: CommentBatchProps) {
+  const t = useT()
   const comments = useSyncExternalStore(subscribeReviewComments, () => reviewComments(target))
   const [note, setNote] = useState("")
 
@@ -51,7 +53,7 @@ export function CommentBatch({ target, onInject }: CommentBatchProps) {
   // send: only a write the session took clears them.
   const send = () => {
     if (!onInject(composeReviewComments(comments, note))) {
-      toast.error("Open a session to send these comments to")
+      toast.error(t("diff.commentBatch.openSession"))
       return
     }
     clear()
@@ -75,7 +77,7 @@ export function CommentBatch({ target, onInject }: CommentBatchProps) {
             </span>
             <span className="ml-auto">
               <IconAction
-                label="Remove comment"
+                label={t("diff.commentBatch.removeComment")}
                 onClick={() => removeReviewComment(target, comment.id)}
               >
                 <X className="size-3.5" />
@@ -94,18 +96,18 @@ export function CommentBatch({ target, onInject }: CommentBatchProps) {
               addNote()
             }
           }}
-          placeholder="A note about the whole change…"
-          aria-label="A note about the whole change"
+          placeholder={t("diff.commentBatch.notePlaceholder")}
+          aria-label={t("diff.commentBatch.noteLabel")}
           className="h-7 text-xs"
         />
       </div>
       <div className="flex items-center gap-2 px-2 pt-1 pb-2">
         <span className="text-xs text-muted-foreground tabular-nums">
-          {comments.length} {comments.length === 1 ? "comment" : "comments"}
+          {t("diff.commentBatch.count", { count: comments.length })}
         </span>
         <span className="ml-auto flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={clear}>
-            Clear
+            {t("diff.commentBatch.clear")}
           </Button>
           <Button
             variant="ghost"
@@ -114,7 +116,7 @@ export function CommentBatch({ target, onInject }: CommentBatchProps) {
             className="bg-accent/55 text-foreground hover:bg-accent"
           >
             <Send />
-            Send
+            {t("diff.commentBatch.send")}
           </Button>
         </span>
       </div>

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n/i18n"
 /**
  * Pure helpers for the "copied to clipboard" toast shown when the user selects
  * text in the terminal. Framework-free so it can be unit-tested without
@@ -13,5 +14,5 @@ export function countChars(text: string): number {
 
 export function copyToastMessage(text: string): string {
   const count = countChars(text)
-  return `copied ${count} ${count === 1 ? "char" : "chars"} to clipboard`
+  return t("terminal.copyToast.copied", { count })
 }

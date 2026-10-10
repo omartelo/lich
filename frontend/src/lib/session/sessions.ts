@@ -7,6 +7,7 @@
 // input — which keeps the reducer logic testable without React or a PTY.
 
 import { applyOrder } from "@/lib/reorder"
+import { t } from "@/lib/i18n/i18n"
 
 // Provider ids that can back a session, mirrored from internal/providers.Registry
 // (Go) — keep in sync. A session's kind is one of these or the plain shell.
@@ -637,7 +638,7 @@ const NO_FORK_PROVIDERS: Partial<Record<SessionKind, string>> = {
 // card and looks for the same thing on a Crush one has to read why it is dead.
 export function forkUnavailableReason(session: Session): string | null {
   const name = NO_FORK_PROVIDERS[session.kind]
-  return name === undefined ? null : `${name} keeps no fork; resume only.`
+  return name === undefined ? null : t("session.fork.unavailable", { name })
 }
 
 // forkableSession returns the session a "Fork to worktree" offer can be made

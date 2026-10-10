@@ -4,6 +4,7 @@ import { formatWindow, timeLeft } from "@/lib/quota/quota-format"
 import { cn } from "@/lib/utils"
 import { usageColor } from "./ContextRing"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useT } from "@/lib/i18n/i18n"
 
 // Every column is fixed but the bar's. Sized to its own text, the readout gave a
 // window with no reset time the width the rows beside it spent on "6d 18h", and
@@ -83,13 +84,18 @@ export function QuotaGauge({ window: quota, now, stacked }: QuotaGaugeProps) {
 // already wears usageColor, and a hue here would say something the ramp does
 // not.
 function AheadMark() {
+  const t = useT()
   return (
     <Tooltip>
       <TooltipTrigger render={<span className="flex cursor-help items-center" />}>
-        <TrendingUp className="size-3 shrink-0" role="img" aria-label="Ahead of pace" />
+        <TrendingUp
+          className="size-3 shrink-0"
+          role="img"
+          aria-label={t("shell.quotaGauge.aheadOfPace")}
+        />
       </TooltipTrigger>
       <TooltipContent side="top" className="border border-border bg-card text-foreground">
-        Spending ahead of this window's pace.
+        {t("shell.quotaGauge.aheadTooltip")}
       </TooltipContent>
     </Tooltip>
   )
@@ -101,10 +107,11 @@ function AheadMark() {
 // tooltip rather than inline, since the provider's wording is not written for
 // the width a gauge row has.
 function LockedReading({ reason }: { reason: string }) {
+  const t = useT()
   return (
     <Tooltip>
       <TooltipTrigger render={<span className="cursor-help underline decoration-dotted" />}>
-        Locked
+        {t("shell.quotaGauge.locked")}
       </TooltipTrigger>
       <TooltipContent side="top" className="border border-border bg-card text-foreground">
         {reason}

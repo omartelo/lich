@@ -13,6 +13,7 @@ import type { RecentProject } from "@/lib/api-types"
 import { displayPath } from "@/lib/paths"
 import { ProjectService, Store } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
+import { useT } from "@/lib/i18n/i18n"
 
 // MENU_LIMIT is how many closed projects the menu offers. Five is what fits
 // above the picker entry without turning the menu into a second project list;
@@ -25,6 +26,7 @@ const MENU_LIMIT = 5
 // project to offer there is no menu at all — the button is the picker, which is
 // what it was before this list existed.
 export function OpenProjectMenu() {
+  const t = useT()
   const { projects, openProject, openRecent } = useProjects()
   const [recents, setRecents] = useState<RecentProject[]>([])
   const [missing, setMissing] = useState<ReadonlySet<string>>(new Set())
@@ -69,8 +71,8 @@ export function OpenProjectMenu() {
         variant="ghost"
         size="icon-sm"
         onClick={() => void openProject()}
-        title="Open project"
-        aria-label="Open project"
+        title={t("tabs.openProjectMenu.open")}
+        aria-label={t("tabs.openProjectMenu.open")}
         className="text-muted-foreground"
       >
         <Plus className="size-4" />
@@ -81,8 +83,8 @@ export function OpenProjectMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        title="Open project"
-        aria-label="Open project"
+        title={t("tabs.openProjectMenu.open")}
+        aria-label={t("tabs.openProjectMenu.open")}
         render={
           <Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" />
         }
@@ -93,7 +95,7 @@ export function OpenProjectMenu() {
         {/* A plain div, not DropdownMenuLabel: that is base-ui's Menu.GroupLabel
             and throws outside a Menu.Group. */}
         <div className="px-2 py-1.5 text-xs font-semibold tracking-wide text-foreground">
-          Recent projects
+          {t("tabs.openProjectMenu.recent")}
         </div>
         <DropdownMenuSeparator />
         {recents.map((recent) => {
@@ -114,7 +116,7 @@ export function OpenProjectMenu() {
               </span>
               {gone && (
                 <span className="shrink-0 self-center font-mono text-[0.625rem] text-muted-foreground">
-                  relocate
+                  {t("tabs.openProjectMenu.relocate")}
                 </span>
               )}
             </DropdownMenuItem>
@@ -123,11 +125,11 @@ export function OpenProjectMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem className="gap-2" onClick={() => void openProject()}>
           <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
-          Open folder…
+          {t("tabs.openProjectMenu.openFolder")}
         </DropdownMenuItem>
         {more > 0 && (
           <div className="px-2 pt-1.5 text-xs text-muted-foreground">
-            {more} more closed project{more === 1 ? "" : "s"} — search the palette
+            {t("tabs.openProjectMenu.moreClosed", { count: more })}
           </div>
         )}
       </DropdownMenuContent>

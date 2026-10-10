@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { toast } from "sonner"
 import { System } from "@/lib/rpc"
 import { runWithToast } from "@/lib/toast-async"
+import { t } from "@/lib/i18n/i18n"
 
 // UncleanExitGate says, once per launch, that the run before this one ended
 // without closing its window — a crash, a kill, a machine that went down. It is
@@ -24,20 +25,20 @@ export function UncleanExitGate() {
 // Persistent on purpose: this is the one telling, and a toast that expires while
 // the user is reading a session is a toast they never saw.
 const prompt = () => {
-  toast.warning("lich's previous run ended unexpectedly", {
-    description: "Your sessions were restored, but whatever they were running stopped with it.",
+  toast.warning(t("shell.uncleanExitGate.title"), {
+    description: t("shell.uncleanExitGate.description"),
     duration: Infinity,
     action: {
-      label: "Open log folder",
+      label: t("shell.uncleanExitGate.openLogFolder"),
       onClick: () =>
         void runWithToast(
-          "Opening log folder…",
+          t("shell.uncleanExitGate.opening"),
           System.RevealLog,
-          "Log folder opened.",
-          "Could not open the log folder",
+          t("shell.uncleanExitGate.opened"),
+          t("shell.uncleanExitGate.openFailed"),
         ),
     },
     // sonner closes the toast itself; the handler is only what its type asks for.
-    cancel: { label: "Dismiss", onClick: () => {} },
+    cancel: { label: t("shell.uncleanExitGate.dismiss"), onClick: () => {} },
   })
 }

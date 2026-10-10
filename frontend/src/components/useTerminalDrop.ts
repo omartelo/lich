@@ -1,6 +1,7 @@
 import { useRef, useState } from "react"
 import type { DragEvent } from "react"
 import { toast } from "sonner"
+import { t } from "@/lib/i18n/i18n"
 import { isWindows } from "@/lib/platform"
 import {
   composeDroppedPaths,
@@ -60,7 +61,7 @@ export function useTerminalDrop(
         focus()
       }
       if (skipped.length > 0) {
-        toast.error(`Not attached: ${skipped.join(", ")}`)
+        toast.error(t("terminal.drop.notAttached", { files: skipped.join(", ") }))
       }
     })()
   }

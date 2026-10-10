@@ -13,7 +13,7 @@ import { en } from "@/lib/i18n/locales/en"
 import { isWindows } from "@/lib/platform"
 import type { ProviderState } from "@/lib/providers-store"
 import { sandboxDefaultFor } from "@/lib/providers-store"
-import { CONFINED_MEANS } from "@/lib/sandbox-copy"
+import { confinedMeans } from "@/lib/sandbox-copy"
 import type { ProviderKind } from "@/lib/session/sessions"
 import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { useSandboxAsk } from "@/lib/use-sandbox-rung"
@@ -111,7 +111,7 @@ function SandboxStep({ provider, onOpen, onBack }: SandboxStepProps) {
         <DropdownMenuCheckboxItem checked={confined} onCheckedChange={setConfined}>
           {t("sidebar.sessionLaunchMenuItems.runConfined")}
         </DropdownMenuCheckboxItem>
-        <p className="px-2 pt-0.5 pb-1.5 text-xs text-muted-foreground">{CONFINED_MEANS}</p>
+        <p className="px-2 pt-0.5 pb-1.5 text-xs text-muted-foreground">{confinedMeans()}</p>
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
       <DropdownMenuGroup>

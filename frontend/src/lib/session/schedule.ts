@@ -1,3 +1,5 @@
+import { getLocale, t } from "@/lib/i18n/i18n"
+
 // The four times a prompt can be parked for, and the words the card says about
 // one that is parked. Kept out of the components because both of them — the
 // dialog that offers the times and the card that counts one down — need the
@@ -33,10 +35,10 @@ export function scheduleChoices(now: Date): ScheduleChoice[] {
   tomorrow.setDate(tomorrow.getDate() + 1)
   tomorrow.setHours(TOMORROW_HOUR, 0, 0, 0)
   return [
-    { label: "15 min", at: seconds + 15 * MINUTE },
-    { label: "1 hour", at: seconds + HOUR },
-    { label: "4 hours", at: seconds + 4 * HOUR },
-    { label: "Tomorrow", at: Math.floor(tomorrow.getTime() / 1000) },
+    { label: t("session.schedule.choice15Minutes"), at: seconds + 15 * MINUTE },
+    { label: t("session.schedule.choice1Hour"), at: seconds + HOUR },
+    { label: t("session.schedule.choice4Hours"), at: seconds + 4 * HOUR },
+    { label: t("session.schedule.choiceTomorrow"), at: Math.floor(tomorrow.getTime() / 1000) },
   ]
 }
 
@@ -46,6 +48,15 @@ export function clockAt(at: number): string {
     hour: "2-digit",
     minute: "2-digit",
   })
+}
+
+function countdown(value: number, unit: "minute" | "hour" | "day"): string {
+  const amount = new Intl.NumberFormat(getLocale(), {
+    style: "unit",
+    unit,
+    unitDisplay: "narrow",
+  }).format(value)
+  return t("session.schedule.countdown", { amount })
 }
 
 /**
@@ -61,12 +72,12 @@ export function timeUntil(at: number, now: Date): string | null {
   }
   if (seconds < HOUR) {
     // Rounded up, so a prompt 30 seconds out says "in 1m" rather than "in 0m".
-    return `in ${Math.ceil(seconds / MINUTE)}m`
+    return countdown(Math.ceil(seconds / MINUTE), "minute")
   }
   if (seconds < 24 * HOUR) {
-    return `in ${Math.round(seconds / HOUR)}h`
+    return countdown(Math.round(seconds / HOUR), "hour")
   }
-  return `in ${Math.round(seconds / (24 * HOUR))}d`
+  return countdown(Math.round(seconds / (24 * HOUR)), "day")
 }
 
 /**
@@ -79,7 +90,8 @@ export function scheduledFor(at: number, now: Date): string {
   const when = new Date(at * 1000)
   const clock = clockAt(at)
   if (when.toDateString() === now.toDateString()) {
-    return `today ${clock}`
+    return t("session.schedule.today", { clock })
   }
-  return `${when.toLocaleDateString(undefined, { weekday: "short" })} ${clock}`
+  const weekday = when.toLocaleDateString(getLocale(), { weekday: "short" })
+  return t("session.schedule.weekdayAt", { weekday, clock })
 }

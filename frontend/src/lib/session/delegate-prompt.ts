@@ -2,6 +2,7 @@
 // hand work to. lich never carries the request itself: it puts the words there
 // and hands the cursor back, and the agent reading that prompt is what acts.
 
+import { prompt } from "@/lib/i18n/prompt"
 import type { SessionKind } from "./sessions"
 
 // The providers whose sessions are handed lich's tools on their own command
@@ -39,7 +40,7 @@ const TOOL_KINDS: readonly string[] = ["claude", "codex"]
  */
 export function delegatePrompt(senderKind: SessionKind | string, target: string): string {
   if (TOOL_KINDS.includes(senderKind)) {
-    return `Delegate to the "${target}" session: `
+    return prompt("prompts.delegate.session", { target })
   }
   return `lich send "${target}" "`
 }
@@ -57,7 +58,7 @@ export function delegatePrompt(senderKind: SessionKind | string, target: string)
  */
 export function delegateWorktreePrompt(senderKind: SessionKind | string): string {
   if (TOOL_KINDS.includes(senderKind)) {
-    return "Delegate to a new worktree session: "
+    return prompt("prompts.delegate.newWorktree")
   }
-  return "Delegate to a new worktree session (run `lich open --worktree <branch> --prompt <task>`): "
+  return prompt("prompts.delegate.newWorktreeWithCommand")
 }

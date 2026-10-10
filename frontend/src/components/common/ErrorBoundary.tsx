@@ -2,6 +2,7 @@ import { RotateCcw, TriangleAlert } from "lucide-react"
 import { Component, type ErrorInfo, type ReactNode } from "react"
 import { Notice } from "@/components/common/Notice"
 import { Button } from "@/components/ui/button"
+import { t } from "@/lib/i18n/i18n"
 import { cn } from "@/lib/utils"
 
 interface ErrorBoundaryProps {
@@ -75,7 +76,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         )}
       >
         <TriangleAlert className="size-8 text-muted-foreground" />
-        <p className="text-sm text-foreground">{this.props.label} stopped rendering</p>
+        <p className="text-sm text-foreground">
+          {t("common.errorBoundary.stoppedRendering", { label: this.props.label })}
+        </p>
         {/* The message, not just a console line: the window it would have been
             read in is the one this fallback is standing in for. */}
         <Notice className="max-w-md py-0 font-mono break-words select-text">
@@ -90,7 +93,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           onClick={() => (exhausted ? window.location.reload() : this.setState({ error: null }))}
         >
           <RotateCcw data-icon="inline-start" />
-          {exhausted ? "Reload the window" : (this.props.retry ?? "Try again")}
+          {exhausted
+            ? t("common.errorBoundary.reload")
+            : (this.props.retry ?? t("common.errorBoundary.retry"))}
         </Button>
       </div>
     )

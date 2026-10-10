@@ -1,5 +1,6 @@
 import { ProviderIcon } from "@/components/ProviderIcon"
 import { Switch } from "@/components/ui/switch"
+import { useT } from "@/lib/i18n/i18n"
 import { installSummary } from "@/lib/provider-summary"
 import { setProviderEnabled, type ProviderState } from "@/lib/providers-store"
 import { ProviderDocsLink } from "./ProviderDocsLink"
@@ -12,6 +13,7 @@ import { ProviderDocsLink } from "./ProviderDocsLink"
 // A provider that is not installed cannot be turned on, but one already
 // enabled stays togglable, so it is never trapped on by a binary that moved.
 export function ProviderToggleRow({ provider }: { provider: ProviderState }) {
+  const t = useT()
   return (
     <div className="flex items-center justify-between gap-4 py-3">
       <div className="flex min-w-0 items-center gap-3">
@@ -23,7 +25,7 @@ export function ProviderToggleRow({ provider }: { provider: ProviderState }) {
               installSummary(provider)
             ) : (
               <>
-                <span>Not found on PATH</span>
+                <span>{t("settings.providerToggleRow.notFound")}</span>
                 <span aria-hidden>·</span>
                 <ProviderDocsLink provider={provider} />
               </>
@@ -35,7 +37,7 @@ export function ProviderToggleRow({ provider }: { provider: ProviderState }) {
         checked={provider.enabled}
         disabled={!provider.installed && !provider.enabled}
         onCheckedChange={(checked) => setProviderEnabled(provider.id, checked)}
-        aria-label={`Enable ${provider.name}`}
+        aria-label={t("settings.providersPane.enableNamed", { name: provider.name })}
       />
     </div>
   )
