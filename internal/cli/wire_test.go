@@ -147,6 +147,25 @@ func TestInsertOverTheRealDispatcher(t *testing.T) {
 	}
 }
 
+func TestFocusOverTheRealDispatcher(t *testing.T) {
+	env, _ := wiredLich(t)
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"focus", "--json", "docs"}, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"label":"docs"`) {
+		t.Errorf("stdout = %q, want the session it focused", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run([]string{"focus", "nobody"}, "test", env, &stdout, &stderr); code != 1 ||
+		!strings.Contains(stderr.String(), "docs") {
+		t.Errorf("exit = %d, stderr = %q, want a refusal naming the live sessions", code, stderr.String())
+	}
+}
+
 func TestSendAndReplyOverTheRealDispatcher(t *testing.T) {
 	env, term := wiredLich(t)
 

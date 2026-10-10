@@ -1335,3 +1335,48 @@ func TestInsertWithNothingToReadStdinFrom(t *testing.T) {
 		t.Errorf("exit = %d, stderr = %q, want a refusal", code, stderr)
 	}
 }
+
+const focusedBody = `{"id":"s2","label":"docs","project":"lich"}`
+
+func TestFocusNamesTheSessionItBroughtUp(t *testing.T) {
+	f := newFakeLich(t, focusedBody)
+
+	code, stdout, stderr := run(t, f, "focus", "--project", "lich", "docs")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	call := f.only(t)
+	want := []any{"s1", "docs", "lich"}
+	if call.method != "relay.Focus" || !reflect.DeepEqual(call.args, want) {
+		t.Errorf("called %s %v, want relay.Focus %v", call.method, call.args, want)
+	}
+	if stdout != "Focused \"docs\" (lich).\n" {
+		t.Errorf("output = %q, want the session it brought up", stdout)
+	}
+}
+
+func TestFocusJSONIsTheFocusedObject(t *testing.T) {
+	f := newFakeLich(t, focusedBody)
+
+	code, stdout, stderr := run(t, f, "focus", "--json", "docs")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	if strings.TrimSpace(stdout) != focusedBody {
+		t.Errorf("output = %s, want %s", stdout, focusedBody)
+	}
+}
+
+func TestFocusTakesExactlyOneSession(t *testing.T) {
+	f := newFakeLich(t, focusedBody)
+
+	for _, args := range [][]string{{"focus"}, {"focus", "docs", "extra"}} {
+		code, _, stderr := run(t, f, args...)
+		if code != 1 || !strings.Contains(stderr, "usage: lich focus") {
+			t.Errorf("%v: exit = %d, stderr = %q, want the usage", args, code, stderr)
+		}
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("a malformed call reached the server: %v", f.calls)
+	}
+}

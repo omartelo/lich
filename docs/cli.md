@@ -131,7 +131,7 @@ guess at the one it resembles, and exit 1 — a typo does not open a window.
 Arguments the app itself takes still do: bare `lich`, `lich --shell <path>`, and
 `lich --` with the Chromium flags behind it.
 
-`--json` on `sessions`, `whoami`, `send`, `insert`, `wait`, `open`, `close`, `rename`, `control`, `ask`, `worktrees`, `folders`, `file`,
+`--json` on `sessions`, `whoami`, `send`, `insert`, `focus`, `wait`, `open`, `close`, `rename`, `control`, `ask`, `worktrees`, `folders`, `file`,
 `rename-folder`, `color-folder`, `cost` and `version`
 replaces the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
@@ -339,6 +339,23 @@ plugins call.
 It types at the terminal for every provider, a Claude Code session with the
 lich-plugin mod included: the mod takes prompts to submit, not text to leave on
 a line.
+
+### `lich focus [--project <name-or-path>] [--json] <session>`
+
+Brings the lich window to the front with `<session>`'s card open, the same as
+clicking it: the window switches to that session's project and opens the card.
+It is what an editor plugin calls to take the person to a session it just
+pasted into, or one that just finished its turn.
+
+- `<session>` resolves the way `send`'s target does: label, roster name or lich
+  id, narrowed with `--project` (a name or a directory) when a label is
+  ambiguous. One that names no live session is refused with the list of the
+  ones there are.
+- Raising the window is best effort, the same hand-off a second launch of lich
+  makes; the card is switched either way. See `docs/ceilings.md` for where the
+  window is not raised.
+- Prints `Focused "<label>" (<project>).`; `--json` prints
+  `{"id","label","project"}`. Exit 1 when no session was focused.
 
 ### `lich wait [--timeout <seconds>] [--no-wait] [--json] [<ticket>]`
 

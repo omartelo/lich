@@ -145,6 +145,8 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.send, args[1:])
 	case "insert":
 		return c.run(c.insert, args[1:])
+	case "focus":
+		return c.run(c.focus, args[1:])
 	case "wait":
 		return c.run(c.wait, args[1:])
 	case "reply":
@@ -412,6 +414,32 @@ func (c *client) insert(args []string) error {
 	}
 	fmt.Fprintf(c.stdout, "Inserted %d bytes at the prompt of %q (%s). Nothing was sent.\n",
 		inserted.Bytes, inserted.Label, inserted.Project)
+	return nil
+}
+
+func (c *client) focus(args []string) error {
+	flags := newFlagSet("focus")
+	project := flags.String(
+		"project", "",
+		"narrow the target to one project, by name or by directory path, when the label is ambiguous",
+	)
+	asJSON := flags.Bool("json", false, "print the result as JSON")
+	if err := c.parse(flags, args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 {
+		return usageError("focus")
+	}
+
+	var focused relay.Focused
+	call := []any{c.sessionID(), flags.Arg(0), *project}
+	if err := c.call(context.Background(), "relay.Focus", call, shortCall, &focused); err != nil {
+		return err
+	}
+	if *asJSON {
+		return c.emit(focused)
+	}
+	fmt.Fprintf(c.stdout, "Focused %q (%s).\n", focused.Label, focused.Project)
 	return nil
 }
 

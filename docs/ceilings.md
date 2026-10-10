@@ -492,6 +492,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   some providers) is what refuses; the rest are on the same footing as `send`. It ignores the user's unsent draft
   on purpose, unlike `send`, because it adds to the line instead of sending it; the draft heuristic's blind spots
   (above) do not apply to it for that reason.
+- **`lich focus` raises the window the way a second launch does, with the same gaps**
+  (`internal/relay/focus.go`, `focusRunning` in `main.go`): the card is opened by an event to the window, and the
+  window is brought up by handing its URL to Chromium against the shared profile. A `task dev` window is never
+  raised (its own profile, skipped as for a second launch), so it only switches the card. Where lich is running as
+  a browser tab (no window of its own, `chromium.ErrNoShell`), each call opens one more tab pointed at lich, and
+  every tab open on lich switches to the card. It reaches only live sessions other than the caller's own, as every
+  command resolving a target does.
 - **An interrupted wait lets go only when the caller says so, and oh-my-pi never says so**
   (`internal/cli/mcp.go`, `runMCP`; `internal/relay/inbox.go`, `collect`): a wait whose caller is gone must not
   take a result, because nothing reads it and the nudge was skipped for its sake. `lich wait` killed with Ctrl-C

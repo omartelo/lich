@@ -53,6 +53,12 @@ var commands = []command{
 			"must be running there. For an editor sending a selection or a file.",
 	},
 	{
+		name: "focus",
+		args: "[--project <name-or-path>] [--json] <session>",
+		about: "Bring the lich window to the front with <session>'s card open, as if it\n" +
+			"had been clicked. For an editor pointing the person at a session.",
+	},
+	{
 		name: "wait",
 		args: "[--timeout <seconds>] [--no-wait] [--json] [<ticket>]",
 		about: "With a ticket, wait again on that errand. Without one, collect every\n" +

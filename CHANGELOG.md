@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`lich focus <session>` brings the lich window up with that session's card
+  open**, as if you had clicked it. It is what an editor plugin calls to take
+  you from a "finished its turn" notice straight to the session.
+
 ### Changed
 
 - **The language settings open Settings › Appearance**, above the theme, where
