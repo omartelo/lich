@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
+import { useT } from "@/lib/i18n/i18n"
 import { cn } from "@/lib/utils"
 
 /** The field every piece of review prose is typed into. Exported because the
@@ -51,6 +52,7 @@ export function CommentBox({
   className,
   submitOnEnter = false,
 }: CommentBoxProps) {
+  const t = useT()
   const empty = value.trim() === ""
   const fieldRef = useRef<HTMLTextAreaElement>(null)
   // A diff refetch remounts the box with its text already in it, and the browser
@@ -86,11 +88,11 @@ export function CommentBox({
       />
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={onSubmit} disabled={busy || empty}>
-          {busy ? "Sending…" : submitLabel}
+          {busy ? t("pulls.commentBox.sending") : submitLabel}
         </Button>
         {onCancel && (
           <Button size="sm" variant="ghost" onClick={onCancel} disabled={busy}>
-            Cancel
+            {t("common.action.cancel")}
           </Button>
         )}
       </div>

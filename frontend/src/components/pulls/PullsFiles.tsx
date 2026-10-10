@@ -10,6 +10,7 @@ import { DiffStat } from "@/components/DiffStat"
 import { FileTree } from "@/components/FileTree"
 import { SkeletonLines } from "@/components/common/SkeletonLines"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useT } from "@/lib/i18n/i18n"
 import { buildTree } from "@/lib/git/file-tree"
 import { hideWhitespace } from "@/lib/git/whitespace"
 import type { ReviewThread as Thread } from "@/lib/api-types"
@@ -140,6 +141,7 @@ export function PullsFiles({
   threads,
   actions,
 }: PullsFilesProps) {
+  const t = useT()
   const { files, error } = usePullRequestDiff(path, head, number)
   // Read against the PR's head and never against the checkout: the branch under
   // review is usually not the one on disk, and often not in this clone at all
@@ -208,13 +210,15 @@ export function PullsFiles({
   }, [files, threads, drafts, actions, pull, pullRequest])
 
   if (error) {
-    return <Notice className="px-4 py-6 text-sm">Couldn’t load the diff: {error}</Notice>
+    return (
+      <Notice className="px-4 py-6 text-sm">{t("pulls.pullsFiles.loadFailed", { error })}</Notice>
+    )
   }
   if (files === null) {
     return <FilesSkeleton tree={treeOpen} width={width} />
   }
   if (files.length === 0) {
-    return <Notice className="px-4 py-6 text-sm">No file changes</Notice>
+    return <Notice className="px-4 py-6 text-sm">{t("pulls.pullsFiles.none")}</Notice>
   }
 
   // Counted as drawn: each card hides the same blocks on its own.
@@ -235,7 +239,11 @@ export function PullsFiles({
       {treeOpen && (
         <div className="relative shrink-0 border-r border-border" style={{ width: `${width}rem` }}>
           <FileTree tree={tree} active={active} defaultOpen className="h-full" onSelect={jumpTo} />
-          <ResizeHandle edge="right" label="Resize the file tree" handleProps={handleProps} />
+          <ResizeHandle
+            edge="right"
+            label={t("pulls.pullsFiles.resizeTree")}
+            handleProps={handleProps}
+          />
         </div>
       )}
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -244,7 +252,7 @@ export function PullsFiles({
         <div className="flex flex-none items-center justify-end gap-2 border-b border-border px-3 py-2 text-xs text-muted-foreground">
           <span className="mr-auto flex items-center gap-2">
             <IconAction
-              label={treeOpen ? "Hide the file tree" : "Show the file tree"}
+              label={treeOpen ? t("pulls.pullsFiles.hideTree") : t("pulls.pullsFiles.showTree")}
               onClick={toggleTree}
             >
               {treeOpen ? (
@@ -255,7 +263,7 @@ export function PullsFiles({
             </IconAction>
             {viewedCount > 0 && (
               <span className="tabular-nums">
-                {viewedCount} of {files.length} viewed
+                {t("pulls.pullsFiles.viewed", { viewed: viewedCount, total: files.length })}
               </span>
             )}
           </span>

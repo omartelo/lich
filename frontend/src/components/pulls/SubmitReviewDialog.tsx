@@ -1,6 +1,7 @@
 import { Check, MessageSquare, X } from "lucide-react"
 import type { ReviewEvent } from "@/lib/api-types"
 import type { PendingReview } from "@/lib/pulls/pending-review-store"
+import { useT } from "@/lib/i18n/i18n"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { commentFieldClass } from "./CommentBox"
@@ -12,24 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-
-const VERDICTS: Record<ReviewEvent, { title: string; action: string; description: string }> = {
-  approve: {
-    title: "Approve",
-    action: "Approve",
-    description: "Sign this pull request off. GitHub refuses an approval of your own.",
-  },
-  comment: {
-    title: "Comment",
-    action: "Send review",
-    description: "Send the comments without a verdict.",
-  },
-  request_changes: {
-    title: "Request changes",
-    action: "Request changes",
-    description: "Ask for the changes below before this can land.",
-  },
-}
 
 interface SubmitReviewDialogProps {
   event: ReviewEvent
@@ -52,7 +35,7 @@ export function SubmitReviewDialog({
   onCancel,
   onSubmit,
 }: SubmitReviewDialogProps) {
-  const verdict = VERDICTS[event]
+  const t = useT()
   const count = review.comments.length
   // GitHub takes a bare approval, but a review that neither approves nor says
   // anything has nothing in it to send.
@@ -62,27 +45,29 @@ export function SubmitReviewDialog({
     <Dialog open onOpenChange={(next) => !next && onCancel()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{verdict.title}</DialogTitle>
-          <DialogDescription>{verdict.description}</DialogDescription>
+          <DialogTitle>{t(`pulls.submitReviewDialog.verdict.${event}.title`)}</DialogTitle>
+          <DialogDescription>
+            {t(`pulls.submitReviewDialog.verdict.${event}.description`)}
+          </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <textarea
             value={review.body}
             onChange={(e) => onBodyChange(e.target.value)}
-            placeholder="Summary — optional"
+            placeholder={t("pulls.submitReviewDialog.summaryPlaceholder")}
             autoFocus
             className={cn(commentFieldClass, "min-h-24")}
           />
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <MessageSquare className="size-3.5" />
             {count === 0
-              ? "No line comments — this sends the summary alone."
-              : `${count} line ${count === 1 ? "comment" : "comments"} go with it.`}
+              ? t("pulls.submitReviewDialog.summaryAlone")
+              : t("pulls.submitReviewDialog.lineComments", { count })}
           </p>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onCancel} disabled={submitting}>
-            Cancel
+            {t("common.action.cancel")}
           </Button>
           <Button onClick={onSubmit} disabled={submitting || empty}>
             {event === "approve" ? (
@@ -92,7 +77,9 @@ export function SubmitReviewDialog({
             ) : (
               <MessageSquare />
             )}
-            {submitting ? "Sending…" : verdict.action}
+            {submitting
+              ? t("pulls.commentBox.sending")
+              : t(`pulls.submitReviewDialog.verdict.${event}.action`)}
           </Button>
         </DialogFooter>
       </DialogContent>

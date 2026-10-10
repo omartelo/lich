@@ -1,3 +1,4 @@
+import type { PlainMessageKey } from "@/lib/i18n/i18n"
 import type { PullRequestSummary } from "@/lib/api-types"
 import { agoUnit } from "@/lib/ago"
 
@@ -10,21 +11,21 @@ import { agoUnit } from "@/lib/ago"
 export const PULLS_FILTERS = ["all", "ready", "drafts", "failing"] as const
 export type PullsFilter = (typeof PULLS_FILTERS)[number]
 
-export const FILTER_LABELS: Record<PullsFilter, string> = {
-  all: "All",
-  ready: "Ready",
-  drafts: "Drafts",
-  failing: "Failing",
+export const FILTER_LABEL_KEYS: Record<PullsFilter, PlainMessageKey> = {
+  all: "pulls.pullsList.filter.all",
+  ready: "pulls.pullsList.filter.ready",
+  drafts: "pulls.pullsList.filter.drafts",
+  failing: "pulls.pullsList.filter.failing",
 }
 
 export const PULLS_SORTS = ["updated", "oldest", "failing", "number"] as const
 export type PullsSort = (typeof PULLS_SORTS)[number]
 
-export const SORT_LABELS: Record<PullsSort, string> = {
-  updated: "Recently updated",
-  oldest: "Least recently updated",
-  failing: "Failing first",
-  number: "Highest number",
+export const SORT_LABEL_KEYS: Record<PullsSort, PlainMessageKey> = {
+  updated: "pulls.pullsList.sort.updated",
+  oldest: "pulls.pullsList.sort.oldest",
+  failing: "pulls.pullsList.sort.failing",
+  number: "pulls.pullsList.sort.number",
 }
 
 // How many pull requests one gh call brings back — mirrors prListLimit in

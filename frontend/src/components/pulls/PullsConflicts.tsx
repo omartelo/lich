@@ -1,5 +1,6 @@
 import { useState } from "react"
 import type { PullRequestDetail } from "@/lib/api-types"
+import { useT } from "@/lib/i18n/i18n"
 import { foldConflicts, splitConflictPath } from "@/lib/pulls/conflict-files"
 import { conflictsWithBase } from "@/lib/pulls/merge-gate"
 import { usePullRequestConflicts } from "@/lib/pulls/use-pull-request-conflicts"
@@ -13,6 +14,7 @@ import { usePullRequestConflicts } from "@/lib/pulls/use-pull-request-conflicts"
 // Nothing is drawn for a pull request that merges: the row exists only while
 // something is in the way, like every other reading on that line.
 export function PullsConflicts({ path, detail }: { path: string; detail: PullRequestDetail }) {
+  const t = useT()
   const [all, setAll] = useState(false)
   const conflicting = detail.state === "OPEN" && conflictsWithBase(detail)
   const { files, loading, error } = usePullRequestConflicts(
@@ -27,16 +29,16 @@ export function PullsConflicts({ path, detail }: { path: string; detail: PullReq
     return null
   }
   if (loading) {
-    return <Row>Working out which files conflict…</Row>
+    return <Row>{t("pulls.pullsConflicts.loading")}</Row>
   }
   if (error) {
-    return <Row>Couldn’t work out which files conflict: {error}</Row>
+    return <Row>{t("pulls.pullsConflicts.failed", { error })}</Row>
   }
   // GitHub recomputes mergeability on its own clock, so a resolution that has
   // just landed reads as a conflict up here and as a clean merge down there.
   // Saying which of the two is the fresh one beats a list that silently empties.
   if (files.length === 0) {
-    return <Row>No file conflicts here now — GitHub may not have caught up.</Row>
+    return <Row>{t("pulls.pullsConflicts.stale")}</Row>
   }
 
   const { shown, hidden } = foldConflicts(files, all)
@@ -44,7 +46,7 @@ export function PullsConflicts({ path, detail }: { path: string; detail: PullReq
     <>
       <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
         <span className="text-muted-foreground">
-          {files.length} conflicting {files.length === 1 ? "file" : "files"}
+          {t("pulls.pullsConflicts.count", { count: files.length })}
         </span>
         {shown.map((file) => (
           <ConflictPath key={file} file={file} />
@@ -67,6 +69,7 @@ function MoreButton({
   all: boolean
   onToggle: () => void
 }) {
+  const t = useT()
   if (hidden === 0) {
     return null
   }
@@ -76,7 +79,7 @@ function MoreButton({
       onClick={onToggle}
       className="text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
     >
-      {all ? "Show fewer" : `+${hidden} more`}
+      {all ? t("pulls.pullsConflicts.showFewer") : t("pulls.pullsConflicts.more", { hidden })}
     </button>
   )
 }

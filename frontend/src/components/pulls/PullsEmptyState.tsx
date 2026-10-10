@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { Bot, ExternalLink, GitPullRequestArrow } from "lucide-react"
+import { Trans } from "@/components/common/Trans"
+import { useT } from "@/lib/i18n/i18n"
 import { ProjectService } from "@/lib/rpc"
 import { Button } from "@/components/ui/button"
 import { errorText } from "@/lib/utils"
@@ -27,6 +29,7 @@ export function PullsEmptyState({
   onHandOff,
   handOffBlocked,
 }: PullsEmptyStateProps) {
+  const t = useT()
   const [opening, setOpening] = useState(false)
   const [handingOff, setHandingOff] = useState(false)
   const handOff = async () => {
@@ -43,7 +46,7 @@ export function PullsEmptyState({
       await ProjectService.CreatePullRequest(path)
       onOpened()
     } catch (err: unknown) {
-      toast.error(`Couldn’t open a pull request: ${errorText(err)}`)
+      toast.error(t("pulls.pullsEmptyState.openFailed", { error: errorText(err) }))
     } finally {
       setOpening(false)
     }
@@ -53,11 +56,12 @@ export function PullsEmptyState({
       <GitPullRequestArrow className="size-8 text-muted-foreground" />
       <p className="text-sm text-muted-foreground">
         {branch ? (
-          <>
-            No open pull request for <span className="font-medium text-foreground">{branch}</span>.
-          </>
+          <Trans
+            k="pulls.pullsEmptyState.noneFor"
+            params={{ branch: <span className="font-medium text-foreground">{branch}</span> }}
+          />
         ) : (
-          "No open pull request."
+          t("pulls.pullsEmptyState.none")
         )}
       </p>
       <div className="flex flex-wrap justify-center gap-2">
@@ -69,12 +73,14 @@ export function PullsEmptyState({
             disabled={handingOff || handOffBlocked !== null}
           >
             <Bot />
-            {handingOff ? "Opening session…" : "Create with agent"}
+            {handingOff
+              ? t("pulls.pullsEmptyState.openingSession")
+              : t("pulls.pullsEmptyState.createWithAgent")}
           </Button>
         </span>
         <Button variant="ghost" size="sm" onClick={() => void openPR()} disabled={opening}>
           <GitPullRequestArrow />
-          {opening ? "Opening…" : "Open on GitHub"}
+          {opening ? t("pulls.pullsEmptyState.opening") : t("pulls.pullsEmptyState.openOnGitHub")}
           <ExternalLink />
         </Button>
       </div>
