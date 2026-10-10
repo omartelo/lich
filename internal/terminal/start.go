@@ -139,6 +139,12 @@ func (s *Service) spawnSession(
 	// The model and effort are read from the row rather than passed in, so every
 	// spawn that starts a conversation of its own gets them: the window's first
 	// view and a restart. A resume leaves them to the provider (modelArgs).
+	env, err := pasteUnfoldEnv(
+		subagentEnv(s.sessionEnv(id, projectID, cwd), kind, depth, cardsOn), kind, s.store.PasteUnfold(kind),
+	)
+	if err != nil {
+		return nil, "", err
+	}
 	spec := ptySpec{
 		bin: resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
 		args: providerArgs(
@@ -147,7 +153,7 @@ func (s *Service) spawnSession(
 			s.promptLanguage(),
 		),
 		dir:  cwd,
-		env:  subagentEnv(s.sessionEnv(id, projectID, cwd), kind, depth, cardsOn),
+		env:  env,
 		cols: cols,
 		rows: rows,
 	}

@@ -90,6 +90,27 @@ export function supportsSubagentCards(id: string): boolean {
   return id === "claude"
 }
 
+// pasteUnfoldKey holds the flag that makes a long paste land as the full text
+// in a provider that folds it (mirrors store.pasteUnfoldKey in Go). Global only,
+// off unless the stored value is "true".
+export function pasteUnfoldKey(id: string): string {
+  return `provider.${id}.pasteUnfold`
+}
+
+// pasteUnfoldTiming is when a provider honours the flag: Claude Code and Kiro
+// CLI on the next paste, since the window does the unfolding
+// (lib/terminal/paste-unfold.ts); opencode at spawn, through its own config.
+// Absent for a provider whose fold nothing can undo.
+export function pasteUnfoldTiming(id: string): "nextPaste" | "nextSession" | null {
+  if (id === "claude" || id === "kiro") {
+    return "nextPaste"
+  }
+  if (id === "opencode") {
+    return "nextSession"
+  }
+  return null
+}
+
 // How far a provider runs without asking, as one ladder ordered by risk. The
 // two settings keys stay exactly as they are — this is the shape the user
 // chooses in, not the shape lich stores.

@@ -29,6 +29,7 @@ export const terminal = {
   view: {
     restartFailed: "会话重新启动失败：{error}",
     startFailed: "会话启动失败：{error}",
+    pasteSettingFailed: "无法读取是否展开长粘贴，因此本次只粘贴了一次：{error}",
   },
   sessionExit: {
     ended: "会话已结束",

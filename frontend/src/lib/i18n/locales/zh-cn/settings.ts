@@ -273,6 +273,15 @@ export const settings = {
       },
     },
   },
+  pasteUnfoldSetting: {
+    title: "展开长粘贴",
+    searchWords: "粘贴 折叠 标签 摘要 占位符 文本 paste fold chip summary",
+    descriptionNextPaste:
+      "{provider} 会折叠成占位符的粘贴将以完整文本出现，方便你在发送前编辑。从下一次粘贴起，对所有 {provider} 会话生效。",
+    descriptionNextSession:
+      "{provider} 会折叠成占位符的粘贴将以完整文本出现，方便你在发送前编辑。对更改后打开的会话生效。",
+    label: "在 {provider} 中展开长粘贴",
+  },
   subagentCardsSetting: {
     title: "子智能体作为 lich 会话",
     searchWords: "智能体 子智能体 卡片 工作树 委派 后台",

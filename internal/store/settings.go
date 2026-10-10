@@ -160,6 +160,19 @@ func (s *Service) SubagentCards(providerID string) bool {
 	return err != nil || value != "false"
 }
 
+// pasteUnfoldKey is the settings key that makes a long paste land as the full
+// text in a provider that folds it. Global only, and on only for the literal
+// "true".
+func pasteUnfoldKey(providerID string) string {
+	return "provider." + providerID + ".pasteUnfold"
+}
+
+// PasteUnfold reports whether a long paste into this provider lands unfolded.
+func (s *Service) PasteUnfold(providerID string) bool {
+	value, err := s.GetSetting(pasteUnfoldKey(providerID), globalScope)
+	return err == nil && value == "true"
+}
+
 // Sandbox rungs, ordered by how much of the machine a session can reach. They
 // are the stored spelling of the control in Settings › Providers, and anything
 // this list does not name reads as SandboxOff — an unknown value must never be
