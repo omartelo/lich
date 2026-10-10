@@ -305,7 +305,7 @@
       "title": "Trust boundaries",
       "items": [
         "Every /rpc call carries the session token; hook scripts call back over HTTP with it",
-        "Hook scripts ship from the companion repo omartelo/lich-plugin \u2014 contract-first",
+        "Hook scripts ship from the companion repo lichdotdev/lich-plugin \u2014 contract-first",
         "Agent CLIs are untrusted subprocesses; lich talks to them only through the PTY"
       ]
     }

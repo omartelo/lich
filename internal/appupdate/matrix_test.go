@@ -16,7 +16,7 @@ func TestUpgradeMatrix(t *testing.T) {
 		fedora = "ID=fedora\nID_LIKE=\"rhel centos\"\n"
 		arch   = "ID=arch\n"
 	)
-	cask := "paste brew upgrade --cask omartelo/tap/lich" + restartChain
+	cask := "paste brew upgrade --cask lichdotdev/tap/lich" + restartChain
 	scoop := "paste scoop update lich" + restartChainPwsh
 	packaged := []string{"usr/lib/lich/shell/lich-shell"}
 

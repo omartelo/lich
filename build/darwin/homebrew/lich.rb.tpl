@@ -1,5 +1,5 @@
 # Rendered by .github/workflows/release.yml (@VERSION@ -> tag, checksums from the
-# release's checksums.txt) and pushed to the omartelo/homebrew-tap repository as
+# release's checksums.txt) and pushed to the lichdotdev/homebrew-tap repository as
 # Casks/lich.rb — edit this template, never the tap copy.
 #
 # A cask, not a formula: only a cask installs an .app into /Applications, which

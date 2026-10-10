@@ -18,10 +18,10 @@ type Focused struct {
 	Project string `json:"project"`
 }
 
-// SetRaiseWindow wires how the relay brings lich's window to the front. Nil (a
-// test that does not care, or lich serving without a window) leaves Focus
-// opening the card wherever the window is. Called at startup.
-func (s *Service) SetRaiseWindow(raise func()) {
+// SetRaiseWindow wires how the relay brings lich's window to the front, or
+// opens one on the session's card when none is open. Nil (a test that does not
+// care) leaves Focus opening the card wherever the window is. Called at startup.
+func (s *Service) SetRaiseWindow(raise func(sessionID string)) {
 	s.raiseWindow = raise
 }
 
@@ -45,7 +45,7 @@ func (s *Service) Focus(opts FocusOptions) (Focused, error) {
 		s.events.Emit(FocusEventName, FocusEvent{ID: dest.ID})
 	}
 	if s.raiseWindow != nil {
-		s.raiseWindow()
+		s.raiseWindow(dest.ID)
 	}
 	return Focused{ID: dest.ID, Label: dest.Peer.Label, Project: dest.Peer.Project}, nil
 }

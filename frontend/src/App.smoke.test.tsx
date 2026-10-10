@@ -106,6 +106,7 @@ function backendFor({ projects = [], settings = {} }: Workspace): Record<string,
     "project.CommitIdentity": () => ({ name: "Dev", email: "dev@example.com", local: false }),
     "store.ClosedSessions": () => ({ sessions: [], total: 0, indexing: 0 }),
     "fonts.List": () => ["FiraCode Nerd Font Mono"],
+    "tray.SetLabels": () => null,
     "system.SandboxBackend": () => "bubblewrap",
     "system.SSHAgentKeys": () => null,
     "system.Diagnostics": () => ({

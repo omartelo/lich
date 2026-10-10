@@ -778,3 +778,12 @@ export function projectOfSession(state: SessionState, sessionId: string): string
   }
   return ""
 }
+
+// sessionLabels names these sessions in workspace order, for a prompt that lists
+// them. An id no project holds any more is left out.
+export function sessionLabels(state: SessionState, ids: readonly string[]): string[] {
+  const wanted = new Set(ids)
+  return Object.values(state).flatMap((project) =>
+    project.sessions.filter((session) => wanted.has(session.id)).map((session) => session.label),
+  )
+}

@@ -36,7 +36,7 @@ telemetry, so the interesting boundaries are local ones:
   puts that account's token in the environment of the `gh` calls lich makes.
   A path that leaks it, or hands it to the wrong project, is a vulnerability.
 - **Session hooks.** The scripts ship from
-  [lich-plugin](https://github.com/omartelo/lich-plugin) and post to the same
+  [lich-plugin](https://github.com/lichdotdev/lich-plugin) and post to the same
   authenticated listener. A payload that escapes its contract belongs here too;
   a bug in the scripts themselves belongs in that repository.
 

@@ -3,5 +3,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: lich plugin (session titles, git refresh, resume)
-    url: https://github.com/omartelo/lich-plugin/issues
+    url: https://github.com/lichdotdev/lich-plugin/issues
     about: The Claude Code hooks ship from their own repository — report those there.

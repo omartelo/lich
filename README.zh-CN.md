@@ -155,7 +155,7 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 | 平台 | 安装方式 | 运行时依赖 |
 | --- | --- | --- |
 | **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `zenity`，以及随软件包附带的窗口所需的 glibc 2.34 或更新版本（Debian 12、Ubuntu 22.04、RHEL 9 及以上） |
-| **macOS** | `brew install --cask omartelo/tap/lich` | 无需任何东西 —— Apple Silicon 和 Intel 上窗口都随应用一起附带 |
+| **macOS** | `brew install --cask lichdotdev/tap/lich` | 无需任何东西 —— Apple Silicon 和 Intel 上窗口都随应用一起附带 |
 | **Windows** | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序或便携版 zip，或使用 Scoop：`scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json` | 无需任何东西，每种方式都自带窗口 |
 
 手动的分发版软件包、Linux 压缩包和 Windows 便携版 zip 见 [INSTALL.md](INSTALL.md)。macOS 和 Windows 的
@@ -190,7 +190,7 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
 - **Worktree** —— 项目仓库里的 `.lich/setup-worktree.sh` 会在新 worktree 的终端里
   先于智能体运行；New worktree 对话框会展示这个脚本，若仓库没有则给出检测到的建议。
   `.worktreeinclude` 文件用来调整哪些被 gitignore 的文件会被复制过去。
-- **会话钩子** —— 在设置里装上 [lich 插件](https://github.com/omartelo/lich-plugin)
+- **会话钩子** —— 在设置里装上 [lich 插件](https://github.com/lichdotdev/lich-plugin)
   之后，会话会给自己的卡片起标题，并在它写入文件的那一刻刷新 git。
 - **稳定性承诺** —— 哪些部分可以放心写脚本依赖、哪些可能在任何版本里变动，写在
   [docs/stability.md](docs/stability.md)（英文）。

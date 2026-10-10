@@ -9,16 +9,18 @@ lich that opened it — so nothing about it reaches the pure-Go build.
 ## The kurogane pin
 
 `shell/Cargo.toml` pins kurogane at the fork `omartelo/kurogane`, branch
-`lich-master`: upstream master plus the one patch upstream has not merged yet,
-Chromium's status bubble kept off the window
-([0x48piraj/kurogane#23](https://github.com/0x48piraj/kurogane/pull/23)).
+`lich-close-prompt`: `lich-master` (upstream master plus Chromium's status
+bubble kept off the window,
+[0x48piraj/kurogane#23](https://github.com/0x48piraj/kurogane/pull/23)) and
+`App::on_before_unload`, which lets lich-shell keep a close the user made so the
+page can ask whether lich keeps running. Neither is upstream yet.
 Everything else the fork once carried is upstream's own now, in upstream's
 shape: the window's class, icon and title, the profile directory, where the
 window closed and where it reopens, the decision hooks that grew out of
 [#12](https://github.com/0x48piraj/kurogane/pull/12), the page-first key
 ([#21](https://github.com/0x48piraj/kurogane/pull/21)), a second launch
 raising the window, the sandbox as a mode, the macOS menus and bundle layout.
-When #23 lands, point `shell/Cargo.toml` at `0x48piraj/kurogane`. Nothing
+When both land, point `shell/Cargo.toml` at `0x48piraj/kurogane`. Nothing
 else changes.
 
 ## Building

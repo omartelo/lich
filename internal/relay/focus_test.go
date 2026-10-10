@@ -9,7 +9,9 @@ func TestFocusOpensTheCardAndRaisesTheWindow(t *testing.T) {
 	events := &fakeEvents{}
 	svc := newRelay(editorWorkspace("/src/lich", "/src/lich-wt"), newFakeTerminal("s1", "s2", "s3"), events)
 	var order []string
-	svc.SetRaiseWindow(func() {
+	var raisedFor string
+	svc.SetRaiseWindow(func(id string) {
+		raisedFor = id
 		if len(events.focus) == 1 {
 			order = append(order, "card", "window")
 		}
@@ -25,6 +27,9 @@ func TestFocusOpensTheCardAndRaisesTheWindow(t *testing.T) {
 	if len(events.focus) != 1 || events.focus[0].ID != "s2" {
 		t.Errorf("focus events = %+v, want one for s2", events.focus)
 	}
+	if raisedFor != "s2" {
+		t.Errorf("window raised for %q, want s2: a window opened for it starts on its card", raisedFor)
+	}
 	if strings.Join(order, ",") != "card,window" {
 		t.Errorf("order = %v, want the card chosen before the window comes up", order)
 	}
@@ -34,7 +39,7 @@ func TestFocusNamesTheLiveSessionsWhenTheTargetIsUnknown(t *testing.T) {
 	events := &fakeEvents{}
 	svc := newRelay(editorWorkspace("/src/lich", "/src/lich-wt"), newFakeTerminal("s1", "s3"), events)
 	raised := false
-	svc.SetRaiseWindow(func() { raised = true })
+	svc.SetRaiseWindow(func(string) { raised = true })
 
 	_, err := svc.Focus(FocusOptions{Target: "feature"})
 	if err == nil || !strings.Contains(err.Error(), "main") || !strings.Contains(err.Error(), "solo") {

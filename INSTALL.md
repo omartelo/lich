@@ -119,17 +119,17 @@ over it would leave the old binary first on your PATH.
 
 ## macOS
 
-From the [tap](https://github.com/omartelo/homebrew-tap) — Apple Silicon and
+From the [tap](https://github.com/lichdotdev/homebrew-tap) — Apple Silicon and
 Intel both:
 
 ```bash
-brew install --cask omartelo/tap/lich
+brew install --cask lichdotdev/tap/lich
 ```
 
 The cask installs `Lich.app` into `/Applications` — Launchpad, Spotlight and
 the Finder list it under its own icon — and symlinks the same binary onto
 `PATH` as `lich`, so the app and the command are one install. `brew upgrade
---cask omartelo/tap/lich` tracks new versions, and lich's own update button
+--cask lichdotdev/tap/lich` tracks new versions, and lich's own update button
 steps aside on a Homebrew install.
 
 The app carries its own window on Apple Silicon and Intel alike, the same
@@ -144,7 +144,7 @@ as `Formula/lich.rb`. Homebrew refuses to install the cask over it (both want
 
 ```bash
 brew uninstall lich
-brew install --cask omartelo/tap/lich
+brew install --cask lichdotdev/tap/lich
 ```
 
 Without Homebrew, download `lich-*-darwin-arm64.zip` (Apple Silicon) or

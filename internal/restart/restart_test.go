@@ -15,7 +15,7 @@ func TestNew(t *testing.T) {
 	if c.exePath != "/usr/local/bin/lich" {
 		t.Fatalf("exePath = %q", c.exePath)
 	}
-	if c.spawn == nil || c.terminate == nil {
+	if c.spawn == nil {
 		t.Fatal("New left the process primitives unset")
 	}
 }
@@ -39,40 +39,9 @@ func TestSuccessorEnvAppendsWaitMarker(t *testing.T) {
 	}
 }
 
-func TestCloseWindowCommand(t *testing.T) {
-	// /F is the whole point: with it taskkill ends the process, and Chromium
-	// never flushes the profile the close exists to save.
-	t.Run("asks rather than forces", func(t *testing.T) {
-		_, args := closeWindowCommand(func(string) string { return `C:\Windows` }, 4321)
-		if slices.Contains(args, "/F") {
-			t.Fatalf("args = %v, must not force the kill", args)
-		}
-		if !slices.Equal(args, []string{"/PID", "4321"}) {
-			t.Fatalf("args = %v, want [/PID 4321]", args)
-		}
-	})
-
-	t.Run("resolved under SystemRoot", func(t *testing.T) {
-		exe, _ := closeWindowCommand(func(string) string { return `C:\Windows` }, 1)
-		if exe != `C:\Windows\System32\taskkill.exe` {
-			t.Fatalf("exe = %q, want the SystemRoot path", exe)
-		}
-	})
-
-	// No SystemRoot is a broken environment, not a reason to skip the close:
-	// the bare name still resolves through PATH on every Windows.
-	t.Run("falls back to the bare name", func(t *testing.T) {
-		exe, _ := closeWindowCommand(func(string) string { return "" }, 1)
-		if exe != "taskkill.exe" {
-			t.Fatalf("exe = %q, want taskkill.exe", exe)
-		}
-	})
-}
-
-func TestDoSpawnsThenTerminates(t *testing.T) {
+func TestDoSpawnsThenStops(t *testing.T) {
 	var (
 		spawnedEnv []string
-		terminated bool
 		order      []string
 	)
 	c := &Coordinator{
@@ -83,54 +52,44 @@ func TestDoSpawnsThenTerminates(t *testing.T) {
 			order = append(order, "spawn")
 			return nil
 		},
-		terminate: func(*os.Process) error {
-			terminated = true
-			order = append(order, "terminate")
-			return nil
-		},
 	}
-	c.SetWindow(&os.Process{}) // non-nil so terminate runs
+	c.SetStop(func() { order = append(order, "stop") })
 
 	if err := c.Do(); err != nil {
 		t.Fatalf("Do() = %v, want nil", err)
 	}
-	if !terminated {
-		t.Fatal("window was not terminated")
-	}
 	if !slices.Contains(spawnedEnv, WaitEnv+"=1") {
 		t.Fatalf("successor env = %v, missing wait marker", spawnedEnv)
 	}
-	// Successor must start before the window is torn down.
-	if len(order) != 2 || order[0] != "spawn" || order[1] != "terminate" {
-		t.Fatalf("order = %v, want [spawn terminate]", order)
+	// Successor must start before this lich stops.
+	if !slices.Equal(order, []string{"spawn", "stop"}) {
+		t.Fatalf("order = %v, want [spawn stop]", order)
 	}
 }
 
 func TestDoIsIdempotent(t *testing.T) {
-	spawns, terminates := 0, 0
+	spawns, stops := 0, 0
 	c := &Coordinator{
-		exePath:   "/usr/local/bin/lich",
-		spawn:     func(string, []string, []string) error { spawns++; return nil },
-		terminate: func(*os.Process) error { terminates++; return nil },
+		exePath: "/usr/local/bin/lich",
+		spawn:   func(string, []string, []string) error { spawns++; return nil },
 	}
-	c.SetWindow(&os.Process{})
+	c.SetStop(func() { stops++ })
 
 	for range 3 {
 		if err := c.Do(); err != nil {
 			t.Fatalf("Do() = %v, want nil", err)
 		}
 	}
-	if spawns != 1 || terminates != 1 {
-		t.Fatalf("spawns=%d terminates=%d, want 1 and 1 — restart must fire once", spawns, terminates)
+	if spawns != 1 || stops != 1 {
+		t.Fatalf("spawns=%d stops=%d, want 1 and 1 — restart must fire once", spawns, stops)
 	}
 }
 
-func TestDoWithoutWindowStillSpawns(t *testing.T) {
+func TestDoBeforeServingStillSpawns(t *testing.T) {
 	spawned := false
 	c := &Coordinator{
-		exePath:   "/usr/local/bin/lich",
-		spawn:     func(string, []string, []string) error { spawned = true; return nil },
-		terminate: func(*os.Process) error { t.Fatal("terminate called with no window"); return nil },
+		exePath: "/usr/local/bin/lich",
+		spawn:   func(string, []string, []string) error { spawned = true; return nil },
 	}
 	if err := c.Do(); err != nil {
 		t.Fatalf("Do() = %v, want nil", err)
@@ -138,6 +97,29 @@ func TestDoWithoutWindowStillSpawns(t *testing.T) {
 	if !spawned {
 		t.Fatal("successor was not spawned")
 	}
+}
+
+func TestQuit(t *testing.T) {
+	t.Run("stops without launching anything", func(t *testing.T) {
+		stops := 0
+		c := &Coordinator{
+			exePath: "/usr/local/bin/lich",
+			spawn:   func(string, []string, []string) error { t.Fatal("quit launched a process"); return nil },
+		}
+		c.SetStop(func() { stops++ })
+		if err := c.Quit(); err != nil {
+			t.Fatalf("Quit() = %v, want nil", err)
+		}
+		if stops != 1 {
+			t.Fatalf("stops = %d, want 1", stops)
+		}
+	})
+
+	t.Run("refused before lich serves", func(t *testing.T) {
+		if err := New("/usr/local/bin/lich", nil).Quit(); err == nil {
+			t.Fatal("Quit() = nil before SetStop, want an error")
+		}
+	})
 }
 
 func TestDoErrors(t *testing.T) {
@@ -201,8 +183,7 @@ func TestInstallLaunchesBeforeShutdown(t *testing.T) {
 		order = append(order, "launch")
 		return nil
 	}
-	c.terminate = func(*os.Process) error { order = append(order, "shutdown"); return nil }
-	c.SetWindow(&os.Process{})
+	c.SetStop(func() { order = append(order, "shutdown") })
 	if err := c.Install("verified-setup.exe"); err != nil {
 		t.Fatal(err)
 	}
@@ -214,26 +195,26 @@ func TestInstallLaunchesBeforeShutdown(t *testing.T) {
 	}
 }
 
-func TestInstallerLaunchFailureKeepsWindow(t *testing.T) {
+func TestInstallerLaunchFailureKeepsRunning(t *testing.T) {
 	c := New("lich.exe", nil)
 	c.spawn = func(string, []string, []string) error { return io.ErrClosedPipe }
-	c.terminate = func(*os.Process) error { t.Fatal("closed window after launch failure"); return nil }
-	c.SetWindow(&os.Process{})
+	c.SetStop(func() { t.Fatal("stopped after launch failure") })
 	if err := c.Install("setup.exe"); !errors.Is(err, io.ErrClosedPipe) {
 		t.Fatalf("launch error = %v", err)
 	}
 }
 
-func TestInstallWithoutWindowExitsCleanly(t *testing.T) {
-	c := New("lich.exe", nil)
-	var order []string
-	c.spawn = func(string, []string, []string) error { order = append(order, "launch"); return nil }
-	c.terminate = func(*os.Process) error { t.Fatal("must not taskkill the backend"); return nil }
-	c.SetStop(func() { order = append(order, "stop") })
-	if err := c.Install("setup.exe"); err != nil {
-		t.Fatal(err)
+// A successor is spawned with the wait marker, and everything it spawns
+// inherited it: a session of a restarted lich carried LICH_RESTART_WAIT=1, so a
+// `lich` launched from its shell skipped the duplicate check and died on the
+// busy port instead of showing the running lich's window.
+func TestWithoutMarkerKeepsTheRestartMarkerOutOfChildren(t *testing.T) {
+	env := successorEnv([]string{"PATH=/bin", "LICH_LISTEN_PORT=47821"})
+	got := WithoutMarker(env)
+	if want := []string{"PATH=/bin", "LICH_LISTEN_PORT=47821"}; !slices.Equal(got, want) {
+		t.Fatalf("WithoutMarker = %v, want %v", got, want)
 	}
-	if !slices.Equal(order, []string{"launch", "stop"}) {
-		t.Fatalf("order = %v", order)
+	if !slices.Contains(env, WaitEnv+"=1") {
+		t.Fatal("WithoutMarker changed the slice it was given")
 	}
 }

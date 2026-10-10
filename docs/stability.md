@@ -12,7 +12,7 @@ old form keeps working, with a visible warning, for at least one minor release b
   `--json` output, the columns of `--csv` output, and exit codes. [cli.md](cli.md) is the reference for each of them.
 - **MCP tools**, except the experimental ones below. The tool names and input schemas that `lich mcp` serves
   (`internal/cli/mcp.go`).
-- **The hook contract** with [`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin), except the parts
+- **The hook contract** with [`lichdotdev/lich-plugin`](https://github.com/lichdotdev/lich-plugin), except the parts
   listed as experimental below: the endpoints and payloads written down in [hooks/](hooks/README.md). Which plugin
   releases a lich supports, and how the plugin's version number marks a contract change, is under [Versioning](hooks/README.md#versioning).
 - **Themes.** The theme JSON format and the `lich-theme.json` pack manifest, as described in [themes.md](themes.md).

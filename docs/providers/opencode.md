@@ -37,7 +37,7 @@ reads it as not installed.
 A new MCP tool reaches opencode a release later than everyone else (`internal/cli/mcp.go`, `mcpTools`; the
 registration table in [`../cli.md`](../cli.md)). Every other harness is handed lich's own server, so a tool added
 there is in that session's list on the next spawn. opencode cannot register an MCP server from a plugin, so its
-plugin defines each tool itself in the companion repo (`omartelo/lich-plugin`, `opencode/lich.js`), which means a
+plugin defines each tool itself in the companion repo (`lichdotdev/lich-plugin`, `opencode/lich.js`), which means a
 tool arrives there only once that repo cuts a release and the user reinstalls the plugin. Until they do it is
 missing from that session's list while it is in every other. `lich rename` works there like anywhere else; it is
 discovery that lags, which is the whole reason the tools exist.

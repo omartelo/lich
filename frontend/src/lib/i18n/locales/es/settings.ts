@@ -264,6 +264,24 @@ export const settings = {
     used: "usado",
     resets: "se restablece",
   },
+  closeSetting: {
+    title: "Al cerrar la ventana",
+    searchWords: "salir cerrar segundo plano ventana bandeja mantener",
+    description:
+      "Qué hace lich con sus sesiones cuando cierras su ventana. Sin ninguna en ejecución, cerrar la ventana sale de lich.",
+    choice: {
+      ask: { label: "Preguntar", consequence: "lich pregunta cada vez si sigue en segundo plano." },
+      background: {
+        label: "Mantener en ejecución",
+        consequence:
+          "La ventana se cierra y las sesiones siguen trabajando; abrir lich de nuevo las devuelve.",
+      },
+      quit: {
+        label: "Salir",
+        consequence: "Cerrar la ventana sale de lich y termina todas sus sesiones.",
+      },
+    },
+  },
   restoreSetting: {
     title: "Sesiones restauradas",
     searchWords:

@@ -15,11 +15,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command palette Alt+Enter on a session does the same in one step. Clicking
   the pane of another project's session switches to that project and keeps the
   split on screen.
+- **`lich quit` ends lich and every session in it.** It is the way out now that
+  closing the window no longer is, and it returns once lich is gone, so a
+  script can start it again right after.
+- **Quit lich from the window.** Type `>` in the command palette and pick Quit
+  lich; it names the sessions in the middle of a turn before ending them. It
+  has no shortcut by default; give it one in Settings › Hotkeys.
 
 ### Changed
 
 - **Show another session beside this one asks which session** instead of
   taking the next card in the sidebar.
+- **Closing the window can keep your sessions running.** With a session
+  running, lich asks whether to keep going in the background or quit; kept
+  running, every agent and terminal goes on working, and launching lich again
+  opens a window on them, scrollback included. Tick "Don't ask again", or pick
+  the answer in Settings › Appearance › When the window closes. With nothing
+  running, closing the window quits as before. Restarting for an update still
+  ends every session.
+- **A tray icon while lich runs** (Linux and Windows): Show lich brings the
+  window back, the menu counts the sessions running, and Quit lich ends it.
+- **lich opens where you left it.** A new window, whether reopened on a lich
+  that kept running or opened by a fresh launch, lands on the project screen
+  it was on when the window closed instead of Home.
+- **The Homebrew tap moved to `lichdotdev/tap`.** New installs run
+  `brew install --cask lichdotdev/tap/lich`. An install from `omartelo/tap`
+  keeps upgrading: the old tap points Homebrew at the new one.
+
+### Fixed
+
+- **Launching lich from a terminal inside lich after an update shows the
+  running window.** Sessions of an updated lich used to carry a restart marker
+  that made the launch die on the busy port instead.
 
 ## [0.66.0] - 2026-10-10
 

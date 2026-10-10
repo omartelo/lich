@@ -3,6 +3,7 @@ module github.com/omartelo/lich
 go 1.27.0
 
 require (
+	fyne.io/systray v1.11.0
 	github.com/UserExistsError/conpty v0.1.4
 	github.com/coder/websocket v1.8.14
 	github.com/creack/pty v1.1.24
@@ -16,6 +17,7 @@ require (
 	github.com/akavel/rsrc v0.10.2 // indirect
 	github.com/dchest/jsmin v0.0.0-20220218165748-59f39799265f // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/josephspurrier/goversioninfo v1.4.1 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
