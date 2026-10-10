@@ -29,6 +29,8 @@ export const terminal = {
   view: {
     restartFailed: "Falha ao reiniciar a sessão: {error}",
     startFailed: "Falha ao iniciar a sessão: {error}",
+    pasteSettingFailed:
+      "Não deu para ler se o paste longo deve ser expandido, então este foi colado uma vez: {error}",
   },
   sessionExit: {
     ended: "Sessão encerrada",

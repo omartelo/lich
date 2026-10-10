@@ -1,5 +1,5 @@
 import { formatCombo, HOTKEY_ACTIONS, HOTKEY_GROUPS, type Hotkeys } from "@/lib/hotkeys"
-import { t, tIn } from "@/lib/i18n/i18n"
+import { t } from "@/lib/i18n/i18n"
 
 // The rows the shortcuts overlay lists, and the read-only half of the Hotkeys
 // settings pane. Two sources: the rebindable actions, read from the user's
@@ -15,9 +15,6 @@ export interface ShortcutGroup {
   title: string
   rows: ShortcutRow[]
 }
-
-export const TERMINAL_TITLE = tIn("en", "hotkeys.shortcuts.terminalTitle")
-export const PASSTHROUGH_TITLE = tIn("en", "hotkeys.shortcuts.passthroughTitle")
 
 // lich's own chord, and not a rebindable one: it shadows Chromium's Find in
 // --app mode, and an accelerator answers to a fixed chord (TerminalView). Ctrl

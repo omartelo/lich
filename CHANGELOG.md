@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A long paste can land as text you can edit, in Claude Code, opencode and
+  Kiro CLI.** Turn on Unfold long pastes in Settings › Providers and a paste
+  the agent would fold into a placeholder (`[Pasted text #1 +32 lines]`,
+  `[Pasted ~32 lines]`, `32 lines ▸`) arrives as the full text instead. Off by
+  default.
 - **`lich focus <session>` brings the lich window up with that session's card
   open**, as if you had clicked it. It is what an editor plugin calls to take
   you from a "finished its turn" notice straight to the session.
@@ -17,6 +22,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The language settings open Settings › Appearance**, above the theme, where
   someone who can't read the current language finds them first.
+
+### Fixed
+
+- **The hands-on time on a session card is written in the interface language.**
+  It read `1h12m` in every language; it now reads `1 h 12 min` in Portuguese,
+  `1h12min` in Spanish and `1小时12分钟` in Chinese, and stays `1h12m` in English.
+
+- **Claude Code, opencode, oh-my-pi and Cursor CLI follow lich's light or dark
+  theme when you switch it.** A session kept the look it picked at start, so
+  switching lich to light left Claude Code (under its *Auto (match terminal)*
+  theme) drawing dark-theme diffs, dark green and red bands with white text, on
+  a light terminal. lich now tells the terminal apps that ask (mode 2031) and
+  they repaint in the new look.
 
 ## [0.65.0] - 2026-10-10
 

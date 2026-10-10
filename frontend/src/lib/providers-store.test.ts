@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
+import { tIn } from "@/lib/i18n/i18n"
 import type { BinaryCheck, DetectedProvider } from "./api-types"
 import {
   binKey,
@@ -9,7 +10,6 @@ import {
   enabledProviders,
   readEnabled,
   noProviderInstalled,
-  NO_AGENT_REASON,
   resolveDefaultProvider,
   resolveImplicitSessionKind,
   resolveProjectDefaultProvider,
@@ -24,6 +24,8 @@ import {
   skipPermissionFlags,
   skipPermissionsKey,
   supportsUltracode,
+  pasteUnfoldKey,
+  pasteUnfoldTiming,
   ultracodeKey,
   SANDBOX_RISK_ORDER,
   SKIP_RISK_ORDER,
@@ -75,6 +77,20 @@ describe("provider setting keys", () => {
       "shell",
     ]) {
       expect(supportsUltracode(id)).toBe(false)
+    }
+  })
+
+  // The Go spawn reads this exact string (store.pasteUnfoldKey).
+  it("keys the paste-unfold flag per provider", () => {
+    expect(pasteUnfoldKey("opencode")).toBe("provider.opencode.pasteUnfold")
+  })
+
+  it("offers paste unfolding only where lich can undo the fold, and says when it applies", () => {
+    expect(pasteUnfoldTiming("claude")).toBe("nextPaste")
+    expect(pasteUnfoldTiming("kiro")).toBe("nextPaste")
+    expect(pasteUnfoldTiming("opencode")).toBe("nextSession")
+    for (const id of ["codex", "antigravity", "omp", "crush", "cursor", "shell"]) {
+      expect(pasteUnfoldTiming(id)).toBeNull()
     }
   })
 
@@ -360,12 +376,11 @@ describe("noProviderInstalled / resolveImplicitSessionKind", () => {
   })
 })
 
-describe("NO_AGENT_REASON", () => {
-  // Pinned as a literal rather than read back off the export: this is the one
-  // sentence that explains a terminal the user did not ask for, and a test that
-  // compares the constant to itself would pass through any rewrite of it.
+describe("shell.emptySessions.noAgent", () => {
+  // Pinned as a literal: this is the one sentence that explains a terminal the
+  // user did not ask for.
   it("names both the reason and where the machine is told about an agent", () => {
-    expect(NO_AGENT_REASON).toBe(
+    expect(tIn("en", "shell.emptySessions.noAgent")).toBe(
       "No agent found on PATH, so this opens a terminal — set one in Settings › Providers.",
     )
   })

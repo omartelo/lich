@@ -1,4 +1,4 @@
-import { t, tIn } from "@/lib/i18n/i18n"
+import { t } from "@/lib/i18n/i18n"
 
 // Global keyboard shortcuts. Combos are user-configurable and persisted to the
 // workspace database, the way the theme selection is (see settings.tsx). `mod`
@@ -68,10 +68,6 @@ export interface Combo {
 // how a user gives a chord back to the TUI in the terminal, which never sees a
 // chord the window claims for itself.
 export const UNASSIGNED: Combo = { mod: false, shift: false, alt: false, key: "" }
-
-// What formatCombo prints for UNASSIGNED, pinned to English: a test's reference,
-// never display text. Rows say "unassigned" with a flag, not by this string.
-export const UNASSIGNED_LABEL = tIn("en", "hotkeys.unassigned")
 
 export interface HotkeyAction {
   id: HotkeyId

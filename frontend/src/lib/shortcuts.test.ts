@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { DEFAULT_HOTKEYS, HOTKEY_ACTIONS, HOTKEY_GROUPS, UNASSIGNED } from "./hotkeys"
-import { PASSTHROUGH_TITLE, shortcutGroups, TERMINAL_TITLE } from "./shortcuts"
+import { shortcutGroups } from "./shortcuts"
 
 const groupTitled = (
   groups: { title: string; rows: { label: string; keys: string }[] }[],
@@ -20,8 +20,8 @@ describe("shortcutGroups", () => {
     const groups = shortcutGroups(DEFAULT_HOTKEYS, false, false)
     expect(groups.map((g) => g.title)).toEqual([
       ...HOTKEY_GROUPS.map((g) => g.label),
-      TERMINAL_TITLE,
-      PASSTHROUGH_TITLE,
+      "Terminal",
+      "Passed through to the agent",
     ])
     const listed = groups.slice(0, -2).flatMap((g) => g.rows.map((row) => row.label))
     expect(listed).toEqual(HOTKEY_ACTIONS.map((a) => a.label))

@@ -6,13 +6,15 @@ import { SerializeAddon } from "@xterm/addon-serialize"
 import { SearchAddon } from "@xterm/addon-search"
 import { WebLinksAddon } from "@xterm/addon-web-links"
 import { toast } from "sonner"
-import { System, Terminal as Service } from "@/lib/rpc"
+import { Store, System, Terminal as Service } from "@/lib/rpc"
 import { t } from "@/lib/i18n/i18n"
 import { errorText } from "@/lib/utils"
 import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/terminal/term-transport"
 import { chordSequence, isSearchOpenChord, pastedImageSequence } from "@/lib/terminal/term-keys"
 import { takePaste } from "@/lib/terminal/paste-queue"
+import { pasteUnfold } from "@/lib/terminal/paste-unfold"
+import { pasteUnfoldKey } from "@/lib/providers-store"
 import { takeFork } from "@/lib/terminal/fork-queue"
 import { takeSetup } from "@/lib/terminal/setup-queue"
 import type { PaletteSession } from "@/lib/session/command-palette"
@@ -26,6 +28,7 @@ import {
   feedEntry,
   hideEntry,
   type LiveTerminal,
+  markExited,
   showEntry,
   terminalEntry,
 } from "@/lib/terminal/terminal-registry"
@@ -36,6 +39,7 @@ import { TerminalDropHint } from "./TerminalDropHint"
 import { TerminalSearchBar, type SearchResults } from "./TerminalSearchBar"
 import { useTerminalDrop } from "./useTerminalDrop"
 import { linkClickIsOurs } from "@/lib/terminal/term-modes"
+import { colorSchemeReport, watchThemeNotify } from "@/lib/terminal/theme-notify"
 import { createSessionLinkProvider } from "@/lib/terminal/session-link-provider"
 import { sessionLinkTargets } from "@/lib/terminal/session-links"
 import { useSettings } from "@/providers/settings"
@@ -158,12 +162,14 @@ export function TerminalView({
   const fontRef = useRef(font)
   const fontSizeRef = useRef(terminalFontSize)
   const themeRef = useRef(terminalColors)
+  const schemeRef = useRef(resolvedTheme.scheme)
   visibleRef.current = visible
   focusedRef.current = focused
   stillInWorkspaceRef.current = stillInWorkspace
   fontRef.current = font
   fontSizeRef.current = terminalFontSize
   themeRef.current = terminalColors
+  schemeRef.current = resolvedTheme.scheme
 
   // Every other open session's label, for the link provider below — read
   // through a ref because xterm calls provideLinks straight from its own
@@ -343,6 +349,8 @@ export function TerminalView({
         term.focus()
       })
 
+    const themeNotify = watchThemeNotify(term, entry, () => schemeRef.current, writeInput)
+
     const search = new SearchAddon()
     term.loadAddon(search)
     const searchResults = search.onDidChangeResults(({ resultIndex, resultCount }) =>
@@ -394,12 +402,39 @@ export function TerminalView({
     // drop a paste with no text in it.
     const onPaste = (event: ClipboardEvent) => {
       const seq = pastedImageSequence(event.clipboardData, isWindows)
-      if (seq === null) {
+      if (seq !== null) {
+        event.preventDefault()
+        event.stopPropagation()
+        writeInput(seq)
         return
       }
+      const text = event.clipboardData?.getData("text/plain") ?? ""
+      const unfold = pasteUnfold(kind, text, term.rows)
+      if (unfold === null) {
+        return
+      }
+      // Asked at paste time rather than held, so a switch flipped in Settings
+      // answers the next paste. The clipboard has to be claimed now, before the
+      // answer: xterm would paste it once on its own.
       event.preventDefault()
       event.stopPropagation()
-      writeInput(seq)
+      Store.GetSetting(pasteUnfoldKey(kind), "").then(
+        (value) => {
+          term.paste(text)
+          if (value !== "true") {
+            return
+          }
+          if (unfold.kind === "repaste") {
+            term.paste(text)
+          } else {
+            writeInput(unfold.key)
+          }
+        },
+        (error: unknown) => {
+          term.paste(text)
+          toast.error(t("terminal.view.pasteSettingFailed", { error: errorText(error) }))
+        },
+      )
     }
     host.addEventListener("paste", onPaste, true)
 
@@ -445,6 +480,7 @@ export function TerminalView({
         selection.dispose()
         searchResults.dispose()
         sessionLinks.dispose()
+        themeNotify.dispose()
         // Disposing the WebGL addon only detaches its canvas — the GL context
         // lives on until the canvas is collected, and Chromium force-loses the
         // oldest of them once 16 are alive. Since every hide destroys a
@@ -585,7 +621,7 @@ export function TerminalView({
         onAppEvent(EXIT_EVENT_PREFIX + sessionId, (data) => {
           const exit = readSessionExit(data)
           feedEntry(entry, new TextEncoder().encode(exitMarker(exit)), 0)
-          entry.exit = exit
+          markExited(entry, exit)
           entry.handlers?.exited(exit)
         }),
       )
@@ -714,10 +750,21 @@ export function TerminalView({
   // on the Settings route, where TerminalHost destroys every live terminal —
   // recreation reads the refs. The theme can flip with a terminal on screen
   // (OS scheme under "system").
+  // An app listening for theme changes is told even while its terminal is
+  // hidden: it answers with an OSC 11 query, which waits in the replay queue and
+  // is answered with the new background once the terminal is rebuilt.
+  const appliedThemeRef = useRef(resolvedTheme)
   useEffect(() => {
     const live = entry.live
     if (live) {
       live.term.options.theme = resolvedTheme.terminal
+    }
+    if (appliedThemeRef.current === resolvedTheme) {
+      return
+    }
+    appliedThemeRef.current = resolvedTheme
+    if (entry.themeNotify) {
+      writeInput(colorSchemeReport(resolvedTheme.scheme))
     }
   }, [resolvedTheme, entry])
 

@@ -54,6 +54,19 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   CHANGELOG group labels in the What's new dialog (`PatchNotesDialog`), which render a file that is English;
   and MCP tool descriptions and the `lich` CLI's `--help`, which agents read and which do not follow the prompt
   language either.
+- **"Unfold long pastes" copies three providers' own rules** (`frontend/src/lib/terminal/paste-unfold.ts`,
+  `internal/terminal/paste_unfold.go`), and is off until turned on. For Claude Code lich pastes twice wherever it
+  predicts the fold, because a repeat of the same text unfolds the `[Pasted text #N +M lines]` chip. The prediction
+  is Claude Code's rule copied from its 2.1.296 bundle (more than 800 characters, or more than `min(rows - 10, 2)`
+  newlines, up to 100 000), and nothing tells lich when that rule moves: a paste lich thinks folds and Claude Code
+  does not lands twice, and one it thinks does not stays a chip. It also assumes the paste goes to the prompt; a
+  paste into one of Claude Code's own dialogs that does not fold gets the text twice. For Kiro CLI lich presses Tab
+  behind a paste of more than 10 lines or 500 characters (2.21.0), which expands the newest `N lines ▸` chip; a
+  paste lich thinks folds and Kiro does not gets a Tab, which in the `/` menu picks an entry. For opencode the spawn sets
+  `experimental.disable_paste_summary` through `OPENCODE_CONFIG_CONTENT`, extending one the user exports rather than
+  replacing it; opencode's own "Disable paste summary" command is stored in its state and wins over any config, so
+  once used there the switch changes nothing. Codex, Antigravity, Crush and Cursor CLI fold with a constant, no
+  setting and no key that unfolds, so they have no switch; oh-my-pi was not measured.
 - **`LICH_WORKTREE_PORT` is reserved, never held** (`internal/terminal/worktreeport.go`): the number is a name the
   checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts. A
   Run card shortens that window rather than closing it — the process it starts is what binds the port, and
@@ -249,6 +262,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   for one terminal. The budget suite pins that adding a pane mounts one terminal and remounts none
   (`frontend/src/components/render-budget.test.tsx`); it cannot measure the cadence, because jsdom has
   no canvas to paint.
+- **A theme switch reaches only the apps that asked, and only since the page loaded**
+  (`frontend/src/lib/terminal/theme-notify.ts`): lich answers mode 2031 and sends the light or dark report on a
+  switch, but the "asked" flag lives on the page's terminal entry. A full page reload forgets it, so a session
+  that turned the mode on at boot stays on its old look until it turns it on again, and a terminal reset
+  (`ESC c`) does not clear it. Of the providers, Claude Code and opencode ask (driven in a PTY), oh-my-pi and
+  Cursor CLI ask in their shipped code (not driven); Codex, Antigravity and Kiro CLI read the background once at
+  boot and never hear of a switch, and Crush reads it not at all.
 - **An interrupted turn is read off the keystrokes, not from the provider** (`internal/terminal/draft.go`,
   `hookstate.go`, `Service.noteInterrupt`): Claude Code, Codex and oh-my-pi all skip the hook that ends a turn
   when the user stops one, so lich publishes `interrupted` itself when a lone Ctrl+C or Escape reaches a session

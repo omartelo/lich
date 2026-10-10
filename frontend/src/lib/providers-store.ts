@@ -10,7 +10,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react"
 import type { BinaryCheck, DetectedProvider } from "./api-types"
 import { Providers, Store } from "./rpc"
-import { tIn } from "@/lib/i18n/i18n"
 import { errorText } from "./utils"
 import { PROVIDER_KINDS, type ProviderKind, type SessionKind } from "@/lib/session/sessions"
 
@@ -89,6 +88,27 @@ export function subagentCardsKey(id: string): string {
 // through the lich-plugin mod, so Settings offers the switch there alone.
 export function supportsSubagentCards(id: string): boolean {
   return id === "claude"
+}
+
+// pasteUnfoldKey holds the flag that makes a long paste land as the full text
+// in a provider that folds it (mirrors store.pasteUnfoldKey in Go). Global only,
+// off unless the stored value is "true".
+export function pasteUnfoldKey(id: string): string {
+  return `provider.${id}.pasteUnfold`
+}
+
+// pasteUnfoldTiming is when a provider honours the flag: Claude Code and Kiro
+// CLI on the next paste, since the window does the unfolding
+// (lib/terminal/paste-unfold.ts); opencode at spawn, through its own config.
+// Absent for a provider whose fold nothing can undo.
+export function pasteUnfoldTiming(id: string): "nextPaste" | "nextSession" | null {
+  if (id === "claude" || id === "kiro") {
+    return "nextPaste"
+  }
+  if (id === "opencode") {
+    return "nextSession"
+  }
+  return null
 }
 
 // How far a provider runs without asking, as one ladder ordered by risk. The
@@ -293,12 +313,6 @@ export function resolveProjectDefaultProvider(
 export function noProviderInstalled(list: ProviderState[]): boolean {
   return list.length > 0 && !list.some((provider) => provider.installed)
 }
-
-// NO_AGENT_REASON is the English text of what the empty screen says when its own
-// button will open a terminal rather than an agent (shell.emptySessions.noAgent,
-// which the screen reads in the interface language): the sentence names both the
-// reason and where the machine is told about an agent lich could not find.
-export const NO_AGENT_REASON = tIn("en", "shell.emptySessions.noAgent")
 
 // No project binaries known — a project nothing was read for, and every caller
 // asking the machine-wide question. Frozen and shared so the default argument is

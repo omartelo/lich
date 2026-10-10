@@ -55,6 +55,12 @@ export interface TerminalEntry {
   serialized: string | null
   /** The modes the snapshot cannot carry (term-modes.ts). */
   carriedModes: string
+  /**
+   * Whether the app asked to hear about theme changes (theme-notify.ts). Held
+   * here rather than on the terminal: the app turned it on once, and every
+   * terminal a hide and show rebuild must keep answering it.
+   */
+  themeNotify: boolean
   readonly replay: ReplayBuffer
   /** Read by the link provider, which xterm calls from its own render loop. */
   readonly linkTargets: { current: SessionLinkTargets }
@@ -95,6 +101,7 @@ export function terminalEntry(sessionId: string): TerminalEntry {
     live: null,
     serialized: null,
     carriedModes: "",
+    themeNotify: false,
     replay: makeReplayBuffer(),
     linkTargets: { current: { pattern: null, byLabel: new Map() } },
     handlers: null,
@@ -172,6 +179,15 @@ export function feedEntry(entry: TerminalEntry, bytes: Uint8Array, decodeMs: num
   }
   const t0 = performance.now()
   live.term.write(bytes, () => recordChunk(decodeMs, performance.now() - t0, bytes.length))
+}
+
+/**
+ * Records the session's process ending. Modes the app asked for die with it:
+ * Restart spawns a new process into this same entry.
+ */
+export function markExited(entry: TerminalEntry, exit: SessionExit): void {
+  entry.exit = exit
+  entry.themeNotify = false
 }
 
 /** Serializes the live terminal and destroys it; output then queues until show. */

@@ -281,6 +281,15 @@ export const settings = {
       },
     },
   },
+  pasteUnfoldSetting: {
+    title: "Expandir pastes longos",
+    searchWords: "paste colar colado dobrar chip resumo placeholder texto",
+    descriptionNextPaste:
+      "Um paste que {provider} dobraria num placeholder entra como o texto inteiro, para você editar antes de enviar. Vale a partir do próximo paste, em todas as sessões de {provider}.",
+    descriptionNextSession:
+      "Um paste que {provider} dobraria num placeholder entra como o texto inteiro, para você editar antes de enviar. Vale para as sessões abertas depois da mudança.",
+    label: "Expandir pastes longos em {provider}",
+  },
   subagentCardsSetting: {
     title: "Subagentes como sessões do lich",
     searchWords: "agente subagente card worktree delegar segundo plano",

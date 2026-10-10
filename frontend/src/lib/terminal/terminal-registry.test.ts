@@ -13,6 +13,7 @@ import {
   feedEntry,
   hideEntry,
   type LiveTerminal,
+  markExited,
   reapTerminals,
   showEntry,
   spawnedSessions,
@@ -137,4 +138,16 @@ test("disposing ends the terminal and forgets the session", () => {
   expect(entry.disposed).toBe(true)
   // A session id that comes back — an undone close — starts from nothing.
   expect(terminalEntry(SESSION)).not.toBe(entry)
+})
+
+test("an exited process takes its theme-notify request with it", () => {
+  // Restart spawns a new process into the same entry; one that never asked must
+  // not get a theme report typed at its prompt.
+  const entry = terminalEntry(SESSION)
+  entry.themeNotify = true
+  const exit = { code: 0 }
+
+  markExited(entry, exit)
+  expect(entry.exit).toBe(exit)
+  expect(entry.themeNotify).toBe(false)
 })
