@@ -14,6 +14,7 @@ import { displayPath } from "@/lib/paths"
 import { ProjectService, Store } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
 import { useT } from "@/lib/i18n/i18n"
+import { Hint } from "@/components/common/Hint"
 
 // MENU_LIMIT is how many closed projects the menu offers. Five is what fits
 // above the picker entry without turning the menu into a second project list;
@@ -67,30 +68,32 @@ export function OpenProjectMenu() {
 
   if (recents.length === 0) {
     return (
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => void openProject()}
-        title={t("tabs.openProjectMenu.open")}
-        aria-label={t("tabs.openProjectMenu.open")}
-        className="text-muted-foreground"
-      >
-        <Plus className="size-4" />
-      </Button>
+      <Hint label={t("tabs.openProjectMenu.open")} side="bottom">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => void openProject()}
+          aria-label={t("tabs.openProjectMenu.open")}
+          className="text-muted-foreground"
+        >
+          <Plus className="size-4" />
+        </Button>
+      </Hint>
     )
   }
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        title={t("tabs.openProjectMenu.open")}
-        aria-label={t("tabs.openProjectMenu.open")}
-        render={
-          <Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" />
-        }
-      >
-        <Plus className="size-4" />
-      </DropdownMenuTrigger>
+      <Hint label={t("tabs.openProjectMenu.open")} side="bottom">
+        <DropdownMenuTrigger
+          aria-label={t("tabs.openProjectMenu.open")}
+          render={
+            <Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" />
+          }
+        >
+          <Plus className="size-4" />
+        </DropdownMenuTrigger>
+      </Hint>
       <DropdownMenuContent align="start" className="w-72">
         {/* A plain div, not DropdownMenuLabel: that is base-ui's Menu.GroupLabel
             and throws outside a Menu.Group. */}

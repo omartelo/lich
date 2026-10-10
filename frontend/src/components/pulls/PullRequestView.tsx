@@ -65,6 +65,7 @@ import {
 } from "./PullsStats"
 import type { ThreadActions } from "./ReviewThread"
 import { SubmitReviewDialog } from "./SubmitReviewDialog"
+import { Hint } from "@/components/common/Hint"
 
 // SessionAction is the header's "work on this pull request" button, resolved by
 // the screen: what it should say, whether it can run at all, and what it does.
@@ -295,19 +296,21 @@ export function PullRequestView({
           </h1>
           <div className="flex flex-none items-center gap-2">
             {/* The same wrapper trick as the merge button below: a disabled
-                button takes no pointer events, so its own title never shows. */}
-            <span title={session.blocked ?? undefined}>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={session.busy || session.blocked !== null}
-                onClick={session.run}
-                className="bg-accent/55 text-foreground hover:bg-accent"
-              >
-                <SquareTerminal />
-                {session.busy ? t("pulls.pullRequestView.opening") : session.label}
-              </Button>
-            </span>
+                button takes no pointer events, so its own tooltip never shows. */}
+            <Hint label={session.blocked ?? undefined}>
+              <span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={session.busy || session.blocked !== null}
+                  onClick={session.run}
+                  className="bg-accent/55 text-foreground hover:bg-accent"
+                >
+                  <SquareTerminal />
+                  {session.busy ? t("pulls.pullRequestView.opening") : session.label}
+                </Button>
+              </span>
+            </Hint>
             {/* Whatever is wrong with this pull request, handed to the session
                 that would fix it — a conflict first, red CI after it. Nothing
                 is drawn when nothing is wrong: that state is the Merge button's
@@ -315,17 +318,19 @@ export function PullRequestView({
                 with the same sentence: a fork that refuses maintainer edits has
                 nowhere to put the work. */}
             {handoff && (
-              <span title={session.blocked ?? undefined}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={handingOff || session.blocked !== null}
-                  onClick={() => void handOff()}
-                >
-                  <Wrench />
-                  {handingOff ? t("pulls.pullRequestView.openingSession") : handoff.label}
-                </Button>
-              </span>
+              <Hint label={session.blocked ?? undefined}>
+                <span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={handingOff || session.blocked !== null}
+                    onClick={() => void handOff()}
+                  >
+                    <Wrench />
+                    {handingOff ? t("pulls.pullRequestView.openingSession") : handoff.label}
+                  </Button>
+                </span>
+              </Hint>
             )}
             {/* With nothing written, reviewing is the one-click approval it has
                 always been. The moment a comment is waiting, the same control
@@ -333,81 +338,84 @@ export function PullRequestView({
                 many are riding on it. Approving twice is something GitHub allows
                 and nobody means to do, so an approved pull request says so
                 instead of offering it again. */}
-            <span title={reviewBlocked ?? undefined}>
-              {pending === 0 ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={
-                    submitting || reviewBlocked !== null || detail.reviewDecision === "APPROVED"
-                  }
-                  onClick={() => void submitReview("approve")}
-                >
-                  <Check />
-                  {submitting
-                    ? t("pulls.pullRequestView.approving")
-                    : detail.reviewDecision === "APPROVED"
-                      ? t("pulls.pullRequestView.approved")
-                      : t("pulls.pullRequestView.approve")}
-                </Button>
-              ) : (
+            <Hint label={reviewBlocked ?? undefined}>
+              <span>
+                {pending === 0 ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={
+                      submitting || reviewBlocked !== null || detail.reviewDecision === "APPROVED"
+                    }
+                    onClick={() => void submitReview("approve")}
+                  >
+                    <Check />
+                    {submitting
+                      ? t("pulls.pullRequestView.approving")
+                      : detail.reviewDecision === "APPROVED"
+                        ? t("pulls.pullRequestView.approved")
+                        : t("pulls.pullRequestView.approve")}
+                  </Button>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button size="sm" variant="ghost" disabled={reviewBlocked !== null}>
+                          <MessageSquare />
+                          {t("pulls.pullRequestView.submitReview")}
+                          <span className="tabular-nums text-muted-foreground">{pending}</span>
+                          <ChevronDown />
+                        </Button>
+                      }
+                    />
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setVerdict("comment")}>
+                        {t("pulls.pullRequestView.comment")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setVerdict("approve")}>
+                        {t("pulls.pullRequestView.approve")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setVerdict("request_changes")}>
+                        {t("pulls.pullRequestView.requestChanges")}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => clearPendingReview(detail.url)}>
+                        {t("pulls.pullRequestView.discardPending", { count: pending })}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </span>
+            </Hint>
+            {/* The reason rides on a wrapper: a disabled button takes no pointer
+                events, so its own tooltip would never surface. With nothing
+                blocking, the same spot carries what would make you think twice
+                — red CI that no rule requires, which GitHub merges over
+                without a word. */}
+            <Hint label={blocked ?? ruleNote ?? failingChecks(detail.checks.failed)}>
+              <span>
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
-                      <Button size="sm" variant="ghost" disabled={reviewBlocked !== null}>
-                        <MessageSquare />
-                        {t("pulls.pullRequestView.submitReview")}
-                        <span className="tabular-nums text-muted-foreground">{pending}</span>
+                      <Button size="sm" disabled={merging || (blocked !== null && !bypass)}>
+                        <GitMerge />
+                        {merging
+                          ? t("pulls.pullRequestView.merging")
+                          : t("pulls.pullRequestView.merge")}
+                        {/* The checks readout says this too, a line above — but
+                          the decision is taken here, and a count beside the
+                          button is the only place it cannot be missed. */}
+                        {detail.checks.failed > 0 && (
+                          <span className="flex items-center gap-0.5">
+                            <X className="size-3.5" />
+                            <span className="tabular-nums">{detail.checks.failed}</span>
+                          </span>
+                        )}
                         <ChevronDown />
                       </Button>
                     }
                   />
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setVerdict("comment")}>
-                      {t("pulls.pullRequestView.comment")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setVerdict("approve")}>
-                      {t("pulls.pullRequestView.approve")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setVerdict("request_changes")}>
-                      {t("pulls.pullRequestView.requestChanges")}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => clearPendingReview(detail.url)}>
-                      {t("pulls.pullRequestView.discardPending", { count: pending })}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </span>
-            {/* The reason rides on a wrapper: a disabled button takes no pointer
-                events, so its own title would never surface. With nothing
-                blocking, the same spot carries what would make you think twice
-                — red CI that no rule requires, which GitHub merges over
-                without a word. */}
-            <span title={blocked ?? ruleNote ?? failingChecks(detail.checks.failed)}>
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button size="sm" disabled={merging || (blocked !== null && !bypass)}>
-                      <GitMerge />
-                      {merging
-                        ? t("pulls.pullRequestView.merging")
-                        : t("pulls.pullRequestView.merge")}
-                      {/* The checks readout says this too, a line above — but
-                          the decision is taken here, and a count beside the
-                          button is the only place it cannot be missed. */}
-                      {detail.checks.failed > 0 && (
-                        <span className="flex items-center gap-0.5">
-                          <X className="size-3.5" />
-                          <span className="tabular-nums">{detail.checks.failed}</span>
-                        </span>
-                      )}
-                      <ChevronDown />
-                    </Button>
-                  }
-                />
-                {/* Every item bypasses, or none does — never a menu offering
+                  {/* Every item bypasses, or none does — never a menu offering
                     both. Once GitHub answers BLOCKED or BEHIND gh refuses a
                     plain merge from the client without ever calling GitHub, so
                     where the bypass is available the ordinary items are already
@@ -421,38 +429,39 @@ export function PullRequestView({
                     administrator's ordinary approved merge goes out with
                     --admin here and GitHub records it as an override. gh leaves
                     no other way through. */}
-                <DropdownMenuContent align="end">
-                  {methods.map((method) => (
-                    <DropdownMenuItem
-                      key={method}
-                      onClick={() => void merge(method, "", "", bypass)}
-                    >
-                      {bypass
-                        ? t("pulls.pullRequestView.methodBypass", {
-                            method: t(MERGE_LABELS[method]),
-                          })
-                        : t(MERGE_LABELS[method])}
-                    </DropdownMenuItem>
-                  ))}
-                  {/* Rebase replays the branch's own commits, so gh takes no
+                  <DropdownMenuContent align="end">
+                    {methods.map((method) => (
+                      <DropdownMenuItem
+                        key={method}
+                        onClick={() => void merge(method, "", "", bypass)}
+                      >
+                        {bypass
+                          ? t("pulls.pullRequestView.methodBypass", {
+                              method: t(MERGE_LABELS[method]),
+                            })
+                          : t(MERGE_LABELS[method])}
+                      </DropdownMenuItem>
+                    ))}
+                    {/* Rebase replays the branch's own commits, so gh takes no
                       message for it and it has no "edit message" twin. */}
-                  {editableMethods.length > 0 && <DropdownMenuSeparator />}
-                  {editableMethods.map((method) => (
-                    <DropdownMenuItem
-                      key={`${method}-edit`}
-                      onClick={() => setEdit(mergeEditFor(method, detail))}
-                    >
-                      {t(
-                        bypass
-                          ? "pulls.pullRequestView.editMessageBypass"
-                          : "pulls.pullRequestView.editMessage",
-                        { method: t(MERGE_LABELS[method]) },
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </span>
+                    {editableMethods.length > 0 && <DropdownMenuSeparator />}
+                    {editableMethods.map((method) => (
+                      <DropdownMenuItem
+                        key={`${method}-edit`}
+                        onClick={() => setEdit(mergeEditFor(method, detail))}
+                      >
+                        {t(
+                          bypass
+                            ? "pulls.pullRequestView.editMessageBypass"
+                            : "pulls.pullRequestView.editMessage",
+                          { method: t(MERGE_LABELS[method]) },
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </span>
+            </Hint>
             {/* HEAD moving refetches on its own; this covers what it can't see —
                 a review, a check finishing, a PR opened from the terminal. */}
             <Button

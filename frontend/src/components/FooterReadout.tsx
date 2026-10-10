@@ -41,10 +41,8 @@ export function FooterReadout({
         id={descriptionId}
         role="tooltip"
         side="top"
-        className={cn(
-          "max-w-80 border border-border bg-popover text-popover-foreground",
-          tooltipClassName,
-        )}
+        variant="card"
+        className={cn("max-w-80", tooltipClassName)}
       >
         <div className="flex flex-col gap-1.5">
           <span className="font-medium">{title}</span>

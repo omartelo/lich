@@ -62,7 +62,7 @@ export function SessionTooltip({ session, path, projectId }: SessionTooltipProps
   const skippedLinks = session.sandboxSkippedLinks ?? []
   const drift = rung === null ? "" : sandboxDrift(rung, !!session.path, confined)
   return (
-    <TooltipContent side="right" className="max-w-xs border border-border bg-card text-foreground">
+    <TooltipContent side="right" variant="card">
       <div className="flex flex-col gap-1.5">
         <span className="font-medium">{session.label}</span>
         <span className="break-all font-mono text-muted-foreground">

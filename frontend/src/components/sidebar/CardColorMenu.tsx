@@ -15,6 +15,7 @@ import {
 import { useT } from "@/lib/i18n/i18n"
 import { CARD_COLOR_NAMES, CARD_COLORS, type CardColor } from "@/lib/session/card-color"
 import { cn } from "@/lib/utils"
+import { Hint } from "@/components/common/Hint"
 
 interface CardColorMenuProps {
   // The colour drawn as chosen; undefined is the theme.
@@ -26,7 +27,6 @@ interface CardColorMenuProps {
 type SwatchItem = ComponentType<{
   className?: string
   "aria-label": string
-  title: string
   onClick: () => void
   children: ReactNode
 }>
@@ -43,18 +43,19 @@ function Swatches({ current, onPick, Item }: CardColorMenuProps & { Item: Swatch
           <Item
             key={name || "theme"}
             aria-label={on ? t("sidebar.cardColor.current", { color: label }) : label}
-            title={label}
             onClick={() => onPick(name)}
             className="justify-center p-1.5"
           >
-            <span
-              className={cn(
-                "size-4 rounded-full ring-1 ring-foreground/15",
-                on && "outline-2 outline-offset-2 outline-foreground",
-                !name && "bg-[conic-gradient(var(--accent)_0_50%,var(--background)_0)]",
-              )}
-              style={name ? { background: CARD_COLORS[name] } : undefined}
-            />
+            <Hint label={label}>
+              <span
+                className={cn(
+                  "size-4 rounded-full ring-1 ring-foreground/15",
+                  on && "outline-2 outline-offset-2 outline-foreground",
+                  !name && "bg-[conic-gradient(var(--accent)_0_50%,var(--background)_0)]",
+                )}
+                style={name ? { background: CARD_COLORS[name] } : undefined}
+              />
+            </Hint>
           </Item>
         )
       })}

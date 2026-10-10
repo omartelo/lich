@@ -22,6 +22,7 @@ import { useT } from "@/lib/i18n/i18n"
 import { cn } from "@/lib/utils"
 import { FolderLaunchMenuItems, type LaunchCheckout } from "./FolderLaunchMenuItems"
 import { type RunMenuAction, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
+import { Hint } from "@/components/common/Hint"
 
 interface SessionGroupHeaderProps {
   name: string
@@ -111,61 +112,64 @@ function SessionGroupTitleButton({
 }: SessionGroupTitleButtonProps) {
   const t = useT()
   return (
-    <button
-      ref={activatorRef}
-      type="button"
-      {...activatorProps}
-      aria-expanded={!collapsed}
-      title={
+    <Hint
+      label={
         collapsed
           ? t("sidebar.sessionGroupHeader.expand", { name })
           : t("sidebar.sessionGroupHeader.collapse", { name })
       }
-      onClick={onClick}
-      className={cn(
-        "group/collapse -ml-1 flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-accent/50",
-        fixed ? "cursor-pointer" : "cursor-grab",
-        dropOver && "bg-tone-pass/15 hover:bg-tone-pass/15",
-      )}
     >
-      <ChevronRight
+      <button
+        ref={activatorRef}
+        type="button"
+        {...activatorProps}
+        aria-expanded={!collapsed}
+        onClick={onClick}
         className={cn(
-          "size-3 shrink-0 text-muted-foreground/70 transition-[color,transform] group-hover/collapse:text-muted-foreground",
-          !collapsed && "rotate-90",
+          "group/collapse -ml-1 flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-accent/50",
+          fixed ? "cursor-pointer" : "cursor-grab",
+          dropOver && "bg-tone-pass/15 hover:bg-tone-pass/15",
         )}
-      />
-      {folder && (
-        <Folder
-          className="size-3 shrink-0 text-muted-foreground/70"
-          style={color ? { color: CARD_COLORS[color] } : undefined}
-        />
-      )}
-      <span className="min-w-0 truncate text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors group-hover/collapse:text-muted-foreground">
-        {name}
-      </span>
-      {folder && (
-        <span className="shrink-0 text-2xs font-medium tabular-nums text-muted-foreground/60">
-          {count}
-        </span>
-      )}
-      {collapsed && mark && (
-        <span
+      >
+        <ChevronRight
           className={cn(
-            "size-1.5 shrink-0 rounded-full",
-            mark === "wait" ? "bg-tone-wait" : "bg-tone-pass",
+            "size-3 shrink-0 text-muted-foreground/70 transition-[color,transform] group-hover/collapse:text-muted-foreground",
+            !collapsed && "rotate-90",
           )}
-        >
-          {/* The dot is the whole of it on screen; the words are what a reader
-              hears in its place, since a colour is not an announcement. */}
-          <span className="sr-only">
-            {mark === "wait"
-              ? t("sidebar.sessionGroupHeader.waiting")
-              : t("sidebar.sessionGroupHeader.unread")}
-          </span>
+        />
+        {folder && (
+          <Folder
+            className="size-3 shrink-0 text-muted-foreground/70"
+            style={color ? { color: CARD_COLORS[color] } : undefined}
+          />
+        )}
+        <span className="min-w-0 truncate text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors group-hover/collapse:text-muted-foreground">
+          {name}
         </span>
-      )}
-      <span className="h-px flex-1 bg-border" />
-    </button>
+        {folder && (
+          <span className="shrink-0 text-2xs font-medium tabular-nums text-muted-foreground/60">
+            {count}
+          </span>
+        )}
+        {collapsed && mark && (
+          <span
+            className={cn(
+              "size-1.5 shrink-0 rounded-full",
+              mark === "wait" ? "bg-tone-wait" : "bg-tone-pass",
+            )}
+          >
+            {/* The dot is the whole of it on screen; the words are what a reader
+              hears in its place, since a colour is not an announcement. */}
+            <span className="sr-only">
+              {mark === "wait"
+                ? t("sidebar.sessionGroupHeader.waiting")
+                : t("sidebar.sessionGroupHeader.unread")}
+            </span>
+          </span>
+        )}
+        <span className="h-px flex-1 bg-border" />
+      </button>
+    </Hint>
   )
 }
 
@@ -263,13 +267,14 @@ export function SessionGroupHeader({
       )}
       {launch && (
         <DropdownMenu>
-          <DropdownMenuTrigger
-            aria-label={t("sidebar.sessionGroupHeader.newSessionIn", { name })}
-            title={t("sidebar.sessionGroupHeader.newSessionIn", { name })}
-            render={<Button variant="ghost" size="icon-xs" />}
-          >
-            <Plus />
-          </DropdownMenuTrigger>
+          <Hint label={t("sidebar.sessionGroupHeader.newSessionIn", { name })}>
+            <DropdownMenuTrigger
+              aria-label={t("sidebar.sessionGroupHeader.newSessionIn", { name })}
+              render={<Button variant="ghost" size="icon-xs" />}
+            >
+              <Plus />
+            </DropdownMenuTrigger>
+          </Hint>
           <DropdownMenuContent align="end" className="max-w-56">
             {checkouts ? (
               <FolderLaunchMenuItems
@@ -298,13 +303,14 @@ export function SessionGroupHeader({
           is what makes a folder worth making with forty cards on screen. */}
       {(onRename || onDissolve || onFileAll || onColor) && (
         <DropdownMenu>
-          <DropdownMenuTrigger
-            aria-label={t("sidebar.sessionGroupHeader.optionsFor", { name })}
-            title={t("sidebar.sessionGroupHeader.optionsFor", { name })}
-            render={<Button variant="ghost" size="icon-xs" />}
-          >
-            <MoreHorizontal />
-          </DropdownMenuTrigger>
+          <Hint label={t("sidebar.sessionGroupHeader.optionsFor", { name })}>
+            <DropdownMenuTrigger
+              aria-label={t("sidebar.sessionGroupHeader.optionsFor", { name })}
+              render={<Button variant="ghost" size="icon-xs" />}
+            >
+              <MoreHorizontal />
+            </DropdownMenuTrigger>
+          </Hint>
           <DropdownMenuContent align="end" className="max-w-56">
             {onRename && (
               <DropdownMenuItem onClick={() => setEditing(true)}>

@@ -15,6 +15,7 @@ import { useProjects } from "@/providers/projects"
 import type { SessionStatus } from "@/lib/session/session-events"
 import { dismissSessionNotification, usePendingStatuses } from "@/lib/session/use-session-status"
 import { useT } from "@/lib/i18n/i18n"
+import { Hint } from "@/components/common/Hint"
 
 function StatusIcon({ status }: { status: SessionStatus }) {
   if (status === "waiting") {
@@ -45,32 +46,33 @@ export function NotificationsButton() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        title={t("tabs.notificationsButton.title")}
-        // The count belongs in the trigger's own name: it rode an aria-label on
-        // the dot below, which is a plain span with no role, so nothing
-        // announced it.
-        aria-label={
-          items.length > 0
-            ? t("tabs.notificationsButton.titlePending", { count: items.length })
-            : t("tabs.notificationsButton.title")
-        }
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="relative shrink-0 text-muted-foreground"
-          />
-        }
-      >
-        <Bell className="size-4" />
-        {items.length > 0 && (
-          <span
-            aria-hidden
-            className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-destructive ring-2 ring-sidebar"
-          />
-        )}
-      </DropdownMenuTrigger>
+      <Hint label={t("tabs.notificationsButton.title")} side="bottom">
+        <DropdownMenuTrigger
+          // The count belongs in the trigger's own name: it rode an aria-label on
+          // the dot below, which is a plain span with no role, so nothing
+          // announced it.
+          aria-label={
+            items.length > 0
+              ? t("tabs.notificationsButton.titlePending", { count: items.length })
+              : t("tabs.notificationsButton.title")
+          }
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="relative shrink-0 text-muted-foreground"
+            />
+          }
+        >
+          <Bell className="size-4" />
+          {items.length > 0 && (
+            <span
+              aria-hidden
+              className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-destructive ring-2 ring-sidebar"
+            />
+          )}
+        </DropdownMenuTrigger>
+      </Hint>
       <DropdownMenuContent align="end" className="w-72">
         {/* Plain divs, not DropdownMenuLabel: that is base-ui's Menu.GroupLabel
             and throws outside a Menu.Group (it writes the label id into the

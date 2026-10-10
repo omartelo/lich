@@ -54,17 +54,17 @@ function ToggleGroup({
   )
 }
 
-function ToggleGroupItem({
-  className,
-  children,
-  variant = "default",
-  size = "default",
-  ...props
-}: TogglePrimitive.Props & VariantProps<typeof toggleVariants>) {
+// forwardRef for the reason ui/tooltip.tsx gives: a Hint renders this item
+// through its own `render`, and needs the DOM node to anchor on.
+const ToggleGroupItem = React.forwardRef<
+  HTMLButtonElement,
+  TogglePrimitive.Props & VariantProps<typeof toggleVariants>
+>(({ className, children, variant = "default", size = "default", ...props }, ref) => {
   const context = React.useContext(ToggleGroupContext)
 
   return (
     <TogglePrimitive
+      ref={ref}
       data-slot="toggle-group-item"
       data-variant={context.variant || variant}
       data-size={context.size || size}
@@ -82,6 +82,7 @@ function ToggleGroupItem({
       {children}
     </TogglePrimitive>
   )
-}
+})
+ToggleGroupItem.displayName = "ToggleGroupItem"
 
 export { ToggleGroup, ToggleGroupItem }

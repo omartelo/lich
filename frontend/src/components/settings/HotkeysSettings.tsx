@@ -22,6 +22,7 @@ import { useT } from "@/lib/i18n/i18n"
 import { isMac, isWindows } from "@/lib/platform"
 import { cn } from "@/lib/utils"
 import { GroupProvider, useHighlight } from "./setting-highlight"
+import { Hint } from "@/components/common/Hint"
 
 // A dense list rather than one setting block per action: the bindings read as a
 // table of rows, and a block each would be a column of near-empty cards.
@@ -110,26 +111,28 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
       >
         {recording ? t("settings.hotkeysSettings.pressKeys") : formatCombo(combo, isMac)}
       </button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={t("settings.hotkeysSettings.unassignNamed", { name: action.label })}
-        title={t("settings.hotkeysSettings.unassignHint")}
-        disabled={isUnassigned}
-        onClick={() => setHotkey(action.id, UNASSIGNED)}
-      >
-        <Ban />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={t("settings.hotkeysSettings.resetNamed", { name: action.label })}
-        title={t("settings.hotkeysSettings.resetHint")}
-        disabled={isDefault}
-        onClick={() => resetHotkey(action.id)}
-      >
-        <RotateCcw />
-      </Button>
+      <Hint label={t("settings.hotkeysSettings.unassignHint")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("settings.hotkeysSettings.unassignNamed", { name: action.label })}
+          disabled={isUnassigned}
+          onClick={() => setHotkey(action.id, UNASSIGNED)}
+        >
+          <Ban />
+        </Button>
+      </Hint>
+      <Hint label={t("settings.hotkeysSettings.resetHint")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("settings.hotkeysSettings.resetNamed", { name: action.label })}
+          disabled={isDefault}
+          onClick={() => resetHotkey(action.id)}
+        >
+          <RotateCcw />
+        </Button>
+      </Hint>
     </div>
   )
 }

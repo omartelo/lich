@@ -33,6 +33,7 @@ import { useRemoteResource } from "@/lib/use-remote-resource"
 import { HIT_SELECTOR, SearchResults } from "./SearchResults"
 import { useFileEditor } from "./useFileEditor"
 import { useT } from "@/lib/i18n/i18n"
+import { Hint } from "@/components/common/Hint"
 
 // FilesPanel is the Files tab of the right dock: a read-only tree of the active
 // session's files — tracked and untracked in a repository, whatever is on disk
@@ -386,14 +387,16 @@ function FilePreview({ path, rel, line, onBack, onInject, onComment }: FilePrevi
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-border px-2 text-xs">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label={t("dock.filesPanel.backToTree")}
-          className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <ChevronLeft className="size-4" />
-        </button>
+        <Hint label={t("dock.filesPanel.backToTree")}>
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label={t("dock.filesPanel.backToTree")}
+            className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+        </Hint>
         <span className="truncate font-mono" title={rel}>
           {rel}
         </span>
