@@ -10,12 +10,15 @@
 #
 # Env: SLICE_HOME     where the isolated backend keeps its state
 #                     (default ~/.cache/lich-native-slice)
+#      LICH_BIN       the lich binary the backend runs (default: lich on PATH);
+#                     point it at a build of this checkout to test its backend
 #      LIBGHOSTTY_VT  prefix of a libghostty-vt built from ghostty main
 #                     (zig build -Demit-lib-vt -Doptimize=ReleaseFast --prefix ...;
 #                     default $SLICE_HOME/libghostty-vt, at the commit in GHOSTTY_COMMIT)
 set -eu
 SLICE_HOME=${SLICE_HOME:-$HOME/.cache/lich-native-slice}
 LIBGHOSTTY_VT=${LIBGHOSTTY_VT:-$SLICE_HOME/libghostty-vt}
+BACKEND_BIN=${LICH_BIN:-lich}
 CONFIG=$SLICE_HOME/config
 RUNTIME=$CONFIG/lich/runtime-dev.json
 PORT=47901
@@ -51,7 +54,7 @@ if ! curl -sf -o /dev/null -X POST -d '[]' "http://127.0.0.1:$PORT/rpc/store.Loa
     # backend or its sessions.
     for v in $(env | sed -n 's/^\(LICH_[A-Z_]*\|CLAUDE[A-Z_]*\)=.*/\1/p'); do unset "$v"; done
     exec setsid -f env XDG_CONFIG_HOME="$CONFIG" LICH_DEV=1 LICH_LISTEN_PORT=$PORT LICH_SHELL="$SLICE_HOME/no-window" \
-      lich > "$SLICE_HOME/backend.log" 2>&1 < /dev/null
+      "$BACKEND_BIN" > "$SLICE_HOME/backend.log" 2>&1 < /dev/null
   )
   i=0
   until [ -s "$RUNTIME" ]; do
