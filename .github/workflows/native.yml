@@ -30,15 +30,15 @@ jobs:
           cache-dependency-path: native/go.sum
 
       # Gio's Linux headers (gioui.org/doc/install), fontconfig for the glyph
-      # rasterizer, and Mesa's llvmpipe so the headless render tests draw on the
-      # CPU instead of skipping for want of a GPU.
+      # rasterizer, and Mesa's llvmpipe under Xvfb so the headless render tests
+      # draw on the CPU instead of skipping for want of a GPU.
       - name: System packages
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev \
             libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev \
-            libgl1-mesa-dri libegl-mesa0 fontconfig fonts-dejavu-core
+            libgl1-mesa-dri libegl-mesa0 xvfb fontconfig fonts-dejavu-core
 
       - name: Pinned Ghostty commit
         id: ghostty
@@ -82,7 +82,16 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      # The render tests skip where no GPU answers, which on a laptop is a
+      # shrug and here would be a gate that checks nothing: a skip fails the job.
       - name: go test
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
-        run: go test ./...
+        run: |
+          xvfb-run -a go test -v ./... > test.log 2>&1 || { cat test.log; exit 1; }
+          grep -E '^(ok|FAIL|---)' test.log
+          if grep -q 'no headless GPU' test.log; then
+            echo "::error::render tests skipped: no headless GPU under Xvfb"
+            grep -B1 'no headless GPU' test.log
+            exit 1
+          fi
