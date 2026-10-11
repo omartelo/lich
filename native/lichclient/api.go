@@ -134,3 +134,10 @@ func (c *Client) RevertLines(ctx context.Context, path, rel string, lines []Reve
 	var r RevertResult
 	return r, c.Call(ctx, "project.RevertLines", &r, path, rel, lines)
 }
+
+// GetSetting returns a setting's value, "" when unset. scope is a project id,
+// "" for a global setting.
+func (c *Client) GetSetting(ctx context.Context, key, scope string) (string, error) {
+	var v string
+	return v, c.Call(ctx, "store.GetSetting", &v, key, scope)
+}

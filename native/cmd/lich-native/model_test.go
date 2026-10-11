@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -162,5 +163,147 @@ func TestFollowStaysQuietWhenTheWindowCloses(t *testing.T) {
 	m.follow(ctx, events)
 	if m.connectionLost() {
 		t.Error("the window closing itself marked the model lost")
+	}
+}
+
+func TestGroupNamesAWorktreeWithASlashByItsWholeName(t *testing.T) {
+	const root = "/home/me/.local/share/lich/worktrees/p"
+	m := newModel(nil, func() {})
+	m.projects = []lichclient.Project{{ID: "p", Path: checkout, Sessions: []lichclient.Session{
+		{ID: "a"}, {ID: "b", Path: root + "/feat/x"}, {ID: "c", Path: root + "/fix/x"},
+	}}}
+	var names []string
+	for _, g := range m.groups() {
+		names = append(names, g.name)
+	}
+	if want := []string{"repo", "feat/x", "fix/x"}; !slices.Equal(names, want) {
+		t.Errorf("got groups %q, want %q", names, want)
+	}
+}
+
+func TestCheckoutLabel(t *testing.T) {
+	const (
+		project = "/home/me/code/lich"
+		id      = "e48f04f46a4a"
+		root    = "/home/me/.local/share/lich/worktrees/" + id
+	)
+	cases := []struct{ name, path, want string }{
+		{"root group is the project folder", "", "lich"},
+		{"a worktree name keeps its slash", root + "/feat/x", "feat/x"},
+		{"a slashless worktree", root + "/eager-willow", "eager-willow"},
+		{"a Windows checkout", `C:\Users\me\AppData\lich\worktrees\` + id + `\feat\x`, "feat/x"},
+		{"cut at the root, not a worktree named after the id", root + "/" + id + "/x", id + "/x"},
+		{"outside the worktree root", "/home/me/code/lich-elsewhere", "lich-elsewhere"},
+	}
+	for _, c := range cases {
+		if got := checkoutLabel(c.path, project, id); got != c.want {
+			t.Errorf("%s: checkoutLabel(%q) = %q, want %q", c.name, c.path, got, c.want)
+		}
+	}
+}
+
+// fakeState serves store.LoadState with *projects and store.GetSetting with
+// lastScreen.
+func fakeState(t *testing.T, projects *[]lichclient.Project, lastScreen string) *lichclient.Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rpc/store.LoadState":
+			_ = json.NewEncoder(w).Encode(*projects)
+		case "/rpc/store.GetSetting":
+			_ = json.NewEncoder(w).Encode(lastScreen)
+		default:
+			t.Errorf("unexpected call %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+	return lichclient.New(lichclient.Runtime{Port: port, Token: "tok"})
+}
+
+func twoProjects() []lichclient.Project {
+	return []lichclient.Project{
+		{ID: "a", Path: checkout, ActiveSessionID: "a2", Sessions: []lichclient.Session{{ID: "a1"}, {ID: "a2"}}},
+		{ID: "b", Path: elsewhere, ActiveSessionID: "b1", Sessions: []lichclient.Session{{ID: "b1"}}},
+	}
+}
+
+func onScreen(m *model) (project, session string) {
+	p, _ := m.project()
+	s, _ := m.activeSession()
+	return p.ID, s.ID
+}
+
+func TestLaunchOpensTheProjectTheLastScreenWasOn(t *testing.T) {
+	cases := map[string]string{"/projects/b/settings": "b", "/projects/gone": "a", "/": "a"}
+	for saved, want := range cases {
+		ps := twoProjects()
+		m := newModel(fakeState(t, &ps, saved), func() {})
+		if err := m.reload(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		wantSession := map[string]string{"a": "a2", "b": "b1"}[want]
+		if p, s := onScreen(m); p != want || s != wantSession {
+			t.Errorf("last screen %q: on %s/%s, want %s/%s", saved, p, s, want, wantSession)
+		}
+	}
+}
+
+func TestReloadKeepsTheActiveProjectAndAdoptsAnOpenedOne(t *testing.T) {
+	var ps []lichclient.Project
+	m := newModel(fakeState(t, &ps, ""), func() {})
+	if err := m.reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.project(); ok {
+		t.Fatal("an empty backend reported a project")
+	}
+	ps = twoProjects()[1:]
+	if err := m.reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ps = twoProjects()
+	if err := m.reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if p, s := onScreen(m); p != "b" || s != "b1" {
+		t.Errorf("on %s/%s after another project opened, want b/b1 to stay", p, s)
+	}
+}
+
+func TestSetActiveProjectSwitchesSidebarAndRestoresItsSession(t *testing.T) {
+	m := newModel(fakeDiff(t, ""), func() {})
+	m.projects = twoProjects()
+	m.activeProject, m.active = "a", "a2"
+	m.setActive("a1")
+
+	if !m.setActiveProject("b") {
+		t.Fatal("setActiveProject(b) reported no such project")
+	}
+	if p, s := onScreen(m); p != "b" || s != "b1" {
+		t.Errorf("on %s/%s, want b/b1", p, s)
+	}
+	if gs := m.groups(); len(gs) != 1 || gs[0].path != elsewhere {
+		t.Errorf("sidebar shows %+v, want b's checkout", gs)
+	}
+	if paths := m.shownPaths(); !slices.Equal(paths, []string{elsewhere}) {
+		t.Errorf("polls git at %q, want only b's %q", paths, elsewhere)
+	}
+	m.setActiveProject("a")
+	if p, s := onScreen(m); p != "a" || s != "a1" {
+		t.Errorf("back on %s/%s, want a/a1, the session a last showed", p, s)
+	}
+	if m.setActiveProject("gone") {
+		t.Error("setActiveProject accepted a project that is not open")
+	}
+}
+
+func TestCloseSessionFindsItInAnyProject(t *testing.T) {
+	m := newModel(nil, func() {})
+	m.projects = twoProjects()
+	m.activeProject, m.active = "a", "a2"
+	if p, active, ok := m.closeSession("b1"); !ok || p != "b" || active != "a2" {
+		t.Errorf("closing a background project's session: got %q %q %v, want b a2 true", p, active, ok)
 	}
 }
