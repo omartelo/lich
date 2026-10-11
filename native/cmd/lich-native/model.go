@@ -35,18 +35,18 @@ type model struct {
 	mu            sync.Mutex
 	projects      []lichclient.Project // open projects, in the user's order
 	status        *statusStore
-	cwd           map[string]sessionCwd           // session id -> last session-cwd report
-	agent         map[string]string               // session id -> provider CLI live in its PTY
-	confined      map[string]bool                 // session id -> its spawn ran sandboxed
-	relay         map[string]sessionRelay         // session id -> request open with another
-	git           map[string]lichclient.DiffStats // shown path -> its branch and changes
-	base          map[string]baseStanding         // shown path -> where it stands against its base
-	prs           map[string]prLookup             // shown path -> its open pull request
-	activeProject string                          // project id on screen
-	active        string                          // session id on screen
-	lost          bool                            // /events ended under an open window
-	focused       bool                            // the window has the user's focus
-	restored      bool                            // unread marks taken from the first LoadState
+	cwd           map[string]sessionCwd             // session id -> last session-cwd report
+	agent         map[string]string                 // session id -> provider CLI live in its PTY
+	sandbox       map[string]sandboxEvent           // session id -> how its spawn was confined
+	relay         map[string]sessionRelay           // session id -> request open with another
+	git           map[string]lichclient.DiffStats   // shown path -> its branch and changes
+	base          map[string]*lichclient.BaseStatus // shown path -> where it stands against its base
+	prs           map[string]prLookup               // shown path -> its open pull request
+	activeProject string                            // project id on screen
+	active        string                            // session id on screen
+	lost          bool                              // /events ended under an open window
+	focused       bool                              // the window has the user's focus
+	restored      bool                              // unread marks taken from the first LoadState
 }
 
 // sessionCwd is a session-cwd payload: where the session's shell is, or the
@@ -59,8 +59,8 @@ type sessionCwd struct {
 
 func newModel(client *lichclient.Client, invalidate func()) *model {
 	return &model{client: client, invalidate: invalidate, status: newStatusStore(), cwd: map[string]sessionCwd{},
-		agent: map[string]string{}, confined: map[string]bool{}, relay: map[string]sessionRelay{}, git: map[string]lichclient.DiffStats{},
-		base: map[string]baseStanding{}, prs: map[string]prLookup{}}
+		agent: map[string]string{}, sandbox: map[string]sandboxEvent{}, relay: map[string]sessionRelay{}, git: map[string]lichclient.DiffStats{},
+		base: map[string]*lichclient.BaseStatus{}, prs: map[string]prLookup{}}
 }
 
 func (m *model) reload(ctx context.Context) error {
@@ -284,12 +284,12 @@ type sessionView struct {
 	age       time.Duration // how long status has lasted, while aged
 	aged      bool          // status has a clock (busy, compacting, waiting)
 	agent     string        // provider CLI live in the PTY, "" for none
-	confined  bool
+	sandbox   sandboxEvent
 	relay     sessionRelay // Direction "" for none
 	tool      sessionTool  // Name "" outside a tool call
 	reason    string       // what a waiting session is blocked on, "" for unsaid
 	git       lichclient.DiffStats
-	base      baseStanding
+	base      *lichclient.BaseStatus  // nil without a base to stand against
 	pr        *lichclient.PullRequest // open PR of the shown path's branch, nil for none
 }
 
@@ -320,7 +320,7 @@ func (m *model) groups() []group {
 		g.sessions = append(g.sessions, sessionView{
 			Session: s, projectID: p.ID, path: path, shown: shown, host: m.cwd[s.ID].Host,
 			status: m.status.status(s.ID), unread: m.status.unread(s.ID), age: age, aged: aged,
-			agent: m.agent[s.ID], confined: m.confined[s.ID], git: m.git[shown],
+			agent: m.agent[s.ID], sandbox: m.sandbox[s.ID], git: m.git[shown],
 			base: m.base[shown], pr: m.prs[shown].pr,
 			relay: m.relay[s.ID], tool: tool, reason: m.status.reason(s.ID),
 		})

@@ -102,7 +102,7 @@ func TestCardFollowsThePullRequestOfItsBranch(t *testing.T) {
 	forge.set("feat", "c1")
 	m := newTestModel(forge.client(t))
 	prOnCard(t, m, 0)
-	if b := cardOf(t, m).base; b != (baseStanding{count: 2}) {
+	if b := standingOf(cardOf(t, m).base); b != (baseStanding{count: 2}) {
 		t.Fatalf("base %+v, want 2 behind", b)
 	}
 

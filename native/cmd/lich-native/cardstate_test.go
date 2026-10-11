@@ -40,11 +40,11 @@ func TestCardWearsTheLiveAgentUntilItLeaves(t *testing.T) {
 func TestCardMarksASandboxedSpawn(t *testing.T) {
 	m := newTestModel(nil)
 	send(m, "session-sandbox", sandboxEvent{ID: "s1", Confined: true})
-	if !cardOf(t, m).confined {
+	if !cardOf(t, m).sandbox.Confined {
 		t.Fatal("confined spawn: card not marked")
 	}
 	send(m, "session-sandbox", sandboxEvent{ID: "s1", Confined: false})
-	if cardOf(t, m).confined {
+	if cardOf(t, m).sandbox.Confined {
 		t.Fatal("unconfined respawn: card still marked")
 	}
 }

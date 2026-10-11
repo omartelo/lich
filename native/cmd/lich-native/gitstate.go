@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"slices"
 
 	"github.com/omartelo/lich/native/lichclient"
 )
@@ -13,6 +14,14 @@ import (
 type baseStanding struct {
 	conflict bool
 	count    int
+}
+
+// sameBase is git-status-store.ts sameBase.
+func sameBase(a, b *lichclient.BaseStatus) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Base == b.Base && a.Behind == b.Behind && slices.Equal(a.Conflicts, b.Conflicts)
 }
 
 func standingOf(b *lichclient.BaseStatus) baseStanding {
@@ -45,10 +54,9 @@ func (m *model) refreshPath(ctx context.Context, path string) {
 	if err != nil {
 		return
 	}
-	base := standingOf(b)
 	m.mu.Lock()
-	changed := m.git[path] != d || m.base[path] != base
-	m.git[path], m.base[path] = d, base
+	changed := m.git[path] != d || !sameBase(m.base[path], b)
+	m.git[path], m.base[path] = d, b
 	prev, looked := m.prs[path]
 	ask := !looked || prev.branch != d.Branch || prev.head != d.Head
 	if ask {

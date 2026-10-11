@@ -23,11 +23,15 @@ type sessionRelay struct {
 	ID        string `json:"id"`
 	Peer      string `json:"peer"`
 	Direction string `json:"direction"`
+	Ticket    string `json:"ticket"`
 }
 
+// sandboxEvent is whether a spawn ran confined, and what that sandbox left
+// out of the private home for being a symlink.
 type sandboxEvent struct {
-	ID       string `json:"id"`
-	Confined bool   `json:"confined"`
+	ID           string   `json:"id"`
+	Confined     bool     `json:"confined"`
+	SkippedLinks []string `json:"skippedLinks"`
 }
 
 // Directions a relay mark runs (internal/relay DirectionOut, DirectionIn).
@@ -102,7 +106,7 @@ func (m *model) applyLive(ev lichclient.Event) (bool, error) {
 		}
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		m.confined[s.ID] = s.Confined
+		m.sandbox[s.ID] = s
 	default:
 		return false, nil
 	}

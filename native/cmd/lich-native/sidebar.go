@@ -24,6 +24,8 @@ import (
 const sidebarWidth = 288
 
 type sidebar struct {
+	root      *ui.Root // where card tooltips float
+	tips      map[string]*ui.Tooltip
 	newShell  widget.Clickable
 	newClaude widget.Clickable
 	list      widget.List
@@ -46,11 +48,13 @@ type sidebar struct {
 	started   time.Time
 }
 
-func newSidebar() *sidebar {
+func newSidebar(root *ui.Root) *sidebar {
 	s := &sidebar{
+		root:      root,
 		cards:     map[string]*widget.Clickable{},
 		closes:    map[string]*widget.Clickable{},
 		pins:      map[string]*widget.Clickable{},
+		tips:      map[string]*ui.Tooltip{},
 		prChips:   map[string]*widget.Clickable{},
 		folds:     map[string]*widget.Clickable{},
 		collapsed: map[string]bool{},
@@ -232,7 +236,20 @@ func (s *sidebar) card(gtx C, th *ui.Theme, sv *sessionView, active bool) (D, si
 	}
 	fill := cardFill(th, sv.Color, active, click.Hovered())
 	th = th.On(fill)
-	d := click.Layout(gtx, func(gtx C) D {
+	tip, ok := s.tips[sv.ID]
+	if !ok {
+		tip = new(ui.Tooltip)
+		s.tips[sv.ID] = tip
+	}
+	tooltip := th.TooltipCard(s.root, tip, sessionTooltip(th, sv))
+	tooltip.Side = ui.SideRight
+	d := tooltip.Layout(gtx, func(gtx C) D { return s.cardFace(gtx, th, sv, click, pinClick, closeClick, prChip, fill) })
+	return d, act
+}
+
+// cardFace is the card itself, under its tooltip.
+func (s *sidebar) cardFace(gtx C, th *ui.Theme, sv *sessionView, click, pinClick, closeClick, prChip *widget.Clickable, fill color.NRGBA) D {
+	return click.Layout(gtx, func(gtx C) D {
 		return layout.Background{}.Layout(gtx,
 			func(gtx C) D { return ui.Fill(gtx, fill, ui.RadiusMD) },
 			func(gtx C) D {
@@ -247,7 +264,6 @@ func (s *sidebar) card(gtx C, th *ui.Theme, sv *sessionView, active bool) (D, si
 			},
 		)
 	})
-	return d, act
 }
 
 func (s *sidebar) cardBody(gtx C, th *ui.Theme, sv *sessionView, prChip *widget.Clickable) D {
@@ -281,7 +297,7 @@ func (s *sidebar) titleRow(th *ui.Theme, sv *sessionView) []layout.FlexChild {
 		layout.Rigid(func(gtx C) D { return s.statusRing(gtx, th, sv) }),
 		ui.Gap(1.5),
 	}
-	if sv.confined {
+	if sv.sandbox.Confined {
 		row = append(row, layout.Rigid(func(gtx C) D { return s.icShield.Layout(gtx, 12, th.MutedForeground) }), ui.Gap(1.5))
 	}
 	controls := ui.Space(11)
@@ -324,8 +340,8 @@ func (s *sidebar) branchRow(gtx C, th *ui.Theme, sv *sessionView, prChip *widget
 		ui.Gap(1),
 		layout.Flexed(1, th.Text(ui.TextXS, git.Branch).Muted().Layout),
 	}
-	if sv.base.count > 0 {
-		children = append(children, ui.Gap(2), layout.Rigid(func(gtx C) D { return s.baseReadout(gtx, th, sv.base) }))
+	if standing := standingOf(sv.base); standing.count > 0 {
+		children = append(children, ui.Gap(2), layout.Rigid(func(gtx C) D { return s.baseReadout(gtx, th, standing) }))
 	}
 	if sv.pr != nil {
 		children = append(children, ui.Gap(2), layout.Rigid(func(gtx C) D { return s.prBadge(gtx, th, prChip, sv.pr.Number) }))

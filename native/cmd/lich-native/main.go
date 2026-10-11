@@ -106,12 +106,13 @@ func run(w *app.Window, rt lichclient.Runtime) error {
 	th.Fg, th.Bg = colForeground, colBackground
 
 	u := &window{
-		ctx: ctx, client: client, th: th, sidebar: newSidebar(),
+		ctx: ctx, client: client, th: th,
 		theme: &ui.Theme{Palette: ui.Dark, Shaper: th.Shaper, Mono: faces[0].Font.Typeface, Surface: ui.Dark.Background},
 		model: newModel(client, w.Invalidate),
 		terms: &terminals{client: client, invalidate: w.Invalidate, renderer: *flagRenderer, family: *flagFont,
 			size: unit.Sp(*flagSize), byID: map[string]*termView{}},
 	}
+	u.sidebar = newSidebar(&u.root)
 	if u.diff, err = newDiffView(client, w.Invalidate, *flagFont, unit.Sp(*flagSize), th); err != nil {
 		return err
 	}
