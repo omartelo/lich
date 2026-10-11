@@ -36,10 +36,17 @@ type model struct {
 	projects      []lichclient.Project // open projects, in the user's order
 	status        *statusStore
 	cwd           map[string]sessionCwd           // session id -> last session-cwd report
+	agent         map[string]string               // session id -> provider CLI live in its PTY
+	confined      map[string]bool                 // session id -> its spawn ran sandboxed
+	relay         map[string]sessionRelay         // session id -> request open with another
 	git           map[string]lichclient.DiffStats // shown path -> its branch and changes
+	base          map[string]baseStanding         // shown path -> where it stands against its base
+	prs           map[string]prLookup             // shown path -> its open pull request
 	activeProject string                          // project id on screen
 	active        string                          // session id on screen
 	lost          bool                            // /events ended under an open window
+	focused       bool                            // the window has the user's focus
+	restored      bool                            // unread marks taken from the first LoadState
 }
 
 // sessionCwd is a session-cwd payload: where the session's shell is, or the
@@ -51,7 +58,9 @@ type sessionCwd struct {
 }
 
 func newModel(client *lichclient.Client, invalidate func()) *model {
-	return &model{client: client, invalidate: invalidate, status: newStatusStore(), cwd: map[string]sessionCwd{}, git: map[string]lichclient.DiffStats{}}
+	return &model{client: client, invalidate: invalidate, status: newStatusStore(), cwd: map[string]sessionCwd{},
+		agent: map[string]string{}, confined: map[string]bool{}, relay: map[string]sessionRelay{}, git: map[string]lichclient.DiffStats{},
+		base: map[string]baseStanding{}, prs: map[string]prLookup{}}
 }
 
 func (m *model) reload(ctx context.Context) error {
@@ -70,6 +79,10 @@ func (m *model) reload(ctx context.Context) error {
 	}
 	m.mu.Lock()
 	m.projects = ps
+	if !m.restored {
+		m.status.restoreUnread(unreadSessions(ps))
+		m.restored = true
+	}
 	if launch != "" {
 		m.activeProject = launch
 	}
@@ -133,10 +146,7 @@ func (m *model) follow(ctx context.Context, events <-chan lichclient.Event) {
 	for ev := range events {
 		switch ev.Name {
 		case statusEventName:
-			m.mu.Lock()
-			_, err := m.status.apply(ev, time.Now())
-			m.mu.Unlock()
-			if err != nil {
+			if err := m.applyStatus(ctx, ev); err != nil {
 				log.Printf("%s: %v", ev.Name, err)
 			}
 		case "session-cwd":
@@ -159,7 +169,13 @@ func (m *model) follow(ctx context.Context, events <-chan lichclient.Event) {
 				log.Printf("reload after %s: %v", ev.Name, err)
 			}
 		default:
-			continue
+			live, err := m.applyLive(ev)
+			if err != nil {
+				log.Printf("%s: %v", ev.Name, err)
+			}
+			if !live {
+				continue
+			}
 		}
 		m.invalidate()
 	}
@@ -208,17 +224,7 @@ func (m *model) pollGit(ctx context.Context) {
 // checkout fails and keeps no entry, so its card shows no branch.
 func (m *model) refreshGit(ctx context.Context) {
 	for _, path := range m.shownPaths() {
-		d, err := m.client.Diff(ctx, path)
-		if err != nil {
-			continue
-		}
-		m.mu.Lock()
-		changed := m.git[path] != d
-		m.git[path] = d
-		m.mu.Unlock()
-		if changed {
-			m.invalidate()
-		}
+		m.refreshPath(ctx, path)
 	}
 }
 
@@ -274,7 +280,17 @@ type sessionView struct {
 	shown     string
 	host      string
 	status    string
+	unread    bool          // a done turn nobody has read
+	age       time.Duration // how long status has lasted, while aged
+	aged      bool          // status has a clock (busy, compacting, waiting)
+	agent     string        // provider CLI live in the PTY, "" for none
+	confined  bool
+	relay     sessionRelay // Direction "" for none
+	tool      sessionTool  // Name "" outside a tool call
+	reason    string       // what a waiting session is blocked on, "" for unsaid
 	git       lichclient.DiffStats
+	base      baseStanding
+	pr        *lichclient.PullRequest // open PR of the shown path's branch, nil for none
 }
 
 // groups returns the sidebar blocks of the active project: the project's own
@@ -287,6 +303,7 @@ func (m *model) groups() []group {
 		return nil
 	}
 	p := *shown
+	now := time.Now()
 	byPath := map[string]*group{}
 	var order []string
 	for _, s := range p.Sessions {
@@ -298,9 +315,14 @@ func (m *model) groups() []group {
 			order = append(order, path)
 		}
 		shown := m.shownPath(p, s)
+		age, aged := m.status.age(s.ID, now)
+		tool, _ := m.status.tool(s.ID)
 		g.sessions = append(g.sessions, sessionView{
 			Session: s, projectID: p.ID, path: path, shown: shown, host: m.cwd[s.ID].Host,
-			status: m.status.status(s.ID), git: m.git[shown],
+			status: m.status.status(s.ID), unread: m.status.unread(s.ID), age: age, aged: aged,
+			agent: m.agent[s.ID], confined: m.confined[s.ID], git: m.git[shown],
+			base: m.base[shown], pr: m.prs[shown].pr,
+			relay: m.relay[s.ID], tool: tool, reason: m.status.reason(s.ID),
 		})
 	}
 	sort.SliceStable(order, func(i, j int) bool { return order[i] == p.Path && order[j] != p.Path })
@@ -327,12 +349,25 @@ func (m *model) activeSession() (sessionView, bool) {
 
 // setActive puts a session of the active project on screen, and records it
 // as the session that project shows when it is put back on screen.
-func (m *model) setActive(id string) {
+//
+// Leaving a card reads its turn, so one that finished while it was on screen
+// does not stay news; arriving reads the new one while the window has focus
+// (project-events.tsx).
+func (m *model) setActive(ctx context.Context, id string) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	left := m.active
 	m.active = id
 	if p := m.shownProject(); p != nil {
 		p.ActiveSessionID = id
+	}
+	readLeft := left != id && m.status.markSeen(left)
+	readNew := m.focused && m.status.markSeen(id)
+	m.mu.Unlock()
+	if readLeft {
+		m.markRead(ctx, left)
+	}
+	if readNew {
+		m.markRead(ctx, id)
 	}
 }
 
@@ -411,4 +446,18 @@ func baseName(path string) string {
 		return ""
 	}
 	return segments[len(segments)-1]
+}
+
+// unreadSessions is every session the workspace database says came back with
+// a finished turn nobody read.
+func unreadSessions(ps []lichclient.Project) []string {
+	var ids []string
+	for _, p := range ps {
+		for _, s := range p.Sessions {
+			if s.Unread {
+				ids = append(ids, s.ID)
+			}
+		}
+	}
+	return ids
 }

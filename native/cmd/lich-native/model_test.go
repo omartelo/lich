@@ -20,12 +20,17 @@ const (
 )
 
 // fakeDiff serves project.Diff, answering branch "b:<path>" with one file per
-// path it is asked about, and failing for notGit.
+// path it is asked about, and failing for notGit; a path has no base status
+// and no pull request.
 func fakeDiff(t *testing.T, notGit string) *lichclient.Client {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var args []string
 		body, _ := io.ReadAll(r.Body)
+		if r.URL.Path == "/rpc/project.BaseStatus" || r.URL.Path == "/rpc/project.PullRequest" {
+			_ = json.NewEncoder(w).Encode(nil)
+			return
+		}
 		if err := json.Unmarshal(body, &args); err != nil || r.URL.Path != "/rpc/project.Diff" {
 			t.Errorf("unexpected call %s %s", r.URL.Path, body)
 		}
@@ -276,7 +281,7 @@ func TestSetActiveProjectSwitchesSidebarAndRestoresItsSession(t *testing.T) {
 	m := newModel(fakeDiff(t, ""), func() {})
 	m.projects = twoProjects()
 	m.activeProject, m.active = "a", "a2"
-	m.setActive("a1")
+	m.setActive(context.Background(), "a1")
 
 	if !m.setActiveProject("b") {
 		t.Fatal("setActiveProject(b) reported no such project")

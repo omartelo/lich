@@ -127,6 +127,11 @@ func TestUnknownNamePanics(t *testing.T) {
 // inked.
 func render(t *testing.T, ic *Icon) func(x, y int) bool {
 	t.Helper()
+	return renderWith(t, ic.Layout)
+}
+
+func renderWith(t *testing.T, draw func(layout.Context, unit.Dp, color.NRGBA) layout.Dimensions) func(x, y int) bool {
+	t.Helper()
 	const size = 24
 	win, err := headless.NewWindow(size, size)
 	if err != nil {
@@ -135,7 +140,7 @@ func render(t *testing.T, ic *Icon) func(x, y int) bool {
 	defer win.Release()
 	ops := new(op.Ops)
 	gtx := layout.Context{Ops: ops, Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1}, Constraints: layout.Exact(image.Pt(size, size))}
-	ic.Layout(gtx, size, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
+	draw(gtx, size, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
 	if err := win.Frame(ops); err != nil {
 		t.Fatal(err)
 	}
@@ -157,5 +162,15 @@ func TestLobeFillsAndKeepsCounters(t *testing.T) {
 	inked := render(t, Lobe("opencode"))
 	if !inked(6, 12) || inked(12, 12) {
 		t.Errorf("opencode: frame inked %v, counter inked %v; want the frame filled and the counter open", inked(6, 12), inked(12, 12))
+	}
+}
+
+func TestLayoutFilledFillsTheOutline(t *testing.T) {
+	square := Lucide("square")
+	if render(t, square)(12, 12) {
+		t.Fatal("square: centre inked by Layout; want only the stroke")
+	}
+	if !renderWith(t, square.LayoutFilled)(12, 12) {
+		t.Error("square: centre not inked by LayoutFilled; want the outline filled")
 	}
 }

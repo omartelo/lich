@@ -158,6 +158,16 @@ func (ic *Icon) Layout(gtx layout.Context, size unit.Dp, c color.NRGBA) layout.D
 	return layout.Dimensions{Size: image.Pt(px, px)}
 }
 
+// LayoutFilled draws the icon as Layout does with its outlines filled too:
+// the fill-current that makes a Lucide glyph read as on, like a set pin.
+func (ic *Icon) LayoutFilled(gtx layout.Context, size unit.Dp, c color.NRGBA) layout.Dimensions {
+	scale := float32(gtx.Dp(size)) / viewBox
+	for _, sh := range ic.shapes {
+		paint.FillShape(gtx.Ops, c, clip.Outline{Path: sh.spec(gtx, scale)}.Op())
+	}
+	return ic.Layout(gtx, size, c)
+}
+
 func (sh shape) spec(gtx layout.Context, scale float32) clip.PathSpec {
 	var p clip.Path
 	p.Begin(gtx.Ops)

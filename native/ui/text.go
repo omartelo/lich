@@ -46,6 +46,9 @@ func (l LabelStyle) Weight(w font.Weight) LabelStyle { l.Font.Weight = w; return
 // Mono sets font-mono.
 func (l LabelStyle) Mono() LabelStyle { l.Font.Typeface = l.theme.Mono; return l }
 
+// Italic sets italic.
+func (l LabelStyle) Italic() LabelStyle { l.Font.Style = font.Italic; return l }
+
 // In sets the color.
 func (l LabelStyle) In(c color.NRGBA) LabelStyle { l.Color = c; return l }
 

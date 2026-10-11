@@ -127,6 +127,8 @@ func run(w *app.Window, rt lichclient.Runtime) error {
 		switch e := w.Event().(type) {
 		case app.DestroyEvent:
 			return e.Err
+		case app.ConfigEvent:
+			u.model.setFocused(u.ctx, e.Config.Focused)
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
 			if err := u.layout(gtx); err != nil {
@@ -292,9 +294,10 @@ func (u *window) tabBar(gtx C, active sessionView, hasActive bool) D {
 
 func (u *window) apply(act sidebarAction) {
 	if act.activate != "" {
-		u.model.setActive(act.activate)
+		u.model.setActive(u.ctx, act.activate)
 		if p, ok := u.model.project(); ok {
-			go u.logErr("set active session", u.client.SetActiveSession(u.ctx, p.ID, act.activate))
+			id := act.activate
+			go func() { u.logErr("set active session", u.client.SetActiveSession(u.ctx, p.ID, id)) }()
 		}
 		u.model.invalidate()
 	}
@@ -303,6 +306,15 @@ func (u *window) apply(act sidebarAction) {
 	}
 	if act.close != "" {
 		u.closeSession(act.close)
+	}
+	if act.openURL != "" {
+		url := act.openURL
+		go func() { u.logErr("open pull request", u.client.OpenExternal(u.ctx, url)) }()
+	}
+	if act.pin != "" && u.model.setPinned(act.pin, act.pinTo) {
+		u.model.invalidate()
+		id, pinned := act.pin, act.pinTo
+		go func() { u.logErr("pin session", u.client.SetSessionPinned(u.ctx, id, pinned)) }()
 	}
 }
 
@@ -343,7 +355,7 @@ func (u *window) newSession(kind string) {
 		u.logErr("reload", err)
 		return
 	}
-	u.model.setActive(id)
+	u.model.setActive(u.ctx, id)
 	u.logErr("set active session", u.client.SetActiveSession(u.ctx, p.ID, id))
 	u.tab = tabTerminal
 	u.model.invalidate()

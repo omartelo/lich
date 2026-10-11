@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
-	"github.com/omartelo/lich/native/lichclient"
 	"github.com/omartelo/lich/native/ui"
 	"github.com/omartelo/lich/native/ui/icons"
 )
@@ -29,6 +29,8 @@ type sidebar struct {
 	list      widget.List
 	cards     map[string]*widget.Clickable
 	closes    map[string]*widget.Clickable
+	pins      map[string]*widget.Clickable
+	prChips   map[string]*widget.Clickable
 	folds     map[string]*widget.Clickable
 	collapsed map[string]bool
 	icPlus    *icons.Icon
@@ -36,6 +38,11 @@ type sidebar struct {
 	icOpen    *icons.Icon
 	icBranch  *icons.Icon
 	icClose   *icons.Icon
+	icPin     *icons.Icon
+	icShield  *icons.Icon
+	icBehind  *icons.Icon
+	icClash   *icons.Icon
+	icPR      *icons.Icon
 	started   time.Time
 }
 
@@ -43,6 +50,8 @@ func newSidebar() *sidebar {
 	s := &sidebar{
 		cards:     map[string]*widget.Clickable{},
 		closes:    map[string]*widget.Clickable{},
+		pins:      map[string]*widget.Clickable{},
+		prChips:   map[string]*widget.Clickable{},
 		folds:     map[string]*widget.Clickable{},
 		collapsed: map[string]bool{},
 		icPlus:    icons.Lucide("plus"),
@@ -50,6 +59,11 @@ func newSidebar() *sidebar {
 		icOpen:    icons.Lucide("chevron-down"),
 		icBranch:  icons.Lucide("git-branch"),
 		icClose:   icons.Lucide("x"),
+		icPin:     icons.Lucide("pin"),
+		icShield:  icons.Lucide("shield"),
+		icBehind:  icons.Lucide("arrow-down"),
+		icClash:   icons.Lucide("triangle-alert"),
+		icPR:      icons.Lucide("git-pull-request-arrow"),
 		started:   time.Now(),
 	}
 	s.list.Axis = layout.Vertical
@@ -60,6 +74,9 @@ func newSidebar() *sidebar {
 type sidebarAction struct {
 	activate string // session id
 	close    string // session id
+	pin      string // session id
+	pinTo    bool   // the pin the click asked for
+	openURL  string // a pull request to show in the browser
 	newKind  string // "shell" or "claude"
 }
 
@@ -82,7 +99,7 @@ func (s *sidebar) layout(gtx C, th *ui.Theme, groups []group, active string) (D,
 					ui.VGap(2),
 					layout.Flexed(1, func(gtx C) D {
 						d, a := s.items(gtx, th, groups, active)
-						act.activate, act.close = a.activate, a.close
+						act.activate, act.close, act.pin, act.pinTo, act.openURL = a.activate, a.close, a.pin, a.pinTo, a.openURL
 						return d
 					}),
 				)
@@ -146,6 +163,12 @@ func (s *sidebar) items(gtx C, th *ui.Theme, groups []group, active string) (D, 
 			if a.close != "" {
 				act.close = a.close
 			}
+			if a.pin != "" {
+				act.pin, act.pinTo = a.pin, a.pinTo
+			}
+			if a.openURL != "" {
+				act.openURL = a.openURL
+			}
 			return d
 		})
 	})
@@ -166,7 +189,7 @@ func (s *sidebar) groupHeader(gtx C, th *ui.Theme, g *group) D {
 	if click.Clicked(gtx) {
 		s.collapsed[g.path] = !s.collapsed[g.path]
 	}
-	nameColor := ui.Alpha(th.MutedForeground, 0.7)
+	nameColor := th.Over(ui.Alpha(th.MutedForeground, 0.7))
 	if click.Hovered() {
 		nameColor = th.MutedForeground
 	}
@@ -193,24 +216,31 @@ func (s *sidebar) groupHeader(gtx C, th *ui.Theme, g *group) D {
 
 func (s *sidebar) card(gtx C, th *ui.Theme, sv *sessionView, active bool) (D, sidebarAction) {
 	var act sidebarAction
-	click, closeClick := clickable(s.cards, sv.ID), clickable(s.closes, sv.ID)
+	click, closeClick, pinClick := clickable(s.cards, sv.ID), clickable(s.closes, sv.ID), clickable(s.pins, sv.ID)
 	if click.Clicked(gtx) {
 		act.activate = sv.ID
 	}
 	if closeClick.Clicked(gtx) {
 		act.close = sv.ID
 	}
+	if pinClick.Clicked(gtx) {
+		act.pin, act.pinTo = sv.ID, !sv.Pinned
+	}
+	prChip := clickable(s.prChips, sv.ID)
+	if prChip.Clicked(gtx) && sv.pr != nil {
+		act.openURL = sv.pr.URL
+	}
+	fill := cardFill(th, sv.Color, active, click.Hovered())
+	th = th.On(fill)
 	d := click.Layout(gtx, func(gtx C) D {
 		return layout.Background{}.Layout(gtx,
-			func(gtx C) D {
-				return ui.Fill(gtx, cardFill(th, sv.Color, active, click.Hovered()), ui.RadiusMD)
-			},
+			func(gtx C) D { return ui.Fill(gtx, fill, ui.RadiusMD) },
 			func(gtx C) D {
 				return layout.Stack{Alignment: layout.NE}.Layout(gtx,
-					layout.Stacked(func(gtx C) D { return s.cardBody(gtx, th, sv) }),
+					layout.Stacked(func(gtx C) D { return s.cardBody(gtx, th, sv, prChip) }),
 					layout.Stacked(func(gtx C) D {
 						return layout.UniformInset(ui.Space(2)).Layout(gtx, func(gtx C) D {
-							return closeButton(gtx, th, closeClick, s.icClose, click.Hovered())
+							return s.cardControls(gtx, th, sv, pinClick, closeClick, click.Hovered())
 						})
 					}),
 				)
@@ -220,7 +250,7 @@ func (s *sidebar) card(gtx C, th *ui.Theme, sv *sessionView, active bool) (D, si
 	return d, act
 }
 
-func (s *sidebar) cardBody(gtx C, th *ui.Theme, sv *sessionView) D {
+func (s *sidebar) cardBody(gtx C, th *ui.Theme, sv *sessionView, prChip *widget.Clickable) D {
 	gtx.Constraints.Min.X = gtx.Constraints.Max.X
 	path := displayPath(sv.shown)
 	if sv.host != "" {
@@ -228,33 +258,77 @@ func (s *sidebar) cardBody(gtx C, th *ui.Theme, sv *sessionView) D {
 	}
 	rows := []layout.FlexChild{
 		layout.Rigid(func(gtx C) D {
-			return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-				layout.Rigid(func(gtx C) D { return s.statusRing(gtx, th, sv) }),
-				ui.Gap(1.5),
-				// pr-11: the title stops short of the controls in the corner.
-				layout.Flexed(1, func(gtx C) D {
-					return layout.Inset{Right: ui.Space(11)}.Layout(gtx, th.Text(ui.TextSM, sv.Label).Weight(font.Medium).Layout)
-				}),
-			)
+			return layout.Flex{Alignment: layout.Middle}.Layout(gtx, s.titleRow(th, sv)...)
 		}),
-		ui.VGap(2),
-		layout.Rigid(th.Text(ui.TextXS, path).Muted().Mono().LayoutTail),
 	}
+	if rung, ok := statusRung(th, sv); ok {
+		rows = append(rows, ui.VGap(2), layout.Rigid(rung))
+	}
+	rows = append(rows, ui.VGap(2), layout.Rigid(th.Text(ui.TextXS, path).Muted().Mono().LayoutTail))
 	if sv.git.Branch != "" {
-		rows = append(rows, ui.VGap(2), layout.Rigid(func(gtx C) D { return s.branchRow(gtx, th, sv.git) }))
+		rows = append(rows, ui.VGap(2), layout.Rigid(func(gtx C) D { return s.branchRow(gtx, th, sv, prChip) }))
 	}
 	return layout.Inset{Top: ui.Space(2), Bottom: ui.Space(2), Left: ui.Space(2.5), Right: ui.Space(2.5)}.Layout(gtx, func(gtx C) D {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx, rows...)
 	})
 }
 
-// branchRow is the card's last line: the branch, and on the right the
-// checkout's changes while it has any.
-func (s *sidebar) branchRow(gtx C, th *ui.Theme, git lichclient.DiffStats) D {
+// titleRow is the card's first line: the status ring around the provider
+// mark, a shield on a session that runs sandboxed, and the label, which stops
+// short of the corner controls (pr-11, pr-6 for a pinned card's lone pin).
+func (s *sidebar) titleRow(th *ui.Theme, sv *sessionView) []layout.FlexChild {
+	row := []layout.FlexChild{
+		layout.Rigid(func(gtx C) D { return s.statusRing(gtx, th, sv) }),
+		ui.Gap(1.5),
+	}
+	if sv.confined {
+		row = append(row, layout.Rigid(func(gtx C) D { return s.icShield.Layout(gtx, 12, th.MutedForeground) }), ui.Gap(1.5))
+	}
+	controls := ui.Space(11)
+	if sv.Pinned {
+		controls = ui.Space(6)
+	}
+	return append(row, layout.Flexed(1, func(gtx C) D {
+		return layout.Inset{Right: controls}.Layout(gtx, th.Text(ui.TextSM, sv.Label).Weight(font.Medium).Layout)
+	}))
+}
+
+// cardControls is the card's top-right corner. At rest it holds how long the
+// status has lasted, and the pin of a pinned card; hovered, the pin and the ×
+// take its place. A pinned card has no ×: closing is what the pin withholds.
+func (s *sidebar) cardControls(gtx C, th *ui.Theme, sv *sessionView, pin, close *widget.Clickable, hovered bool) D {
+	var children []layout.FlexChild
+	if !hovered && sv.aged {
+		children = append(children, layout.Rigid(th.Text(ui.TextXS, formatAge(sv.age)).Muted().Layout))
+		gtx.Execute(op.InvalidateCmd{At: gtx.Now.Add(nextAgeChange(sv.age))})
+	}
+	if hovered || sv.Pinned {
+		if len(children) > 0 {
+			children = append(children, ui.Gap(1))
+		}
+		children = append(children, layout.Rigid(func(gtx C) D { return cornerButton(gtx, th, pin, s.icPin, sv.Pinned) }))
+	}
+	if hovered && !sv.Pinned {
+		children = append(children, ui.Gap(1), layout.Rigid(func(gtx C) D { return cornerButton(gtx, th, close, s.icClose, false) }))
+	}
+	return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
+}
+
+// branchRow is the card's last line: the branch, and on the right a cluster
+// that reads outward from it: where it stands against its base, its open
+// pull request, and the checkout's changes.
+func (s *sidebar) branchRow(gtx C, th *ui.Theme, sv *sessionView, prChip *widget.Clickable) D {
+	git := sv.git
 	children := []layout.FlexChild{
 		layout.Rigid(func(gtx C) D { return s.icBranch.Layout(gtx, 12, th.MutedForeground) }),
 		ui.Gap(1),
 		layout.Flexed(1, th.Text(ui.TextXS, git.Branch).Muted().Layout),
+	}
+	if sv.base.count > 0 {
+		children = append(children, ui.Gap(2), layout.Rigid(func(gtx C) D { return s.baseReadout(gtx, th, sv.base) }))
+	}
+	if sv.pr != nil {
+		children = append(children, ui.Gap(2), layout.Rigid(func(gtx C) D { return s.prBadge(gtx, th, prChip, sv.pr.Number) }))
 	}
 	if git.Files > 0 {
 		children = append(children, ui.Gap(2), layout.Rigid(func(gtx C) D { return diffStat(gtx, th, git.Added, git.Deleted) }))
@@ -262,8 +336,40 @@ func (s *sidebar) branchRow(gtx C, th *ui.Theme, git lichclient.DiffStats) D {
 	return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
 }
 
-// statusRing draws the ring SessionStatusIcon draws around the provider mark:
-// spinning while busy, amber when waiting on the user, emerald when done.
+// baseReadout is ↓N commits behind the base, or ⚠N files that would conflict
+// with it, in the waiting tone.
+func (s *sidebar) baseReadout(gtx C, th *ui.Theme, b baseStanding) D {
+	ic, c := s.icBehind, th.MutedForeground
+	if b.conflict {
+		ic, c = s.icClash, th.ToneWait
+	}
+	return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+		layout.Rigid(func(gtx C) D { return ic.Layout(gtx, 12, c) }),
+		ui.Gap(0.5),
+		layout.Rigid(th.Text(ui.TextXS, strconv.Itoa(b.count)).In(c).Layout),
+	)
+}
+
+// prBadge is the open pull request's number, a button that brightens on
+// hover.
+func (s *sidebar) prBadge(gtx C, th *ui.Theme, click *widget.Clickable, number int) D {
+	c := th.MutedForeground
+	if click.Hovered() {
+		c = th.Foreground
+	}
+	return click.Layout(gtx, func(gtx C) D {
+		return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+			layout.Rigid(func(gtx C) D { return s.icPR.Layout(gtx, 12, c) }),
+			ui.Gap(1),
+			layout.Rigid(th.Text(ui.TextXS, "#"+strconv.Itoa(number)).In(c).Layout),
+		)
+	})
+}
+
+// statusRing is SessionStatusIcon: the provider mark (the agent live in the
+// PTY, else the session's kind) in a ring that spins while busy, is amber
+// when waiting on the user and emerald when done, faded once that turn is
+// read.
 func (s *sidebar) statusRing(gtx C, th *ui.Theme, sv *sessionView) D {
 	size := gtx.Dp(22)
 	stroke := float32(gtx.Dp(1.5))
@@ -271,27 +377,27 @@ func (s *sidebar) statusRing(gtx C, th *ui.Theme, sv *sessionView) D {
 	radius := float32(size)/2 - stroke/2
 	switch sv.status {
 	case "busy", "compacting":
-		strokeArc(gtx, center, radius, stroke, 0, 2*math.Pi, ui.Alpha(th.MutedForeground, 0.25))
+		strokeArc(gtx, center, radius, stroke, 0, 2*math.Pi, th.Over(ui.Alpha(th.MutedForeground, 0.25)))
 		turn := float32(time.Since(s.started).Seconds()) * 2 * math.Pi
 		strokeArc(gtx, center, radius, stroke, turn, math.Pi/2, th.MutedForeground)
 		gtx.Execute(op.InvalidateCmd{})
 	case "waiting":
 		strokeArc(gtx, center, radius, stroke, 0, 2*math.Pi, th.ToneWait)
 	case "done":
-		strokeArc(gtx, center, radius, stroke, 0, 2*math.Pi, th.TonePass)
+		ring := th.TonePass
+		if !sv.unread {
+			ring = th.Over(ui.Alpha(ring, 0.3))
+		}
+		strokeArc(gtx, center, radius, stroke, 0, 2*math.Pi, ring)
 	}
 	gtx.Constraints = layout.Exact(image.Pt(size, size))
-	return layout.Center.Layout(gtx, func(gtx C) D {
-		return th.Text(10, providerMark(sv.Kind)).Muted().Weight(font.Bold).Layout(gtx)
-	})
-}
-
-// ponytail: provider logos are a letter; the real port needs ProviderIcon's SVGs.
-func providerMark(kind string) string {
-	if kind == "shell" || kind == "" {
-		return ">_"
+	kind := sv.Kind
+	if sv.agent != "" {
+		kind = sv.agent
 	}
-	return strings.ToUpper(kind[:1])
+	return layout.Center.Layout(gtx, func(gtx C) D {
+		return providerIcon(kind).Layout(gtx, 14, th.MutedForeground)
+	})
 }
 
 func strokeArc(gtx C, center f32.Point, radius, width, start, sweep float32, c color.NRGBA) {

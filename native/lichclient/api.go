@@ -28,6 +28,9 @@ type Session struct {
 	Pinned bool   `json:"pinned"`
 	Unread bool   `json:"unread"`
 	Color  string `json:"color"`
+	// MCPServers are the servers the session's spawn found registered with
+	// its provider, which divide an MCP tool's name into server and tool.
+	MCPServers []string `json:"mcpServers"`
 }
 
 // DiffStats mirrors project.DiffStats.
