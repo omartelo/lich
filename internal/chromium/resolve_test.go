@@ -90,10 +90,11 @@ func TestDescribe(t *testing.T) {
 
 func TestParseFlags(t *testing.T) {
 	tests := []struct {
-		name   string
-		args   []string
-		pinned string
-		extra  []string
+		name     string
+		args     []string
+		pinned   string
+		noWindow bool
+		extra    []string
 	}{
 		{name: "nothing"},
 		{name: "separate value", args: []string{"--shell", "/opt/x/lich-shell"}, pinned: "/opt/x/lich-shell"},
@@ -117,12 +118,24 @@ func TestParseFlags(t *testing.T) {
 			extra: []string{"--shell=/opt/x/lich-shell"},
 		},
 		{name: "value missing", args: []string{"--shell"}},
+		{name: "no window", args: []string{"--no-window"}, noWindow: true},
+		{
+			name:     "no window beside the others",
+			args:     []string{"--no-window", "--shell=/opt/x/lich-shell", "--", "--ozone-platform=wayland"},
+			pinned:   "/opt/x/lich-shell",
+			noWindow: true,
+			extra:    []string{"--ozone-platform=wayland"},
+		},
+		{name: "no window after the separator is the window's", args: []string{"--", "--no-window"}, extra: []string{"--no-window"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pinned, extra := ParseFlags(tt.args)
+			pinned, noWindow, extra := ParseFlags(tt.args)
 			if pinned != tt.pinned {
 				t.Fatalf("pinned = %q, want %q", pinned, tt.pinned)
+			}
+			if noWindow != tt.noWindow {
+				t.Fatalf("noWindow = %v, want %v", noWindow, tt.noWindow)
 			}
 			if !slices.Equal(extra, tt.extra) {
 				t.Fatalf("extra = %v, want %v", extra, tt.extra)
@@ -135,7 +148,7 @@ func TestParseFlags(t *testing.T) {
 // launched again with them opens its window with the same ones.
 func TestRelaunchArgsRoundTripsThroughParseFlags(t *testing.T) {
 	for _, extra := range [][]string{nil, {"--ozone-platform=x11"}, {"--ozone-platform=x11", "--remote-debugging-port=9334"}} {
-		_, got := ParseFlags(RelaunchArgs(extra))
+		_, _, got := ParseFlags(RelaunchArgs(extra))
 		if !slices.Equal(got, extra) {
 			t.Errorf("ParseFlags(RelaunchArgs(%q)) = %q", extra, got)
 		}

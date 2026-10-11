@@ -52,7 +52,7 @@ func New(exePath string, env, args []string) *Coordinator {
 		exePath: exePath,
 		env:     env,
 		args:    args,
-		spawn:   startDetached,
+		spawn:   StartDetached,
 	}
 }
 

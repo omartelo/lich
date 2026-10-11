@@ -192,12 +192,14 @@ func TestWindowDismiss(t *testing.T) {
 	if err := w.Dismiss(); err != nil {
 		t.Fatalf("Dismiss = %v", err)
 	}
-	if end := f.ended(t); end.Err != nil {
-		t.Fatalf("end = %+v, want a clean close", end)
+	if end := f.ended(t); end.Err != nil || !end.Dismissed {
+		t.Fatalf("end = %+v, want a clean close marked dismissed", end)
 	}
 	w.Show()
 	f.opened(t) <- nil
-	f.ended(t)
+	if end := f.ended(t); end.Dismissed {
+		t.Fatalf("end = %+v, a window closed on its own was reported dismissed", end)
+	}
 }
 
 func TestWindowShowSessionOpensOnTheCard(t *testing.T) {

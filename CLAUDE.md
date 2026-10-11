@@ -34,6 +34,9 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
 - Go 1.27, pure Go: `CGO_ENABLED=0` and a fully static binary are a constraint, not a default. The Linux
   window is a *separate* binary, `shell/` (Rust on CEF via a kurogane fork), launched with the same argv as a
   system browser plus one switch of its own — nothing about it reaches the Go build (`docs/chromium-shell.md`).
+  The native window, `native/`, is the other exception: its own Go module and binary, `lich-native`, built
+  with cgo (Gio, libghostty-vt), talking to the backend only over RPC, `/events` and `/ws`, never importing
+  `internal/` (`docs/native-window.md`).
 - OS-specific code is selected by build tags behind small seams, never by runtime checks — the PTY is the model
   (`internal/terminal`).
 - No literal user-visible or agent-facing text: a string a person reads on a lich screen, or that lich types
@@ -61,6 +64,10 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
 - Touched `shell/`? `cd shell && cargo fmt --check && cargo clippy --release --all-targets -- -D warnings &&
   cargo test --release` clean (`--release` shares the CEF build with `task build:shell`).
 - `cd frontend && pnpm build` succeeds (tsc typecheck + vite).
+- Touched `native/`? From `native/`, `gofmt -l .`, `go vet ./...` and `go test ./...` clean, with
+  `PKG_CONFIG_PATH` pointing at a libghostty-vt built from the commit in `native/GHOSTTY_COMMIT`
+  (`native/slice.sh` says how). Changed what it draws? Take a `-shot` and look at it; the maintainer's review
+  in a real window is the one to trust.
 - Shipped anything a user can see? Its `CHANGELOG.md` `[Unreleased]` entry lands in the same PR — the release notes
   are read from there, so an entry written later is an entry that missed its release.
 - Touched an OS seam or a `_test.go` build tag? Run the same cross-compile loop CI runs:

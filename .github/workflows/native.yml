@@ -1,0 +1,88 @@
+name: native
+
+# The native window (native/) is its own Go module and its own binary, built
+# with cgo: Gio needs it for Wayland, X11 and EGL, and libghostty-vt is a C
+# library (docs/native-window.md). It never reaches the lich binary's build, so
+# it gets this job instead of a step in ci.yml, and runs only when it changes.
+on:
+  pull_request:
+    paths: [native/**, .github/workflows/native.yml]
+  push:
+    branches: [main]
+    paths: [native/**, .github/workflows/native.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: native/go.mod
+          cache-dependency-path: native/go.sum
+
+      # Gio's Linux headers (gioui.org/doc/install), fontconfig for the glyph
+      # rasterizer, and Mesa's llvmpipe so the headless render tests draw on the
+      # CPU instead of skipping for want of a GPU.
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev \
+            libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev \
+            libgl1-mesa-dri libegl-mesa0 fontconfig fonts-dejavu-core
+
+      - name: Pinned Ghostty commit
+        id: ghostty
+        run: echo "commit=$(cat GHOSTTY_COMMIT)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache libghostty-vt
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/libghostty-vt
+          key: libghostty-vt-${{ runner.os }}-${{ steps.ghostty.outputs.commit }}
+
+      - name: Set up Zig
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Build libghostty-vt
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: ${{ runner.temp }}
+        run: |
+          git init ghostty
+          cd ghostty
+          git fetch --depth 1 https://github.com/ghostty-org/ghostty "${{ steps.ghostty.outputs.commit }}"
+          git checkout FETCH_HEAD
+          zig build -Demit-lib-vt -Doptimize=ReleaseFast --prefix ~/libghostty-vt
+
+      - name: Point pkg-config at libghostty-vt
+        run: echo "PKG_CONFIG_PATH=$HOME/libghostty-vt/share/pkgconfig" >> "$GITHUB_ENV"
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt: these files need formatting:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: go test ./...
