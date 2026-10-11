@@ -35,3 +35,16 @@ func (c *Client) PullRequest(ctx context.Context, path string) (*PullRequest, er
 func (c *Client) OpenExternal(ctx context.Context, url string) error {
 	return c.Call(ctx, "system.OpenExternal", nil, url)
 }
+
+// OpenFolderInEditor opens dir in the user's editor. A GUI editor is launched
+// detached and the reply is ""; a terminal editor comes back as the command
+// line to run in a shell at dir.
+func (c *Client) OpenFolderInEditor(ctx context.Context, dir string) (string, error) {
+	var command string
+	return command, c.Call(ctx, "system.OpenFolderInEditor", &command, dir)
+}
+
+// OpenFolder opens dir in the file manager.
+func (c *Client) OpenFolder(ctx context.Context, dir string) error {
+	return c.Call(ctx, "system.OpenFolder", nil, dir)
+}

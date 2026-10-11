@@ -41,6 +41,19 @@ type terminals struct {
 	mu    sync.Mutex
 	byID  map[string]*termView
 	shown string
+	// typeahead is input for a session whose terminal has not started yet,
+	// sent right after Start; the PTY holds it until the shell reads it.
+	typeahead map[string]string
+}
+
+// queue sends text to session id's terminal once it starts.
+func (ts *terminals) queue(id, text string) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.typeahead == nil {
+		ts.typeahead = map[string]string{}
+	}
+	ts.typeahead[id] += text
 }
 
 func (ts *terminals) onOutput(id string, data []byte) {
@@ -106,6 +119,11 @@ func (ts *terminals) show(ctx context.Context, gtx layout.Context, s sessionView
 	if err := ts.client.Start(ctx, s.ID, s.projectID, s.path, s.Kind, cols, rows); err != nil {
 		return nil, err
 	}
+	ts.mu.Lock()
+	pending := ts.typeahead[s.ID]
+	delete(ts.typeahead, s.ID)
+	ts.mu.Unlock()
+	ts.send(s.ID, []byte(pending))
 	return t, ts.client.Resize(ctx, s.ID, cols, rows)
 }
 
@@ -138,7 +156,9 @@ func (ts *terminals) setVisible(hidden, shown string) {
 
 // layout draws t into the whole of gtx.Constraints.Max, following the area's
 // size with the grid and the backend PTY, and routes keys typed into it.
-func (ts *terminals) layout(gtx layout.Context, t *termView) error {
+// layout draws t and types into it. focus says nothing else in the window
+// wants the keyboard (a rename, an open menu), so the terminal takes it.
+func (ts *terminals) layout(gtx layout.Context, t *termView, focus bool) error {
 	size := gtx.Constraints.Max
 	defer clip.Rect(image.Rectangle{Max: size}).Push(gtx.Ops).Pop()
 	if err := t.r.Measure(gtx); err != nil {
@@ -156,7 +176,7 @@ func (ts *terminals) layout(gtx layout.Context, t *termView) error {
 			}
 		}()
 	}
-	ts.input(gtx, t)
+	ts.input(gtx, t, focus)
 	snap, err := t.vt.Update()
 	if err != nil {
 		return err
@@ -168,11 +188,13 @@ func (ts *terminals) layout(gtx layout.Context, t *termView) error {
 	return nil
 }
 
-func (ts *terminals) input(gtx layout.Context, t *termView) {
+func (ts *terminals) input(gtx layout.Context, t *termView, focus bool) {
 	_, cellH := t.r.Cell()
 	filters := append(gioterm.KeyFilters(t.tag),
 		pointer.Filter{Target: t.tag, Kinds: pointer.Scroll | pointer.Press, ScrollY: pointer.ScrollRange{Min: -1 << 20, Max: 1 << 20}})
-	gtx.Execute(key.FocusCmd{Tag: t.tag})
+	if focus {
+		gtx.Execute(key.FocusCmd{Tag: t.tag})
+	}
 	for {
 		ev, ok := gtx.Event(filters...)
 		if !ok {

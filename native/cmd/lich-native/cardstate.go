@@ -139,6 +139,19 @@ func (m *model) markRead(ctx context.Context, id string) {
 	}()
 }
 
+// setColor tints a session's card here, ahead of the backend. It reports
+// false when no open session has that id.
+func (m *model) setColor(id, tint string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	p, i := m.sessionAt(id)
+	if p == nil {
+		return false
+	}
+	p.Sessions[i].Color = tint
+	return true
+}
+
 // setPinned flips a session's pin here, ahead of the backend, as the web's
 // optimistic commit does. It reports false when no open session has that id.
 func (m *model) setPinned(id string, pinned bool) bool {

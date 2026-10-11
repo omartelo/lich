@@ -24,3 +24,13 @@ func (c *Client) SetSessionPinned(ctx context.Context, sessionID string, pinned 
 func (c *Client) SetSessionUnread(ctx context.Context, sessionID string, unread bool) error {
 	return c.Call(ctx, "store.SetSessionUnread", nil, sessionID, unread)
 }
+
+// RenameSession gives a session the label the user typed.
+func (c *Client) RenameSession(ctx context.Context, sessionID, label string) error {
+	return c.Call(ctx, "store.RenameSession", nil, sessionID, label)
+}
+
+// SetSessionColor tints a session's card, "" for the theme's.
+func (c *Client) SetSessionColor(ctx context.Context, sessionID, color string) error {
+	return c.Call(ctx, "store.SetSessionColor", nil, sessionID, color)
+}

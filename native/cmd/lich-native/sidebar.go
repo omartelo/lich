@@ -24,8 +24,12 @@ import (
 const sidebarWidth = 288
 
 type sidebar struct {
-	root      *ui.Root // where card tooltips float
-	tips      map[string]*ui.Tooltip
+	root    *ui.Root // where card tooltips float
+	tips    map[string]*ui.Tooltip
+	menus   map[string]*ui.MenuState
+	renames map[string]*ui.InlineEdit
+	// renamed is the label a rename committed during this frame's layout.
+	renamed   sessionRename
 	newShell  widget.Clickable
 	newClaude widget.Clickable
 	list      widget.List
@@ -55,6 +59,8 @@ func newSidebar(root *ui.Root) *sidebar {
 		closes:    map[string]*widget.Clickable{},
 		pins:      map[string]*widget.Clickable{},
 		tips:      map[string]*ui.Tooltip{},
+		menus:     map[string]*ui.MenuState{},
+		renames:   map[string]*ui.InlineEdit{},
 		prChips:   map[string]*widget.Clickable{},
 		folds:     map[string]*widget.Clickable{},
 		collapsed: map[string]bool{},
@@ -74,6 +80,22 @@ func newSidebar(root *ui.Root) *sidebar {
 	return s
 }
 
+// holdsKeys reports whether a card is being renamed or has its menu open,
+// either of which wants the keyboard the terminal otherwise takes.
+func (s *sidebar) holdsKeys() bool {
+	for _, r := range s.renames {
+		if r.Active() {
+			return true
+		}
+	}
+	for _, m := range s.menus {
+		if m.Opened() {
+			return true
+		}
+	}
+	return false
+}
+
 // sidebarAction is what a frame's clicks asked for.
 type sidebarAction struct {
 	activate string // session id
@@ -82,7 +104,15 @@ type sidebarAction struct {
 	pinTo    bool   // the pin the click asked for
 	openURL  string // a pull request to show in the browser
 	newKind  string // "shell" or "claude"
+	// Open in, from the card menu: a directory for a shell session, the
+	// editor or the file manager.
+	terminalAt, editorAt, folderAt string
+	rename                         sessionRename
+	color, colorTo                 string // session id, and its new tint ("" for the theme)
 }
+
+// sessionRename is a label typed into a card.
+type sessionRename struct{ id, label string }
 
 func (s *sidebar) layout(gtx C, th *ui.Theme, groups []group, active string) (D, sidebarAction) {
 	var act sidebarAction
@@ -103,7 +133,8 @@ func (s *sidebar) layout(gtx C, th *ui.Theme, groups []group, active string) (D,
 					ui.VGap(2),
 					layout.Flexed(1, func(gtx C) D {
 						d, a := s.items(gtx, th, groups, active)
-						act.activate, act.close, act.pin, act.pinTo, act.openURL = a.activate, a.close, a.pin, a.pinTo, a.openURL
+						a.newKind = act.newKind
+						act = a
 						return d
 					}),
 				)
@@ -161,17 +192,9 @@ func (s *sidebar) items(gtx C, th *ui.Theme, groups []group, active string) (D, 
 				return s.groupHeader(gtx, th, r.group)
 			}
 			d, a := s.card(gtx, th, r.session, r.session.ID == active)
-			if a.activate != "" {
-				act.activate = a.activate
-			}
-			if a.close != "" {
-				act.close = a.close
-			}
-			if a.pin != "" {
-				act.pin, act.pinTo = a.pin, a.pinTo
-			}
-			if a.openURL != "" {
-				act.openURL = a.openURL
+			// One card is clicked per frame at most.
+			if a != (sidebarAction{}) {
+				act = a
 			}
 			return d
 		})
@@ -241,9 +264,25 @@ func (s *sidebar) card(gtx C, th *ui.Theme, sv *sessionView, active bool) (D, si
 		tip = new(ui.Tooltip)
 		s.tips[sv.ID] = tip
 	}
+	menu, ok := s.menus[sv.ID]
+	if !ok {
+		menu = new(ui.MenuState)
+		s.menus[sv.ID] = menu
+	}
 	tooltip := th.TooltipCard(s.root, tip, sessionTooltip(th, sv))
 	tooltip.Side = ui.SideRight
-	d := tooltip.Layout(gtx, func(gtx C) D { return s.cardFace(gtx, th, sv, click, pinClick, closeClick, prChip, fill) })
+	rename, ok := s.renames[sv.ID]
+	if !ok {
+		rename = new(ui.InlineEdit)
+		s.renames[sv.ID] = rename
+	}
+	entries := cardMenu(sv, &act, func() { rename.Start(sv.Label) })
+	d := th.ContextMenu(s.root, menu, entries).Layout(gtx, func(gtx C) D {
+		return tooltip.Layout(gtx, func(gtx C) D { return s.cardFace(gtx, th, sv, click, pinClick, closeClick, prChip, fill) })
+	})
+	if s.renamed.id == sv.ID {
+		act.rename, s.renamed = s.renamed, sessionRename{}
+	}
 	return d, act
 }
 
@@ -304,9 +343,24 @@ func (s *sidebar) titleRow(th *ui.Theme, sv *sessionView) []layout.FlexChild {
 	if sv.Pinned {
 		controls = ui.Space(6)
 	}
+	if rename := s.renames[sv.ID]; rename != nil && rename.Active() {
+		return append(row, layout.Flexed(1, func(gtx C) D { return s.renameField(gtx, th, sv.ID, rename, controls) }))
+	}
 	return append(row, layout.Flexed(1, func(gtx C) D {
 		return layout.Inset{Right: controls}.Layout(gtx, th.Text(ui.TextSM, sv.Label).Weight(font.Medium).Layout)
 	}))
+}
+
+// renameField is the label as a field while the card is being renamed; the
+// padding sits inside its ring, as the web input's does.
+func (s *sidebar) renameField(gtx C, th *ui.Theme, id string, rename *ui.InlineEdit, controls unit.Dp) D {
+	field := th.InlineEdit(rename, ui.TextSM).Weight(font.Medium)
+	field.PadRight = controls
+	d, res := field.Layout(gtx)
+	if res.Outcome == ui.InlineEditCommitted {
+		s.renamed = sessionRename{id: id, label: res.Value}
+	}
+	return d
 }
 
 // cardControls is the card's top-right corner. At rest it holds how long the

@@ -461,3 +461,12 @@ func unreadSessions(ps []lichclient.Project) []string {
 	}
 	return ids
 }
+
+// checkoutPath is sessions.ts checkoutPath: a session in the project's own
+// directory stores no path of its own.
+func checkoutPath(dir, projectPath string) string {
+	if dir == projectPath {
+		return ""
+	}
+	return dir
+}

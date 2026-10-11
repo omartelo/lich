@@ -245,7 +245,7 @@ func (u *window) content(gtx C, active sessionView) error {
 	if err != nil {
 		return err
 	}
-	return u.terms.layout(gtx, t)
+	return u.terms.layout(gtx, t, !u.sidebar.holdsKeys())
 }
 
 func (u *window) tabBar(gtx C, active sessionView, hasActive bool) D {
@@ -303,7 +303,7 @@ func (u *window) apply(act sidebarAction) {
 		u.model.invalidate()
 	}
 	if act.newKind != "" {
-		go u.newSession(act.newKind)
+		go u.newSession(act.newKind, "", "")
 	}
 	if act.close != "" {
 		u.closeSession(act.close)
@@ -316,6 +316,42 @@ func (u *window) apply(act sidebarAction) {
 		u.model.invalidate()
 		id, pinned := act.pin, act.pinTo
 		go func() { u.logErr("pin session", u.client.SetSessionPinned(u.ctx, id, pinned)) }()
+	}
+	u.applyOpenIn(act)
+	if act.color != "" && u.model.setColor(act.color, act.colorTo) {
+		u.model.invalidate()
+		id, tint := act.color, act.colorTo
+		go func() { u.logErr("color session", u.client.SetSessionColor(u.ctx, id, tint)) }()
+	}
+	if r := act.rename; r.id != "" {
+		u.model.rename(r.id, r.label)
+		u.model.invalidate()
+		go func() { u.logErr("rename session", u.client.RenameSession(u.ctx, r.id, r.label)) }()
+	}
+}
+
+// applyOpenIn carries out the card menu's Open in: a shell session at the
+// card's directory, the directory in the editor, or in the file manager.
+func (u *window) applyOpenIn(act sidebarAction) {
+	if act.terminalAt != "" {
+		go u.newSession("shell", act.terminalAt, "")
+	}
+	if dir := act.editorAt; dir != "" {
+		go func() {
+			command, err := u.client.OpenFolderInEditor(u.ctx, dir)
+			if err != nil {
+				u.logErr("open in editor", err)
+				return
+			}
+			// A terminal editor runs in a shell at the directory, as the
+			// web card does.
+			if command != "" {
+				u.newSession("shell", dir, command+"\n")
+			}
+		}()
+	}
+	if dir := act.folderAt; dir != "" {
+		go func() { u.logErr("open folder", u.client.OpenFolder(u.ctx, dir)) }()
 	}
 }
 
@@ -340,7 +376,9 @@ func (u *window) logErr(what string, err error) {
 	}
 }
 
-func (u *window) newSession(kind string) {
+// newSession adds a session of kind at dir ("" for the project's own
+// checkout) and puts it on screen; typeahead is typed into it once it starts.
+func (u *window) newSession(kind, dir, typeahead string) {
 	p, ok := u.model.project()
 	if !ok {
 		log.Print("new session: the backend has no project open")
@@ -348,13 +386,16 @@ func (u *window) newSession(kind string) {
 	}
 	id := strings.ToLower(rand.Text())
 	label := fmt.Sprintf("%s %d", strings.ToUpper(kind[:1])+kind[1:], p.NextSeq+1)
-	if err := u.client.AddSession(u.ctx, p.ID, id, label, kind, p.Path, p.NextSeq+1); err != nil {
+	if err := u.client.AddSession(u.ctx, p.ID, id, label, kind, checkoutPath(dir, p.Path), p.NextSeq+1); err != nil {
 		u.logErr("new session", err)
 		return
 	}
 	if err := u.model.reload(u.ctx); err != nil {
 		u.logErr("reload", err)
 		return
+	}
+	if typeahead != "" {
+		u.terms.queue(id, typeahead)
 	}
 	u.model.setActive(u.ctx, id)
 	u.logErr("set active session", u.client.SetActiveSession(u.ctx, p.ID, id))

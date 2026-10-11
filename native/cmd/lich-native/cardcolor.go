@@ -18,6 +18,9 @@ var cardColors = map[string]color.NRGBA{
 	"pink":   ui.OKLCH(0.656, 0.241, 354.308, 1),
 }
 
+// cardColorNames is card-color.ts CARD_COLOR_NAMES, the swatch order.
+var cardColorNames = []string{"red", "orange", "amber", "green", "teal", "blue", "violet", "pink"}
+
 // The tint's share of each fill, card-color.ts's TINTED_FILL.
 const (
 	tintRest   = 0.10
