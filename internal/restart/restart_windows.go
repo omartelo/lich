@@ -9,10 +9,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// startDetached launches exe detached from this console and process group so it
+// StartDetached launches exe detached from this console and process group so it
 // outlives the restarting process, including an installer that must wait for
 // this process to release its executable.
-func startDetached(exe string, env, args []string) error {
+func StartDetached(exe string, env, args []string) error {
 	cmd := exec.Command(exe, args...)
 	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{

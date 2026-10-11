@@ -93,15 +93,18 @@ func RelaunchArgs(extra []string) []string {
 }
 
 // ParseFlags splits lich's own launch arguments: --shell <path> pins the
-// window to open, and everything after `--` passes through to it as Chromium
-// switches. The flag wins over its environment variable because the caller
-// writes it into the environment (main.go), which is also what carries it to
-// the restart successor.
-func ParseFlags(args []string) (pinned string, extra []string) {
+// window to open, --no-window starts the backend without one (`lich native`
+// uses it), and everything after `--` passes through to the window as Chromium
+// switches. The --shell flag wins over its environment variable because the
+// caller writes it into the environment (main.go), which is also what carries
+// it to the restart successor.
+func ParseFlags(args []string) (pinned string, noWindow bool, extra []string) {
 	for i := 0; i < len(args); i++ {
 		switch arg := args[i]; {
 		case arg == "--":
-			return pinned, args[i+1:]
+			return pinned, noWindow, args[i+1:]
+		case arg == "--no-window":
+			noWindow = true
 		case arg == "--shell" && i+1 < len(args):
 			i++
 			pinned = args[i]
@@ -109,5 +112,5 @@ func ParseFlags(args []string) (pinned string, extra []string) {
 			pinned = strings.TrimPrefix(arg, "--shell=")
 		}
 	}
-	return pinned, nil
+	return pinned, noWindow, nil
 }

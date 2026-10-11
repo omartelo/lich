@@ -76,7 +76,7 @@ func main() {
 
 	// Everything after `--` is the window's.
 	args, handedErr := launchArgs()
-	pinnedShell, chromiumArgs := chromium.ParseFlags(args)
+	pinnedShell, noWindow, chromiumArgs := chromium.ParseFlags(args)
 	pinShellFlag(pinnedShell)
 
 	configDir, err := os.UserConfigDir()
@@ -131,7 +131,23 @@ func main() {
 
 	term.SetRestart(coord.Do)
 
-	runChromium(term, configDir, coord, window)
+	runChromium(term, configDir, coord, window, startWindow(window, noWindow))
+}
+
+// windowStart is what a launch does about lich's window: open it, its own or
+// the one of a lich already running. --no-window does neither, and leaves the
+// backend for a client of its own (`lich native`); the tray and a second
+// launch still open the window later.
+type windowStart struct {
+	open        func()
+	openRunning func(configDir string, running *singleton.Info)
+}
+
+func startWindow(window *restart.Window, noWindow bool) windowStart {
+	if noWindow {
+		return windowStart{open: func() {}, openRunning: func(string, *singleton.Info) {}}
+	}
+	return windowStart{open: window.Show, openRunning: showRunning}
 }
 
 // launchArgs are lich's own arguments, or the ones an update on Windows handed
@@ -488,10 +504,10 @@ func denyInternal(d *rpc.Handler) {
 // elsewhere, internal/chromium) and serves until lich is told to quit. The
 // window is not the app's lifecycle: closing it leaves every session running,
 // and a second launch opens a new one on them (handleBindFailure).
-func runChromium(term *terminal.Service, configDir string, coord *restart.Coordinator, window *restart.Window) {
+func runChromium(term *terminal.Service, configDir string, coord *restart.Coordinator, window *restart.Window, start windowStart) {
 	info := term.Transport()
 	if info.Port == 0 {
-		handleBindFailure(configDir, term.TransportError()) // never returns
+		handleBindFailure(configDir, term.TransportError(), start.openRunning) // never returns
 	}
 
 	// The runtime file lets install.sh reach a running lich for /restart when it
@@ -512,14 +528,14 @@ func runChromium(term *terminal.Service, configDir string, coord *restart.Coordi
 	}
 	term.MountPublic("/", http.FileServerFS(dist))
 
-	serve(coord, window)
+	serve(coord, window, start.open)
 }
 
 // serve opens the window and returns when lich is told to quit (`lich quit`,
 // a restart, SIGINT or SIGTERM), so the caller's defers still run. The window
 // is closed on the way out rather than left to die with the process, so
 // Chromium flushes its profile first.
-func serve(coord *restart.Coordinator, window *restart.Window) {
+func serve(coord *restart.Coordinator, window *restart.Window, open func()) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(stop)
@@ -530,7 +546,7 @@ func serve(coord *restart.Coordinator, window *restart.Window) {
 		default:
 		}
 	})
-	window.Show()
+	open()
 	<-stop
 	slog.Info("quitting")
 	window.Close()
@@ -617,7 +633,13 @@ func newWindow(info terminal.TransportInfo, configDir string, extra []string,
 
 // quitIfIdle ends lich when the user closed its window with no session running:
 // the backend outlives the window to keep sessions alive, and there are none.
+// A window dismissed through system.CloseWindow was asked to go by someone
+// keeping lich running (the page's answer, `lich native` taking over), so it
+// never quits lich.
 func quitIfIdle(end restart.WindowEnd, live func() int, quit func() error) {
+	if end.Dismissed {
+		return
+	}
 	if chromium.EndingOf(end.Err, end.First, end.Uptime) != chromium.WindowClosed || live() > 0 {
 		return
 	}
@@ -689,8 +711,9 @@ func openTab(target windowTarget, configDir string) {
 // handleBindFailure runs when the pinned listener would not bind, and never
 // returns. It gathers the two inputs the decision needs, asks
 // singleton.BindFailureVerdict what they mean, and performs the effects. cause
-// is the bind error, carried into the log for the launches that end here.
-func handleBindFailure(configDir string, cause error) {
+// is the bind error, carried into the log for the launches that end here, and
+// openRunning is what a duplicate launch asks of the lich already running.
+func handleBindFailure(configDir string, cause error, openRunning func(string, *singleton.Info)) {
 	port := os.Getenv("LICH_LISTEN_PORT")
 	restartWait := os.Getenv(restart.WaitEnv)
 	// A restart successor never probes: the verdict is already decided, and the
@@ -703,7 +726,7 @@ func handleBindFailure(configDir string, cause error) {
 	if singleton.BindFailureVerdict(restartWait, running) == singleton.BindFailureIsDuplicate {
 		slog.Info("lich already running, showing its window",
 			"pid", running.PID, "port", running.Port)
-		showRunning(configDir, running)
+		openRunning(configDir, running)
 		os.Exit(0)
 	}
 	// No "is the port free?" here: on Windows the answer is regularly yes and

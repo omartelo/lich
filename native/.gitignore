@@ -1,0 +1,4 @@
+cmd/gio-term/gio-term
+cmd/gio-term/testdata/
+cmd/lich-native/lich-native
+cmd/ui-gallery/ui-gallery

@@ -175,6 +175,8 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.cost, args[1:])
 	case "mcp":
 		return c.run(c.serveMCP, args[1:])
+	case "native":
+		return c.run(c.native, args[1:])
 	case "quit":
 		return c.run(c.quit, args[1:])
 	case "rage":
@@ -231,6 +233,9 @@ type client struct {
 	// the same reason bundle exists — the real walk binds the pinned port and
 	// opens the workspace database.
 	diagnose func() ([]doctor.Check, error)
+	// launch starts a process detached from this one; nil takes the real one.
+	// A test overrides it because `lich native` starts lich and its window.
+	launch func(exe string, env, args []string) error
 }
 
 // lang is the language the session's agent was spawned to hear, exported by

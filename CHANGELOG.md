@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`lich native` opens an experimental native window.** It is built in Go on
+  Gio, beside the web window, and opens on the running lich (starting one when
+  none runs) after closing the web window, so your sessions stay where they
+  are. It is not in the release packages yet: build `lich-native` from
+  `native/` and put it beside `lich`, or point `LICH_NATIVE` at it.
+- **`lich --no-window` starts lich without opening its window.** The sessions,
+  the tray and the CLI are all there; the tray's Show lich, or launching lich
+  again, opens the window when you want it.
+
 ## [0.67.0] - 2026-10-10
 
 ### Added

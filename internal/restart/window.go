@@ -15,11 +15,13 @@ import (
 const closeWait = 5 * time.Second
 
 // WindowEnd is how one window ended: what its run returned, whether it was the
-// first window this lich opened, and how long it ran.
+// first window this lich opened, how long it ran, and whether Dismiss closed it
+// rather than the user.
 type WindowEnd struct {
-	Err    error
-	First  bool
-	Uptime time.Duration
+	Err       error
+	First     bool
+	Uptime    time.Duration
+	Dismissed bool
 }
 
 // Window is lich's window over a backend that outlives it. Closing the window
@@ -35,6 +37,8 @@ type Window struct {
 	// exited is closed when the open window's run returns.
 	exited chan struct{}
 	opened bool
+	// dismissed is set when Dismiss closes the open window, until it ends.
+	dismissed bool
 	// closing is set once Close has run: lich is quitting, so no window opens
 	// again and the one closing is not reported as having ended.
 	closing bool
@@ -95,12 +99,13 @@ func (w *Window) keep(first bool, focus string) {
 	w.open = false
 	w.closeWindow = nil
 	close(w.exited)
-	closing := w.closing
+	closing, dismissed := w.closing, w.dismissed
+	w.dismissed = false
 	w.mu.Unlock()
 	if closing {
 		return
 	}
-	w.ended(WindowEnd{Err: err, First: first, Uptime: time.Since(started)})
+	w.ended(WindowEnd{Err: err, First: first, Uptime: time.Since(started), Dismissed: dismissed})
 }
 
 func (w *Window) started(closeWindow func() error) {
@@ -109,8 +114,9 @@ func (w *Window) started(closeWindow func() error) {
 	w.mu.Unlock()
 }
 
-// errNoWindow is Dismiss with no window up to close.
-var errNoWindow = errors.New("no lich window is open")
+// ErrNoWindow is Dismiss with no window up to close. It reaches a client only
+// as the RPC's error text, which is what `lich native` matches it by.
+var ErrNoWindow = errors.New("no lich window is open")
 
 // Dismiss closes the open window and leaves lich running, which is what the
 // page asks for when the user answers that lich keeps running in the
@@ -118,9 +124,10 @@ var errNoWindow = errors.New("no lich window is open")
 func (w *Window) Dismiss() error {
 	w.mu.Lock()
 	closeWindow := w.closeWindow
+	w.dismissed = closeWindow != nil
 	w.mu.Unlock()
 	if closeWindow == nil {
-		return errNoWindow
+		return ErrNoWindow
 	}
 	return closeWindow()
 }

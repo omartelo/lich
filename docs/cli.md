@@ -128,7 +128,8 @@ none answered.
 
 A word that names no subcommand is refused with `lich: unknown command "…"`, a
 guess at the one it resembles, and exit 1 — a typo does not open a window.
-Arguments the app itself takes still do: bare `lich`, `lich --shell <path>`, and
+Arguments the app itself takes still do: bare `lich`, `lich --shell <path>`,
+`lich --no-window` (the backend with no window, which `lich native` starts), and
 `lich --` with the Chromium flags behind it.
 
 `--json` on `sessions`, `whoami`, `send`, `insert`, `focus`, `wait`, `open`, `close`, `rename`, `control`, `ask`, `worktrees`, `folders`, `file`,
@@ -972,6 +973,26 @@ may auto-allow them.
 `folder`, `to` or `color`, rather than reading the missing field as empty: an
 empty name takes a session out of its folder, or a folder apart, an empty color
 clears a folder's, and a model that forgot the field did not ask for that.
+
+### `lich native`
+
+Opens the native window, experimental (`docs/native-window.md`), on the running
+lich. With no lich running it starts one in the background first, as
+`lich --no-window`: the backend and its tray, no web window. The web window is
+closed before the native one opens, through the same call as the page's "keep
+running" answer, so lich and its sessions go on; the two windows cannot share
+the backend's event and terminal streams, and the newest one takes them.
+
+```
+Opening the native window on lich (port 47900).
+```
+
+The native window is `lich-native`, looked up beside the `lich` binary, or at
+the path `LICH_NATIVE` names. Neither there is an error before anything starts
+or closes. It runs detached, with the backend's port and token as `LICH_PORT`
+and `LICH_TOKEN`, so the command returns at once and closing the native window
+ends nothing. There is no `--json` and no MCP tool: it opens a window for the
+person at the screen.
 
 ### `lich quit`
 

@@ -186,6 +186,14 @@ var commands = []command{
 			"MCP client at lich.",
 	},
 	{
+		name: "native",
+		args: "",
+		about: "Open the native window (experimental) on the running lich, starting lich\n" +
+			"in the background with no window when none runs. The web window closes\n" +
+			"first: one window at a time. lich-native is looked up beside the lich\n" +
+			"binary, or wherever LICH_NATIVE points.",
+	},
+	{
 		name: "quit",
 		args: "",
 		about: "End the running lich: its window closes and every session in it ends.\n" +
