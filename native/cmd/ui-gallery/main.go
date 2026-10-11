@@ -124,6 +124,7 @@ type gallery struct {
 	menu            ui.MenuState
 	contextMenu     ui.MenuState
 	pinned          bool
+	cardColor       string
 	lastAction      string
 
 	dialog       ui.DialogState

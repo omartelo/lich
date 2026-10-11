@@ -2,6 +2,7 @@ package main
 
 import (
 	"image"
+	"image/color"
 
 	"gioui.org/font"
 	"gioui.org/layout"
@@ -364,6 +365,7 @@ func (g *gallery) overlaysSection(gtx C, th *ui.Theme) D {
 			{Label: "Inbox", OnClick: act("Move to Inbox")},
 			{Label: "Archive", OnClick: act("Move to Archive")},
 		}},
+		{Kind: ui.MenuSubTrigger, Label: "Color", Icon: g.icon("palette"), Sub: g.swatches(), Columns: 3},
 		{Kind: ui.MenuSeparator},
 		{Label: "Close session", Icon: g.icon("trash-2"), Shortcut: "Ctrl+W", Variant: ui.VariantDestructive, OnClick: act("Close session")},
 	}
@@ -421,4 +423,29 @@ func (g *gallery) layoutDialog(gtx C) {
 	if d.Layout(gtx) {
 		g.dialogOpen = false
 	}
+}
+
+// cardColors are CARD_COLORS of frontend/src/lib/session/card-color.ts.
+var cardColors = []struct {
+	name  string
+	color color.NRGBA
+}{
+	{"Red", ui.OKLCH(0.637, 0.237, 25.331, 1)},
+	{"Orange", ui.OKLCH(0.705, 0.213, 47.604, 1)},
+	{"Amber", ui.OKLCH(0.769, 0.188, 70.08, 1)},
+	{"Green", ui.OKLCH(0.723, 0.219, 149.579, 1)},
+	{"Teal", ui.OKLCH(0.704, 0.14, 182.503, 1)},
+	{"Blue", ui.OKLCH(0.623, 0.214, 259.815, 1)},
+	{"Violet", ui.OKLCH(0.606, 0.25, 292.717, 1)},
+	{"Pink", ui.OKLCH(0.656, 0.241, 354.308, 1)},
+}
+
+// swatches is CardColorMenu's grid: the theme option, then every card color.
+func (g *gallery) swatches() []ui.MenuEntry {
+	pick := func(name, label string) func() { return func() { g.cardColor, g.lastAction = name, label } }
+	entries := []ui.MenuEntry{{Kind: ui.MenuSwatch, Label: "Theme", Checked: g.cardColor == "", OnClick: pick("", "Theme color")}}
+	for _, c := range cardColors {
+		entries = append(entries, ui.MenuEntry{Kind: ui.MenuSwatch, Label: c.name, Swatch: c.color, Checked: g.cardColor == c.name, OnClick: pick(c.name, c.name+" color")})
+	}
+	return entries
 }

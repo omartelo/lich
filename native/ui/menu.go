@@ -3,6 +3,7 @@ package ui
 import (
 	"image"
 	"image/color"
+	"time"
 
 	"gioui.org/f32"
 	"gioui.org/font"
@@ -28,6 +29,9 @@ const (
 	MenuSubTrigger
 	MenuLabel
 	MenuSeparator
+	// MenuSwatch is a color swatch cell of a grid submenu, as
+	// CardColorMenu.tsx draws one; Label is its Hint.
+	MenuSwatch
 )
 
 // MenuEntry is one row of a DropdownMenu or ContextMenu, the props of its
@@ -40,10 +44,17 @@ type MenuEntry struct {
 	Variant  Variant
 	Inset    bool
 	Disabled bool
-	// Checked is the state a checkbox or radio item draws.
+	// Checked is the state a checkbox or radio item draws, or the current
+	// swatch's outline.
 	Checked bool
 	// Sub is the submenu a MenuSubTrigger opens.
 	Sub []MenuEntry
+	// Columns lays a MenuSubTrigger's Sub out as a min-w-0 grid this many
+	// cells wide; 0 is the usual column of rows.
+	Columns int
+	// Swatch is a MenuSwatch's color; the zero color is the theme option,
+	// half accent and half background.
+	Swatch color.NRGBA
 	// OnClick runs when an item or radio item is chosen; an item closes the
 	// menu first, a radio item keeps it open, as base-ui does.
 	OnClick func()
@@ -73,6 +84,10 @@ type menuLevel struct {
 	highlight int
 	pressed   bool
 	rows      []image.Rectangle
+	// hints are a grid's per-cell tooltips.
+	hints []Tooltip
+	// shown is when the panel first drew, the start of its animate-in.
+	shown time.Time
 }
 
 // Opened reports whether the menu is showing.
@@ -228,6 +243,12 @@ func (m menuCore) panelEvents(gtx C, k int) {
 			return
 		}
 		pe, ok := ev.(pointer.Event)
+		if ok {
+			// The deferred panels are outside the root's area, so it never
+			// sees these events; a panel's are in window coordinates already,
+			// what the root would have recorded for a tooltip inside it.
+			m.root.pointer = pe.Position
+		}
 		live := m.s.open && k < len(m.s.levels) && m.s.levels[k] == lv
 		if ok && live {
 			m.panelPointer(gtx, k, pe)
@@ -362,6 +383,9 @@ func (m menuCore) keyLevel() int {
 
 func (m menuCore) key(gtx C, name key.Name) {
 	k := m.keyLevel()
+	if cols := m.levelColumns(k); cols > 0 && m.gridKey(k, cols, name) {
+		return
+	}
 	lv, entries := m.s.levels[k], m.levelEntries(k)
 	h := lv.highlight
 	switch name {
@@ -401,22 +425,28 @@ func (m menuCore) drawOverlay(gtx C) {
 		gtx.Execute(key.FocusCmd{Tag: &m.s.backdrop})
 		m.s.focus = false
 	}
-	anchor, place, minWidth, entries := m.s.anchor, m.geo.root, m.geo.minWidth, m.entries
+	anchor, place, minWidth, entries, cols := m.s.anchor, m.geo.root, m.geo.minWidth, m.entries, 0
 	for _, lv := range m.s.levels {
-		m.drawPanel(gtx, lv, entries, anchor, place, minWidth)
+		m.drawPanel(gtx, lv, anchor, place, func(gtx C) image.Point {
+			if cols > 0 {
+				return m.layoutGrid(gtx, lv, entries, cols)
+			}
+			return m.layoutPanel(gtx, lv, entries, minWidth)
+		})
 		if lv.highlight < 0 || lv.highlight >= len(entries) {
 			return
 		}
-		anchor, place, minWidth = lv.rows[lv.highlight], m.geo.sub, m.geo.subMinWidth
-		entries = entries[lv.highlight].Sub
+		trigger := entries[lv.highlight]
+		anchor, place, minWidth, entries, cols = lv.rows[lv.highlight], m.geo.sub, m.geo.subMinWidth, trigger.Sub, trigger.Columns
 	}
 }
 
-func (m menuCore) drawPanel(gtx C, lv *menuLevel, entries []MenuEntry, anchor image.Rectangle, place popupPlace, minWidth unit.Dp) {
+// drawPanel places what layout draws at its origin beside anchor.
+func (m menuCore) drawPanel(gtx C, lv *menuLevel, anchor image.Rectangle, place popupPlace, layout func(C) image.Point) {
 	macro := op.Record(gtx.Ops)
-	size := m.layoutPanel(gtx, lv, entries, minWidth)
+	size := layout(gtx)
 	call := macro.Stop()
-	box, _ := place.box(gtx, anchor, size, image.Rectangle{Max: m.root.window})
+	box, side := place.box(gtx, anchor, size, image.Rectangle{Max: m.root.window})
 	pos := box.Min
 	for i := range lv.rows {
 		lv.rows[i] = lv.rows[i].Add(pos)
@@ -425,7 +455,56 @@ func (m menuCore) drawPanel(gtx C, lv *menuLevel, entries []MenuEntry, anchor im
 	event.Op(gtx.Ops, lv)
 	area.Pop()
 	defer op.Offset(pos).Push(gtx.Ops).Pop()
+	defer menuEnter(gtx, lv, side, anchor.Min.Sub(pos), size)()
 	call.Add(gtx.Ops)
+}
+
+// menuDuration is the content's duration-100.
+const menuDuration = 100 * time.Millisecond
+
+// menuEnter starts a panel's animate-in: fade-in-0, zoom-in-95 from the
+// anchor (origin-(--transform-origin)) and slide-in-2 from the anchor's
+// side, over menuDuration from its first frame. Hit testing stays on the
+// final box. The returned func pops what it pushed.
+//
+// ponytail: no animate-out; a closed menu is gone at once. Adding it means
+// drawing the last entries for menuDuration after close.
+func menuEnter(gtx C, lv *menuLevel, side Side, anchor, size image.Point) func() {
+	if lv.shown.IsZero() {
+		lv.shown = gtx.Now
+	}
+	elapsed := gtx.Now.Sub(lv.shown)
+	if elapsed >= menuDuration {
+		return func() {}
+	}
+	gtx.Execute(op.InvalidateCmd{})
+	p := ease(float32(elapsed) / float32(menuDuration))
+	origin, toward := menuOrigin(side, anchor, size)
+	slide := toward.Mul(float32(gtx.Dp(Space(2))) * (1 - p))
+	scale := zoomFrom + (1-zoomFrom)*p
+	transform := op.Affine(f32.Affine2D{}.Scale(origin, f32.Pt(scale, scale)).Offset(slide)).Push(gtx.Ops)
+	opacity := paint.PushOpacity(gtx.Ops, p)
+	return func() {
+		opacity.Pop()
+		transform.Pop()
+	}
+}
+
+// menuOrigin is base-ui's transform origin for a panel placed on side of an
+// anchor at the panel-local point anchor: the panel edge facing it, at the
+// anchor's position along that edge. toward points back at the anchor.
+func menuOrigin(side Side, anchor, size image.Point) (origin, toward f32.Point) {
+	x := float32(min(max(anchor.X, 0), size.X))
+	y := float32(min(max(anchor.Y, 0), size.Y))
+	switch side {
+	case SideRight:
+		return f32.Pt(0, y), f32.Pt(-1, 0)
+	case SideLeft:
+		return f32.Pt(float32(size.X), y), f32.Pt(1, 0)
+	case SideTop:
+		return f32.Pt(x, float32(size.Y)), f32.Pt(0, 1)
+	}
+	return f32.Pt(x, 0), f32.Pt(0, -1)
 }
 
 // layoutPanel draws the popup at its origin and records each row's rectangle
